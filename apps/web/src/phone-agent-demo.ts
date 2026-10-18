@@ -32,7 +32,8 @@ const apiUrl =
     : `http://localhost:${proxyPort}/api/chat/dispatch-phone-agent`;
 
 // Realtime voice talks to Runtype directly, so it needs a client token and a
-// saved agent. The typed path never does: it goes through the proxy above.
+// saved agent. Typed chat always goes through the proxy above, so chips keep
+// the bundled receptionist's tools whichever voice path is active.
 const RUNTYPE_API_URL = "https://api.runtype.com";
 const STORAGE_KEYS = {
   voice: "phoneAgentDemoVoice",
@@ -119,8 +120,8 @@ const renderLatencyPath = (path: VoicePath): void => {
   const realtime = path === "runtype";
   if (latencyEls.path) {
     latencyEls.path.textContent = realtime
-      ? "Realtime voice: server timings for the last spoken turn."
-      : "Measured in the browser from send, through the proxy.";
+      ? "Last spoken turn: server timings from Runtype realtime voice."
+      : "Last typed turn: measured in the browser from send, through the proxy.";
   }
   if (latencyEls.firstEventLabel) latencyEls.firstEventLabel.textContent = realtime ? "First audio" : "First event";
   if (latencyEls.firstWordLabel) latencyEls.firstWordLabel.textContent = realtime ? "LLM time" : "First word";
@@ -142,6 +143,8 @@ const onSSEEvent = (eventType: string, payload: unknown): void => {
 
 // Realtime voice reports server-side timings once per spoken turn.
 const onVoiceMetrics = (metrics: VoiceMetrics): void => {
+  turn = null;
+  renderLatencyPath("runtype");
   if (latencyEls.firstEvent) latencyEls.firstEvent.textContent = formatMs(metrics.firstAudioMs);
   if (latencyEls.tool) latencyEls.tool.textContent = "—";
   if (latencyEls.firstWord) latencyEls.firstWord.textContent = formatMs(metrics.llmMs);
@@ -157,9 +160,9 @@ const buildVoiceConfig = (path: VoicePath): Partial<AgentWidgetConfig> => {
     return { voiceRecognition: { enabled: false } };
   }
   if (path === "runtype") {
+    // No widget-level clientToken: that would move typed chat off the proxy.
+    // The realtime socket speaks its own replies, so no textToSpeech either.
     return {
-      apiUrl: RUNTYPE_API_URL,
-      clientToken: settings.clientToken,
       voiceRecognition: {
         enabled: true,
         onMetrics: onVoiceMetrics,
@@ -168,13 +171,9 @@ const buildVoiceConfig = (path: VoicePath): Partial<AgentWidgetConfig> => {
           runtype: {
             agentId: settings.agentId,
             clientToken: settings.clientToken,
+            host: RUNTYPE_API_URL,
           },
         },
-      },
-      textToSpeech: {
-        enabled: true,
-        provider: "runtype",
-        agentId: settings.agentId,
       },
     };
   }
@@ -236,7 +235,7 @@ const mountWidget = (mode: Mode, stage: HTMLElement): (() => void) => {
   activeStage = stage;
   turn = null;
   renderLatency();
-  renderLatencyPath(resolveVoicePath());
+  renderLatencyPath("browser");
   renderVoiceStatus();
 
   const config = buildConfig(mode);
@@ -257,9 +256,12 @@ const mountWidget = (mode: Mode, stage: HTMLElement): (() => void) => {
     destroy = () => controller.destroy();
   }
 
+  // Realtime voice turns run over the voice socket and never reach onSSEEvent,
+  // so this times typed turns on every path; onVoiceMetrics takes over the
+  // readout after each spoken turn.
   const offUserMessage = controller.on("user:message", () => {
-    if (resolveVoicePath() === "runtype") return;
     turn = { start: performance.now() };
+    renderLatencyPath("browser");
     renderLatency();
   });
 
