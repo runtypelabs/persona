@@ -2458,8 +2458,16 @@ export type AgentWidgetToolCallDisplayFeature = {
   groupedMode?: "stack" | "summary" | "collapsible";
   /** Split adjacent tools at known iteration or execution changes. Missing metadata preserves adjacency. @default "adjacent" */
   groupBoundary?: "adjacent" | "iteration";
+  /** Keep group headers for single tools in stack/collapsible modes. Summary mode always keeps them.
+   * False shows the tool directly; iteration boundaries still apply. @default false */
+  groupSingletons?: boolean;
   /** Built-in collapsible header icon visibility. Inherits iconVisibility; child rows and custom summary content keep their own icons. */
   groupIconVisibility?: "always" | "active" | "never";
+  /** Automatic elapsed timing in tool rows and collapsible group headers. Whole seconds (2s),
+   * hidden below 1s or without known timing. Groups span earliest start to latest completion,
+   * including gaps/overlap, and tick only while a child runs. Authored templates/renderers
+   * and exact timing in expanded details are independent. @default "none" */
+  durationDisplay?: "none" | "tools" | "group" | "all";
   /**
    * What happens to a tool call row once it completes.
    *
@@ -2824,6 +2832,7 @@ export type WidgetPreferenceSlice = {
     | "grouped"
     | "groupedMode"
     | "groupBoundary"
+    | "groupSingletons"
     | "loadingAnimation"
   >;
   reasoningDisplay?: Pick<
@@ -6123,6 +6132,7 @@ export type AgentWidgetToolCallConfig = {
    * Override the summary content for grouped consecutive tool-call containers.
    * In `groupedMode: "summary"`, the summary owns the visible row starting
    * with the first tool so its DOM stays stable as more calls arrive.
+   * Other modes call this only for multiple tools unless groupSingletons is true.
    * Return `null` to fall back to the built-in `Called [x] tools` summary.
    */
   renderGroupedSummary?: (context: {
@@ -6131,7 +6141,7 @@ export type AgentWidgetToolCallConfig = {
     defaultSummary: string;
     /** Whether the session is currently streaming, including gaps between tool batches. */
     streaming: boolean;
-    /** The last rendered tool group, even when followed by assistant prose. */
+    /** The final logical tool group, including unwrapped singletons; assistant prose does not affect this flag. */
     isLatestGroup: boolean;
     /** This group contains tools observed in the current session run. */
     isCurrentRunGroup: boolean;
@@ -7998,6 +8008,21 @@ export type AgentWidgetLoadingIndicatorConfig = {
   renderIdle?: (context: IdleIndicatorRenderContext) => HTMLElement | null;
 };
 
+/** Shared motion for tool, tool-group, and reasoning disclosure containers. */
+export type AgentWidgetExpansionConfig = {
+  /** Disclosure arrow directions. V5 defaults to right/down; V4 retains down/up. */
+  chevron?: {
+    collapsed?: "up" | "down" | "left" | "right";
+    expanded?: "up" | "down" | "left" | "right";
+  };
+  /** Disclosure motion. Initial/restored state and reduced motion are always instant. @default "instant" */
+  animation?: "instant" | "height";
+  /** Transition duration in milliseconds; zero disables motion. @default 160 */
+  duration?: number;
+  /** CSS timing function. Invalid values fall back to instant disclosure. @default "ease-out" */
+  easing?: string;
+};
+
 /** Built-in `sessionInit` triggers. See {@link AgentWidgetConfig.sessionInit}. */
 export type AgentWidgetSessionInitTrigger = 'input' | 'focus' | 'mount' | 'send';
 
@@ -8961,6 +8986,8 @@ export type AgentWidgetConfig = {
   loadingIndicator?: AgentWidgetLoadingIndicatorConfig;
   /** Shared loading-label animation overrides and optional managed custom effect. */
   loadingLabel?: AgentWidgetLoadingLabelConfig;
+  /** Shared tool/group/reasoning expansion motion, independent of loading-label effects. */
+  expansion?: AgentWidgetExpansionConfig;
 };
 
 /**

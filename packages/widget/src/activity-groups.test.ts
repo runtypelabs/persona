@@ -26,6 +26,7 @@ afterEach(() => vi.useRealTimers());
 describe.each(['summary', 'stack', 'collapsible'] as const)('%s tool groups', mode => {
   it('splits known neighboring iterations and executions while keeping singleton groups', () => {
     const summary = vi.fn<NonNullable<NonNullable<AgentWidgetConfig["toolCall"]>["renderGroupedSummary"]>>(() => null); const settings = { ...config(mode), toolCall: { renderGroupedSummary: summary } };
+    settings.features!.toolCallDisplay!.groupSingletons = true;
     const node = render([tool('a', 1, 'e1'), tool('b', 1, 'e1'), tool('c', 2, 'e1'), tool('d', 2, 'e2')], settings, true, ['c', 'd']);
     expect(node.querySelectorAll('[data-persona-tool-group-row]')).toHaveLength(3);
     expect(summary.mock.calls.map(([context]) => context)).toEqual([
@@ -34,6 +35,18 @@ describe.each(['summary', 'stack', 'collapsible'] as const)('%s tool groups', mo
       expect.objectContaining({ streaming: true, isLatestGroup: true, isCurrentRunGroup: true }),
     ]);
     expect(node.querySelector('[data-wrapper-id="tool-group-c"]')).not.toBeNull();
+  });
+  it('flattens singleton iterations without losing boundaries or latest-group context', () => {
+    const summary = vi.fn<NonNullable<NonNullable<AgentWidgetConfig['toolCall']>['renderGroupedSummary']>>(() => null);
+    const settings = { ...config(mode), toolCall: { renderGroupedSummary: summary } };
+    const node = render([tool('a', 1), tool('b', 1), tool('c', 2), tool('d', 3)], settings, true, ['a', 'b', 'c', 'd']);
+    expect(node.querySelectorAll('[data-persona-tool-group-row]')).toHaveLength(mode === 'summary' ? 3 : 1);
+    expect(summary.mock.calls[0][0]).toEqual(expect.objectContaining({ isLatestGroup: false, isCurrentRunGroup: true }));
+    if (mode !== 'summary') {
+      expect(summary).toHaveBeenCalledTimes(1);
+      expect(node.querySelector('[data-wrapper-id="c"]')?.parentElement).toBe(node);
+      expect(node.querySelector('[data-wrapper-id="d"]')?.parentElement).toBe(node);
+    }
   });
   it('uses pairwise visible neighbors, skipping hidden reasoning and removed tools', () => {
     const summary = vi.fn<NonNullable<NonNullable<AgentWidgetConfig["toolCall"]>["renderGroupedSummary"]>>(() => null);
@@ -68,7 +81,7 @@ it.each(['error', 'interrupted', 'denied', 'awaiting-approval'] as const)('prese
   expect(group.dataset.activityState).toBe(expected);
 });
 it.each(['always', 'active', 'never'] as const)('applies %s group icon visibility to the header only', groupIconVisibility => {
-  const settings = config('collapsible'); settings.features!.toolCallDisplay!.iconVisibility = 'never'; settings.features!.toolCallDisplay!.groupIconVisibility = groupIconVisibility;
+  const settings = config('collapsible'); settings.features!.toolCallDisplay!.groupSingletons = true; settings.features!.toolCallDisplay!.iconVisibility = 'never'; settings.features!.toolCallDisplay!.groupIconVisibility = groupIconVisibility;
   const custom = document.createElement('i'); custom.dataset.customIcon = 'true'; settings.toolCall = { renderGroupedSummary: () => custom };
   const node = render([tool('a')], settings);
   expect(!!node.querySelector('.persona-activity-icon')).toBe(groupIconVisibility === 'always');
@@ -91,4 +104,51 @@ it('ignores non-HTML direct children when resolving group wrappers', () => {
     createMessageRow: () => document.createElement('div'), activityIds: new Set(), activityLifecycle: createActivityLifecycle(() => {}), toolExpansionState: new Set() });
   expect(tempContainer.querySelector('[data-persona-tool-group-row]')).toBeNull();
   expect(tempContainer.children).toHaveLength(2);
+});
+
+it('measures overlapping tools as a wall-clock span and preserves mode changes', () => {
+  const a = tool('a'), b = tool('b');
+  Object.assign(a.toolCall!, { startedAt: 1000, completedAt: 5000, duration: 4000 });
+  Object.assign(b.toolCall!, { startedAt: 3000, completedAt: 7000, duration: 4000 });
+  const settings = config('collapsible');
+  for (const durationDisplay of ['none', 'tools', 'group', 'all'] as const) {
+    settings.features!.toolCallDisplay!.durationDisplay = durationDisplay;
+    expect(render([a, b], settings).querySelector('.persona-activity-duration')?.textContent ?? '').toBe(durationDisplay === 'group' || durationDisplay === 'all' ? '6s' : '');
+  }
+});
+it('holds the measured span between batches, then ticks only while a child runs', () => {
+  vi.useFakeTimers(); vi.setSystemTime(10000);
+  const a = tool('a'), b = tool('b');
+  Object.assign(a.toolCall!, { startedAt: 1000, completedAt: 3000 });
+  Object.assign(b.toolCall!, { startedAt: 5000, completedAt: 7000 });
+  const settings = config('collapsible', 'adjacent'); settings.features!.toolCallDisplay!.durationDisplay = 'group';
+  const node = render([a, b], settings, true, ['a', 'b']);
+  expect(node.querySelector('[data-persona-tool-group]')?.getAttribute('data-activity-state')).toBe('running');
+  expect(node.querySelector('.persona-activity-duration')?.textContent).toBe('6s');
+  expect(node.querySelector('[data-tool-elapsed]')).toBeNull();
+  b.toolCall!.status = 'running'; b.toolCall!.completedAt = undefined;
+  expect(render([a, b], settings, true, ['a', 'b']).querySelector('[data-tool-elapsed]')?.getAttribute('data-tool-elapsed')).toBe('1000');
+});
+it.each(['missing start', 'missing end', 'invalid', 'future', 'negative', 'zero', 'inverted', 'duration only'])('omits group timing for %s metadata', problem => {
+  const a = tool('a'), b = tool('b');
+  Object.assign(a.toolCall!, { startedAt: 1000, completedAt: 3000 });
+  Object.assign(b.toolCall!, { startedAt: 2000, completedAt: 7000 });
+  if (problem === 'missing start') delete b.toolCall!.startedAt;
+  if (problem === 'missing end') delete b.toolCall!.completedAt;
+  if (problem === 'invalid') b.toolCall!.startedAt = NaN;
+  if (problem === 'future') b.toolCall!.completedAt = Date.now() + 10000;
+  if (problem === 'negative') b.toolCall!.startedAt = -1000;
+  if (problem === 'zero') b.toolCall!.startedAt = 0;
+  if (problem === 'inverted') b.toolCall!.completedAt = 1000;
+  if (problem === 'duration only') { delete b.toolCall!.startedAt; delete b.toolCall!.completedAt; b.toolCall!.duration = 5000; }
+  const settings = config('collapsible'); settings.features!.toolCallDisplay!.durationDisplay = 'group';
+  expect(render([a, b], settings).querySelector('.persona-activity-duration')?.textContent).toBe('');
+});
+
+it('does not keep an earlier adjacent group working when the final tool is unwrapped', () => {
+  const summary = vi.fn<NonNullable<NonNullable<AgentWidgetConfig['toolCall']>['renderGroupedSummary']>>(() => null);
+  const settings = { ...config('collapsible', 'adjacent'), toolCall: { renderGroupedSummary: summary } };
+  const node = render([tool('a'), tool('b'), text, tool('c')], settings, true, ['a', 'b', 'c']);
+  expect(node.querySelector('[data-persona-tool-group]')?.getAttribute('data-activity-state')).toBe('done');
+  expect(summary).toHaveBeenCalledWith(expect.objectContaining({ isLatestGroup: false, isCurrentRunGroup: true }));
 });

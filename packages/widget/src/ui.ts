@@ -7,7 +7,7 @@ import { createScrollAnimation, createScrollToLatest } from "./utils/scroll-anim
 import { createScrollToBottomControl } from "./components/scroll-to-bottom";
 import { createLayoutSlots } from "./utils/layout-slots";
 import { isBrowserLocalApproval } from "./utils/restored-browser-state";
-import { activityVariant, activityDuration } from "./components/activity-row";
+import { activityVariant } from "./components/activity-row";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
 import type { DictationSession } from "./dictation-session";
 import { usesSessionVoice, usesSessionVoiceForConfig } from "./utils/voice-support";
@@ -293,7 +293,7 @@ import {
   latestAgentSuggestions,
   resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
-import { formatElapsedMs, isShortReasoning } from "./utils/formatting";
+import { isShortReasoning } from "./utils/formatting";
 import { loadApprovalUi, getApprovalUiSync, type ApprovalUiModule } from "./approval-ui-loader";
 import { getWebMcpToolDisplayTitle } from "./webmcp-bridge";
 import type { AgentWidgetPlugin } from "./plugins/types";
@@ -953,14 +953,9 @@ export const createAgentExperience = (
     const ready = getActivityUiSync();
     if (ready && loadingLabels) {
       ready.initActivityUi(renderLucideIcon, loadingLabels);
-      activityLifecycle = ready.createActivityLifecycle((id, kind) => {
-        messageCache.delete(id);
-        const bubble = queryMessageBubble(id);
-        const tool = kind === "tool";
-        if (bubble) (tool ? ready.updateToolBubbleUI : ready.updateReasoningBubbleUI)(
-          id, bubble, tool ? toolExpansionState : reasoningExpansionState, config
-        );
-      });
+      activityLifecycle = ready.createActivityLifecycle(
+        mount, () => config, toolExpansionState, reasoningExpansionState, messageCache, queryMessageBubble
+      );
       return activityUi = ready;
     }
     return null;
@@ -2801,20 +2796,14 @@ export const createAgentExperience = (
 
 
     // Toggle expansion state
-    if (bubbleType === 'reasoning') {
-      if (reasoningExpansionState.has(messageId)) {
-        reasoningExpansionState.delete(messageId);
-      } else {
-        reasoningExpansionState.add(messageId);
-      }
-      activityUi?.updateReasoningBubbleUI(messageId, bubble, reasoningExpansionState);
-    } else if (bubbleType === 'tool') {
-      if (toolExpansionState.has(messageId)) {
-        toolExpansionState.delete(messageId);
-      } else {
-        toolExpansionState.add(messageId);
-      }
-      activityUi?.updateToolBubbleUI(messageId, bubble, toolExpansionState, config);
+    if (bubbleType === 'reasoning' || bubbleType === 'tool') {
+      const reasoning = bubbleType === 'reasoning';
+      const expansionState = reasoning ? reasoningExpansionState : toolExpansionState;
+      if (expansionState.has(messageId)) expansionState.delete(messageId);
+      else expansionState.add(messageId);
+      if (activityUi) (reasoning ? activityUi.updateReasoningBubbleUI : activityUi.updateToolBubbleUI)(
+        messageId, bubble, expansionState, config
+      );
     } else if (bubbleType === 'approval' && approvalUi) {
       // approvalUi is always set here: approval bubbles only exist after the
       // chunk was adopted. The guard keeps a stray click on a stub harmless.
@@ -6964,6 +6953,7 @@ export const createAgentExperience = (
 
     // Dispose replaced effects before cleanup can disturb the new default DOM.
     loadingLabelLifecycle?.prepare(tempContainer);
+    activityLifecycle?.prepare(tempContainer);
     // Use idiomorph to morph the container contents
     morphMessages(container, tempContainer);
     liveRowFingerprints = nextLiveRowFingerprints;
@@ -7087,6 +7077,7 @@ export const createAgentExperience = (
     }
     ensureActivityUi();
     loadingLabelLifecycle?.sync();
+    activityLifecycle?.sync();
   };
 
   // Alias for clarity - the implementation handles flicker prevention via typing indicator logic.
@@ -8434,9 +8425,7 @@ export const createAgentExperience = (
       }
       const now = Date.now();
       spans.forEach((span) => {
-        const startedAt = Number(span.getAttribute("data-tool-elapsed"));
-        if (!startedAt) return;
-        span.textContent = span.closest(".persona-activity-row") ? activityDuration(now - startedAt) : formatElapsedMs(now - startedAt);
+        activityUi?.updateActivityElapsed(span, now);
       });
     }, 100);
   };
@@ -13183,7 +13172,7 @@ export const createAgentExperience = (
         clearInterval(toolElapsedTimerId);
         toolElapsedTimerId = null;
       }
-      activityLifecycle?.clear();
+      activityLifecycle?.destroy();
       loadingLabelLifecycle?.destroy();
       toolExpansionState.clear();
       reasoningExpansionState.clear();

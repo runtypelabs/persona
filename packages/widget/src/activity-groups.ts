@@ -31,7 +31,8 @@ export function groupToolRows(options: {
       display.groupedMode === "summary";
 
     const flush = () => {
-      if (currentGroup.length > 1 || ((summaryOnly || iterationBoundary) && currentGroup.length > 0)) toolGroups.push(currentGroup);
+      // Keep singleton boundaries for latest-group state, even without a wrapper.
+      if (currentGroup.length) toolGroups.push(currentGroup);
       currentGroup = [];
     };
 
@@ -73,39 +74,47 @@ export function groupToolRows(options: {
       const wrappers = group.map(message => rows.get(message.id))
         .filter((wrapper): wrapper is HTMLElement => Boolean(wrapper));
 
-      if (wrappers.length < (summaryOnly || iterationBoundary ? 1 : 2)) {
+      if (wrappers.length < (summaryOnly || display.groupSingletons ? 1 : 2)) {
         return;
       }
 
-      const groupWrapper = createMessageRow(
-        `tool-group-${group[0].id}`,
-        "assistant"
-      );
+      const id = `tool-group-${group[0].id}`;
+      const groupWrapper = createMessageRow(id, "assistant");
       groupWrapper.setAttribute("data-persona-tool-group-row", "true");
 
       const toolCount = `${group.length} ${group.length === 1 ? "tool" : "tools"}`;
-      const interrupted = group.some(item => item.toolCall?.interrupted);
+      const tools = group.map(item => item.toolCall!);
+      const interrupted = tools.some(tool => tool.interrupted);
       const isLatestGroup = groupIndex === toolGroups.length - 1;
       const isCurrentRunGroup = group.some(item => currentRunToolIds?.has(item.id));
-      const context = { messages: group, toolCalls: group.map(item => item.toolCall!), config,
+      const context = { messages: group, toolCalls: tools, config,
         streaming, isLatestGroup, isCurrentRunGroup };
 
       const approvals = group.map(item => item.approval?.status ?? item.toolCall?.approvalStatus);
       const approvalStatus = approvals.includes("denied") ? "denied" : approvals.includes("pending") ? "pending" : undefined;
-      const success = !group.some(item => item.toolCall?.success === false);
+      const success = !tools.some(tool => tool.success === false);
       const attention = interrupted || !success || approvalStatus;
-      const active = group.some(item => item.toolCall?.status !== "complete") ||
+      const running = tools.some(tool => tool.status !== "complete");
+      const active = running ||
         (!iterationBoundary && streaming && isLatestGroup && isCurrentRunGroup && !attention);
 
       if (display.groupedMode === "collapsible") {
-        const id = `tool-group-${group[0].id}`;
         const synthetic: AgentWidgetMessage = { ...group[0], id, approval: undefined, toolCall: {
           id, name: toolCount, status: active ? "running" : "complete",
-          chunks: group.flatMap(item => item.toolCall?.chunks ?? []),
+          chunks: tools.flatMap(tool => tool.chunks ?? []),
           success, interrupted, approvalStatus,
         } };
+        // Only measured timestamps establish a wall-clock interval. Never add
+        // individual durations: tools can overlap or have gaps between batches.
+        if (tools.every(tool => Number.isFinite(tool.startedAt) && tool.startedAt! > 0 && tool.startedAt! <= Date.now() &&
+          (tool.status !== "complete" || (Number.isFinite(tool.completedAt) && tool.completedAt! <= Date.now() && tool.completedAt! >= tool.startedAt!)))) {
+          const start = Math.min(...tools.map(tool => tool.startedAt!));
+          const end = Math.max(...tools.map(tool => tool.completedAt ?? tool.startedAt!));
+          if (running) synthetic.toolCall!.startedAt = start;
+          else synthetic.toolCall!.durationMs = end - start;
+        }
         activityIds.add(id);
-        activityLifecycle.observe(synthetic, "tool", toolExpansionState, display);
+        activityLifecycle.observe(synthetic, "tool", toolExpansionState, display, group.find(item => toolExpansionState.has(item.id))?.id ?? "");
         const label = synthetic.toolCall?.interrupted ? `${toolCount} · Interrupted`
           : `${active ? "Using" : "Used"} ${toolCount}`;
         const custom = config.toolCall?.renderGroupedSummary?.({ ...context, defaultSummary: label });

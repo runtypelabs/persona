@@ -56,6 +56,44 @@ const config = {
 
 `composer.send` styles the idle send control. Its `size` applies to icon mode; padding supports icon and text modes. The existing `button.stop` group styles the streaming stop state and inherits idle send colors when omitted. Use the same paths under `darkTheme.components` for dark exceptions. Control `borderColor` is a color and `borderWidth` is a CSS length; both are needed for a visible border. Base component `border` tokens such as `header.border` are colors, while `introCard.border` and artifact pane borders are full CSS shorthands such as `'1px solid #ddd'`. See [advanced surface recipes and migration mappings](style-migrations.md#close-clear-submit-and-mic) for voice, approval, tools, questions and artifacts.
 
+## Group tool activity without extra nesting
+
+```typescript
+const config = {
+  features: {
+    toolCallDisplay: {
+      grouped: true,
+      groupedMode: 'collapsible',
+      groupBoundary: 'iteration',
+      groupSingletons: false,
+    },
+  },
+};
+```
+
+A single tool appears directly, so one click opens its details. Multiple tools share a group header. Iteration boundaries still apply when single tools have no group wrapper. If an open tool gains a sibling, its new group starts open; later updates respect manual group toggles.
+
+Set `groupSingletons: true` to retain a group header from the first tool, including custom `toolCall.renderGroupedSummary` content. This applies to stack and collapsible modes; summary mode always retains its consolidated summary. The default is false in V4 and V5. Summary callbacks run only for rendered group headers, but `isLatestGroup` considers every logical group, including unwrapped single tools.
+
+## Animate tool and reasoning expansion
+
+```typescript
+const config = {
+  expansion: {
+    animation: 'height', duration: 160, easing: 'ease-out',
+    chevron: { collapsed: 'right', expanded: 'down' },
+  },
+};
+```
+
+`expansion` shares disclosure motion across tool cards/rows, collapsible tool groups, and reasoning. Its effective defaults are `animation: 'instant'`, `duration: 160` milliseconds, and `easing: 'ease-out'` in both V4 and V5. `height` animates opening and closing from the current rendered height, including a visible collapsed preview. The header stays in place while the inner content moves down 8 pixels on expansion and up on collapse, fading in sync with the height. With height motion enabled, collapsible groups move as one unit instead of replaying per-child entry animations. Rapid toggles reverse from the current height and content appearance; streamed text keeps updating and grows naturally once open. Initial and restored states render immediately. Reduced motion and a zero duration make transitions instant. Negative durations clamp to zero, non-finite durations use 160, and invalid CSS easing falls back to instant.
+
+`expansion.chevron` controls the arrow direction for tools, groups, and reasoning. Each state accepts `up`, `down`, `left`, or `right`. V5 defaults to right when collapsed and down when expanded; V4 retains down/up. Explicit directions override either default and can be updated live. The lighter chevron rotates with the configured expansion duration and easing in height mode; instant mode and reduced motion switch it immediately.
+
+This setting is independent of `loadingLabel` text effects and loading-icon motion. Manual disclosure preserves the widget's reading/scroll intent. Automatic expansion and delayed collapse use the same animation when enabled by `features.toolCallDisplay` or `features.reasoningDisplay`. A child toggle settles an active parent transition so the parent's height cannot clip the newly opened details. Closing details become inert immediately; focus inside them returns to the disclosure header without scrolling.
+
+Content supplied inside Persona's standard tool/reasoning containers receives the same motion. A renderer that replaces the whole container owns its animation. Live `handle.update({ expansion: { animation: 'height' } })` patches merge normally; changing settings during a transition settles it immediately.
+
 ## Where does this setting belong?
 
 | Task | Config owner | Example |

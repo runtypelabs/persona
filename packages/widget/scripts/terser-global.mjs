@@ -42,7 +42,7 @@ for (const file of files) {
   let result = await minify(input, {
     ecma: 2020,
     module: !file.endsWith(".global.js"),
-    compress: { passes: 2, keep_fargs: false, hoist_funs: file.endsWith("theme-editor.js") },
+    compress: { passes: 2, keep_fargs: false, hoist_funs: file.endsWith("theme-editor.js") || file.endsWith("activity-ui.js") },
     mangle: true,
     format: { comments: /@license|@preserve|^!/ },
     sourceMap: existsSync(mapFile)

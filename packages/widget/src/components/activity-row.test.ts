@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { activityDuration, createActivityLifecycle } from './activity-row';
+import { activityDuration, updateActivityElapsed, createActivityLifecycle } from './activity-row';
 import { createToolBubble } from './tool-bubble';
 import { createReasoningBubble } from './reasoning-bubble';
 import type { AgentWidgetMessage } from '../types';
@@ -13,7 +13,7 @@ describe.each([false, true])('activity rows (V5 %s)', v5Defaults => {
     for (const variant of ['card', 'row'] as const) {
       const node = createToolBubble(message('complete'), { ...config, features: { toolCallDisplay: { variant } } });
       expect(node.classList.contains('persona-activity-row')).toBe(variant === 'row');
-      if (variant === 'row') { expect(node.textContent).toContain('Used Search'); expect(node.textContent).toContain('1m 5s'); }
+      if (variant === 'row') { expect(node.textContent).toContain('Used Search'); expect(node.querySelector('.persona-activity-duration')).toBeNull(); }
     }
   });
   it('resolves icon visibility and removes the icon slot on successful completion', () => {
@@ -112,3 +112,52 @@ it('cancels a completion timer on resumed activity, then rearms without reopenin
   lifecycle.manual('tool'); lifecycle.observe(message('complete', ['three']), 'tool', expanded);
   vi.advanceTimersByTime(2000); expect(changed).toHaveBeenCalledTimes(1);
 });
+
+// Automatic timing never takes ownership of host-authored labels or elapsed elements.
+it('supports timing modes on live rerender while retaining exact expanded details', () => {
+  const m = message('complete'); m.toolCall!.duration = 12789;
+  for (const durationDisplay of ['none', 'tools', 'group', 'all', undefined] as const) {
+    const node = createToolBubble(m, { future: { v5Defaults: true }, features: { toolCallDisplay: { durationDisplay } } }, new Set(['tool']));
+    expect(node.querySelector('.persona-activity-duration')?.textContent ?? '').toBe(durationDisplay === 'tools' || durationDisplay === 'all' ? '12s' : '');
+    expect(node.textContent).toContain('Duration: 12789ms');
+  }
+});
+it.each([undefined, 700, -1, NaN, Infinity])('omits automatic short/unknown/invalid timing (%s)', durationMs => {
+  const m = message('complete'); m.toolCall!.durationMs = durationMs;
+  expect(createToolBubble(m, { future: { v5Defaults: true }, features: { toolCallDisplay: { durationDisplay: 'tools' } } }).querySelector('.persona-activity-duration')?.textContent).toBe('');
+});
+it('ticks automatic whole seconds while preserving authored elapsed precision', () => {
+  const automatic = document.createElement('span'); automatic.className = 'persona-activity-duration'; automatic.dataset.toolElapsed = '1000';
+  expect(formatActivityElapsed(automatic, 1700)).toBe('');
+  expect(formatActivityElapsed(automatic, 13789)).toBe('12s');
+  expect(formatActivityElapsed(automatic, 66000)).toBe('1m 5s');
+  const authored = document.createElement('span'); authored.dataset.toolElapsed = '1000';
+  expect(formatActivityElapsed(authored, 3700)).toBe('2.7s');
+  authored.dataset.toolElapsed = '0'; authored.textContent = 'Host duration';
+  expect(formatActivityElapsed(authored, 3700)).toBe('Host duration');
+});
+it('retains authored duration placeholders and custom timer elements with automatic timing off', () => {
+  const m = message('running'); m.toolCall!.startedAt = Date.now() - 2500;
+  const node = createToolBubble(m, { future: { v5Defaults: true }, toolCall: { activeTextTemplate: 'Running {toolName} {duration}' } });
+  expect(node.querySelector('[data-tool-elapsed]')).not.toBeNull();
+  expect(node.querySelector('.persona-activity-duration')).toBeNull();
+  let authored: HTMLElement | undefined;
+  const custom = createToolBubble(m, { future: { v5Defaults: true }, toolCall: { renderCollapsedSummary: ({ createElapsedElement }) => authored = createElapsedElement() } });
+  expect(custom.contains(authored!)).toBe(true);
+  expect(formatActivityElapsed(authored!, Number(authored!.dataset.toolElapsed) + 2700)).toBe('2s');
+});
+
+it('does not create a live automatic timer for invalid or future starts', () => {
+  vi.useFakeTimers(); vi.setSystemTime(10000);
+  for (const startedAt of [0, -1, NaN, Infinity, 11000, undefined]) {
+    const m = message(); m.toolCall!.startedAt = startedAt; m.toolCall!.durationMs = undefined;
+    const node = createToolBubble(m, { future: { v5Defaults: true }, features: { toolCallDisplay: { durationDisplay: 'tools' } } });
+    expect(node.querySelector('[data-tool-elapsed]')).toBeNull();
+    expect(node.querySelector('.persona-activity-duration')?.textContent).toBe('');
+  }
+});
+
+function formatActivityElapsed(span: HTMLElement, now: number) {
+  updateActivityElapsed(span, now);
+  return span.textContent;
+}

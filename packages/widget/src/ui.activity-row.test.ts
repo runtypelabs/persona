@@ -46,7 +46,7 @@ describe.each([false, true])('activity UI (V5 %s)', v5Defaults => {
     expect(group.querySelector('button')?.textContent).toContain('Used 2 tools');
     const children = group.querySelectorAll<HTMLElement>('.persona-activity-group-child'); expect(children).toHaveLength(2);
     expect(children[1].style.getPropertyValue('--persona-activity-stagger')).toBe('40ms');
-    const chevron = () => header('tool-group-tool1').querySelector('.persona-activity-chevron svg')!.outerHTML;
+    const chevron = () => header('tool-group-tool1').querySelector('.persona-activity-chevron')!.outerHTML;
     const collapsedChevron = chevron();
     expect(header('tool-group-tool1').querySelector('svg[stroke="currentColor"]')).not.toBeNull();
     header('tool-group-tool1').click(); expect(header('tool-group-tool1').getAttribute('aria-expanded')).toBe('true');
@@ -91,7 +91,7 @@ it('copies current tool output after a streaming DOM update', async () => {
 });
 
 it.each(['stack', 'summary', 'collapsible'] as const)('preserves %s group DOM from its singleton through later iterations', mode => {
-  start(true, { grouped: true, groupedMode: mode, groupBoundary: 'iteration' });
+  start(true, { grouped: true, groupedMode: mode, groupBoundary: 'iteration', groupSingletons: true });
   inject('tool1', 'running', ['one']);
   const group = mount.querySelector('[data-persona-tool-group-row]')!;
   const bubble = mount.querySelector('[data-persona-tool-group]')!;
@@ -106,7 +106,7 @@ it.each(['stack', 'summary', 'collapsible'] as const)('preserves %s group DOM fr
 });
 it('keeps group icon overrides separate from actual child icons and custom label content', () => {
   controller = createAgentExperience(mount, { apiUrl: '/test', persistState: false, launcher: { enabled: false }, future: { v5Defaults: true },
-    features: { toolCallDisplay: { grouped: true, groupBoundary: 'iteration', groupIconVisibility: 'always', iconVisibility: 'never' } },
+    features: { toolCallDisplay: { grouped: true, groupBoundary: 'iteration', groupSingletons: true, groupIconVisibility: 'always', iconVisibility: 'never' } },
     toolCall: { renderGroupedSummary: () => { const icon = document.createElement('i'); icon.dataset.customIcon = 'true'; return icon; } } });
   inject('tool1', 'complete', ['one']);
   expect(header('tool-group-tool1').querySelector('.persona-activity-icon')).not.toBeNull();
@@ -133,7 +133,7 @@ it.each(['stack', 'summary', 'collapsible'] as const)('collapses %s activity loc
 it.each(['stack', 'summary', 'collapsible'] as const)('manages loading effects on %s group labels, tools and reasoning through updates and completion', groupedMode => {
   const started: { kind: string; element: HTMLElement; update: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> }[] = [];
   controller = createAgentExperience(mount, { apiUrl: '/test', persistState: false, launcher: { enabled: false }, future: { v5Defaults: true },
-    features: { toolCallDisplay: { grouped: true, groupedMode, groupBoundary: 'iteration' } },
+    features: { toolCallDisplay: { grouped: true, groupedMode, groupBoundary: 'iteration', groupSingletons: true } },
     loadingLabel: { animate: ({ element, kind }) => {
       expect(element.isConnected).toBe(true);
       const entry = { element, kind, update: vi.fn(), destroy: vi.fn() }; started.push(entry); return entry;
@@ -155,4 +155,56 @@ it.each(['stack', 'summary', 'collapsible'] as const)('manages loading effects o
   expect(reason.update).toHaveBeenCalled();
   controller.injectTestMessage({ type: 'message', message: { ...message, reasoning: { ...message.reasoning!, status: 'complete' } } });
   expect(reason.destroy).toHaveBeenCalledTimes(1);
+});
+
+
+it('keeps open singleton details visible when a second tool forms a group, then respects a manual group close', () => {
+  start(true, { groupBoundary: 'iteration', autoExpand: false, autoCollapseDelay: false });
+  inject('tool1', 'running', ['first output']);
+  expect(mount.querySelector('[data-persona-tool-group]')).toBeNull();
+  const toolHeader = header('tool1');
+  toolHeader.click();
+  expect(toolHeader.getAttribute('aria-expanded')).toBe('true');
+  inject('tool2', 'running', ['second output']);
+  expect(header('tool1')).toBe(toolHeader);
+  expect(toolHeader.getAttribute('aria-expanded')).toBe('true');
+  const groupHeader = header('tool-group-tool1');
+  expect(groupHeader.getAttribute('aria-expanded')).toBe('true');
+  expect(groupHeader.nextElementSibling?.getAttribute('style') ?? '').not.toContain('display: none');
+  groupHeader.click();
+  inject('tool1', 'running', ['first output', 'more output']);
+  expect(header('tool-group-tool1')).toBe(groupHeader);
+  expect(groupHeader.getAttribute('aria-expanded')).toBe('false');
+  expect(toolHeader.getAttribute('aria-expanded')).toBe('true');
+});
+
+it('toggles singleton grouping live without losing child expansion or its DOM', () => {
+  start(true, { groupBoundary: 'iteration', autoExpand: false, autoCollapseDelay: false });
+  inject('tool1', 'complete', ['visible details']);
+  const toolHeader = header('tool1');
+  toolHeader.click();
+  controller.update({ features: { toolCallDisplay: { groupSingletons: true } } });
+  expect(header('tool1')).toBe(toolHeader);
+  expect(header('tool-group-tool1').getAttribute('aria-expanded')).toBe('true');
+  controller.update({ features: { toolCallDisplay: { groupSingletons: false } } });
+  expect(mount.querySelector('[data-persona-tool-group]')).toBeNull();
+  expect(header('tool1')).toBe(toolHeader);
+  expect(toolHeader.getAttribute('aria-expanded')).toBe('true');
+  toolHeader.click();
+  controller.update({ features: { toolCallDisplay: { groupSingletons: true } } });
+  expect(header('tool1').getAttribute('aria-expanded')).toBe('false');
+  expect(header('tool-group-tool1').getAttribute('aria-expanded')).toBe('false');
+});
+
+it('preserves manually opened singleton details after group completion without disabling automatic groups', () => {
+  start(true, { groupBoundary: 'iteration', autoExpand: false, autoCollapseDelay: 100 });
+  vi.useFakeTimers();
+  inject('tool1', 'running', ['one']);
+  header('tool1').click();
+  inject('tool2', 'running', ['two']);
+  inject('tool1', 'complete', ['one']);
+  inject('tool2', 'complete', ['two']);
+  vi.advanceTimersByTime(200);
+  expect(header('tool-group-tool1').getAttribute('aria-expanded')).toBe('true');
+  expect(header('tool1').getAttribute('aria-expanded')).toBe('true');
 });

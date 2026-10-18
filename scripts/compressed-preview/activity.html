@@ -8,7 +8,7 @@
   *{box-sizing:border-box}body{margin:0;background:#f7f7f5;color:#252525;font:15px/1.5 system-ui,sans-serif}
   main{max-width:1400px;margin:auto;padding:28px}h1{font-size:28px;margin:0 0 6px}p{margin:6px 0 18px;max-width:90ch;color:#595959}
   .controls{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:20px 0}button{font:inherit;border:1px solid #bcbcb8;border-radius:8px;background:white;padding:8px 15px;cursor:pointer}button:disabled{opacity:.5;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #538cc8;outline-offset:3px}label{display:flex;gap:7px;align-items:center}
-  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}section{min-width:0}h2{font-size:18px;margin:0 0 4px}.explanation{min-height:45px;margin-bottom:8px}.widget{height:470px;background:white;border:1px solid #ddd;border-radius:14px;overflow:hidden}.phase{min-height:25px;margin:12px 0 4px;font-weight:600}.context{font:12px/1.6 ui-monospace,monospace;color:#555;white-space:normal}.custom-summary{color:#245e99;font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}section{min-width:0}h2{font-size:18px;margin:0 0 4px}.explanation{min-height:45px;margin-bottom:8px}.widget{height:470px;background:white;border-radius:14px;overflow:hidden}.phase{min-height:25px;margin:12px 0 4px;font-weight:600}.context{font:12px/1.6 ui-monospace,monospace;color:#555;white-space:normal}.custom-summary{color:#245e99;font-weight:600}
   select{font:inherit;padding:8px 28px 8px 10px;border:1px solid #bcbcb8;border-radius:8px;background:white;color:inherit}#ready{font-size:13px;color:#666}details{margin-top:22px}li{margin:5px 0}@media(max-width:850px){.grid{grid-template-columns:1fr}main{padding:20px}.widget{height:430px}}
 </style>
 </head>
@@ -19,24 +19,35 @@
   <button id="run" disabled>Run both</button>
   <button id="reset" disabled>Clear both</button>
   <label><input id="custom" type="checkbox">Custom summaries</label>
+  <label><input id="singletons" type="checkbox">Group single tools</label>
   <label><input id="icons" type="checkbox">Hide group icons</label>
   <label>Label animation <select id="animation"><option value="shimmer">Shimmer</option><option value="none">None</option><option value="pulse">Pulse</option><option value="shimmer-color">Color shimmer</option><option value="rainbow">Rainbow</option><option value="custom">Custom pulse</option></select></label>
-  <label>Duration <select id="duration"><option value="1800">1.8 seconds</option><option value="3600">3.6 seconds</option></select></label>
+  <label>Label cycle <select id="duration"><option value="1800">1.8 seconds</option><option value="3600">3.6 seconds</option></select></label>
+  <label>Elapsed timing <select id="timing"><option value="none">Off (default)</option><option value="tools">Per tool</option><option value="group">Group</option><option value="all">Group and tools</option></select></label>
+  <label>Mock tool time <select id="tool-time"><option value="700">700 ms</option><option value="2400">2.4 seconds</option><option value="12000">12 seconds</option></select></label>
+  <label>Expansion <select id="expansion"><option value="instant">Instant</option><option value="height">Height</option></select></label>
+  <label>Expansion duration <select id="expansion-duration"><option value="90">90 ms</option><option value="120">120 ms</option><option value="150">150 ms</option><option value="160" selected>160 ms</option><option value="180">180 ms</option><option value="250">250 ms</option><option value="300">300 ms</option><option value="600">600 ms</option><option value="1200">1.2 seconds</option></select></label>
+  <label>Expansion easing <select id="expansion-easing"><option value="ease-out">Ease out</option><option value="ease-in-out">Ease in/out</option><option value="linear">Linear</option></select></label>
+  <label><input id="auto-expand" type="checkbox">Auto expand/collapse tools</label>
   <label>Thinking icon <select id="thinking-icon"><option value="default">Default spinner</option><option value="sparkles">Sparkles</option><option value="preview-diamond">Registered diamond</option><option value="hidden">Hidden</option></select></label>
   <label>Icon animation <select id="thinking-motion"><option value="default">Default</option><option value="none">None</option><option value="spin">Spin</option></select></label>
 </div>
 <div class="grid">
   <section><h2>Adjacent groups</h2><p class="explanation">One group stays working during the pauses between batches.</p><div id="adjacent" class="widget"></div><div id="adjacent-phase" class="phase" role="status">Ready to run</div><div id="adjacent-context" class="context">Summary context appears here when tools arrive.</div></section>
-  <section><h2>Iteration groups</h2><p class="explanation">Three separate groups. Each finishes when its own tools finish.</p><div id="iteration" class="widget"></div><div id="iteration-phase" class="phase" role="status">Ready to run</div><div id="iteration-context" class="context">Summary context appears here when tools arrive.</div></section>
+  <section><h2>Iteration groups</h2><p class="explanation">One two-tool group and two direct tool rows. Each iteration finishes independently.</p><div id="iteration" class="widget"></div><div id="iteration-phase" class="phase" role="status">Ready to run</div><div id="iteration-context" class="context">Summary context appears here when tools arrive.</div></section>
 </div>
 <p id="ready" role="status">Loading the widgets…</p>
 <details open><summary>What to check</summary><ul>
+<li>Single-tool iterations open their details directly. Enable “Group single tools” to keep a header for every iteration, including custom summaries. An open tool stays visible when a second tool joins its group.</li>
+<li>Elapsed timing is off by default. Per-tool timing omits sub-second calls; exact milliseconds remain in expanded details. Group timing measures the tool-activity span, including gaps between batches; it holds the latest measured interval when no child is running. Switch modes during a run or after completion.</li>
 <li>During “Thinking between batches,” the adjacent header keeps working; finished iteration headers stay done.</li>
 <li>Expand a group during the run. Its controls and tool rows should stay in place as more calls arrive.</li>
 <li>Run again after completion. Old groups stay done while the new response waits for its first tool.</li>
 <li>“Hide group icons” removes only header icons. Expanded child rows keep their icons.</li>
 <li>“Custom summaries” uses all three context flags to show a custom working label for the latest group in this run. Earlier iteration groups stay done.</li>
 <li>Change the label animation before or during a run. Thinking, individual tools, and running groups share the selected style. Custom summaries own their appearance.</li>
+<li>Choose Height expansion, then open/close a group or child tool. Reverse it mid-motion: the transition starts from its current height. Headers stay in place while the inner content moves down 8 pixels when opening and up when closing, with a subtle fade; streamed details keep updating. Longer durations make this easier to inspect.</li>
+<li>Change expansion settings mid-transition to settle immediately. Enable auto expand/collapse before a new run to check automatic tool transitions. Reduced motion makes all disclosures instant.</li>
 <li>“Custom pulse” uses the loading-label hook and the Web Animations API. Reduced motion disables loading animations.</li>
 <li>Choose a Thinking icon before or during a run. Custom icons stay still by default; icon animation is independent of the text effect. The diamond is registered through the public icon registry.</li>
 </ul></details>
@@ -45,8 +56,11 @@
 <script>
 const handles = [];
 const run = document.querySelector('#run'), reset = document.querySelector('#reset');
-const custom = document.querySelector('#custom'), icons = document.querySelector('#icons');
+const custom = document.querySelector('#custom'), icons = document.querySelector('#icons'), singletons = document.querySelector('#singletons');
 const animation = document.querySelector('#animation'), duration = document.querySelector('#duration');
+const expansion = document.querySelector('#expansion'), expansionDuration = document.querySelector('#expansion-duration'), expansionEasing = document.querySelector('#expansion-easing'), autoExpand = document.querySelector('#auto-expand');
+const expansionSettings = () => ({animation:expansion.value, duration:Number(expansionDuration.value), easing:expansionEasing.value});
+const timing = document.querySelector('#timing'), toolTime = document.querySelector('#tool-time');
 const thinkingIcon = document.querySelector('#thinking-icon'), thinkingMotion = document.querySelector('#thinking-motion');
 AgentWidget.registerIcons({'preview-diamond': [['path', {d:'M12 3 21 12 12 21 3 12Z'}], ['path', {d:'M12 8v8M8 12h8'}]]});
 window.loadingLabelPreview = { started: 0, updated: 0, destroyed: 0, active: 0 };
@@ -101,10 +115,11 @@ function mockStream(boundary) {
         const tool = async (iteration, name) => {
           const toolCallId = executionId + '-' + name;
           emit('tool_start', {iteration, toolCallId, toolName: name, parameters: {iteration}});
-          await wait(350);
+          const elapsed = Number(toolTime.value);
+          await wait(elapsed / 2);
           emit('tool_output_delta', {toolCallId, delta: 'Processing sample data…'});
-          await wait(350);
-          emit('tool_complete', {iteration, toolCallId, toolName: name, success: true, result: 'Complete', executionTime: 700});
+          await wait(elapsed / 2);
+          emit('tool_complete', {iteration, toolCallId, toolName: name, success: true, result: 'Complete', executionTime: elapsed});
         };
         (async () => {
           try {
@@ -145,7 +160,7 @@ function mockStream(boundary) {
 for (const boundary of ['adjacent', 'iteration']) {
   const handle = AgentWidget.initAgentWidget({target:'#' + boundary, config:{
     apiUrl:'/api/chat', persistState:false, future:{v5Defaults:true},
-    loadingLabel:labelSettings(),
+    loadingLabel:labelSettings(), expansion:expansionSettings(),
     launcher:{enabled:false, fullHeight:true}, layout:{showHeader:false},
     voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
     features:{toolCallDisplay:{grouped:true, groupedMode:'collapsible', groupBoundary:boundary, iconVisibility:'always', autoExpand:false, autoCollapseDelay:false}},
@@ -163,14 +178,23 @@ run.addEventListener('click', () => {
   }
 });
 reset.addEventListener('click', () => location.reload());
-for (const input of [custom, icons]) input.addEventListener('change', () => {
+for (const input of [custom, icons, singletons]) input.addEventListener('change', () => {
   for (const {handle,boundary} of handles) handle.update({
-    features:{toolCallDisplay:{groupIconVisibility:icons.checked ? 'never' : 'always'}},
+    features:{toolCallDisplay:{groupIconVisibility:icons.checked ? 'never' : 'always', groupSingletons:singletons.checked}},
     toolCall:{renderGroupedSummary:summary(boundary)}
   });
 });
+timing.addEventListener('change', () => {
+  for (const {handle} of handles) handle.update({features:{toolCallDisplay:{durationDisplay:timing.value}}});
+});
 for (const select of [animation, duration]) select.addEventListener('change', () => {
   for (const {handle} of handles) handle.update({loadingLabel:labelSettings()});
+});
+for (const select of [expansion, expansionDuration, expansionEasing]) select.addEventListener('change', () => {
+  for (const {handle} of handles) handle.update({expansion:expansionSettings()});
+});
+autoExpand.addEventListener('change', () => {
+  for (const {handle} of handles) handle.update({features:{toolCallDisplay:{autoExpand:autoExpand.checked, autoCollapseDelay:autoExpand.checked ? 1000 : false}}});
 });
 for (const select of [thinkingIcon, thinkingMotion]) select.addEventListener('change', () => {
   for (const {handle} of handles) handle.update({loadingIndicator:{

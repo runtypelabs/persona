@@ -6517,6 +6517,7 @@
 .persona-activity-icon { display:inline-flex; flex:none; width:var(--persona-activity-icon-size, var(--persona-components-activity-iconSize, 16px)); height:var(--persona-activity-icon-size, var(--persona-components-activity-iconSize, 16px)); }
 .persona-activity-icon svg { width:100%; height:100%; }
 .persona-activity-chevron { margin-left:0; flex:none; }
+.persona-disclosure-chevron { transition-property:transform; transform-origin:center; }
 .persona-activity-duration { font-size:12px; white-space:nowrap; }
 .persona-activity-row > .persona-activity-body { margin-left:var(--persona-activity-indent); padding:var(--persona-components-activity-bodyPadding, 8px 0); border:0; background:var(--persona-activity-body-bg); }
 .persona-activity-row[data-persona-tool-group] > .persona-activity-body {
@@ -6545,10 +6546,15 @@
 .persona-activity-icon[data-loading-icon-animation="spin"] { animation:persona-activity-spin 1s linear infinite; }
 @keyframes persona-activity-spin { to { transform:rotate(360deg); } }
 @keyframes persona-activity-enter { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
+/* Collapsible groups animate their body as one unit. Per-child entry effects
+   restart after display:none and otherwise flash during disclosure measurement. */
+.persona-activity-row[data-persona-disclosure-motion="height"] .persona-activity-group-child { animation:none; }
 .persona-activity-group-child { animation:persona-activity-enter 160ms ease both; animation-delay:var(--persona-activity-stagger, 0ms); }
 @media (prefers-reduced-motion: reduce) {
   .persona-activity-row[data-activity-state="running"] > .persona-activity-header > .persona-activity-icon,
-  .persona-activity-icon[data-loading-icon-animation="spin"], .persona-activity-group-child { animation:none; }
+  .persona-activity-icon[data-loading-icon-animation="spin"],
+  .persona-activity-group-child { animation:none; }
+  .persona-disclosure-chevron { transition:none !important; }
 }
 /* Keep the top edge soft only while earlier transcript content is out of view. */
 .persona-widget-container:has(> .persona-widget-body[data-persona-top-fade="true"]) {

@@ -78,11 +78,18 @@ production authentication, account loading, and remote server overhead.
 Open http://localhost:5204/activity to compare adjacent and iteration groups using
 the built widget. **Run both** streams four mocked tool calls over three iterations,
 with pauses between batches. Run again to check that historical groups stay done.
-The switches exercise custom summaries and group-only icon visibility; expand a
+Single-tool iterations render directly by default; **Group single tools** restores
+a summary header for every iteration, including custom summaries. The switches
+exercise custom summaries and group-only icon visibility; expand a
 group to check its child rows. The animation selector applies the same style to
 waiting labels, individual tools, and group headers, and can be changed mid-run.
 Custom pulse demonstrates the loading-label lifecycle hook using the Web Animations
 API; its start/update/destroy counters are available in `window.loadingLabelPreview`.
 The Thinking icon controls select a built-in or registered custom glyph, hide it,
 and set icon motion independently of the text animation.
+Expansion controls select instant or height motion, its duration, and its CSS easing
+independently of the loading labels. Open and close groups and child rows, reverse
+a transition, or change settings mid-motion. The automatic toggle enables tool
+expansion on first activity and delayed collapse on completion for the next run.
+Reduced motion keeps disclosure changes instant.
 No backend or API key is required.

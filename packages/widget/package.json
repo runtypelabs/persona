@@ -174,7 +174,7 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && node scripts/build-bundles.mjs && node scripts/terser-global.mjs dist/index.global.js dist/install.global.js dist/launcher.global.js dist/client-stream.js dist/theme-editor.js && pnpm run check:dist-vite8 && pnpm run check:size",
+    "build": "rimraf dist && pnpm run build:styles && node scripts/build-bundles.mjs && node scripts/terser-global.mjs dist/index.global.js dist/install.global.js dist/launcher.global.js dist/client-stream.js dist/theme-editor.js dist/activity-ui.js && pnpm run check:dist-vite8 && pnpm run check:size",
     "check:size": "node scripts/check-size.mjs",
     "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:styles": "node scripts/build-styles.mjs",

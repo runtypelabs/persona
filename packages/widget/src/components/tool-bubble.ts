@@ -118,6 +118,7 @@ export const updateToolBubbleUI = (
 ): void => {
   updateExpandableBubbleUI(messageId, bubble, {
     stateSet: expansionState,
+    config,
     previewKind: "tool",
     iconColor: toolChevronColor(resolveToolStyles(config), bubble.classList.contains("persona-activity-row")),
   });
@@ -251,6 +252,7 @@ export const createToolBubble = (
 
   const iconColor = toolChevronColor(toolCallConfig, activityVariant(config, "tool") === "row");
   const toggleIcon = appendHeaderToggle(header, headerContent, {
+    config,
     expandable,
     expanded,
     iconColor,
@@ -387,21 +389,22 @@ export const createToolBubble = (
       content.appendChild(resultBlock);
     }
 
-    if (tool.status === "complete" && typeof tool.duration === "number") {
-      const duration = createElement(
-        "div",
-        "persona-text-xs persona-text-persona-muted"
-      );
-      if (toolCallConfig.contentTextColor) {
-        duration.style.color = toolCallConfig.contentTextColor;
-      }
-      duration.textContent = `Duration: ${tool.duration}ms`;
-      content.appendChild(duration);
-    }
-
   }
 
-  applyExpansionDisplay({ expanded, header, toggleIcon, content, collapsedPreview, iconColor });
+  const elapsed = tool.duration ?? tool.durationMs ?? (tool.completedAt !== undefined && tool.startedAt !== undefined ? tool.completedAt - tool.startedAt : undefined);
+  if (tool.status === "complete" && typeof elapsed === "number" && Number.isFinite(elapsed) && elapsed >= 0) {
+    const duration = createElement(
+      "div",
+      "persona-text-xs persona-text-persona-muted"
+    );
+    if (toolCallConfig.contentTextColor) {
+      duration.style.color = toolCallConfig.contentTextColor;
+    }
+    duration.textContent = `Duration: ${elapsed}ms`;
+    content.appendChild(duration);
+  }
+
+  applyExpansionDisplay({ expanded, header, toggleIcon, content, collapsedPreview, iconColor, config });
 
   bubble.append(header, collapsedPreview, content);
   return applyActivityRow(bubble, message, config, "tool");

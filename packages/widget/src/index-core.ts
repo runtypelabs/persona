@@ -14,6 +14,7 @@ export type {
   DictationRenderHandle,
   AgentWidgetConfig,
   AgentWidgetLoadingLabelConfig,
+  AgentWidgetExpansionConfig,
   LoadingLabelAnimationContext,
   LoadingLabelAnimationHandle,
   AgentWidgetStorageAdapter,

@@ -2683,6 +2683,8 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 
 **Example:** `"Calling {toolName}... ~{duration}~"` renders the duration in a muted/dim style.
 
+Automatic group timing spans the earliest known tool start through the latest known completion, so overlapping calls are never summed. Gaps between batches are included once the next tool arrives. While no child is running, a still-working group holds the latest measured span. Missing or invalid timestamp metadata omits group timing. This measures tool activity rather than the whole response. `durationDisplay` can be updated live and affects automatic row timing only; V4 cards retain their existing authored summaries.
+
 ### Display Features (`config.features.toolCallDisplay.*`)
 | Property | Default | Description |
 |----------|---------|-------------|
@@ -2693,7 +2695,9 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | `grouped` | `false` | Visually group consecutive tool call rows |
 | `groupedMode` | `"stack"` | `"stack"`, `"summary"`, or `"collapsible"` (V5 default) |
 | `groupBoundary` | `"adjacent"` | `"iteration"` splits visible neighbors when both have different known iterations or execution IDs; unknown metadata retains adjacency |
+| `groupSingletons` | `false` | Keep single-tool group headers in stack/collapsible modes; summary mode always keeps its summary |
 | `groupIconVisibility` | inherits `iconVisibility` | `"always"`, `"active"`, or `"never"` for the built-in collapsible group header only |
+| `durationDisplay` | `"none"` | Automatic timing: `"tools"`, `"group"`, or `"all"`. Tool rows and collapsible group headers show whole seconds (`2s`, `12s`), omitting sub-second or unknown times. Authored `{duration}` placeholders, custom timer elements, and exact milliseconds in expanded details remain available. |
 | `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
 | `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
 | `completedVisibility` | `"kept"` | `"removed"` renders no row once the tool call completes, so the transcript gap closes with it. The tool call stays on the message and in `getMessages()` |
@@ -3454,15 +3458,21 @@ The existing `"stack"` and `"summary"` grouping modes keep their behavior.
 known `agentMetadata.iteration` or `agentMetadata.executionId` values, in every
 mode. Unknown metadata preserves adjacency pairwise: iterations `[1, undefined, 2]`
 stay together. Hidden reasoning and removed completed tools do not create visible
-boundaries. Iteration grouping includes singleton groups from their first tool,
-keeping the group wrapper stable as more calls arrive. `groupBoundary` and all
-three `groupedMode` values are supported in persisted preferences and the editor.
+boundaries. Single-tool groups render the tool directly in stack/collapsible modes,
+so one disclosure reaches its details. Set `groupSingletons: true` to keep a group
+header from the first tool, including a custom summary. Summary mode always keeps
+its summary. If an open standalone tool gains a sibling, the new group starts
+open; subsequent updates respect manual group toggles. `groupBoundary`,
+`groupSingletons`, and all three `groupedMode` values are supported in persisted
+preferences.
 
 `toolCall.renderGroupedSummary` receives `streaming`, `isLatestGroup`, and
 `isCurrentRunGroup` alongside `messages`, `toolCalls`, `defaultSummary`, and `config`.
 `streaming` reflects the session stream, including completed-tool batch gaps.
-`isLatestGroup` identifies the last rendered tool group even when assistant prose
-follows it. `isCurrentRunGroup` means the group contains at least one tool observed
+`isLatestGroup` identifies the final logical tool group even when assistant prose
+follows it. Unwrapped singleton groups count, so an earlier header does not become
+latest just because the final tool has no wrapper. Summary callbacks run only for
+rendered group headers. `isCurrentRunGroup` means the group contains at least one tool observed
 in the current session run; starting a new send or continuation resets that ownership
 before rendering. A continuation can append tools to an existing adjacent group,
 which then becomes current. Restored tools count only when their known execution

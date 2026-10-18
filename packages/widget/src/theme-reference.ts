@@ -341,7 +341,7 @@ export const THEME_TOKEN_DOCS = {
     features: {
       description: 'Feature flags.',
       properties:
-        'showReasoning (AI thinking steps), showToolCalls (tool invocations), toolCallDisplay (collapsedMode, activePreview, activeMinHeight, previewMaxLines, grouped, groupedMode, groupBoundary, groupIconVisibility, expandable, loadingAnimation), reasoningDisplay (activePreview, activeMinHeight, previewMaxLines, expandable, loadingAnimation), artifacts (sidebar config).',
+        'showReasoning (AI thinking steps), showToolCalls (tool invocations), toolCallDisplay (collapsedMode, activePreview, activeMinHeight, previewMaxLines, grouped, groupedMode, groupBoundary, groupSingletons, groupIconVisibility, expandable, loadingAnimation), reasoningDisplay (activePreview, activeMinHeight, previewMaxLines, expandable, loadingAnimation), artifacts (sidebar config).',
     },
   },
 }

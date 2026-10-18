@@ -327,10 +327,11 @@ describe("resolveConfigPreferences", () => {
 
 test('persists every group mode and iteration boundary while leaving header styling code-owned', () => {
   for (const groupedMode of ['stack', 'summary', 'collapsible'] as const) {
-    const parsed = parseWidgetPreferenceSlice({ toolCallDisplay: { groupedMode, groupBoundary: 'iteration', groupIconVisibility: 'always' } });
-    expect(parsed.preferences.toolCallDisplay).toEqual({ groupedMode, groupBoundary: 'iteration' });
+    const parsed = parseWidgetPreferenceSlice({ toolCallDisplay: { groupedMode, groupBoundary: 'iteration', groupSingletons: true, groupIconVisibility: 'always' } });
+    expect(parsed.preferences.toolCallDisplay).toEqual({ groupedMode, groupBoundary: 'iteration', groupSingletons: true });
     expect(parsed.issues).toEqual([expect.objectContaining({ path: 'toolCallDisplay.groupIconVisibility', code: 'unknown_key' })]);
-    expect(applyFeaturePreferences({ toolCallDisplay: { groupIconVisibility: 'always' } }, [parsed.preferences]).toolCallDisplay).toEqual({ groupedMode, groupBoundary: 'iteration', groupIconVisibility: 'always' });
+    expect(applyFeaturePreferences({ toolCallDisplay: { groupIconVisibility: 'always' } }, [parsed.preferences]).toolCallDisplay).toEqual({ groupedMode, groupBoundary: 'iteration', groupSingletons: true, groupIconVisibility: 'always' });
   }
+  expect(parseWidgetPreferenceSlice({ toolCallDisplay: { groupSingletons: 'yes' } }).issues).toEqual([expect.objectContaining({ path: 'toolCallDisplay.groupSingletons', code: 'invalid_type' })]);
   expect(parseWidgetPreferenceSlice({ toolCallDisplay: { groupBoundary: 'turn' } }).issues).toEqual([expect.objectContaining({ path: 'toolCallDisplay.groupBoundary', code: 'invalid_value' })]);
 });

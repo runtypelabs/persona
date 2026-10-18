@@ -29,10 +29,12 @@ const getReasoningPreviewText = (message: AgentWidgetMessage, maxLines: number):
 export const updateReasoningBubbleUI = (
   messageId: string,
   bubble: HTMLElement,
-  expansionState: Set<string>
+  expansionState: Set<string>,
+  config?: AgentWidgetConfig
 ): void => {
   updateExpandableBubbleUI(messageId, bubble, {
     stateSet: expansionState,
+    config,
     previewKind: "reasoning",
     iconColor: "currentColor",
   });
@@ -162,6 +164,7 @@ export const createReasoningBubble = (
 
   const iconColor = "currentColor";
   const toggleIcon = appendHeaderToggle(header, headerContent, {
+    config,
     expandable,
     expanded,
     iconColor,
@@ -209,7 +212,7 @@ export const createReasoningBubble = (
       : "Waiting for details…");
   content.appendChild(body);
 
-  applyExpansionDisplay({ expanded, header, toggleIcon, content, collapsedPreview, iconColor });
+  applyExpansionDisplay({ expanded, header, toggleIcon, content, collapsedPreview, iconColor, config });
 
   bubble.append(header, collapsedPreview, content);
   return applyActivityRow(bubble, message, config, "reasoning");
