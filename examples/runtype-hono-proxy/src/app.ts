@@ -17,6 +17,7 @@ import {
   DOCS_ASSISTANT_AGENT,
   CHAT_ASSISTANT_AGENT,
   ANALYTICS_ASSISTANT_AGENT,
+  PHONE_RECEPTIONIST_AGENT,
   createCheckoutSession,
   type CheckoutItem,
 } from "@runtypelabs/persona-proxy";
@@ -260,6 +261,16 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
     upstreamUrl,
   });
 
+  const phoneAgentApp = createChatProxyApp({
+    ...proxyProtection,
+    path: "/api/chat/dispatch-phone-agent",
+    apiKey,
+    allowedOrigins,
+    agentId: env.AGENT_ID_PHONE_AGENT || undefined,
+    agentConfig: env.AGENT_ID_PHONE_AGENT ? undefined : PHONE_RECEPTIONIST_AGENT,
+    upstreamUrl,
+  });
+
   app.route("/", directiveApp);
   app.route("/", actionApp);
   app.route("/", metadataApp);
@@ -277,6 +288,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   app.route("/", docsAssistantApp);
   app.route("/", chatAssistantApp);
   app.route("/", analyticsAssistantApp);
+  app.route("/", phoneAgentApp);
 
   app.post("/api/tts", async (c) => {
     const origin = c.req.header("origin");

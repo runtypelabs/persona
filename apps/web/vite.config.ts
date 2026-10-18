@@ -775,6 +775,8 @@ export default defineConfig({
         'analytics-agent-demo': path.resolve(__dirname, 'analytics-agent-demo.html'),
         // Agent demo
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
+        // Phone agent: PhoneLLM Mini receptionist with a live weather tool
+        'phone-agent-demo': path.resolve(__dirname, 'phone-agent-demo.html'),
         // WebMCP: page-discovered tools
         'webmcp-demo': path.resolve(__dirname, 'webmcp-demo.html'),
         // WebMCP: calendar copilot (client-token mode)
