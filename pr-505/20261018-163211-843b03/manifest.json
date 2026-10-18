@@ -1,0 +1,79 @@
+{
+  "runId": "20261018-163211-843b03",
+  "entries": [
+    {
+      "feature": "phone-agent",
+      "label": "render-empty",
+      "note": null,
+      "files": [
+        "02-phone-agent-render-empty.png",
+        "02-phone-agent-render-empty.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/phone-agent-demo.html",
+      "at": "2026-10-18T16:32:56.311Z",
+      "head": "3ba7dee996fc61024598bacfa8a9d507844196e2",
+      "diffHash": "977eafaebd94"
+    },
+    {
+      "feature": "phone-agent",
+      "label": "austin-reply",
+      "note": null,
+      "files": [
+        "04-phone-agent-austin-reply.png",
+        "04-phone-agent-austin-reply.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/phone-agent-demo.html",
+      "at": "2026-10-18T16:46:37.918Z",
+      "head": "3ba7dee996fc61024598bacfa8a9d507844196e2",
+      "diffHash": "977eafaebd94"
+    },
+    {
+      "feature": "phone-agent",
+      "label": "austin-tool-call",
+      "note": null,
+      "files": [
+        "03-phone-agent-austin-tool-call.gif",
+        "03-phone-agent-austin-tool-call.webm",
+        "03-phone-agent-austin-tool-call.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/phone-agent-demo.html",
+      "at": "2026-10-18T16:46:38.232Z",
+      "head": "3ba7dee996fc61024598bacfa8a9d507844196e2",
+      "diffHash": "977eafaebd94"
+    },
+    {
+      "feature": "phone-agent",
+      "label": "denver",
+      "note": null,
+      "files": [
+        "06-phone-agent-denver.png",
+        "06-phone-agent-denver.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/phone-agent-demo.html",
+      "at": "2026-10-18T16:48:43.012Z",
+      "head": "3ba7dee996fc61024598bacfa8a9d507844196e2",
+      "diffHash": "977eafaebd94"
+    },
+    {
+      "feature": "phone-agent",
+      "label": "office-hours",
+      "note": null,
+      "files": [
+        "07-phone-agent-office-hours.png",
+        "07-phone-agent-office-hours.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/phone-agent-demo.html",
+      "at": "2026-10-18T16:49:01.610Z",
+      "head": "3ba7dee996fc61024598bacfa8a9d507844196e2",
+      "diffHash": "977eafaebd94"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "phone-agent",
+      "pass": true,
+      "skipped": false,
+      "note": "Live staging dispatch via local proxy: get_current_weather (Austin, Denver) and check_office_hours tool calls, spoken-style replies, 0 reasoning events"
+    }
+  ]
+}

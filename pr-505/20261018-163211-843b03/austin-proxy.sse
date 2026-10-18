@@ -1,0 +1,172 @@
+id: 0
+event: execution_start
+data: {"type":"execution_start","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":0,"kind":"agent","startedAt":"2026-10-18T16:46:56.849Z","agentId":"virtual","agentName":"Sunrise Travel Receptionist","maxTurns":3}
+
+id: 1
+event: turn_start
+data: {"type":"turn_start","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":1,"id":"turn_exec_59bd443d-3789-428c-8147-f9d5904a84bb_1","iteration":1,"turnIndex":0,"role":"assistant"}
+
+id: 2
+event: model_call_start
+data: {"type":"model_call_start","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":2,"id":"exec_59bd443d-3789-428c-8147-f9d5904a84bb:agent-response:c7da7402-cabd-4f2d-b008-181bd88cdb92","ordinal":0,"turnId":"turn_exec_59bd443d-3789-428c-8147-f9d5904a84bb_1","stepId":"agent-response","startedAt":"2026-10-18T16:46:56.880Z"}
+
+id: 3
+event: text_start
+data: {"type":"text_start","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":3,"id":"text_1","role":"assistant"}
+
+id: 4
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":4,"id":"text_1","delta":"Let"}
+
+id: 5
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":5,"id":"text_1","delta":" me"}
+
+id: 6
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":6,"id":"text_1","delta":" check"}
+
+id: 7
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":7,"id":"text_1","delta":" the"}
+
+id: 8
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":8,"id":"text_1","delta":" current"}
+
+id: 9
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":9,"id":"text_1","delta":" weather"}
+
+id: 10
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":10,"id":"text_1","delta":" in"}
+
+id: 11
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":11,"id":"text_1","delta":" Austin"}
+
+id: 12
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":12,"id":"text_1","delta":" for"}
+
+id: 13
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":13,"id":"text_1","delta":" you"}
+
+id: 14
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":14,"id":"text_1","delta":".\n"}
+
+id: 15
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":15,"id":"text_1","delta":"\n"}
+
+id: 16
+event: text_complete
+data: {"type":"text_complete","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":16,"id":"text_1","text":"Let me check the current weather in Austin for you.\n\n"}
+
+id: 17
+event: tool_start
+data: {"type":"tool_start","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":17,"toolCallId":"chatcmpl-tool-8a13b4b6f955a1a8::cf-wai-tool-call::I8NazSdNDsR6bKh5","toolName":"get_current_weather","toolType":"external","iteration":1,"parameters":{"latitude":30.2672,"longitude":-97.7431},"startedAt":"2026-10-18T16:46:57.498Z"}
+
+id: 18
+event: tool_input_complete
+data: {"type":"tool_input_complete","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":18,"toolCallId":"chatcmpl-tool-8a13b4b6f955a1a8::cf-wai-tool-call::I8NazSdNDsR6bKh5","toolName":"get_current_weather","parameters":{}}
+
+id: 19
+event: model_call_complete
+data: {"type":"model_call_complete","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":19,"id":"exec_59bd443d-3789-428c-8147-f9d5904a84bb:agent-response:c7da7402-cabd-4f2d-b008-181bd88cdb92","ordinal":0,"finishReason":"tool-calls","success":true,"durationMs":634,"turnId":"turn_exec_59bd443d-3789-428c-8147-f9d5904a84bb_1","completedAt":"2026-10-18T16:46:57.514Z"}
+
+id: 20
+event: tool_complete
+data: {"type":"tool_complete","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":20,"toolCallId":"chatcmpl-tool-8a13b4b6f955a1a8::cf-wai-tool-call::I8NazSdNDsR6bKh5","toolName":"get_current_weather","success":true,"result":{"latitude":30.269146,"longitude":-97.75338,"generationtime_ms":0.1499652862548828,"utc_offset_seconds":0,"timezone":"GMT","timezone_abbreviation":"GMT","elevation":157,"current_units":{"time":"iso8601","interval":"seconds","temperature_2m":"°F","weather_code":"wmo code"},"current":{"time":"2026-10-18T16:45","interval":900,"temperature_2m":67.3,"weather_code":0}},"executionTime":2989,"iteration":1}
+
+id: 21
+event: model_call_start
+data: {"type":"model_call_start","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":21,"id":"exec_59bd443d-3789-428c-8147-f9d5904a84bb:agent-response:c7da7402-cabd-4f2d-b008-181bd88cdb92:r1","ordinal":0,"turnId":"turn_exec_59bd443d-3789-428c-8147-f9d5904a84bb_1","stepId":"agent-response","startedAt":"2026-10-18T16:47:00.487Z"}
+
+id: 22
+event: text_start
+data: {"type":"text_start","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":22,"id":"text_2","role":"assistant"}
+
+id: 23
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":23,"id":"text_2","delta":"Right"}
+
+id: 24
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":24,"id":"text_2","delta":" now"}
+
+id: 25
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":25,"id":"text_2","delta":" in"}
+
+id: 26
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":26,"id":"text_2","delta":" Austin"}
+
+id: 27
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":27,"id":"text_2","delta":" it"}
+
+id: 28
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":28,"id":"text_2","delta":"'s"}
+
+id: 29
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":29,"id":"text_2","delta":" sixty"}
+
+id: 30
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":30,"id":"text_2","delta":"-seven"}
+
+id: 31
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":31,"id":"text_2","delta":" degrees"}
+
+id: 32
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":32,"id":"text_2","delta":" F"}
+
+id: 33
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":33,"id":"text_2","delta":"ahren"}
+
+id: 34
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":34,"id":"text_2","delta":"heit"}
+
+id: 35
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":35,"id":"text_2","delta":" with"}
+
+id: 36
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":36,"id":"text_2","delta":" clear"}
+
+id: 37
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":37,"id":"text_2","delta":" skies"}
+
+id: 38
+event: text_delta
+data: {"type":"text_delta","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":38,"id":"text_2","delta":"."}
+
+id: 39
+event: model_call_complete
+data: {"type":"model_call_complete","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":39,"id":"exec_59bd443d-3789-428c-8147-f9d5904a84bb:agent-response:c7da7402-cabd-4f2d-b008-181bd88cdb92:r1","ordinal":0,"finishReason":"stop","success":true,"durationMs":491,"turnId":"turn_exec_59bd443d-3789-428c-8147-f9d5904a84bb_1","completedAt":"2026-10-18T16:47:00.978Z"}
+
+id: 40
+event: text_complete
+data: {"type":"text_complete","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":40,"id":"text_2","text":"Right now in Austin it's sixty-seven degrees Fahrenheit with clear skies."}
+
+id: 41
+event: turn_complete
+data: {"type":"turn_complete","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":41,"id":"turn_exec_59bd443d-3789-428c-8147-f9d5904a84bb_1","iteration":1,"role":"assistant","stopReason":"end_turn","completedAt":"2026-10-18T16:47:00.978Z","estimatedContextBreakdown":{"estimatedTotalTokens":818,"categories":{"systemPrompt":{"estimatedTokens":260,"chars":1040},"recordContext":{"estimatedTokens":0,"chars":0},"conversationHistory":{"estimatedTokens":67,"chars":268},"toolDefinitions":{"estimatedTokens":345,"chars":1379},"toolResults":{"estimatedTokens":135,"chars":538},"currentUserMessage":{"estimatedTokens":11,"chars":44}},"contextWindowSize":262140,"estimatedUtilizationPercent":0.3}}
+
+id: 42
+event: execution_complete
+data: {"type":"execution_complete","executionId":"exec_59bd443d-3789-428c-8147-f9d5904a84bb","seq":42,"kind":"agent","success":true,"iterations":1,"stopReason":"complete","completedAt":"2026-10-18T16:47:00.978Z","durationMs":4129,"finalOutput":"Let me check the current weather in Austin for you.\n\nRight now in Austin it's sixty-seven degrees Fahrenheit with clear skies.","outcome":"completed"}
+

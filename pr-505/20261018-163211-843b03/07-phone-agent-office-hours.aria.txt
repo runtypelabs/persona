@@ -1,0 +1,145 @@
+- navigation
+  - link "Persona home" [ref=e1]
+  - link "ADVANCED EXAMPLES" [ref=e2]
+  - button "Search Persona examples" [ref=e6]
+  - link "Server TTS (streaming)" [ref=e3]
+  - link "Form Field Reference" [ref=e4]
+  - link "Persona on GitHub" [ref=e5]
+- main
+  - complementary
+    - sectionheader
+      - heading "Phone Agent" [level=1, ref=e7]
+      - paragraph
+        - StaticText "A Sunrise Travel front-desk receptionist on Pipecat's PhoneLLM Mini, a model tuned for voice agents: sub-100 ms time to first token, reliable tool calls, and no reasoning pass. Ask about the weather where you're headed and it looks it up live mid-conversation."
+    - generic
+      - StaticText "Configure"
+      - heading "Voice" [level=3, ref=e8]
+      - LabelText
+        - checkbox "Talk instead of type" [checked=true, ref=e21]
+      - StaticText "Browser voice: mic + spoken replies"
+      - heading "Last turn latency" [level=3, ref=e9]
+      - paragraph
+        - StaticText "Measured in the browser from send, through the proxy."
+      - DescriptionList
+        - term "First event"
+        - definition
+          - StaticText "2.34 s"
+        - term "Tool call"
+        - definition
+          - StaticText "3.37 s · check_office_hours"
+        - term "First word"
+        - definition
+          - StaticText "3.18 s"
+        - term "Total turn"
+        - definition
+          - StaticText "6.46 s"
+      - heading "Realtime voice (optional)" [level=3, ref=e10]
+      - paragraph
+        - StaticText "Runtype's server-side speech pipeline needs a client token and a saved agent set to "
+        - code
+          - StaticText "phonellm-mini"
+        - StaticText ". Leave blank to use the browser's speech recognition and voices; typing always works without them."
+      - form
+        - LabelText
+          - StaticText "Client token"
+        - textbox "Client token" [ref=e22]
+        - LabelText
+          - StaticText "Agent id"
+        - textbox "Agent id" [ref=e23]
+        - button "Apply" [ref=e24]
+    - generic
+      - heading "Notes" [level=2, ref=e11]
+      - heading "The model" [level=3, ref=e12]
+      - paragraph
+        - strong
+          - StaticText "PhoneLLM Mini Alpha 2"
+        - StaticText " from Pipecat (Daily), served on Cloudflare Workers AI and routed by Runtype as "
+        - code
+          - StaticText "phonellm-mini"
+        - StaticText ". It is post-trained from Nemotron 3 Nano 30B-A3B for phone and voice agents: fast tool calling, short conversational replies, no reasoning tokens. Runtype forces temperature to 0 and disables thinking server-side. Pricing is $0.06 / $0.24 per million input / output tokens."
+      - heading "How it works" [level=3, ref=e13]
+      - paragraph
+        - StaticText "The widget posts to "
+        - code
+          - StaticText "/api/chat/dispatch-phone-agent"
+        - StaticText " on the demo proxy, which pins the agent server-side ("
+        - code
+          - StaticText "PHONE_RECEPTIONIST_AGENT"
+        - StaticText " in "
+        - code
+          - StaticText "@runtypelabs/persona-proxy"
+        - StaticText ") and keeps the Runtype API key off the page. With voice on, the browser transcribes your speech and reads replies aloud; supply a client token and agent id to switch to Runtype's realtime voice pipeline instead."
+      - heading "The weather tool" [level=3, ref=e14]
+      - paragraph
+        - StaticText "A keyless external GET against Open-Meteo. The model fills in coordinates from the place name itself."
+      - generic
+        - StaticText "{\n  name: \"get_current_weather\",\n  toolType: \"external\",\n  parametersSchema: {\n    type: \"object\",\n    properties: {\n      latitude: { type: \"number\" },\n      longitude: { type: \"number\" },\n    },\n    required: [\"latitude\", \"longitude\"],\n  },\n  config: {\n    method: \"GET\",\n    url: \"https://api.open-meteo.com/v1/forecast?latitude={{latitude}}&longitude={{longitude}}&current=temperature_2m,weather_code&temperature_unit=fahrenheit\",\n  },\n}"
+      - paragraph
+        - StaticText "A second tool, "
+        - code
+          - StaticText "check_office_hours"
+        - StaticText ", reads the office's local time from timeapi.io so the receptionist can say whether it's open."
+      - heading "What to look for" [level=3, ref=e15]
+      - list
+        - listitem [level=1]
+          - ListMarker "• "
+          - StaticText "The tool bubble appears before the reply: the model calls the tool first rather than guessing."
+        - listitem [level=1]
+          - ListMarker "• "
+          - StaticText "Replies are one or two short sentences with numbers spelled out, written to be spoken."
+        - listitem [level=1]
+          - ListMarker "• "
+          - StaticText "No reasoning bubble: the model answers without a thinking pass."
+        - listitem [level=1]
+          - ListMarker "• "
+          - StaticText "The latency readout: the tool call lands within a second or two of sending, and the whole turn usually finishes in about two to three seconds including the live weather lookup."
+      - heading "Caveats" [level=3, ref=e16]
+      - paragraph
+        - StaticText "PhoneLLM Mini is an "
+        - strong
+          - StaticText "alpha"
+        - StaticText " model and speaks "
+        - strong
+          - StaticText "English only"
+        - StaticText ". Expect occasional rough edges on long or multi-part requests; it is built for short phone-style exchanges."
+  - generic
+    - group "Preview mode"
+      - button "Preview" [ref=e17]
+      - button "Code" [ref=e18]
+    - StaticText "VIEW AS"
+    - group "Mount mode"
+      - button "Inline" [ref=e19]
+      - button "Launcher" [ref=e20]
+    - generic
+      - generic
+        - StaticText "Sunrise Travel"
+        - StaticText "Front desk, powered by PhoneLLM Mini"
+        - button "Clear chat" [ref=e44]
+        - generic
+          - heading "Sunrise Travel front desk" [level=2, ref=e45]
+          - paragraph
+            - StaticText "Tap the mic and ask about the weather where you're headed, or type below."
+          - generic
+            - paragraph
+            - generic
+              - button "Copy message" [ref=e51]
+            - button "Used tool for 2.5 seconds" [expanded=false, ref=e49]
+            - generic
+              - button "Copy message" [ref=e52]
+            - paragraph
+            - generic
+              - button "Copy message" [ref=e53]
+            - button "Used tool for 2.1 seconds" [expanded=false, ref=e50]
+            - generic
+              - button "Copy message" [ref=e54]
+            - paragraph
+            - generic
+              - button "Copy message" [ref=e56]
+            - button "Used tool for 2.4 seconds" [expanded=false, ref=e55]
+            - generic
+              - button "Copy message" [ref=e57]
+        - generic
+          - form
+            - textbox "Ask the front desk..." [ref=e46]
+            - button "Start voice recognition" [ref=e47]
+            - button "Send message" [ref=e48]
