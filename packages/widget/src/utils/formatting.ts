@@ -55,59 +55,31 @@ const createRegexJsonParserInternal = (): {
     const textFieldRegex = /"text"\s*:\s*"((?:[^"\\]|\\.|")*?)"/;
     const match = jsonString.match(textFieldRegex);
     
-    if (match && match[1]) {
-      // Unescape the string value
-      try {
-        // Replace escaped characters
-        let unescaped = match[1]
-          .replace(/\\n/g, '\n')
-          .replace(/\\r/g, '\r')
-          .replace(/\\t/g, '\t')
-          .replace(/\\"/g, '"')
-          .replace(/\\\\/g, '\\');
-        return unescaped;
-      } catch {
-        return match[1];
-      }
-    }
-    
-    // Also try to match incomplete text field (text field that hasn't closed yet)
-    // Look for "text": " followed by content that may not be closed
+    // Fall back to an unterminated text field while its value is streaming.
     const incompleteTextFieldRegex = /"text"\s*:\s*"((?:[^"\\]|\\.)*)/;
-    const incompleteMatch = jsonString.match(incompleteTextFieldRegex);
-    
-    if (incompleteMatch && incompleteMatch[1]) {
-      // Unescape the partial string value
-      try {
-        let unescaped = incompleteMatch[1]
-          .replace(/\\n/g, '\n')
-          .replace(/\\r/g, '\r')
-          .replace(/\\t/g, '\t')
-          .replace(/\\"/g, '"')
-          .replace(/\\\\/g, '\\');
-        return unescaped;
-      } catch {
-        return incompleteMatch[1];
-      }
+    const value = match?.[1] || jsonString.match(incompleteTextFieldRegex)?.[1];
+    if (!value) return null;
+    try {
+      return unescapeJsonString(value);
+    } catch {
+      return value;
     }
-    
-    return null;
   };
   
   return {
     getExtractedText: () => extractedText,
     processChunk: async (accumulatedContent: string): Promise<AgentWidgetStreamParserResult | string | null> => {
+      // Validate that the accumulated content looks like valid JSON
+      const trimmed = accumulatedContent.trim();
+      if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+        return null;
+      }
+
       // Skip if no new content
       if (accumulatedContent.length <= processedLength) {
         return extractedText !== null
           ? { text: extractedText, raw: accumulatedContent }
           : null;
-      }
-      
-      // Validate that the accumulated content looks like valid JSON
-      const trimmed = accumulatedContent.trim();
-      if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-        return null;
       }
       
       // Try to extract text field using regex
@@ -182,22 +154,8 @@ export const createPlainTextParser = (): AgentWidgetStreamParser => {
  * This is a simpler regex-based alternative to createJsonStreamParser.
  * Less robust for complex/malformed JSON but has no external dependencies.
  */
-export const createRegexJsonParser = (): AgentWidgetStreamParser => {
-  const regexParser = createRegexJsonParserInternal();
-  
-  return {
-    processChunk: async (accumulatedContent: string): Promise<AgentWidgetStreamParserResult | string | null> => {
-      // Only process if it looks like JSON
-      const trimmed = accumulatedContent.trim();
-      if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-        return null;
-      }
-      return regexParser.processChunk(accumulatedContent);
-    },
-    getExtractedText: regexParser.getExtractedText.bind(regexParser),
-    close: regexParser.close?.bind(regexParser)
-  };
-};
+export const createRegexJsonParser = (): AgentWidgetStreamParser =>
+  createRegexJsonParserInternal();
 
 /**
  * JSON stream parser using partial-json library.

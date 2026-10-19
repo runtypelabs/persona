@@ -18,7 +18,7 @@ export const HEADER_CONTROL_SPARSE_CLASS = "persona-header-control--sparse";
  * Icon-size token default in CSS pixels. Only derives the SVG attributes when a
  * per-control size is unset; the box itself is owned by the stylesheet.
  */
-const ICON_FALLBACK_PX = 20;
+const ICON_FALLBACK_PX = 16;
 
 /**
  * Icons whose Lucide paths occupy only the middle of the 24x24 viewBox (X spans
@@ -271,7 +271,7 @@ export const applyHeaderControlStyle = (
     const scale = SPARSE_GLYPHS[iconName]?.[0] ?? 1;
     const iconSize = token("iconSize", "");
     if (!options.iconSize && iconSize) {
-      svg.style.width = svg.style.height = `calc(${token("iconSize", "var(--persona-header-control-icon-size, 20px)")} * ${scale})`;
+      svg.style.width = svg.style.height = `calc(${token("iconSize", "var(--persona-header-control-icon-size, 16px)")} * ${scale})`;
     }
     if (token("iconStrokeWidth", "")) svg.style.strokeWidth = `calc(${token("iconStrokeWidth", "var(--persona-components-header-controlStrokeWidth, 1.5)")} * ${scale === 1 ? 1 : 0.7})`;
   }

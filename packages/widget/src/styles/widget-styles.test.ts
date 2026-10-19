@@ -295,13 +295,26 @@ describe("composer spacing styles", () => {
 });
 
 describe("header control styles", () => {
+  it("keeps the button box independent from the smaller glyph and floors touch targets at 40px", () => {
+    const start = widgetCss.indexOf(".persona-header-control {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("width: var(--persona-header-control-size, 32px)");
+    expect(rule).toContain("height: var(--persona-header-control-size, 32px)");
+    const touchStart = widgetCss.indexOf("@media (pointer: coarse) {\n  .persona-header-control {");
+    const touchRule = widgetCss.slice(touchStart, widgetCss.indexOf("\n  }", touchStart));
+    expect(touchStart).toBeGreaterThan(-1);
+    expect(touchRule).toContain("min-width: 40px");
+    expect(touchRule).toContain("min-height: 40px");
+  });
+
   it("sizes and strokes the glyph from the header control tokens", () => {
     const start = widgetCss.indexOf(".persona-header-control--glyph > svg {");
     const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
 
     expect(start).toBeGreaterThan(-1);
     expect(rule).toContain(
-      "width: var(--persona-header-control-icon-size, 20px)",
+      "width: var(--persona-header-control-icon-size, 16px)",
     );
     // CSS presentation beats the SVG stroke-width attribute, which stays as
     // the no-CSS fallback.
@@ -316,7 +329,7 @@ describe("header control styles", () => {
 
     expect(start).toBeGreaterThan(-1);
     expect(rule).toContain(
-      "width: calc(var(--persona-header-control-icon-size, 20px) * 1.4)",
+      "width: calc(var(--persona-header-control-icon-size, 16px) * 1.4)",
     );
     // 0.7 x the 1.5 default is 1.05, the stroke the close X has always
     // rendered at; SPARSE_GLYPHS in header-parts.ts carries the same pair.

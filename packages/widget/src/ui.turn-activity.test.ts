@@ -495,7 +495,7 @@ it("resolves group icons by category and preserves custom summary content", asyn
   expect(iconFor("tool-group-one")?.innerHTML).toBe(iconMarkup("globe"));
   expect(mount.querySelector("[data-custom-summary]")?.textContent).toBe("Custom batch");
   inject(toolMessage("three", "Read"));
-  expect(iconFor("tool-group-one")?.innerHTML).toBe(iconMarkup("activity"));
+  expect(iconFor("tool-group-one")?.innerHTML).toBe(iconMarkup("square-text"));
   controller.update({ toolCall: { iconName: "check" } });
   expect(iconFor("tool-group-one")?.innerHTML).toBe(iconMarkup("check"));
   expect(iconFor("tool-group-one")?.style.color).toBe("");
@@ -509,12 +509,14 @@ it("supports registered per-tool icons, live callback replacement, fallback and 
   registerIcons({ "custom-query": [["path", { d: "M1 2L3 4" }]] });
   await setup({ features: { toolCallDisplay: { grouped: false } }, toolCall: { iconName: tool => tool.name === "lookup" ? "custom-query" : undefined } });
   inject(toolMessage("lookup", "lookup")); inject(toolMessage("read", "Read"));
+  inject(toolMessage("unknown", "lookup_order_status"));
+  expect(iconFor("unknown")?.innerHTML).toBe(iconMarkup("square-text"));
   expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("custom-query"));
   expect(iconFor("read")?.innerHTML).toBe(iconMarkup("file-text"));
   controller.update({ toolCall: { iconName: () => "pencil" } });
   expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("pencil"));
   controller.update({ toolCall: { iconName: undefined } });
-  expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("activity"));
+  expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("square-text"));
   controller.update({ toolCall: { iconName: "check" } });
   expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("check"));
   expect(iconFor("lookup")?.style.color).toBe("");
@@ -549,7 +551,7 @@ it("supports explicit icons on ordinary rows and neutral fallback for unregister
   inject(toolMessage("one", "lookup"));
   expect(iconFor("one")?.innerHTML).toBe(iconMarkup("file-text"));
   controller.update({ toolCall: { iconName: "missing-tool-icon" } });
-  expect(iconFor("one")?.innerHTML).toBe(iconMarkup("activity"));
+  expect(iconFor("one")?.innerHTML).toBe(iconMarkup("square-text"));
   expect(warn).toHaveBeenCalled();
 });
 

@@ -48,8 +48,10 @@ That said, if you really don't like the idea of building AI without JSX... you p
 | Example | Platform | Description |
 |---------|----------|-------------|
 | [`examples/ai-sdk-webmcp`](./examples/ai-sdk-webmcp) | Next.js | WebMCP page tools using Vercel AI SDK ([live](https://ai-sdk-webmcp.persona-chat.dev)) |
-| [`examples/ai-sdk-next`](./examples/ai-sdk-next) | Next.js | Minimal SSE adapters for AI SDK and OpenAI Responses |
-| [`examples/eve-next`](./examples/eve-next) | Next.js | Vercel [eve](https://github.com/vercel/eve) agent backend (beta; needs Node 24 + a running eve server) |
+| [`examples/ai-sdk-next`](./examples/ai-sdk-next) | Next.js | Persona V5 chat workspace with AI SDK and OpenAI Responses; keyless preview included |
+| [`examples/eve-next`](./examples/eve-next) | Next.js | Persona V5 document copilot powered by Vercel [eve](https://github.com/vercel/eve); keyless preview included |
+| [`examples/flue-next`](./examples/flue-next) | Next.js | Persona V5 floating assistant powered by [Flue](https://flueframework.com); keyless preview included |
+| [`examples/cloudflare-agents`](./examples/cloudflare-agents) | Cloudflare Workers + Vite | Persona V5 docked support copilot powered by the [Agents SDK](https://developers.cloudflare.com/agents/); keyless local preview included |
 | [`examples/openai-agents-next`](./examples/openai-agents-next) | Next.js | OpenAI Agents SDK (`@openai/agents`) backend |
 | [`examples/langgraph-next`](./examples/langgraph-next) | Next.js | LangGraph.js (`@langchain/langgraph`) backend |
 | [`examples/echo-hono`](./examples/echo-hono) | Hono | Host matrix: same adapter on Hono (Node/Bun/Deno/Workers) |
@@ -70,7 +72,9 @@ Prefer not to run a backend at all? [`examples/runtype-script-tag`](./examples/r
 
 Backend adapters in this repo, each emitting Persona's SSE wire from a different SDK:
 
-- [**Vercel Eve**](./examples/eve-next): Vercel's filesystem-first agent framework (beta; Node 24 + a running eve server).
+- [**Vercel Eve**](./examples/eve-next): A document workspace with a Persona V5 copilot. Preview without credentials or connect a live Eve agent (Node 24).
+- [**Flue**](./examples/flue-next): A product workspace with a floating Persona V5 assistant. Preview without credentials or connect a live Flue agent.
+- [**Cloudflare Agents**](./examples/cloudflare-agents): A support inbox with a docked Persona V5 copilot, running inside a Durable Object. Preview locally without credentials or connect a live model.
 - [**OpenAI Agents**](./examples/openai-agents-next): Official OpenAI Agents SDK integration.
 - [**LangGraph.js**](./examples/langgraph-next): LangChain's orchestration framework.
 - [**AI SDK & OpenAI Responses**](./examples/ai-sdk-next): Minimal stream adapters, plus [choosing a model/assistant with `target`](./examples/ai-sdk-next#choosing-a-modelassistant-with-target).

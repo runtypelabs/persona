@@ -29,7 +29,7 @@ describe("icon registry partition", () => {
   });
 
   it("core names resolve synchronously with real content", () => {
-    for (const name of ["bot", "send", "x", "arrow-up-right", "panel-left"]) {
+    for (const name of ["bot", "send", "x", "arrow-up-right", "panel-left", "square-text"]) {
       const svg = renderLucideIcon(name);
       expect(svg, `core icon "${name}"`).not.toBeNull();
       expect(svg!.hasAttribute("data-persona-icon-pending")).toBe(false);

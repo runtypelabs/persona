@@ -500,7 +500,10 @@ describe('theme utils', () => {
     const defaults = themeToCssVariables(createTheme());
 
     expect(defaults['--persona-header-control-size']).toBe('32px');
-    expect(defaults['--persona-header-control-icon-size']).toBe('20px');
+    expect(defaults['--persona-header-control-icon-size']).toBe('16px');
+    const v5 = themeToCssVariables(createTheme(undefined, { future: { v5Defaults: true } }));
+    expect(v5['--persona-header-control-icon-size']).toBe('16px');
+    expect(v5['--persona-header-control-size']).toBe('28px');
     // The stroke has no alias: widget.css reads the full-path token and owns
     // the 1.5 default, which keeps the sparse close X on its 1.05.
     expect(defaults['--persona-components-header-controlStrokeWidth']).toBeUndefined();
@@ -510,7 +513,7 @@ describe('theme utils', () => {
         components: {
           header: {
             controlSize: '32px',
-            controlIconSize: '18px',
+            controlIconSize: '20px',
             controlStrokeWidth: '2',
           },
         },
@@ -518,7 +521,7 @@ describe('theme utils', () => {
     );
 
     expect(custom['--persona-header-control-size']).toBe('32px');
-    expect(custom['--persona-header-control-icon-size']).toBe('18px');
+    expect(custom['--persona-header-control-icon-size']).toBe('20px');
     // Unitless, straight through: no px suffix, no token resolution.
     expect(custom['--persona-components-header-controlStrokeWidth']).toBe('2');
   });

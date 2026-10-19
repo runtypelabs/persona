@@ -113,9 +113,10 @@ describe("4.22.0 defaults parity (flag off)", () => {
     // config and token values deterministic across Node versions.
     const actual = JSON.parse(JSON.stringify(snapshot(false)));
     const baseline = JSON.parse(readFileSync(fixturePath, "utf8"));
-    // Phase 3 activates formerly unused tokens. Lock their old and new values
-    // explicitly instead of rewriting the historical fixture or ignoring keys.
+    // Lock intentional default changes and newly activated tokens to their old
+    // and new values instead of rewriting the historical fixture or ignoring keys.
     const activatedTokens: Record<string, [string, string]> = {
+      "--persona-header-control-icon-size": ["20px", "16px"],
       "--persona-components-header-padding": ["1rem", "20px 24px"],
       "--persona-components-panel-height": ["600px", "min(640px, max(200px, calc(100vh - 64px)))"],
       "--persona-components-panel-maxHeight": ["calc(100vh - 80px)", "none"],

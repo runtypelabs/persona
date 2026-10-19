@@ -1,97 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  createAgentExperience,
-  markdownPostprocessor,
-} from "@runtypelabs/persona";
+import { useEffect, useRef, useState } from "react";
+import { createAgentExperience, markdownPostprocessor } from "@runtypelabs/persona";
+import { renderToolActivitySummary } from "../lib/tool-activity-summary";
 
-type PersonaWidgetProps = {
-  apiUrl: string;
-  title: string;
-  subtitle: string;
-  accent?: string;
-  starterItems?: string[];
-  turnActivity?: boolean;
-};
+const starters = ["Research a thoughtful product launch", "Compare three launch strategies", "Build a launch checklist"];
+type PersonaWidgetProps = { apiUrl: string; conversationId: number; preview: boolean; onTitle: (id: number, title: string) => void };
 
-export function PersonaWidget({
-  apiUrl,
-  title,
-  subtitle,
-  accent = "#157f8f",
-  starterItems,
-  turnActivity = false,
-}: PersonaWidgetProps) {
+export function PersonaWidget({ apiUrl, conversationId, preview, onTitle }: PersonaWidgetProps) {
+  const hostRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
-    const host = document.getElementById("persona-root");
+    const host = hostRef.current;
     if (!host) return;
-
-    let handle: ReturnType<typeof createAgentExperience> | null = createAgentExperience(host, {
+    const handle = createAgentExperience(host, {
       apiUrl,
-      turnActivity: { enabled: turnActivity },
-      // The adapters emit Persona's SSE event vocabulary, which the widget
-      // consumes natively (the same wire the Runtype API emits).
+      persistState: false,
+      future: { v5Defaults: true },
+      turnActivity: { enabled: true },
       launcher: { enabled: false, width: "100%" },
-      welcome: { title, subtitle, variant: "card" },
-      copy: {
-        inputPlaceholder: "Ask anything...",
-      },
+      layout: { embedded: true, showHeader: false },
+      welcome: { title: "Good ideas start with a question.", subtitle: "A little research. A clearer perspective. Your next move.", variant: "card" },
+      copy: { inputPlaceholder: preview ? "Ask about a product launch…" : "Ask anything…" },
       theme: {
-        semantic: {
-          colors: {
-            accent,
-            surface: "#ffffff",
-            background: "#f7f8fb",
-            primary: "#121826",
-          },
-        },
-        components: {
-          introCard: {
-            background: "transparent",
-            shadow: "none",
-          },
-          panel: {
-            border: "1px solid #e0e0e0",
-            borderRadius: "8px",
-            shadow: "0 12px 32px rgb(18 24 38 / 8%)",
-          },
-        },
+        semantic: { colors: { accent: "#202020", surface: "#ffffff", background: "#ffffff", primary: "#202020" } },
+        components: { introCard: { background: "transparent", shadow: "none" }, panel: { border: "none", borderRadius: "0", shadow: "none" } },
       },
-      suggestions: {
-        starters: {
-          items: starterItems,
-          variant: "chip",
-          placement: "composer",
-          overflow: "wrap",
-          maxItems: 4,
-        },
-      },
+      toolCall: { renderGroupedSummary: renderToolActivitySummary },
+      suggestions: { starters: { items: starters, variant: "chip", placement: "composer", overflow: "wrap", maxItems: 3 } },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     });
-
     const clearError = handle.on("run:started", () => setError(null));
-    const showError = handle.on("run:finished", ({ outcome }) => {
-      if (outcome === "error") {
-        setError("The provider could not complete this request. Check the server credentials, account credits, and selected model, then try again.");
+    let titled = false;
+    const updateTitle = handle.on("user:message", message => {
+      if (!titled && message.content) {
+        titled = true;
+        onTitle(conversationId, message.content.slice(0, 54));
       }
     });
-
-    return () => {
-      clearError();
-      showError();
-      handle?.destroy();
-      handle = null;
-      host.replaceChildren();
-    };
-  }, [apiUrl, title, subtitle, accent, starterItems, turnActivity]);
-
-  return (
-    <>
-      {error && <p className="providerError" role="alert">{error}</p>}
-      <div id="persona-root" />
-    </>
-  );
+    const showError = handle.on("run:finished", ({ outcome }) => {
+      if (outcome === "error") setError("This request could not finish. Try again, or check your server’s provider credentials and model settings.");
+    });
+    return () => { clearError(); updateTitle(); showError(); handle.destroy(); host.replaceChildren(); };
+  }, [apiUrl, conversationId, onTitle, preview]);
+  return <>{error && <p className="providerError" role="alert">{error}</p>}<div className="personaHost" ref={hostRef} /></>;
 }

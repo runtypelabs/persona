@@ -15,6 +15,14 @@
 <body><main>
 <h1>Turn and tool activity</h1>
 <p>Compare mocked activity below, or use a real Runtype or OpenAI agent in the live tester. All widgets use the current compressed production build.</p>
+<section id="header-comparison" style="margin:24px 0">
+  <h2>Header action icon size</h2>
+  <p>Compare the new 16px default with an explicit 20px theme setting. Both use the same V5 28px buttons; touch targets still have a 40px minimum. The close X keeps its optical scaling. The header identity icon stays the same.</p>
+  <div class="grid">
+    <section><h2>16px · default</h2><div id="header-default" class="widget" style="height:170px"></div></section>
+    <section><h2>20px · configured</h2><div id="header-configured" class="widget" style="height:170px"></div></section>
+  </div>
+</section>
 <section id="live-tester">
   <h2>Live agent</h2>
   <p id="live-description"></p>
@@ -54,7 +62,7 @@
 </div>
 <p>Overflow controls update existing history immediately. Each tool Request and Response scrolls separately. Only edges with hidden content fade; labels, copy buttons and focus outlines stay clear. Enable long mocks before a run, then compare shared caps, per-kind overrides, no fades and unlimited content. The compatibility reasoning height wins over theme caps when set.</p>
 <p>Panel theme controls update existing tools and reasoning immediately, including live-agent history, without sending another request. Choose reasoning Row + Panel to compare all fields. Component overrides change only their listed properties; the other properties stay shared. Plain/inset reasoning, approval details, and outer cards keep their own appearance.</p>
-<p>Rendering and summary choices apply to all widgets and saved history. The default group summary follows the current action inside turn activity, except stacks; other groups keep their aggregate. Cards keep their original header.</p>
+<p>Rendering and summary choices apply to the live agent, runnable mocks, and their saved history. The completion icon comparison keeps fixed settings. The default group summary follows the current action inside turn activity, except stacks; other groups keep their aggregate. Cards keep their original header.</p>
 <h2 style="margin-top:28px">Mocked comparisons</h2>
 <div class="controls">
   <button id="run" disabled>Run all</button>
@@ -77,6 +85,7 @@
   <section><h2>Adjacent groups</h2><p class="explanation">One group stays working during the pauses between batches.</p><div id="adjacent" class="widget"></div><div id="adjacent-phase" class="phase" role="status">Ready to run</div><div id="adjacent-context" class="context">Summary context appears here when tools arrive.</div></section>
   <section><h2>Iteration groups</h2><p class="explanation">Two two-tool groups and one direct tool row. The second pair runs in parallel; each iteration finishes independently.</p><div id="iteration" class="widget"></div><div id="iteration-phase" class="phase" role="status">Ready to run</div><div id="iteration-context" class="context">Summary context appears here when tools arrive.</div></section>
   <section><h2>Whole-turn activity · opt in</h2><label><input id="mock-turn" type="checkbox" checked>Turn activity for this mock</label><p class="explanation">Compare the same progress and tools inside or outside the turn disclosure. The final answer stays outside.</p><div id="turn" class="widget"></div><div id="turn-phase" class="phase" role="status">Ready to run</div><div id="turn-context" class="context">Explicit block identities classify progress and final answers.</div></section>
+  <section><h2>Completion icon defaults</h2><p class="explanation">Fixed, read-only comparison: web searches keep their globe; an unfamiliar tool and a mixed file/command group use square-text. Expand the groups to compare child icons. Controls above apply to the other widgets.</p><div id="completion-icons" class="widget"></div></section>
 </div>
 <p id="ready" role="status">Loading the widgets…</p>
 <details open><summary>What to check</summary><ul>
@@ -110,6 +119,40 @@ const custom = document.querySelector('#custom'), icons = document.querySelector
 const replay = document.querySelector('#replay');
 const turnRecords = new Map();
 const actionTitles = new Map();
+const iconTools = [
+  ['icon-search-one', 'web_search', 1], ['icon-search-two', 'WebSearch', 1],
+  ['icon-unknown', 'lookup_order_status', 2],
+  ['icon-read', 'Read', 3], ['icon-command', 'Bash', 3],
+].map(([id, name, iteration]) => ({
+  id, role:'assistant', content:'', createdAt:'2026-01-01T00:00:00Z', variant:'tool',
+  turnActivity:{id:'icon-comparison', kind:'progress', outcome:'success'},
+  agentMetadata:{executionId:'icon-comparison', iteration},
+  toolCall:{id, name, status:'complete', success:true, result:'Complete'},
+}));
+const iconPreview = AgentWidget.initAgentWidget({target:'#completion-icons', config:{
+  persistState:false, future:{v5Defaults:true}, launcher:{enabled:false,fullHeight:true},
+  layout:{showHeader:false,showFooter:false}, voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
+  welcome:{variant:'none'}, turnActivity:{enabled:true}, initialMessages:[
+    {id:'icon-request',role:'user',content:'Compare the default tool icons.',createdAt:'2026-01-01T00:00:00Z'},
+    ...iconTools,
+    {id:'icon-answer',role:'assistant',content:'Known tools keep their own icons; unfamiliar tools and mixed groups use square-text.',createdAt:'2026-01-01T00:00:01Z'},
+  ],
+  features:{toolCallDisplay:{groupBoundary:'iteration',iconVisibility:'always',groupIconVisibility:'always'}},
+}});
+const headerPreviews = ['default', 'configured'].map(size => AgentWidget.initAgentWidget({
+  target:'#header-' + size,
+  config:{
+    persistState:false, future:{v5Defaults:true}, launcher:{enabled:false,fullHeight:true,title:'Assistant',headerIconName:'bot'},
+    layout:{showFooter:false,header:{layout:'minimal',trailingActions:[{id:'header-settings',icon:'settings',ariaLabel:'Settings'}]}},
+    theme:size === 'configured' ? {components:{header:{controlIconSize:'20px'}}} : undefined,
+    welcome:{variant:'none'}, voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
+  },
+}));
+iconPreview.ready.then(() => {
+  iconPreview.update({layout:{showFooter:false}});
+  const disclosure = document.querySelector('#completion-icons [data-persona-turn-activity] > button');
+  if (disclosure?.getAttribute('aria-expanded') === 'false') disclosure.click();
+});
 const toolSummary = document.querySelector('#tool-summary');
 const toolRendering = document.querySelector('#tool-rendering');
 const rawToolName = document.querySelector('#raw-tool-name');

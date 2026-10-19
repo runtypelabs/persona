@@ -368,7 +368,7 @@ const headerControlsSectionDef: SectionDef = {
   fields: [
     { id: 'header-min-height', label: 'Header Min Height', description: 'CSS length, e.g. 65px. Blank stays at the natural height', type: 'text', path: 'theme.components.header.minHeight', defaultValue: '', parseValue: parseOptionalCssValue },
     { id: 'header-control-size', label: 'Control Size', description: 'The button box. Coarse pointers still floor the hit area at 40px', type: 'slider', path: 'theme.components.header.controlSize', defaultValue: '32px', slider: { min: 24, max: 64, step: 2 }, parseValue: parseSliderPxLength },
-    { id: 'header-control-icon-size', label: 'Icon Size', description: 'The glyph inside the button', type: 'slider', path: 'theme.components.header.controlIconSize', defaultValue: '20px', slider: { min: 12, max: 40, step: 1 }, parseValue: parseSliderPxLength },
+    { id: 'header-control-icon-size', label: 'Icon Size', description: 'The glyph inside the button', type: 'slider', path: 'theme.components.header.controlIconSize', defaultValue: '16px', slider: { min: 12, max: 40, step: 1 }, parseValue: parseSliderPxLength },
     { id: 'header-control-stroke-width', label: 'Icon Stroke Width', description: 'Unitless line weight. The close X renders at 0.7 of it so its sparser glyph matches', type: 'slider', path: 'theme.components.header.controlStrokeWidth', defaultValue: '1.5', slider: { min: 1, max: 2.5, step: 0.25, unit: 'none' }, parseValue: parseSliderUnitless },
   ],
 };

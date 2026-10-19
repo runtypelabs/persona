@@ -1,76 +1,64 @@
 "use client";
 
-import { useEffect } from "react";
-import { createAgentExperience, markdownPostprocessor } from "@runtypelabs/persona";
+import { useEffect, useRef } from "react";
+import { createAgentExperience, markdownPostprocessor, type AgentWidgetMessage } from "@runtypelabs/persona";
 
-type PersonaWidgetProps = {
-  apiUrl: string;
-  title: string;
-  subtitle: string;
-  accent?: string;
-  starterItems?: string[];
+const toolLabels: Record<string, { active: string; complete: string; groupComplete: string }> = {
+  read_document: { active: "Reading document", complete: "Read document", groupComplete: "Read documents" },
+  review_milestones: { active: "Reviewing milestones", complete: "Reviewed milestones", groupComplete: "Reviewed milestones" },
 };
 
-export function PersonaWidget({
-  apiUrl,
-  title,
-  subtitle,
-  accent = "#157f8f",
-  starterItems,
-}: PersonaWidgetProps) {
-  useEffect(() => {
-    const host = document.getElementById("persona-root");
-    if (!host) return;
+function toolLabel(tool: NonNullable<AgentWidgetMessage["toolCall"]>, grouped = false): string | null {
+  // Let Persona retain its own failure, interruption, and approval wording.
+  if (tool.success === false || tool.interrupted || tool.superseded ||
+      tool.approvalStatus === "pending" || tool.approvalStatus === "denied" || tool.approvalStatus === "timeout") return null;
+  const labels = toolLabels[tool.name ?? ""];
+  if (!labels) return null;
+  return tool.status === "complete" ? (grouped ? labels.groupComplete : labels.complete) : labels.active;
+}
 
-    let handle: ReturnType<typeof createAgentExperience> | null = createAgentExperience(host, {
-      // Proxy mode: no clientToken, just the local /dispatch route. The adapter
-      // emits Persona's SSE event vocabulary, which the widget auto-detects
-      // from the leading `execution_start` frame (the same wire the Runtype API emits).
+export function PersonaWidget({ apiUrl }: { apiUrl: string }) {
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = root.current;
+    if (!host) return;
+    const handle = createAgentExperience(host, {
       apiUrl,
-      launcher: { enabled: false, width: "100%" },
-      welcome: { title, subtitle, variant: "card" },
-      copy: {
-        inputPlaceholder: "Ask anything...",
+      future: { v5Defaults: true },
+      colorScheme: "light",
+      persistState: false,
+      launcher: { enabled: false },
+      layout: { embedded: true },
+      composer: { placement: "block" },
+      welcome: {
+        title: "A fresh perspective,\nright beside your work.",
+        subtitle: "Turn this document into a clear summary, a sharper question, or your next step.",
+        variant: "card",
+      },
+      copy: { inputPlaceholder: "Ask about this document…" },
+      suggestions: {
+        starters: { items: ["Summarize this document", "Find launch risks", "Draft next steps"], behavior: "send", variant: "chip", placement: "welcome", overflow: "wrap", maxItems: 3 },
+      },
+      features: { showToolCalls: true, showReasoning: true },
+      toolCall: {
+        renderCollapsedSummary: ({ toolCall }) => toolLabel(toolCall),
+        renderGroupedSummary: ({ toolCalls }) => {
+          const labels = toolCalls.map((tool) => toolLabel(tool, true));
+          if (labels.some((label) => label === null)) return null;
+          return [...new Set(labels.filter((label) => label !== null))].map((label, index) => index ? label.charAt(0).toLowerCase() + label.slice(1) : label).join(", ");
+        },
       },
       theme: {
-        semantic: {
-          colors: {
-            accent,
-            surface: "#ffffff",
-            background: "#f7f8fb",
-            primary: "#121826",
-          },
-        },
+        semantic: { colors: { accent: "#252525", primary: "#252525", background: "#ffffff", surface: "#ffffff" } },
         components: {
-          introCard: {
-            background: "transparent",
-            shadow: "none",
-          },
-          panel: {
-            border: "1px solid #e0e0e0",
-            borderRadius: "8px",
-            shadow: "0 12px 32px rgb(18 24 38 / 8%)",
-          }
-        },
-      },
-      suggestions: {
-        starters: {
-          items: starterItems,
-          variant: "chip",
-          placement: "composer",
-          overflow: "wrap",
-          maxItems: 4,
+          introCard: { background: "transparent", shadow: "none" },
+          input: { background: "#fff" },
+          activity: { bodySurface: "transparent" },
         },
       },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     });
-
-    return () => {
-      handle?.destroy();
-      handle = null;
-      host.replaceChildren();
-    };
-  }, [apiUrl, title, subtitle, accent, starterItems]);
-
-  return <div id="persona-root" />;
+    return () => { handle.destroy(); host.replaceChildren(); };
+  }, [apiUrl]);
+  return <div ref={root} className="persona-host" />;
 }

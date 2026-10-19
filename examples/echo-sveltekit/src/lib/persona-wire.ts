@@ -21,7 +21,8 @@
  *   event: execution_complete{ executionId, kind:"agent", success:true, completedAt }
  *
  * The tool frames are optional; a text-only turn simply omits them. They are
- * what `emit.toolCall` and `emit.suggestReplies` put on the wire.
+ * what `emit.toolStart` / `emit.toolComplete`, `emit.toolCall`, and
+ * `emit.suggestReplies` put on the wire.
  *
  * The streamed deltas are authoritative. You don't need to re-send the full
  * text at the end. One `executionId` (`exec_…`) and `kind:"agent"` are carried
@@ -47,6 +48,9 @@ export type ChatMessage = { role: "system" | "user" | "assistant"; content: stri
 type WirePayloads = {
   execution_start: { kind: "agent"; agentId: string; agentName: string; startedAt: string };
   turn_start: { id: string; role: "assistant"; iteration: number };
+  reasoning_start: { id: string; scope: "turn" };
+  reasoning_delta: { id: string; delta: string };
+  reasoning_complete: { id: string };
   text_start: { id: string };
   text_delta: { id: string; delta: string };
   text_complete: { id: string };
@@ -61,8 +65,15 @@ type WirePayloads = {
 export type PersonaSuggestion = string | { label: string; prompt?: string; description?: string };
 
 export type PersonaStreamEmitter = {
+  /** Forward provider-supplied reasoning independently from assistant prose. */
+  reasoningStart(id: string): void;
+  reasoningDelta(id: string, text: string): void;
+  reasoningComplete(id: string): void;
   /** Stream a chunk of assistant text (`text_delta`). */
   textDelta(text: string): void;
+  /** Begin a tool call; close it only when the framework reports a result. */
+  toolStart(name: string, parameters: unknown, toolCallId: string): void;
+  toolComplete(toolCallId: string, result: unknown, success: boolean): void;
   /**
    * Emit a completed tool call (`tool_start` → `tool_complete`), fire-and-forget:
    * the widget renders the call and the run continues without pausing.
@@ -96,6 +107,8 @@ export type PersonaStreamEmitter = {
 };
 
 export type PersonaStreamContext = {
+  /** Aborted when the request or downstream response reader is cancelled. */
+  signal: AbortSignal;
   emit: PersonaStreamEmitter;
   executionId: string;
   turnId: string;
@@ -105,17 +118,25 @@ const encoder = new TextEncoder();
 
 export function createPersonaSSEStream(
   handler: (context: PersonaStreamContext) => Promise<void> | void,
+  options: { signal?: AbortSignal } = {},
 ): Response {
   const executionId = `exec_${crypto.randomUUID()}`;
   const turnId = `turn_${crypto.randomUUID()}`;
 
+  const abortController = new AbortController();
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, abortController.signal])
+    : abortController.signal;
+  let cancelled = false;
   const stream = new ReadableStream<Uint8Array>({
+    cancel(reason) { cancelled = true; abortController.abort(reason); },
     async start(controller) {
       // `seq` is the wire envelope's monotonic sequence number. The widget
       // reads a single in-order connection so it isn't load-bearing here, but a
       // faithful reference emits it.
       let seq = 0;
       const send = <T extends keyof WirePayloads>(event: T, payload: WirePayloads[T]) => {
+        if (cancelled) return;
         controller.enqueue(
           encoder.encode(
             `event: ${event}\ndata: ${JSON.stringify({ type: event, executionId, seq: seq++, ...payload })}\n\n`,
@@ -150,9 +171,25 @@ export function createPersonaSSEStream(
       };
 
       const emit: PersonaStreamEmitter = {
+        reasoningStart(id) {
+          if (finished) return;
+          closeTextBlock();
+          openTurn();
+          send("reasoning_start", { id, scope: "turn" });
+        },
+        reasoningDelta(id, delta) { if (!finished) send("reasoning_delta", { id, delta }); },
+        reasoningComplete(id) { if (!finished) send("reasoning_complete", { id }); },
         textDelta(text) {
           openTextBlock();
           send("text_delta", { id: textBlockId!, delta: text });
+        },
+        toolStart(name, parameters, toolCallId) {
+          closeTextBlock();
+          openTurn();
+          send("tool_start", { toolCallId, toolName: name, toolType: "local", parameters, iteration: 1 });
+        },
+        toolComplete(toolCallId, result, success) {
+          send("tool_complete", { toolCallId, result, success });
         },
         toolCall(name, parameters, options) {
           // Blocks don't nest: close any open text block first. A later
@@ -217,13 +254,13 @@ export function createPersonaSSEStream(
       });
 
       try {
-        await handler({ emit, executionId, turnId });
+        await handler({ emit, executionId, turnId, signal });
         // A handler that returns without finishing still gets a clean close.
         emit.complete();
       } catch (error) {
         emit.error(error instanceof Error ? error.message : String(error));
       } finally {
-        controller.close();
+        if (!cancelled) controller.close();
       }
     },
   });

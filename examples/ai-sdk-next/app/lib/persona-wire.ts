@@ -20,6 +20,9 @@ export type PersonaTextPhase = "commentary" | "partial_answer" | "final_answer";
 type WirePayloads = {
   execution_start: { kind: "agent"; agentId: string; agentName: string; startedAt: string };
   turn_start: { id: string; role: "assistant"; iteration: number };
+  reasoning_start: { id: string; scope: "turn" };
+  reasoning_delta: { id: string; delta: string };
+  reasoning_complete: { id: string };
   text_start: { id: string; phase?: PersonaTextPhase };
   text_delta: { id: string; delta: string };
   text_complete: { id: string; phase?: PersonaTextPhase };
@@ -34,6 +37,9 @@ type WirePayloads = {
 export type PersonaSuggestion = string | { label: string; prompt?: string; description?: string };
 
 export type PersonaStreamEmitter = {
+  reasoningStart(id: string): void;
+  reasoningDelta(id: string, text: string): void;
+  reasoningComplete(id: string): void;
   /** Stream a chunk of assistant text (`text_delta`). */
   textDelta(text: string, options?: { id?: string; phase?: PersonaTextPhase }): void;
   /** Close one provider content part without completing the assistant turn. */
@@ -161,6 +167,9 @@ export function createPersonaSSEStream(
       };
 
       const emit: PersonaStreamEmitter = {
+        reasoningStart(id) { if (!finished) { openTurn(); send("reasoning_start", { id, scope: "turn" }); } },
+        reasoningDelta(id, delta) { if (!finished) send("reasoning_delta", { id, delta }); },
+        reasoningComplete(id) { if (!finished) send("reasoning_complete", { id }); },
         textDelta(text, options) {
           if (finished || !text) return;
           openTurn();

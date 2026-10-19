@@ -258,3 +258,5 @@ The counts above are a snapshot of the initial shortlist. Later additions:
 `image` was already registered under Media.
 
 `terminal` and `database` are lazy registry additions for command and database tool activity. `circle` represents pending activity; the activity renderer uses the initialized registry for these icons and disclosure chevrons.
+
+`square-text` is a core registry icon for mixed tool groups, unfamiliar tools, and unavailable custom tool icons. Its custom IconNode uses the same 24px viewbox and rounded strokes as Lucide.

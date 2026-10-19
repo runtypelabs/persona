@@ -356,7 +356,7 @@ export interface HeaderTokens extends ComponentTokenSet {
    * 40px regardless. @default "32px"
    */
   controlSize?: string;
-  /** Glyph box inside a header control. @default "20px" */
+  /** Glyph box inside a header control. @default "16px" */
   controlIconSize?: string;
   /**
    * Stroke weight of the glyph inside a header control. Unitless, as an SVG

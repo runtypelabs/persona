@@ -74,13 +74,20 @@ describe("semantic tool activity", () => {
 
  it.each([
    ["web_search", "globe"], ["Read", "file-text"], ["edit_file", "pencil"], ["Bash", "terminal"],
-   ["sql_db_query", "database"], ["search_events", "activity"], ["my_web_search", "activity"],
+   ["sql_db_query", "database"], ["search_events", "square-text"], ["my_web_search", "square-text"],
  ])("maps the completed icon for %s without guessing", (name, icon) => expect(toolActivityIcon(tool(name))).toBe(icon));
 
- it("keeps homogeneous group icons and uses neutral activity for mixed categories", () => {
+ it("keeps homogeneous group icons and uses square-text for mixed categories", () => {
    const config = { toolCall: { iconName: toolActivityIcon } };
    expect(groupActivityIcon([tool("web_search"), tool("WebSearch")], config)).toBe("globe");
-   expect(groupActivityIcon([tool("web_search"), tool("Read")], config)).toBe("activity");
-   expect(groupActivityIcon([tool("web_search"), tool("web_fetch")], config)).toBe("activity");
+   expect(groupActivityIcon([tool("web_search"), tool("Read")], config)).toBe("square-text");
+   expect(groupActivityIcon([tool("web_search"), tool("web_fetch")], config)).toBe("square-text");
    expect(groupActivityIcon([tool("web_search"), tool("Read")], {})).toBeUndefined();
+ });
+
+ it("keeps custom icon overrides and neutral unknown-tool groups", () => {
+   const tools = [tool("lookup_order"), tool("read_graph")];
+   expect(groupActivityIcon(tools, { toolCall: { iconName: toolActivityIcon } })).toBe("square-text");
+   expect(groupActivityIcon(tools, { toolCall: { iconName: "check" } })).toBe("check");
+   expect(groupActivityIcon([tool("Read"), tool("read_text_file")], { toolCall: { iconName: () => "pencil" } })).toBe("pencil");
  });

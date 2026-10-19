@@ -624,7 +624,7 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
     padding: '8px 8px 8px 16px', minimalPadding: '8px 8px 8px 16px',
     minHeight: '48px', borderBottom: 'none',
     iconBackground: 'transparent', iconForeground: 'semantic.colors.text', iconScale: '1', iconPadding: 'auto',
-    controlSize: '28px', controlIconSize: '18px', controlStrokeWidth: '1.5',
+    controlSize: '28px', controlIconSize: '16px', controlStrokeWidth: '1.5',
     actionIconForeground: 'semantic.colors.textMuted',
     controlBorderRadius: '8px',
     controlHoverBackground: 'color-mix(in srgb, var(--persona-text) 8%, transparent)',
@@ -1214,7 +1214,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // directly and carries the 1.5 default in the var() fallback.
   emitAliases(cssVars, [
     ['header-control-size', 'components-header-controlSize', '=32px'],
-    ['header-control-icon-size', 'components-header-controlIconSize', '=20px'],
+    ['header-control-icon-size', 'components-header-controlIconSize', '=16px'],
   ]);
 
   // Conditional aliases retain the consuming stylesheet's fallback when unset.

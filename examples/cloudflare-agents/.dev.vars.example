@@ -1,0 +1,3 @@
+# Preview runs locally without credentials or a Cloudflare account.
+# Copy to .dev.vars only when enabling Live mode.
+OPENAI_API_KEY=

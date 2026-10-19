@@ -82,7 +82,7 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
   if (semanticIcon && semanticIcon !== "check") icon.style.color = "inherit";
   const customIcon = kind === "reasoning" ? config.features?.reasoningDisplay?.iconName : undefined;
   let glyph = renderLucideIcon(customIcon || (state === "pending" ? "circle" : state === "awaiting-approval" ? "clock" : state === "running" ? "loader-circle" : state === "done" ? semanticIcon || "check" : "x"), 16, "currentColor", 2);
-  if (!glyph && semanticIcon) glyph = renderLucideIcon("activity", 16, "currentColor", 2);
+  if (!glyph && semanticIcon) glyph = renderLucideIcon("square-text", 16, "currentColor", 2);
   if (glyph) icon.appendChild(glyph);
   header.querySelector(".persona-reasoning-header-icon")?.remove();
   const displayKey = kind === "tool" ? "toolCallDisplay" : "reasoningDisplay";

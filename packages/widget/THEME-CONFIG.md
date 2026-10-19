@@ -592,7 +592,7 @@ and the Messages toggle) share these fallback tokens:
 | Token | CSS variable | Default |
 |-------|--------------|---------|
 | `controlSize` | `--persona-header-control-size` | `"32px"` |
-| `controlIconSize` | `--persona-header-control-icon-size` | `"20px"` |
+| `controlIconSize` | `--persona-header-control-icon-size` | `"16px"` |
 | `controlStrokeWidth` | `--persona-components-header-controlStrokeWidth` | `"1.5"` |
 
 `controlStrokeWidth` is unitless, like the SVG `stroke-width` attribute it
@@ -3531,7 +3531,7 @@ with `true` in either defaults state. Customize its height through
 `theme.components.message.topFadeHeight` (for example, `"12px"`).
 
 
-With `future.v5Defaults`, header controls use muted 18px icons in 28px buttons,
+With `future.v5Defaults`, header controls use muted 16px icons in 28px buttons,
 8px corners, a subtle hover/focus fill, and a visible keyboard focus outline.
 Customize these with `components.header.actionIconForeground`,
 `controlBorderRadius`, `controlHoverBackground`, `controlHoverForeground`,
