@@ -2,24 +2,45 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Grouped tool activity preview</title>
+<title>Turn and tool activity preview</title>
 <link data-persona rel="stylesheet" href="/dist/widget.css">
 <style>
   *{box-sizing:border-box}body{margin:0;background:#f7f7f5;color:#252525;font:15px/1.5 system-ui,sans-serif}
   main{max-width:1400px;margin:auto;padding:28px}h1{font-size:28px;margin:0 0 6px}p{margin:6px 0 18px;max-width:90ch;color:#595959}
-  .controls{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:20px 0}button{font:inherit;border:1px solid #bcbcb8;border-radius:8px;background:white;padding:8px 15px;cursor:pointer}button:disabled{opacity:.5;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #538cc8;outline-offset:3px}label{display:flex;gap:7px;align-items:center}
+  .controls{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:20px 0}.controls button{font:inherit;border:1px solid #bcbcb8;border-radius:8px;background:white;padding:8px 15px;cursor:pointer}.controls button:disabled{opacity:.5;cursor:default}.controls button:focus-visible,.controls input:focus-visible{outline:3px solid #538cc8;outline-offset:3px}.controls label{display:flex;gap:7px;align-items:center}
   .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}section{min-width:0}h2{font-size:18px;margin:0 0 4px}.explanation{min-height:45px;margin-bottom:8px}.widget{height:470px;background:white;border-radius:14px;overflow:hidden}.phase{min-height:25px;margin:12px 0 4px;font-weight:600}.context{font:12px/1.6 ui-monospace,monospace;color:#555;white-space:normal}.custom-summary{color:#245e99;font-weight:600}
-  select{font:inherit;padding:8px 28px 8px 10px;border:1px solid #bcbcb8;border-radius:8px;background:white;color:inherit}#ready{font-size:13px;color:#666}details{margin-top:22px}li{margin:5px 0}@media(max-width:850px){.grid{grid-template-columns:1fr}main{padding:20px}.widget{height:430px}}
+  .controls select{font:inherit;padding:8px 28px 8px 10px;border:1px solid #bcbcb8;border-radius:8px;background:white;color:inherit}#ready{font-size:13px;color:#666}details{margin-top:22px}li{margin:5px 0}@media(max-width:850px){.grid{grid-template-columns:1fr}main{padding:20px}.widget{height:430px}}
 </style>
 </head>
 <body><main>
-<h1>Grouped tool activity</h1>
-<p>Compare the same four tool calls across three iterations. Replies are mocked. This page uses the current compressed production build.</p>
+<h1>Turn and tool activity</h1>
+<p>Compare mocked activity below, or use a real Runtype or OpenAI agent in the live tester. All widgets use the current compressed production build.</p>
+<section id="live-tester">
+  <h2>Live agent</h2>
+  <p id="live-description"></p>
+  <div class="controls">
+    <label>Provider <select id="live-provider"><option value="runtype">Runtype agent</option><option value="openai">OpenAI Responses</option></select></label>
+    <label><input id="live-v5" type="checkbox" checked>V5 defaults</label>
+    <label><input id="live-turn" type="checkbox" checked>Turn activity</label>
+    <button id="live-run" disabled>Run Runtype example</button>
+  </div>
+  <div id="live" class="widget" style="height:600px"></div>
+  <div id="live-phase" class="phase" role="status">Loading…</div>
+  <div id="live-error" role="alert"></div>
+  <div id="live-context" class="context">Commentary is grouped only when the provider supplies its phase before the text. Unclassified text stays in the transcript.</div>
+</section>
 <div class="controls">
-  <button id="run" disabled>Run both</button>
-  <button id="reset" disabled>Clear both</button>
+  <label>Tool rendering <select id="tool-rendering"><option value="collapsible">Collapsible groups</option><option value="row">Individual rows</option><option value="summary">Summary only</option><option value="stack">Stack with children</option><option value="card">Individual cards</option></select></label>
+  <label>Group summary <select id="tool-summary"><option value="">Default for this view</option><option value="current-action">Current action</option><option value="aggregate">Aggregate batch</option></select></label>
+  <label><input id="action-titles" type="checkbox" checked>Descriptive titles (mock)</label>
+</div>
+<p>Rendering and summary choices apply to all widgets and saved history. The default group summary follows the current action inside turn activity, except stacks; other groups keep their aggregate. Cards keep their original header.</p>
+<h2 style="margin-top:28px">Mocked comparisons</h2>
+<div class="controls">
+  <button id="run" disabled>Run all</button>
+  <button id="reset" disabled>Clear all</button>
+  <button id="replay" disabled>Replay turn history</button>
   <label><input id="custom" type="checkbox">Custom summaries</label>
-  <label><input id="singletons" type="checkbox">Group single tools</label>
   <label><input id="icons" type="checkbox">Hide group icons</label>
   <label>Label animation <select id="animation"><option value="shimmer">Shimmer</option><option value="none">None</option><option value="pulse">Pulse</option><option value="shimmer-color">Color shimmer</option><option value="rainbow">Rainbow</option><option value="custom">Custom pulse</option></select></label>
   <label>Label cycle <select id="duration"><option value="1800">1.8 seconds</option><option value="3600">3.6 seconds</option></select></label>
@@ -34,11 +55,14 @@
 </div>
 <div class="grid">
   <section><h2>Adjacent groups</h2><p class="explanation">One group stays working during the pauses between batches.</p><div id="adjacent" class="widget"></div><div id="adjacent-phase" class="phase" role="status">Ready to run</div><div id="adjacent-context" class="context">Summary context appears here when tools arrive.</div></section>
-  <section><h2>Iteration groups</h2><p class="explanation">One two-tool group and two direct tool rows. Each iteration finishes independently.</p><div id="iteration" class="widget"></div><div id="iteration-phase" class="phase" role="status">Ready to run</div><div id="iteration-context" class="context">Summary context appears here when tools arrive.</div></section>
+  <section><h2>Iteration groups</h2><p class="explanation">Two two-tool groups and one direct tool row. The second pair runs in parallel; each iteration finishes independently.</p><div id="iteration" class="widget"></div><div id="iteration-phase" class="phase" role="status">Ready to run</div><div id="iteration-context" class="context">Summary context appears here when tools arrive.</div></section>
+  <section><h2>Whole-turn activity · opt in</h2><label><input id="mock-turn" type="checkbox" checked>Turn activity for this mock</label><p class="explanation">Compare the same progress and tools inside or outside the turn disclosure. The final answer stays outside.</p><div id="turn" class="widget"></div><div id="turn-phase" class="phase" role="status">Ready to run</div><div id="turn-context" class="context">Explicit block identities classify progress and final answers.</div></section>
 </div>
 <p id="ready" role="status">Loading the widgets…</p>
 <details open><summary>What to check</summary><ul>
-<li>Single-tool iterations open their details directly. Enable “Group single tools” to keep a header for every iteration, including custom summaries. An open tool stays visible when a second tool joins its group.</li>
+<li>Choose a Tool rendering and switch Group summary during a run. Current action changes from “Checking the streaming documentation” to “Reading the adapter source.” Parallel tools and completed batches keep aggregate labels. Individual rows use descriptive titles independently of grouping or turn activity.</li>
+<li>Stacks default to an aggregate header above their titled children. Summary only hides child details. Cards retain their normal header; Custom summaries can display the resolved title. Turn off Descriptive titles to check the generic fallback. Live calls use safe labels unless their adapter supplies titles.</li>
+<li>Single-tool iterations open their details directly. An open tool stays visible when a second tool joins its group.</li>
 <li>Elapsed timing is off by default. Per-tool timing omits sub-second calls; exact milliseconds remain in expanded details. Group timing measures the tool-activity span, including gaps between batches; it holds the latest measured interval when no child is running. Switch modes during a run or after completion.</li>
 <li>During “Thinking between batches,” the adjacent header keeps working; finished iteration headers stay done.</li>
 <li>Expand a group during the run. Its controls and tool rows should stay in place as more calls arrive.</li>
@@ -55,8 +79,36 @@
 <script src="/dist/index.global.js"></script>
 <script>
 const handles = [];
+let liveHandle;
+const configurableHandles = () => [...handles, ...(liveHandle ? [{handle:liveHandle, boundary:'live'}] : [])];
 const run = document.querySelector('#run'), reset = document.querySelector('#reset');
-const custom = document.querySelector('#custom'), icons = document.querySelector('#icons'), singletons = document.querySelector('#singletons');
+const custom = document.querySelector('#custom'), icons = document.querySelector('#icons');
+const replay = document.querySelector('#replay');
+const turnRecords = new Map();
+const actionTitles = new Map();
+const toolSummary = document.querySelector('#tool-summary');
+const toolRendering = document.querySelector('#tool-rendering');
+const descriptiveTitles = document.querySelector('#action-titles');
+const mockTurn = document.querySelector('#mock-turn');
+function toolDisplay() {
+  const mode = toolRendering.value;
+  return {variant:mode === 'card' ? 'card' : 'row', grouped:!['row','card'].includes(mode),
+    groupedMode:['row','card'].includes(mode) ? 'collapsible' : mode,
+    groupSummary:toolSummary.value || undefined};
+}
+function toolOverrides(boundary) {
+  return {
+    resolveActionTitle:descriptiveTitles.checked ? tool => actionTitles.get(tool.id) : undefined,
+    renderGroupedSummary:summary(boundary),
+    renderCollapsedSummary:context => custom.checked ? `Custom · ${context.actionTitle || context.defaultSummary}` : null,
+  };
+}
+function resolveTurn(message) {
+  const block = message.agentMetadata?.textBlockId;
+  const record = turnRecords.get(message.agentMetadata?.executionId);
+  if (!record || (!block && message.variant !== 'tool')) return undefined;
+  return {...record, kind:block?.endsWith('-answer') ? 'final' : 'progress'};
+}
 const animation = document.querySelector('#animation'), duration = document.querySelector('#duration');
 const expansion = document.querySelector('#expansion'), expansionDuration = document.querySelector('#expansion-duration'), expansionEasing = document.querySelector('#expansion-easing'), autoExpand = document.querySelector('#auto-expand');
 const expansionSettings = () => ({animation:expansion.value, duration:Number(expansionDuration.value), easing:expansionEasing.value});
@@ -86,7 +138,10 @@ function labelSettings() {
   };
 }
 let active = 0, runNumber = 0;
-const updateButtons = () => { run.disabled = reset.disabled = active > 0; };
+const updateButtons = () => {
+  run.disabled = reset.disabled = active > 0;
+  replay.disabled = active > 0 || ![...turnRecords.values()].some(record => record.outcome);
+};
 function summary(boundary) {
   return context => {
     document.getElementById(boundary + '-context').textContent =
@@ -103,6 +158,7 @@ function mockStream(boundary) {
   return async (_url, init) => {
     const executionId = boundary + '-' + (++runNumber);
     const phase = document.getElementById(boundary + '-phase');
+    turnRecords.set(executionId, {id:executionId, startedAt:Date.now()});
     let seq = 0, cancelled = false;
     active++; updateButtons();
     return new Response(new ReadableStream({
@@ -112,8 +168,13 @@ function mockStream(boundary) {
           controller.enqueue(new TextEncoder().encode(`event: ${type}\ndata: ${JSON.stringify({type, executionId, seq: ++seq, ...data})}\n\n`));
         };
         const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+        const prose = (suffix, text) => {
+          const id = executionId + '-' + suffix;
+          emit('text_start', {id, phase:'commentary'}); emit('text_delta', {id, delta:text}); emit('text_complete', {id});
+        };
         const tool = async (iteration, name) => {
-          const toolCallId = executionId + '-' + name;
+          const toolCallId = executionId + '-' + iteration + '-' + name;
+          actionTitles.set(toolCallId, {web_search:'Checking the streaming documentation', Read:'Reading the adapter source', Compare:'Comparing provider contracts', Inspect:'Inspecting example coverage', Summarize:'Preparing the comparison'}[name]);
           emit('tool_start', {iteration, toolCallId, toolName: name, parameters: {iteration}});
           const elapsed = Number(toolTime.value);
           await wait(elapsed / 2);
@@ -125,24 +186,29 @@ function mockStream(boundary) {
           try {
             phase.textContent = 'Starting a new response — no tools yet';
             emit('execution_start', {kind:'agent', agentId:'preview', agentName:'Preview', maxTurns:3});
+            if (boundary === 'turn') prose('opening-progress', 'I’ll trace the issue through the source and compare the relevant files.');
             await wait(1800);
             for (let iteration = 1; iteration <= 3; iteration++) {
               phase.textContent = `Running iteration ${iteration} of 3`;
               emit('turn_start', {id:executionId + '-turn-' + iteration, role:'assistant', iteration});
-              await tool(iteration, ['Search', 'Compare', 'Summarize'][iteration - 1]);
+              if (iteration === 2) await Promise.all([tool(iteration, 'Compare'), tool(iteration, 'Inspect')]);
+              else await tool(iteration, iteration === 1 ? 'web_search' : 'Summarize');
               if (iteration === 1) await tool(iteration, 'Read');
               if (iteration < 3) {
                 phase.textContent = 'Thinking between batches — no tools running';
+                if (boundary === 'turn') prose('progress-' + iteration, iteration === 1 ? 'The first pass found the affected code. I’m checking how the change fits the surrounding behavior.' : 'Research assistant: checked three related examples and confirmed the expected behavior.');
                 await wait(3200);
               }
             }
             phase.textContent = 'Finishing the response';
             await wait(1000);
             const id = executionId + '-answer';
-            emit('text_start', {id});
-            emit('text_delta', {id, delta:'Finished four tools across three iterations.'});
+            emit('text_start', {id, phase:'final_answer'});
+            emit('text_delta', {id, delta:'Finished five tools across three iterations.'});
             emit('text_complete', {id});
+            Object.assign(turnRecords.get(executionId), {completedAt:Date.now(), outcome:'success'});
             emit('execution_complete', {kind:'agent', success:true, stopReason:'end_turn'});
+            if (boundary === 'turn') replay.disabled = false;
             controller.close();
             phase.textContent = 'Complete — run again to check historical groups';
           } catch (error) {
@@ -157,17 +223,95 @@ function mockStream(boundary) {
     }), {headers:{'Content-Type':'text/event-stream'}});
   };
 }
-for (const boundary of ['adjacent', 'iteration']) {
+for (const boundary of ['adjacent', 'iteration', 'turn']) {
   const handle = AgentWidget.initAgentWidget({target:'#' + boundary, config:{
     apiUrl:'/api/chat', persistState:false, future:{v5Defaults:true},
     loadingLabel:labelSettings(), expansion:expansionSettings(),
     launcher:{enabled:false, fullHeight:true}, layout:{showHeader:false},
     voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
-    features:{toolCallDisplay:{grouped:true, groupedMode:'collapsible', groupBoundary:boundary, iconVisibility:'always', autoExpand:false, autoCollapseDelay:false}},
-    toolCall:{renderGroupedSummary:summary(boundary)}, customFetch:mockStream(boundary)
+    features:{toolCallDisplay:{...toolDisplay(), groupBoundary:boundary === 'turn' ? 'iteration' : boundary, iconVisibility:'always', groupIconVisibility:boundary === 'turn' ? 'never' : 'always', autoExpand:false, autoCollapseDelay:false}},
+    turnActivity:{enabled:boundary === 'turn' && mockTurn.checked, resolveMessage:resolveTurn, renderHeader:context => custom.checked ? 'Investigation · ' + context.defaultSummary : null},
+    toolCall:toolOverrides(boundary), customFetch:mockStream(boundary)
   }});
   handles.push({handle, boundary});
 }
+const liveV5 = document.querySelector('#live-v5'), liveTurn = document.querySelector('#live-turn');
+const liveRun = document.querySelector('#live-run'), livePhase = document.querySelector('#live-phase');
+const liveError = document.querySelector('#live-error');
+const liveProvider = document.querySelector('#live-provider');
+const liveHistories = new Map();
+let mountedProvider = liveProvider.value;
+const providers = {
+  runtype:{name:'Runtype', apiUrl:'/api/runtype/dispatch',
+    description:'The Runtype documentation agent inspects the Persona wiki, reads relevant documentation, then asks a focused follow-up using its DeepWiki tools. Each stage asks for a brief progress update. Tool choices and commentary depend on the agent’s actual response.',
+    help:'Check the Runtype Hono proxy on port 43111, its RUNTYPE_API_KEY and agent/tool access.',
+    prompt:`Use your DeepWiki tools to investigate runtypelabs/persona. This is a multi-step documentation investigation; please use tools even if you already know the answer.
+1. Briefly explain your plan, then inspect the repository wiki structure.
+2. Give a brief progress update and use a separate tool call to read the relevant wiki content about streaming and tool-call rendering.
+3. Give another brief update, then ask the repository documentation a focused question about how a host can customize tool-call rendering without changing the transport.
+Use the available structure, content and question tools in that order, with each step informed by the previous result. If a tool is unavailable or fails, report that honestly. Finish with a concise answer under 180 words and relevant documentation links.`},
+  openai:{name:'OpenAI', apiUrl:'/api/openai-responses/dispatch',
+    description:'The OpenAI example researches OpenAI, then Anthropic, then compares their streaming contracts, with brief updates between stages.',
+    help:'Check the OpenAI example on port 5205, its API key, account credits and model settings.'},
+};
+async function mountLive(initialMessages = []) {
+  liveRun.disabled = liveV5.disabled = liveProvider.disabled = true;
+  const provider = providers[liveProvider.value];
+  mountedProvider = liveProvider.value;
+  document.querySelector('#live-description').textContent = provider.description + ' Toggle turn activity or rendering controls to compare the same response without another request.';
+  liveRun.textContent = `Run ${provider.name} example`;
+  liveError.textContent = '';
+  liveHandle?.destroy();
+  liveHandle = AgentWidget.initAgentWidget({target:'#live', config:{
+    apiUrl:provider.apiUrl, persistState:false, initialMessages,
+    future:{v5Defaults:liveV5.checked}, turnActivity:{enabled:liveTurn.checked},
+    launcher:{enabled:false, fullHeight:true}, layout:{showHeader:false},
+    voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
+    loadingLabel:labelSettings(), expansion:expansionSettings(),
+    features:{showToolCalls:true, showReasoning:true, toolCallDisplay:toolDisplay()},
+    toolCall:toolOverrides('live'),
+  }});
+  liveHandle.on('run:started', () => {
+    liveRun.disabled = liveV5.disabled = liveProvider.disabled = true;
+    liveError.textContent = '';
+    livePhase.textContent = `Requesting ${provider.name}…`;
+  });
+  liveHandle.on('run:finished', ({outcome}) => {
+    liveRun.disabled = liveV5.disabled = liveProvider.disabled = false;
+    livePhase.textContent = outcome === 'success' ? 'Complete. Toggle Turn activity to compare this response without another request.' : outcome === 'cancel' ? 'Stopped.' : 'Request failed.';
+    if (outcome === 'error') liveError.textContent = provider.help;
+  });
+  try {
+    await liveHandle.ready;
+    liveRun.disabled = liveV5.disabled = liveProvider.disabled = false;
+    livePhase.textContent = 'Ready. Run the example or type your own prompt.';
+  } catch (error) { liveV5.disabled = liveProvider.disabled = false; liveError.textContent = 'Loading failed: ' + error.message; }
+}
+for (const select of [toolSummary, toolRendering]) select.addEventListener('change', () => {
+  for (const {handle} of configurableHandles()) handle.update({features:{toolCallDisplay:toolDisplay()}});
+});
+descriptiveTitles.addEventListener('change', () => {
+  for (const {handle,boundary} of configurableHandles()) handle.update({toolCall:toolOverrides(boundary)});
+});
+mockTurn.addEventListener('change', () => handles.find(entry => entry.boundary === 'turn').handle.update({turnActivity:{enabled:mockTurn.checked}}));
+liveTurn.addEventListener('change', () => liveHandle.update({turnActivity:{enabled:liveTurn.checked}}));
+liveV5.addEventListener('change', () => mountLive(liveHandle.getMessages()));
+liveProvider.addEventListener('change', () => {
+  liveHistories.set(mountedProvider, liveHandle.getMessages());
+  mountLive(liveHistories.get(liveProvider.value) ?? []);
+});
+liveRun.addEventListener('click', () => {
+  const editor = document.querySelector('#live [data-persona-composer-input]');
+  const prompt = providers[liveProvider.value].prompt ?? `Research how a chat UI can distinguish progress updates from final answers in OpenAI Responses and Anthropic Messages. Work through these stages in order:
+1. Send a brief progress update, then search the official OpenAI documentation for assistant message phase (commentary and final_answer), including https://developers.openai.com/api/docs/guides/reasoning.
+2. After checking those sources, send a short update explaining what you found and what you will check next. Then separately search the official Anthropic Messages documentation for text blocks, tool use, and stop_reason.
+3. Send another brief update before checking any remaining uncertainty against the official documentation. Then give a concise comparison with source links and a recommendation for handling unclassified text.
+Send the progress updates as you work, between tool batches, rather than collecting them into the final answer. Keep each update to one sentence and the final answer under 180 words. Do not claim a provider supports a phase field unless its documentation confirms it.`;
+  if (editor.isContentEditable) editor.textContent = prompt; else editor.value = prompt;
+  editor.dispatchEvent(new Event('input', {bubbles:true}));
+  document.querySelector('#live [data-persona-composer-form]').requestSubmit();
+});
+mountLive();
 run.addEventListener('click', () => {
   for (const {boundary} of handles) {
     const host = document.getElementById(boundary);
@@ -178,26 +322,45 @@ run.addEventListener('click', () => {
   }
 });
 reset.addEventListener('click', () => location.reload());
-for (const input of [custom, icons, singletons]) input.addEventListener('change', () => {
-  for (const {handle,boundary} of handles) handle.update({
-    features:{toolCallDisplay:{groupIconVisibility:icons.checked ? 'never' : 'always', groupSingletons:singletons.checked}},
-    toolCall:{renderGroupedSummary:summary(boundary)}
+replay.addEventListener('click', async () => {
+  const entry = handles.find(entry => entry.boundary === 'turn');
+  const messages = JSON.parse(JSON.stringify(entry.handle.getMessages().map(message => {
+    const metadata = resolveTurn(message);
+    return metadata ? {...message, streaming:false, turnActivity:metadata} : message;
+  })));
+  entry.handle.destroy();
+  entry.handle = AgentWidget.initAgentWidget({target:'#turn', config:{
+    apiUrl:'/api/chat', persistState:false, future:{v5Defaults:true},
+    launcher:{enabled:false, fullHeight:true}, layout:{showHeader:false},
+    voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
+    initialMessages:messages, turnActivity:{enabled:mockTurn.checked, resolveMessage:resolveTurn, renderHeader:context => custom.checked ? 'Investigation · ' + context.defaultSummary : null}, expansion:expansionSettings(), loadingLabel:labelSettings(),
+    features:{toolCallDisplay:{...toolDisplay(), groupBoundary:'iteration',groupIconVisibility:'never',autoExpand:false,autoCollapseDelay:false}},
+    toolCall:toolOverrides('turn'),
+    customFetch:mockStream('turn')
+  }});
+  await entry.handle.ready;
+  document.querySelector('#turn-phase').textContent = 'Replayed JSON history: collapsed, measured duration retained, final answer outside.';
+});
+for (const input of [custom, icons]) input.addEventListener('change', () => {
+  for (const {handle,boundary} of configurableHandles()) handle.update({
+    features:{toolCallDisplay:{groupIconVisibility:boundary === 'turn' || icons.checked ? 'never' : 'always'}},
+    toolCall:toolOverrides(boundary)
   });
 });
 timing.addEventListener('change', () => {
-  for (const {handle} of handles) handle.update({features:{toolCallDisplay:{durationDisplay:timing.value}}});
+  for (const {handle} of configurableHandles()) handle.update({features:{toolCallDisplay:{durationDisplay:timing.value}}});
 });
 for (const select of [animation, duration]) select.addEventListener('change', () => {
-  for (const {handle} of handles) handle.update({loadingLabel:labelSettings()});
+  for (const {handle} of configurableHandles()) handle.update({loadingLabel:labelSettings()});
 });
 for (const select of [expansion, expansionDuration, expansionEasing]) select.addEventListener('change', () => {
-  for (const {handle} of handles) handle.update({expansion:expansionSettings()});
+  for (const {handle} of configurableHandles()) handle.update({expansion:expansionSettings()});
 });
 autoExpand.addEventListener('change', () => {
-  for (const {handle} of handles) handle.update({features:{toolCallDisplay:{autoExpand:autoExpand.checked, autoCollapseDelay:autoExpand.checked ? 1000 : false}}});
+  for (const {handle} of configurableHandles()) handle.update({features:{toolCallDisplay:{autoExpand:autoExpand.checked, autoCollapseDelay:autoExpand.checked ? 1000 : false}}});
 });
 for (const select of [thinkingIcon, thinkingMotion]) select.addEventListener('change', () => {
-  for (const {handle} of handles) handle.update({loadingIndicator:{
+  for (const {handle} of configurableHandles()) handle.update({loadingIndicator:{
     iconName:['default','hidden'].includes(thinkingIcon.value) ? undefined : thinkingIcon.value,
     iconVisibility:thinkingIcon.value === 'hidden' ? 'never' : undefined,
     iconAnimation:thinkingMotion.value === 'default' ? undefined : thinkingMotion.value,
@@ -205,7 +368,7 @@ for (const select of [thinkingIcon, thinkingMotion]) select.addEventListener('ch
 });
 Promise.all(handles.map(({handle}) => handle.ready)).then(() => {
   run.disabled = reset.disabled = false;
-  document.getElementById('ready').textContent = 'Ready. Run both, or type in either widget independently.';
+  document.getElementById('ready').textContent = 'Ready. Run all, or type in any widget independently.';
 }).catch(error => { document.getElementById('ready').textContent = 'Loading failed: ' + error.message; });
 </script>
 </body></html>

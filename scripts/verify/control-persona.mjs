@@ -34,7 +34,7 @@ const HELP = `control-persona: drive the Persona showcase for verification (see 
   doctor                                  read-only health check of the current run; prints a remedy per failure
   open [page] [opts]                      (re)launch the browser session and load a page
         page: verify (default) | voice-e2e | any apps/web page name | absolute URL
-        --scenario echo|markdown|tool|reasoning|approval|error|browser-history   --mode inline|launcher
+        --scenario echo|markdown|tool|reasoning|approval|error|browser-history|turn-activity   --mode inline|launcher
         --theme light|dark   --config '<json>'   --viewport 1100x900   --headed
         --voice browser      mock Web Speech recognition + speechSynthesis (verify page)
         --voice runtype      fake mic WAV -> real capture -> scripted voice socket (voice-e2e page)

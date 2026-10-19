@@ -2695,7 +2695,6 @@ Automatic group timing spans the earliest known tool start through the latest kn
 | `grouped` | `false` | Visually group consecutive tool call rows |
 | `groupedMode` | `"stack"` | `"stack"`, `"summary"`, or `"collapsible"` (V5 default) |
 | `groupBoundary` | `"adjacent"` | `"iteration"` splits visible neighbors when both have different known iterations or execution IDs; unknown metadata retains adjacency |
-| `groupSingletons` | `false` | Keep single-tool group headers in stack/collapsible modes; summary mode always keeps its summary |
 | `groupIconVisibility` | inherits `iconVisibility` | `"always"`, `"active"`, or `"never"` for the built-in collapsible group header only |
 | `durationDisplay` | `"none"` | Automatic timing: `"tools"`, `"group"`, or `"all"`. Tool rows and collapsible group headers show whole seconds (`2s`, `12s`), omitting sub-second or unknown times. Authored `{duration}` placeholders, custom timer elements, and exact milliseconds in expanded details remain available. |
 | `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
@@ -3421,7 +3420,8 @@ These options work in both defaults modes. V4 typography and corner defaults are
 `features.toolCallDisplay.variant` and `features.reasoningDisplay.variant` accept
 `"card"` or `"row"` in either defaults mode. V4 keeps the existing card DOM; V5
 selects compact rows with status icons, a label, a disclosure chevron immediately
-after the label, and indented details. Tool labels include their name (`Using Search`,
+after the label, and indented details. Tool labels use readable activity phrases for exact known names (`Read a file`,
+`Searched the web`) and humanized generic names otherwise (`Using Search`,
 `Used Search`); completed reasoning shows `Thought for a moment` or a duration such
 as `Thought for 1m 5s`. Existing text templates and custom summary/body render hooks
 remain available. `expandable: false` disables disclosure.
@@ -3449,8 +3449,9 @@ stagger animations.
 
 V5 tool display defaults to `grouped: true`, `groupedMode: "collapsible"` and
 `loadingAnimation: "shimmer"`; V5 reasoning also defaults to shimmer. Consecutive
-calls become an expandable `Used N tools` row (or `Using N tools` while active),
-with a 40ms stagger between children. `grouped: false` keeps individual rows.
+calls become an expandable counted category (`Web searches (5)`) or a mixed
+activity summary (`Read files, ran commands`), with a 40ms stagger between children.
+Attention labels remain visible for failures, interruptions and approvals. `grouped: false` keeps individual rows.
 The existing `"stack"` and `"summary"` grouping modes keep their behavior.
 
 `groupBoundary: "adjacent"` preserves the default visible adjacency grouping.
@@ -3459,12 +3460,10 @@ known `agentMetadata.iteration` or `agentMetadata.executionId` values, in every
 mode. Unknown metadata preserves adjacency pairwise: iterations `[1, undefined, 2]`
 stay together. Hidden reasoning and removed completed tools do not create visible
 boundaries. Single-tool groups render the tool directly in stack/collapsible modes,
-so one disclosure reaches its details. Set `groupSingletons: true` to keep a group
-header from the first tool, including a custom summary. Summary mode always keeps
-its summary. If an open standalone tool gains a sibling, the new group starts
-open; subsequent updates respect manual group toggles. `groupBoundary`,
-`groupSingletons`, and all three `groupedMode` values are supported in persisted
-preferences.
+so one disclosure reaches its details. Summary mode always keeps its summary. If
+an open standalone tool gains a sibling, the new group starts open; subsequent
+updates respect manual group toggles. `groupBoundary` and all three `groupedMode`
+values are supported in persisted preferences.
 
 `toolCall.renderGroupedSummary` receives `streaming`, `isLatestGroup`, and
 `isCurrentRunGroup` alongside `messages`, `toolCalls`, `defaultSummary`, and `config`.
@@ -3820,3 +3819,23 @@ Set `suggestions.starters.placement: "below-composer"` to render starters after
 the input form, outside its border. They hide after the first user message;
 follow-ups retain their own placement. `components.introCard.inlineIconSize`
 and `inlineIconGap` tune inline welcome symbols without changing title type.
+
+
+### Optional whole-turn activity
+
+`turnActivity.enabled: true` groups explicitly classified progress prose and tools
+under one Working/Worked disclosure, with the final answer outside. The defaults
+are unchanged. Native SSE phase and execution metadata provide classification;
+unclassified prose stays in the transcript. Other transports can supply
+`message.turnActivity` or the pure synchronous `turnActivity.resolveMessage`
+adapter. Use `turnActivity.renderHeader` for a custom heading.
+See [the complete host contract](../../docs/configuration.md#optional-whole-turn-activity)
+for identity, replay, measured timing, local cancellation/failure and adapter limits.
+Its scoped defaults leave 16px below the divider and between prose/tool batches,
+with 2px around/between nested tool children and compact 28px rows. Authored
+activity `transcriptGap`, `bodyPadding`, `groupGap`, `groupPadding`, and `rowHeight`
+win over these defaults in both V4 and V5. The view reuses activity chrome and
+`expansion` motion; the body is styled with
+`.persona-turn-activity-body`, and automatic timing with
+`.persona-turn-activity-duration`. Whole-turn configuration and callbacks are
+code-owned, not stored in the feature preference slice.

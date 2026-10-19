@@ -232,5 +232,11 @@
     "path": "dist/preferences-runtime.js",
     "limit": "2 kB",
     "gzip": true
+  },
+  {
+    "name": "Opt-in · whole-turn activity view (turn-activity-ui.js)",
+    "path": "dist/turn-activity-ui.js",
+    "limit": "2.5 kB",
+    "gzip": true
   }
 ]

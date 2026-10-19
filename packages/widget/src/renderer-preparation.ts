@@ -1,3 +1,4 @@
+import { getTurnActivityUiSync, loadTurnActivityUi } from "./turn-activity-ui-loader";
 import { prepareIconRegistry } from "./utils/icons";
 import type { AgentWidgetConfig } from "./types";
 import { getComposerActionsSync, loadComposerActions } from "./composer-actions-loader";
@@ -19,7 +20,9 @@ export const prepareRendererModules = (config: AgentWidgetConfig): Promise<unkno
   };
   require(true, getComposerActionsSync(), loadComposerActions);
   require(true, getMarkdownParsersSync(), loadMarkdownParsers);
-  const activity = config.features?.showToolCalls !== false || config.features?.showReasoning !== false;
+  const turn = config.turnActivity?.enabled === true;
+  require(turn, getTurnActivityUiSync(), loadTurnActivityUi);
+  const activity = turn || config.features?.showToolCalls !== false || config.features?.showReasoning !== false;
   require(activity, getActivityUiSync(), loadActivityUi);
   require(activity || config.loadingLabel?.animation !== "none" && (!!config.loadingLabel?.animate ||
     (config.loadingIndicator?.variant ?? (config.future?.v5Defaults ? "label" : "dots")) === "label"), getLoadingLabelRuntimeSync(), loadLoadingLabelRuntime);

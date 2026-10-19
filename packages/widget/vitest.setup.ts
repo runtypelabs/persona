@@ -43,7 +43,8 @@ provideLoadingLabelRuntime(loadingLabelRuntime);
 import * as activityUi from "./src/activity-ui";
 import { provideActivityUi } from "./src/activity-ui-loader";
 import { renderLucideIcon as activityIcon } from "./src/utils/icons";
-activityUi.initActivityUi(activityIcon, loadingLabelRuntime);
+import { activityDependencies } from "./src/activity-dependencies";
+activityUi.initActivityUi(activityIcon, loadingLabelRuntime, activityDependencies);
 provideActivityUi(activityUi);
 
 import { initArtifactsUi } from "./src/components/artifacts-deps";

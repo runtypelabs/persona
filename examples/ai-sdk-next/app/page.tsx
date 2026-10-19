@@ -14,7 +14,7 @@ const endpoints = {
     label: "OpenAI Responses",
     apiUrl: "/api/openai-responses/dispatch",
     description:
-      "Wraps openai.responses.create({ stream: true }) and translates Responses events into Persona SSE.",
+      "Preserves OpenAI message phases: commentary appears in turn activity, while answers stream into the conversation. Models without phase labels show ordinary chat.",
   },
 } as const;
 
@@ -57,6 +57,7 @@ export default function Page() {
           <PersonaWidget
             key={active}
             apiUrl={endpoint.apiUrl}
+            turnActivity={active === "openai"}
             title={endpoint.label}
             subtitle="Ask a question and the selected SDK stream will be wrapped for Persona."
             accent="#157f8f"

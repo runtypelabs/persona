@@ -1,5 +1,6 @@
 import type { BrowserRecognitionEvent } from "./voice/browser-recognition-handlers";
 import { createRenderReadiness } from "./utils/render-readiness";
+import { activityDependencies } from "./activity-dependencies";
 import { prepareRendererModules } from "./renderer-preparation";
 import { loadDictationRuntime, getDictationRuntimeSync, type DictationRuntimeModule } from "./dictation-runtime-loader";
 import { getComposerActionsSync, loadComposerActions, type ComposerActionsModule } from "./composer-actions-loader";
@@ -7,7 +8,6 @@ import { createScrollAnimation, createScrollToLatest } from "./utils/scroll-anim
 import { createScrollToBottomControl } from "./components/scroll-to-bottom";
 import { createLayoutSlots } from "./utils/layout-slots";
 import { isBrowserLocalApproval } from "./utils/restored-browser-state";
-import { activityVariant } from "./components/activity-row";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
 import type { DictationSession } from "./dictation-session";
 import { usesSessionVoice, usesSessionVoiceForConfig } from "./utils/voice-support";
@@ -952,7 +952,7 @@ export const createAgentExperience = (
     if (activityUi) return activityUi;
     const ready = getActivityUiSync();
     if (ready && loadingLabels) {
-      ready.initActivityUi(renderLucideIcon, loadingLabels);
+      ready.initActivityUi(renderLucideIcon, loadingLabels, activityDependencies);
       activityLifecycle = ready.createActivityLifecycle(
         mount, () => config, toolExpansionState, reasoningExpansionState, messageCache, queryMessageBubble
       );
@@ -5660,6 +5660,14 @@ export const createAgentExperience = (
       `[data-message-id="${escapeMessageId(messageId)}"]`
     );
 
+  // Progress inside a turn disclosure belongs to its visible header. Pinning
+  // the nested prose instead clips that header, and leaves a hidden anchor
+  // when the completed turn folds away. Keep ordinary message lookups intact.
+  const queryScrollAnchor = (messageId: string): HTMLElement | null => {
+    const bubble = queryMessageBubble(messageId);
+    return bubble?.closest<HTMLElement>("[data-persona-turn-activity]") ?? bubble;
+  };
+
   // Anchor-top mode: scroll `messageId` to rest `anchorTopOffset` px below the
   // viewport top and hold it there while the response streams in beneath it.
   // Deferred one frame so the message bubble has been rendered and laid out.
@@ -5669,10 +5677,7 @@ export const createAgentExperience = (
     }
     anchorRAF = requestAnimationFrame(() => {
       anchorRAF = null;
-      const escapedId = escapeMessageId(messageId);
-      const bubble = body.querySelector<HTMLElement>(
-        `[data-message-id="${escapedId}"]`
-      );
+      const bubble = queryScrollAnchor(messageId);
       if (!bubble) return;
 
       // Bubble top relative to the scroll content. offsetTop is used instead
@@ -5725,7 +5730,7 @@ export const createAgentExperience = (
   const repinAnchoredMessage = () => {
     if (getScrollMode() !== "anchor-top") return;
     if (!anchorState || !anchoredMessageId) return;
-    const bubble = queryMessageBubble(anchoredMessageId);
+    const bubble = queryScrollAnchor(anchoredMessageId);
     if (!bubble) return;
     cancelSmoothScroll();
     const previousSpacerHeight = anchorState.spacerHeight;
@@ -5851,7 +5856,7 @@ export const createAgentExperience = (
   const isFirstUnreadStranded = (messageId: string): boolean => {
     if (lastSentUserMessageId === null) return true;
     const userBubble = queryMessageBubble(lastSentUserMessageId);
-    const blockBubble = queryMessageBubble(messageId);
+    const blockBubble = queryScrollAnchor(messageId);
     // Unmeasurable geometry: fall back to handing off (pre-conditional
     // behavior) rather than risking an answer parked below the fold.
     if (!userBubble || !blockBubble) return true;
@@ -6008,15 +6013,8 @@ export const createAgentExperience = (
     transform: MessageTransform
   ) => {
     const activityIds = new Set<string>();
-    for (const message of messages) {
-      const kind = message.variant === "tool" ? "tool" : message.variant === "reasoning" ? "reasoning" : null;
-      if (!kind || activityVariant(config, kind) !== "row") continue;
-      const display = kind === "tool" ? config.features?.toolCallDisplay : config.features?.reasoningDisplay;
-      if (display?.expandable === false) continue;
-      activityIds.add(message.id);
-      ensureActivityUi();
-      activityLifecycle?.observe(message, kind, kind === "tool" ? toolExpansionState : reasoningExpansionState, display);
-    }
+    ensureActivityUi();
+    activityLifecycle?.observeMessages(messages, activityIds);
     // Build new content in a temporary container for morphing
     const tempContainer = document.createElement("div");
 
@@ -6295,10 +6293,12 @@ export const createAgentExperience = (
           if (mod) return mod.createErrorBlock(message, transform, actionEligibility.canRegenerate === true);
         }
         // Keep the detail readable even while the secondary UI chunk loads.
-        return createStandardBubble(message, transform, config.layout?.messages,
+        const bubble = createStandardBubble(message, transform, config.layout?.messages,
           config.messageActions, messageActionCallbacks, {
             loadingIndicatorRenderer: inlineLoadingRenderer, widgetConfig: config, actionEligibility
           });
+        bubble.dataset.personaDefaultMessage = "true";
+        return bubble;
       };
 
       // Try plugins first
@@ -6792,8 +6792,9 @@ export const createAgentExperience = (
       });
     }
 
-    activityUi?.groupToolRows({ config, messages, tempContainer, streaming: sessionInitialized ? session.isStreaming() : false,
-      currentRunToolIds: sessionInitialized ? session.getRunToolIds() : undefined, showToolCalls, showReasoning,
+    const hasTurnActivity = ensureActivityUi()?.groupToolRows({ root: mount, config, messages, tempContainer, streaming: sessionInitialized ? session.isStreaming() : false,
+      runActivity: session?.getRunActivity(),
+      showToolCalls, showReasoning,
       dropCompletedToolCalls, dropReasoningRow, createMessageRow, activityIds, activityLifecycle: activityLifecycle!, toolExpansionState });
 
     activityLifecycle?.prune(activityIds);
@@ -6848,7 +6849,7 @@ export const createAgentExperience = (
       lastMessage.variant !== "approval" &&
       !hasHiddenActivityAfterLastVisible;
 
-    if (isStreaming && messages.some((msg) => msg.role === "user") && !hasStreamingAssistantMessage && !hasRecentAssistantResponse) {
+    if (!hasTurnActivity && isStreaming && messages.some((msg) => msg.role === "user") && !hasStreamingAssistantMessage && !hasRecentAssistantResponse) {
       // Get loading indicator using priority chain: plugin -> config -> default
       const loadingIndicatorContext: LoadingIndicatorRenderContext = {
         config,
@@ -8598,7 +8599,8 @@ export const createAgentExperience = (
   session = new AgentWidgetSession(config, {
     onRunStarted: (event) => eventBus.emit("run:started", event),
     onRunFinished(event) {
-      flushPendingStreamingText();
+      flushPendingMessages();
+      if (config.turnActivity?.enabled) renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
       eventBus.emit("run:finished", event);
     },
     onMessagesChanged(messages) {
@@ -11588,7 +11590,6 @@ export const createAgentExperience = (
         (nextVoice.dictation?.provider && nextVoice.dictation.provider !== config.voiceRecognition?.dictation?.provider) ||
         (nextVoice.provider?.custom && nextVoice.provider.custom !== config.voiceRecognition?.provider?.custom))) dismissDictation();
       const previousDefaultsVersion = config.future?.v5Defaults === true;
-      const previousToolCallConfig = config.toolCall;
       const previousMessageActions = config.messageActions;
       const previousLayoutMessages = config.layout?.messages;
       const previousColorScheme = config.colorScheme;
@@ -11846,7 +11847,6 @@ export const createAgentExperience = (
       refreshCloseButton();
 
       // Re-render messages if config affecting message rendering changed
-      const toolCallConfigChanged = JSON.stringify(config.toolCall) !== JSON.stringify(previousToolCallConfig);
       const messageActionsChanged = JSON.stringify(config.messageActions) !== JSON.stringify(previousMessageActions);
       const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages)
         || config.layout?.messages?.renderAssistantMessage !== previousLayoutMessages?.renderAssistantMessage
@@ -11857,9 +11857,9 @@ export const createAgentExperience = (
         || JSON.stringify(config.features?.toolCallDisplay) !== JSON.stringify(previousToolCallDisplay)
         || JSON.stringify(config.features?.reasoningDisplay) !== JSON.stringify(previousReasoningDisplay);
       const messagesConfigChanged = (config.future?.v5Defaults === true) !== previousDefaultsVersion
-        || toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged
+        || "toolCall" in nextConfig || messageActionsChanged || layoutMessagesChanged
         || "loadingIndicator" in nextConfig || iterationDisplayChanged || featuresChanged
-        || "loadingLabel" in nextConfig
+        || "turnActivity" in nextConfig || "loadingLabel" in nextConfig
         || "errorDisplay" in nextConfig || "theme" in nextConfig || "darkTheme" in nextConfig
         || "approval" in nextConfig || config.colorScheme !== previousColorScheme
         || "askUserQuestion" in (nextConfig.features ?? {})
@@ -13168,6 +13168,9 @@ export const createAgentExperience = (
       // pipeline still exist, then let the normal teardown cancel any work
       // scheduled by that final apply.
       flushPendingMessages();
+      // Cancel session work before the final effect/timer cleanup: cancellation
+      // can render a terminal activity state.
+      destroyCallbacks.forEach((cb) => cb());
       if (toolElapsedTimerId != null) {
         clearInterval(toolElapsedTimerId);
         toolElapsedTimerId = null;
@@ -13177,7 +13180,6 @@ export const createAgentExperience = (
       toolExpansionState.clear();
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();
-      destroyCallbacks.forEach((cb) => cb());
       eventBus.dispose();
       wrapper.remove();
       pillRoot?.remove();

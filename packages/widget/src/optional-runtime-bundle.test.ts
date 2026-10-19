@@ -19,6 +19,13 @@ describe("optional runtime bundle boundaries", () => {
     expect(readFileSync(dist(name), "utf8")).toContain(marker);
   });
 
+  it.runIf(built)("keeps initialized activity services out of the separate whole-turn bundle", () => {
+    // Each entry bundles its own module state. The turn renderer must receive
+    // initialized services from activity-ui rather than copy its empty bridge.
+    expect(readFileSync(dist("activity-ui.js"), "utf8")).toContain("Activity UI requires core style dependencies.");
+    expect(readFileSync(dist("turn-activity-ui.js"), "utf8")).not.toContain("Activity UI requires core style dependencies.");
+  });
+
   it.runIf(built)("reuses core icon/tooltip services in controls and dictation", () => {
     for (const name of ["composer-actions-runtime.js", "dictation-runtime.js", "activity-ui.js"]) {
       const code = readFileSync(dist(name), "utf8");

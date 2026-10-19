@@ -3,6 +3,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { brotliCompress, gzip, constants } from "node:zlib";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -37,8 +39,44 @@ const quality = (header, encoding) => {
   return q ? Number(q.trim().slice(2)) : 1;
 };
 const event = (type, data) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
-createServer((req, res) => {
+const runtypeProxy = process.env.PERSONA_RUNTYPE_PROXY_URL ?? "http://127.0.0.1:43111";
+const liveRoutes = new Map([
+  ["/api/openai-responses/dispatch", {url: "http://127.0.0.1:5205/api/openai-responses/dispatch", help: "Start the OpenAI Next.js example on port 5205."}],
+  ...["", "/resume"].map(suffix => [`/api/runtype/dispatch${suffix}`, {
+    url: new URL(`/api/chat/dispatch-activity${suffix}`, runtypeProxy).href,
+    help: "Start the Runtype Hono proxy with RUNTYPE_API_KEY (port 43111 by default).",
+  }]),
+]);
+createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
+  // Keep the existing example adapter and its API key on the server. Stream
+  // through unchanged so this preview exercises the same real provider phases.
+  const liveRoute = liveRoutes.get(url.pathname);
+  if (liveRoute && req.method === "POST") {
+    if (!req.headers["content-type"]?.startsWith("application/json")) {
+      res.writeHead(415).end("Expected application/json"); return;
+    }
+    const abort = new AbortController();
+    res.on("close", () => abort.abort());
+    try {
+      const upstream = await fetch(liveRoute.url, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: Readable.toWeb(req), duplex: "half", signal: abort.signal,
+      });
+      res.writeHead(upstream.status, {
+        "Content-Type": upstream.headers.get("content-type") ?? "text/plain",
+        "Cache-Control": "no-store",
+      });
+      if (upstream.body) await pipeline(Readable.fromWeb(upstream.body), res);
+      else res.end();
+    } catch {
+      if (!res.destroyed) {
+        if (!res.headersSent) res.writeHead(502, { "Content-Type": "text/plain" });
+        res.end(`Live example unavailable. ${liveRoute.help}`);
+      }
+    }
+    return;
+  }
   if (url.pathname === "/api/chat" && req.method === "POST") {
     req.resume();
     const executionId = "preview", now = new Date().toISOString();

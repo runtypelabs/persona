@@ -14,7 +14,7 @@ const render = (messages: AgentWidgetMessage[], config: AgentWidgetConfig, strea
   const tempContainer = document.createElement('div');
   const createMessageRow = (id: string) => { const row = document.createElement('div'); row.dataset.wrapperId = id; return row; };
   for (const message of messages) tempContainer.appendChild(createMessageRow(message.id));
-  groupToolRows({ config, messages, tempContainer, streaming, currentRunToolIds: new Set(ids),
+  groupToolRows({ root: tempContainer, config, messages, tempContainer, streaming, runActivity: {run:{runId:"test",timestamp:Date.now()},messageIds:new Set(ids)},
     showToolCalls: true, showReasoning: false, dropCompletedToolCalls: config.features?.toolCallDisplay?.completedVisibility === 'removed',
     dropReasoningRow: () => true, createMessageRow, activityIds: new Set(), activityLifecycle: createActivityLifecycle(() => {}), toolExpansionState: new Set() });
   return tempContainer;
@@ -23,19 +23,31 @@ const config = (groupedMode: 'summary' | 'stack' | 'collapsible', groupBoundary:
   features: { toolCallDisplay: { grouped: true, groupedMode, groupBoundary } },
 });
 afterEach(() => vi.useRealTimers());
+
+it.each(['summary', 'stack', 'collapsible'] as const)('summarizes semantic categories for %s rows and lets the renderer override', mode => {
+  const a = tool('a'), b = tool('b'), c = tool('c');
+  a.toolCall!.name = 'Read'; b.toolCall!.name = 'read_text_file'; c.toolCall!.name = 'Bash';
+  c.toolCall!.status = 'running';
+  const settings = config(mode); settings.features!.toolCallDisplay!.variant = 'row';
+  const node = render([a, b, c], settings, true, ['a', 'b', 'c']);
+  expect(node.querySelector('[data-persona-tool-group-row]')?.textContent).toBe('Read files, running commands');
+  const summary = vi.fn(() => 'Custom activity'); settings.toolCall = { renderGroupedSummary: summary };
+  expect(render([a, b, c], settings).querySelector('[data-persona-tool-group-row]')?.textContent).toBe('Custom activity');
+  expect(summary).toHaveBeenCalledWith(expect.objectContaining({ defaultSummary: 'Read files, running commands' }));
+});
+
+it('keeps legacy card stack summaries unchanged', () => {
+  expect(render([tool('a'), tool('b')], config('stack')).querySelector('.persona-tool-group-summary')?.textContent).toBe('Called 2 tools');
+});
+
+it('preserves pending approval and failure text when different children need attention', () => {
+  const a = tool('a'), b = tool('b'); a.toolCall!.name = 'Read'; b.toolCall!.name = 'Bash';
+  a.toolCall!.success = false; b.toolCall!.approvalStatus = 'pending';
+  const node = render([a, b], config('collapsible'), true, ['a', 'b']);
+  expect(node.querySelector('[data-persona-tool-group-row]')?.textContent).toBe('Read, bash · Waiting for approval · Failed');
+});
+
 describe.each(['summary', 'stack', 'collapsible'] as const)('%s tool groups', mode => {
-  it('splits known neighboring iterations and executions while keeping singleton groups', () => {
-    const summary = vi.fn<NonNullable<NonNullable<AgentWidgetConfig["toolCall"]>["renderGroupedSummary"]>>(() => null); const settings = { ...config(mode), toolCall: { renderGroupedSummary: summary } };
-    settings.features!.toolCallDisplay!.groupSingletons = true;
-    const node = render([tool('a', 1, 'e1'), tool('b', 1, 'e1'), tool('c', 2, 'e1'), tool('d', 2, 'e2')], settings, true, ['c', 'd']);
-    expect(node.querySelectorAll('[data-persona-tool-group-row]')).toHaveLength(3);
-    expect(summary.mock.calls.map(([context]) => context)).toEqual([
-      expect.objectContaining({ streaming: true, isLatestGroup: false, isCurrentRunGroup: false }),
-      expect.objectContaining({ streaming: true, isLatestGroup: false, isCurrentRunGroup: true }),
-      expect.objectContaining({ streaming: true, isLatestGroup: true, isCurrentRunGroup: true }),
-    ]);
-    expect(node.querySelector('[data-wrapper-id="tool-group-c"]')).not.toBeNull();
-  });
   it('flattens singleton iterations without losing boundaries or latest-group context', () => {
     const summary = vi.fn<NonNullable<NonNullable<AgentWidgetConfig['toolCall']>['renderGroupedSummary']>>(() => null);
     const settings = { ...config(mode), toolCall: { renderGroupedSummary: summary } };
@@ -81,9 +93,9 @@ it.each(['error', 'interrupted', 'denied', 'awaiting-approval'] as const)('prese
   expect(group.dataset.activityState).toBe(expected);
 });
 it.each(['always', 'active', 'never'] as const)('applies %s group icon visibility to the header only', groupIconVisibility => {
-  const settings = config('collapsible'); settings.features!.toolCallDisplay!.groupSingletons = true; settings.features!.toolCallDisplay!.iconVisibility = 'never'; settings.features!.toolCallDisplay!.groupIconVisibility = groupIconVisibility;
+  const settings = config('collapsible'); settings.features!.toolCallDisplay!.iconVisibility = 'never'; settings.features!.toolCallDisplay!.groupIconVisibility = groupIconVisibility;
   const custom = document.createElement('i'); custom.dataset.customIcon = 'true'; settings.toolCall = { renderGroupedSummary: () => custom };
-  const node = render([tool('a')], settings);
+  const node = render([tool('a'), tool('b')], settings);
   expect(!!node.querySelector('.persona-activity-icon')).toBe(groupIconVisibility === 'always');
   expect(node.querySelector('[data-custom-icon]')).toBe(custom);
   expect(settings.features!.toolCallDisplay!.iconVisibility).toBe('never');
@@ -99,7 +111,7 @@ it('ignores non-HTML direct children when resolving group wrappers', () => {
   const tempContainer = document.createElement('div');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('data-wrapper-id', 'a');
   const html = document.createElement('div'); html.dataset.wrapperId = 'b'; tempContainer.append(svg, html);
-  groupToolRows({ config: config('stack', 'adjacent'), messages: [tool('a'), tool('b')], tempContainer, streaming: false,
+  groupToolRows({ root: tempContainer, config: config('stack', 'adjacent'), messages: [tool('a'), tool('b')], tempContainer, streaming: false,
     showToolCalls: true, showReasoning: false, dropCompletedToolCalls: false, dropReasoningRow: () => false,
     createMessageRow: () => document.createElement('div'), activityIds: new Set(), activityLifecycle: createActivityLifecycle(() => {}), toolExpansionState: new Set() });
   expect(tempContainer.querySelector('[data-persona-tool-group-row]')).toBeNull();
@@ -151,4 +163,44 @@ it('does not keep an earlier adjacent group working when the final tool is unwra
   const node = render([tool('a'), tool('b'), text, tool('c')], settings, true, ['a', 'b', 'c']);
   expect(node.querySelector('[data-persona-tool-group]')?.getAttribute('data-activity-state')).toBe('done');
   expect(summary).toHaveBeenCalledWith(expect.objectContaining({ isLatestGroup: false, isCurrentRunGroup: true }));
+});
+
+it('adopts only a known resumed execution when all replayed message ids already exist', async () => {
+  const turn = await import('./turn-activity-ui');
+  const { turnUi } = await import('./activity-ui'); turnUi.render = turn.render;
+  const a = tool('existing', 1, 'resumed'); a.turnActivity = {id:'resumed-turn',kind:'progress'};
+  const old = tool('old', 1, 'previous'); old.turnActivity = {id:'old-turn',kind:'progress'};
+  const messages = [old, a]; const tempContainer = document.createElement('div');
+  const createMessageRow = (id: string) => { const row = document.createElement('div'); row.dataset.wrapperId = id; return row; };
+  for (const message of messages) tempContainer.append(createMessageRow(message.id));
+  groupToolRows({root:tempContainer,config:{turnActivity:{enabled:true}},messages,tempContainer,streaming:true,
+    runActivity:{run:{runId:'local-resume',timestamp:Date.now()},messageIds:new Set(["existing"])},
+    showToolCalls:true,showReasoning:false,dropCompletedToolCalls:false,dropReasoningRow:()=>false,createMessageRow,
+    activityIds:new Set(),activityLifecycle:createActivityLifecycle(()=>{}),toolExpansionState:new Set()});
+  const labels = [...tempContainer.querySelectorAll('[data-persona-turn-activity] > button')];
+  expect(labels.map(label => label.textContent)).toEqual(['Worked','Working']);
+});
+
+it('keeps default group loading animation when a custom summary returns null', () => {
+  const a = tool('a'), b = tool('b');
+  a.toolCall!.status = 'running';
+  const node = render([a, b], { ...config('collapsible'), loadingLabel: { animation: 'pulse' }, toolCall: { renderGroupedSummary: () => null } });
+  expect(node.querySelector('[data-persona-tool-group] > button [data-persona-loading-label]')).not.toBeNull();
+});
+
+it.each(['summary', 'stack', 'collapsible'] as const)('supports current-action opt-in without turn classification in %s groups', mode => {
+  const a = tool('a'), b = tool('b'); a.toolCall!.name = 'Read'; b.toolCall!.name = 'web_search';
+  b.toolCall!.status = 'running'; b.toolCall!.actionTitle = 'Checking citations';
+  const settings = config(mode); settings.features!.toolCallDisplay!.groupSummary = 'current-action';
+  const summary = () => render([a,b], settings).querySelector('[data-persona-tool-group-row]')!.textContent;
+  expect(summary()).toBe('Checking citations');
+  a.toolCall!.status = 'running';
+  expect(summary()).not.toContain('Checking citations');
+  a.toolCall!.status = 'complete'; a.toolCall!.interrupted = true;
+  expect(summary()).toContain('Interrupted');
+  expect(summary()).not.toContain('Checking citations');
+  a.toolCall!.interrupted = false; b.toolCall!.status = 'complete';
+  expect(summary()).not.toContain('Checking citations');
+  settings.toolCall = { renderGroupedSummary: () => 'Host summary' };
+  expect(summary()).toBe('Host summary');
 });

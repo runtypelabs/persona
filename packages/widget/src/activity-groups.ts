@@ -1,16 +1,21 @@
+import type { SessionRunActivity } from "./session";
+import { classify, presentation, groupToolSummary } from "./utils/turn-activity-display";
+import { turnUi, getActivityStyles } from "./components/activity-deps";
 import type { AgentWidgetConfig, AgentWidgetMessage, AgentWidgetReasoning } from "./types";
 import { appendRenderedValue } from "./components/expandable-bubble";
 import { createElement } from "./utils/dom";
 import { applyLoadingLabel } from "./utils/loading-label-deps";
-import { createActivityGroup, type createActivityLifecycle } from "./components/activity-row";
+import { summarizeToolActivity, groupActivityIcon } from "./utils/tool-activity-summary";
+import { activityVariant, createActivityGroup, type createActivityLifecycle } from "./components/activity-row";
 
 /** Group visible tool rows only after the activity renderer has loaded. */
-export function groupToolRows(options: {
+export type ActivityGroupOptions = {
+  root: HTMLElement;
+  runActivity?: SessionRunActivity;
   config: AgentWidgetConfig;
   messages: AgentWidgetMessage[];
   tempContainer: HTMLElement;
   streaming: boolean;
-  currentRunToolIds?: ReadonlySet<string>;
   showToolCalls: boolean;
   showReasoning: boolean;
   dropCompletedToolCalls: boolean;
@@ -19,9 +24,14 @@ export function groupToolRows(options: {
   activityIds: Set<string>;
   activityLifecycle: ReturnType<typeof createActivityLifecycle>;
   toolExpansionState: Set<string>;
-}) {
-  const { config, messages, tempContainer, streaming, currentRunToolIds, showToolCalls, showReasoning, dropCompletedToolCalls, dropReasoningRow, createMessageRow, activityIds, activityLifecycle, toolExpansionState } = options;
+};
 
+export function groupToolRows(options: ActivityGroupOptions) {
+  const { config, messages, tempContainer, streaming, runActivity, showToolCalls, showReasoning, dropCompletedToolCalls, dropReasoningRow, createMessageRow, activityIds, activityLifecycle, toolExpansionState } = options;
+
+  const renderTurn = turnUi.render;
+  if (config.turnActivity?.enabled && renderTurn) return renderTurn(options,
+    { group: createActivityGroup, tools: groupToolRows, classify, presentation, hasExplicitThemeStyle: getActivityStyles().hasExplicitThemeStyle });
   const display = config.features?.toolCallDisplay;
   if (display?.grouped) {
     const toolGroups: AgentWidgetMessage[][] = [];
@@ -74,40 +84,45 @@ export function groupToolRows(options: {
       const wrappers = group.map(message => rows.get(message.id))
         .filter((wrapper): wrapper is HTMLElement => Boolean(wrapper));
 
-      if (wrappers.length < (summaryOnly || display.groupSingletons ? 1 : 2)) {
+      if (wrappers.length < (summaryOnly ? 1 : 2)) {
         return;
       }
 
       const id = `tool-group-${group[0].id}`;
       const groupWrapper = createMessageRow(id, "assistant");
-      groupWrapper.setAttribute("data-persona-tool-group-row", "true");
+      groupWrapper.dataset.personaToolGroupRow = "true";
 
-      const toolCount = `${group.length} ${group.length === 1 ? "tool" : "tools"}`;
       const tools = group.map(item => item.toolCall!);
       const interrupted = tools.some(tool => tool.interrupted);
       const isLatestGroup = groupIndex === toolGroups.length - 1;
-      const isCurrentRunGroup = group.some(item => currentRunToolIds?.has(item.id));
+      const isCurrentRunGroup = group.some(item => runActivity?.messageIds.has(item.id));
       const context = { messages: group, toolCalls: tools, config,
         streaming, isLatestGroup, isCurrentRunGroup };
 
       const approvals = group.map(item => item.approval?.status ?? item.toolCall?.approvalStatus);
-      const approvalStatus = approvals.includes("denied") ? "denied" : approvals.includes("pending") ? "pending" : undefined;
+      const approvalStatus = approvals.includes("pending") ? "pending" : approvals.includes("denied") ? "denied" : approvals.includes("timeout") ? "timeout" : undefined;
       const success = !tools.some(tool => tool.success === false);
       const attention = interrupted || !success || approvalStatus;
       const running = tools.some(tool => tool.status !== "complete");
       const active = running ||
         (!iterationBoundary && streaming && isLatestGroup && isCurrentRunGroup && !attention);
+      const toolCount = `${group.length} tool${group.length === 1 ? "" : "s"}`;
+      const aggregate = display.groupedMode === "collapsible" || activityVariant(config, "tool") === "row"
+        ? summarizeToolActivity(tools.map((tool, index) => ({ ...tool, approvalStatus: approvals[index] }))) || "Tool activity"
+        : interrupted ? `${toolCount} · Interrupted` : `Called ${toolCount}`;
+
+      const defaultSummary = groupToolSummary(group, config, aggregate);
 
       if (display.groupedMode === "collapsible") {
         const synthetic: AgentWidgetMessage = { ...group[0], id, approval: undefined, toolCall: {
-          id, name: toolCount, status: active ? "running" : "complete",
+          id, status: active ? "running" : "complete",
           chunks: tools.flatMap(tool => tool.chunks ?? []),
           success, interrupted, approvalStatus,
         } };
         // Only measured timestamps establish a wall-clock interval. Never add
         // individual durations: tools can overlap or have gaps between batches.
-        if (tools.every(tool => Number.isFinite(tool.startedAt) && tool.startedAt! > 0 && tool.startedAt! <= Date.now() &&
-          (tool.status !== "complete" || (Number.isFinite(tool.completedAt) && tool.completedAt! <= Date.now() && tool.completedAt! >= tool.startedAt!)))) {
+        if (tools.every(tool => measured(tool.startedAt) &&
+          (tool.status !== "complete" || (measured(tool.completedAt) && tool.completedAt! >= tool.startedAt!)))) {
           const start = Math.min(...tools.map(tool => tool.startedAt!));
           const end = Math.max(...tools.map(tool => tool.completedAt ?? tool.startedAt!));
           if (running) synthetic.toolCall!.startedAt = start;
@@ -115,16 +130,14 @@ export function groupToolRows(options: {
         }
         activityIds.add(id);
         activityLifecycle.observe(synthetic, "tool", toolExpansionState, display, group.find(item => toolExpansionState.has(item.id))?.id ?? "");
-        const label = synthetic.toolCall?.interrupted ? `${toolCount} · Interrupted`
-          : `${active ? "Using" : "Used"} ${toolCount}`;
-        const custom = config.toolCall?.renderGroupedSummary?.({ ...context, defaultSummary: label });
-        const row = createActivityGroup(synthetic, config, toolExpansionState.has(id), custom ?? label);
+        const custom = config.toolCall?.renderGroupedSummary?.({ ...context, defaultSummary });
+        const row = createActivityGroup(synthetic, config, toolExpansionState.has(id), custom ?? defaultSummary, undefined, !active && !attention ? groupActivityIcon(tools, config) : undefined);
         row.bubble.classList.add("persona-tool-group");
         row.body.dataset.personaToolGroupStack = "true";
         wrappers[0].before(groupWrapper);
         groupWrapper.appendChild(row.bubble);
         wrappers.forEach((wrapper, index) => {
-          wrapper.style.setProperty("--persona-message-row-max-width", "100%");
+          fillRow(wrapper);
           wrapper.style.setProperty("--persona-activity-stagger", `${index * 40}ms`);
           wrapper.classList.add("persona-activity-group-child");
           row.body.appendChild(wrapper);
@@ -133,13 +146,11 @@ export function groupToolRows(options: {
       }
 
       const groupContainer = createElement("div", "persona-tool-group persona-flex persona-w-full persona-flex-col persona-gap-2");
-      groupContainer.setAttribute("data-persona-tool-group", "true");
+      groupContainer.dataset.personaToolGroup = "true";
 
       const summary = createElement("div", "persona-tool-group-summary persona-text-xs persona-text-persona-muted");
       summary.id = `tool-group-summary-${group[0].id}`;
 
-      const defaultSummary = interrupted
-        ? `${toolCount} · Interrupted` : `Called ${toolCount}`;
       const renderedSummary = config.toolCall?.renderGroupedSummary?.({
         ...context,
         defaultSummary,
@@ -149,7 +160,7 @@ export function groupToolRows(options: {
 
       const stack = createElement("div", "persona-tool-group-stack persona-flex persona-flex-col");
       stack.id = `tool-group-stack-${group[0].id}`;
-      stack.setAttribute("data-persona-tool-group-stack", "true");
+      stack.dataset.personaToolGroupStack = "true";
 
       groupContainer.appendChild(summary);
       if (!summaryOnly) {
@@ -166,11 +177,11 @@ export function groupToolRows(options: {
         // The outer group row owns role sizing. Inner message rows fill that
         // resolved track instead of applying the role max-width a second
         // time (which would turn an 85% cap into 72.25%).
-        wrapper.style.setProperty("--persona-message-row-max-width", "100%");
+        fillRow(wrapper);
         const item = createElement("div", "persona-tool-group-item persona-relative");
-        item.setAttribute("data-persona-tool-group-item", "true");
+        item.dataset.personaToolGroupItem = "true";
         if (wrapperIndex < wrappers.length - 1) {
-          item.setAttribute("data-persona-tool-group-connector", "true");
+          item.dataset.personaToolGroupConnector = "true";
         }
         item.appendChild(wrapper);
         stack.appendChild(item);
@@ -178,4 +189,9 @@ export function groupToolRows(options: {
     });
   }
 
+  return false;
 }
+
+const measured = (value: number | undefined) => value! > 0 && value! <= Date.now();
+
+const fillRow = (wrapper: HTMLElement) => wrapper.style.setProperty("--persona-message-row-max-width", "100%");

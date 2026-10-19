@@ -17,11 +17,14 @@ import {
   CalendarDays,
   Camera,
   ChartColumn,
+  Circle,
   CircleCheck,
   CircleX,
   Clock,
   CreditCard,
   DollarSign,
+  Database,
+  Terminal,
   EyeOff,
   Files,
   Film,
@@ -75,6 +78,9 @@ import {
 } from "lucide";
 
 export const EXTRA_LUCIDE_ICONS = {
+  "circle": Circle,
+  "database": Database,
+  "terminal": Terminal,
   "user": User,
   "mail": Mail,
   "phone": Phone,

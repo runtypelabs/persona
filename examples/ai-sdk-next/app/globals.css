@@ -110,3 +110,13 @@ main {
     height: 620px;
   }
 }
+
+.providerError {
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border: 1px solid #e6b8b8;
+  border-radius: 8px;
+  background: #fff3f3;
+  color: #8d2424;
+  line-height: 1.5;
+}

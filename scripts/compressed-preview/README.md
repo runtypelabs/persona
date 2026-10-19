@@ -76,10 +76,9 @@ production authentication, account loading, and remote server overhead.
 ## Grouped activity preview
 
 Open http://localhost:5204/activity to compare adjacent and iteration groups using
-the built widget. **Run both** streams four mocked tool calls over three iterations,
+the built widget. **Run all** streams five mocked tool calls over three iterations,
 with pauses between batches. Run again to check that historical groups stay done.
-Single-tool iterations render directly by default; **Group single tools** restores
-a summary header for every iteration, including custom summaries. The switches
+Single-tool iterations render directly. The switches
 exercise custom summaries and group-only icon visibility; expand a
 group to check its child rows. The animation selector applies the same style to
 waiting labels, individual tools, and group headers, and can be changed mid-run.
@@ -92,4 +91,61 @@ independently of the loading labels. Open and close groups and child rows, rever
 a transition, or change settings mid-motion. The automatic toggle enables tool
 expansion on first activity and delayed collapse on completion for the next run.
 Reduced motion keeps disclosure changes instant.
-No backend or API key is required.
+The mocked comparisons need no backend or API key.
+
+The **Live agent** tester selects **Runtype agent** or **OpenAI Responses** and
+uses the same compressed widget build. V5 defaults and turn activity start enabled.
+Each provider retains its own in-memory transcript when switching; switching or
+changing V4/V5 is disabled while a request runs. A page reload clears those histories.
+
+For **Runtype agent**, configure `RUNTYPE_API_KEY` in
+`examples/runtype-hono-proxy/.env`, then run:
+
+```sh
+pnpm build:proxy
+pnpm dev:runtype-hono-proxy
+```
+
+If your environment overrides `UPSTREAM_URL` for a local Runtype checkout, start
+that backend too, or set `UPSTREAM_URL=https://api.runtype.com/v1/dispatch` when
+starting the proxy to use the hosted API.
+
+The compressed preview forwards dispatch and resume to the canonical proxy's
+`/api/chat/dispatch-activity` route on port 43111. Set `PERSONA_RUNTYPE_PROXY_URL` on the
+preview server if that proxy runs elsewhere. The existing server-pinned Persona
+documentation agent, with a six-turn and six-tool-call allowance for this tester, uses DeepWiki's repository structure, content and question
+tools. **Run Runtype example** requests these three stages in order, with progress
+updates between them. `AGENT_ID_ACTIVITY` on the proxy can substitute your own hosted
+agent; it must have suitable tools for the prompt. Tool access and model behavior
+can affect which calls actually run. You can also type your own prompt.
+
+For **OpenAI Responses**, run the Next.js example on port 5205 with its server-side
+API key and model options (see `examples/ai-sdk-next/README.md`). **Run OpenAI
+example** requests three stages: check OpenAI documentation, check Anthropic, then
+compare their streaming contracts, with brief progress updates between stages.
+
+Both routes forward the real stream unchanged. API keys remain in their backend;
+Stop cancels the upstream request. Commentary enters turn activity only when the
+backend supplies its phase before the text; unclassified prose remains outside.
+The tester does not invent phases or tool results. Toggle **Turn activity** or the
+rendering controls during or after a response to compare it without another API
+request. **V5 defaults** remounts the live widget with its existing messages;
+transient timing is not retained across that remount. The mocked **Run all** button
+never sends a provider request.
+
+The **Tool rendering** selector compares individual rows, collapsible groups,
+summary-only groups, stacks, and cards across all widgets without another request.
+**Group summary** selects the view's default, current action, or aggregate batch.
+By default, turn activity uses current-action summaries except in stacks; the
+ordinary widgets use aggregate summaries. Explicit selections apply to every view.
+**Turn activity for this mock** compares the same mocked transcript inside and
+outside a whole-turn disclosure.
+
+**Descriptive titles (mock)** toggles a `toolCall.resolveActionTitle` resolver,
+independently of turn classification. Active rows show those titles; one active
+tool can also supply the group summary. Turn the toggle off to see safe mapped
+labels. Cards keep their normal headers; **Custom summaries** demonstrates using
+`renderCollapsedSummary`'s resolved `actionTitle`. The mock includes sequential
+tools, parallel tools, and completed aggregate labels. The same controls apply to
+saved history and the live example; live tools fall back to mapped labels because
+the mock resolver has no titles for their call IDs.

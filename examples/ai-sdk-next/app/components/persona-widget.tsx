@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   createAgentExperience,
   markdownPostprocessor,
@@ -12,6 +12,7 @@ type PersonaWidgetProps = {
   subtitle: string;
   accent?: string;
   starterItems?: string[];
+  turnActivity?: boolean;
 };
 
 export function PersonaWidget({
@@ -20,13 +21,17 @@ export function PersonaWidget({
   subtitle,
   accent = "#157f8f",
   starterItems,
+  turnActivity = false,
 }: PersonaWidgetProps) {
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     const host = document.getElementById("persona-root");
     if (!host) return;
 
     let handle: ReturnType<typeof createAgentExperience> | null = createAgentExperience(host, {
       apiUrl,
+      turnActivity: { enabled: turnActivity },
       // The adapters emit Persona's SSE event vocabulary, which the widget
       // consumes natively (the same wire the Runtype API emits).
       launcher: { enabled: false, width: "100%" },
@@ -67,12 +72,26 @@ export function PersonaWidget({
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     });
 
+    const clearError = handle.on("run:started", () => setError(null));
+    const showError = handle.on("run:finished", ({ outcome }) => {
+      if (outcome === "error") {
+        setError("The provider could not complete this request. Check the server credentials, account credits, and selected model, then try again.");
+      }
+    });
+
     return () => {
+      clearError();
+      showError();
       handle?.destroy();
       handle = null;
       host.replaceChildren();
     };
-  }, [apiUrl, title, subtitle, accent, starterItems]);
+  }, [apiUrl, title, subtitle, accent, starterItems, turnActivity]);
 
-  return <div id="persona-root" />;
+  return (
+    <>
+      {error && <p className="providerError" role="alert">{error}</p>}
+      <div id="persona-root" />
+    </>
+  );
 }

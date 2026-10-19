@@ -131,3 +131,38 @@ it.each([undefined, 'none'] as const)('prepares loading-label code only for anim
   expect(load).toHaveBeenCalledTimes(animation === 'none' ? 0 : 1);
   expect(activityLoad).not.toHaveBeenCalled();
 });
+
+it('prepares the whole-turn renderer before revealing progress-only history', async () => {
+  const turn = await import('./turn-activity-ui');
+  const load = pending<typeof turn>();
+  const { setTurnActivityUiLoader } = await import('./turn-activity-ui-loader');
+  const { setActivityUiLoader } = await import('./activity-ui-loader');
+  setTurnActivityUiLoader(() => load.promise); setActivityUiLoader(async () => activity);
+  const { createAgentExperience } = await import('./ui');
+  const mount = document.createElement('div'); document.body.append(mount);
+  controller = createAgentExperience(mount, { apiUrl:'/chat', launcher:{enabled:false}, persistState:false,
+    voiceRecognition:{enabled:false}, features:{showToolCalls:false,showReasoning:false,artifacts:{enabled:false}},
+    turnActivity:{enabled:true}, initialMessages:[{id:'progress',role:'assistant',content:'Historical work',createdAt:'2026-01-01',turnActivity:{id:'history',kind:'progress'}}] });
+  expect(mount.hasAttribute('data-persona-preparing')).toBe(true);
+  load.resolve(turn); await controller.ready;
+  expect(mount.hasAttribute('data-persona-preparing')).toBe(false);
+  expect(mount.querySelector('[data-persona-turn-activity]')?.textContent).toContain('Historical work');
+});
+
+it('retries turn initialization when the activity dependency fails after the turn module loads', async () => {
+  const turn = await import('./turn-activity-ui');
+  const { setTurnActivityUiLoader, getTurnActivityUiSync } = await import('./turn-activity-ui-loader');
+  const { setActivityUiLoader } = await import('./activity-ui-loader');
+  setTurnActivityUiLoader(async () => turn);
+  let attempts = 0; setActivityUiLoader(async () => { if (++attempts === 1) throw new Error('Activity unavailable'); return activity; });
+  const { createAgentExperience } = await import('./ui');
+  const mount = document.createElement('div'); document.body.append(mount);
+  controller = createAgentExperience(mount, { apiUrl:'/chat', launcher:{enabled:false}, persistState:false,
+    voiceRecognition:{enabled:false}, features:{showToolCalls:false,showReasoning:false,artifacts:{enabled:false}}, turnActivity:{enabled:true} });
+  await expect(controller.ready).rejects.toThrow('Activity unavailable');
+  expect(getTurnActivityUiSync()).toBeNull();
+  controller.update({ turnActivity:{enabled:true} }); await controller.ready;
+  controller.injectTestMessage({type:'message',message:{id:'progress',role:'assistant',content:'Ready after retry',createdAt:'2026-01-01',turnActivity:{id:'history',kind:'progress'}}});
+  expect(mount.querySelector('[data-persona-turn-activity]')?.textContent).toContain('Ready after retry');
+  expect(attempts).toBe(2);
+});

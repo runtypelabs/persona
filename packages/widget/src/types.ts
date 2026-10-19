@@ -619,6 +619,8 @@ export type AgentWidgetRequestPayloadMessage = {
   role: AgentWidgetMessageRole | "tool";
   content: MessageContent;
   createdAt: string;
+  /** Optional assistant phase for backend adapters that replay provider history. */
+  phase?: AgentMessagePhase;
   toolCalls?: AgentWidgetReplayedToolCall[];
   toolResults?: AgentWidgetReplayedToolResult[];
 };
@@ -1029,12 +1031,21 @@ export type BackgroundConversationAdapter = {
   ): () => void;
 };
 
+/** Explicit assistant text placement; answer phases do not imply run completion. */
+export type AgentMessagePhase = "commentary" | "partial_answer" | "final_answer";
+
 /**
  * Metadata attached to messages created during agent execution.
  */
 export type AgentMessageMetadata = {
   /** Stable native text block identity, retained for durable replay segmentation. */
   textBlockId?: string;
+  /** Optional Persona text_start extension, known before the block's first text.
+   * Unclassified text stays in the transcript; adapters must not guess a phase. */
+  phase?: AgentMessagePhase;
+  /** Authoritative text_complete phase for provider history replay only.
+   * May arrive late; never changes the placement selected by text_start.phase. */
+  providerPhase?: AgentMessagePhase;
   executionId?: string;
   iteration?: number;
   turnId?: string;
@@ -2456,11 +2467,12 @@ export type AgentWidgetToolCallDisplayFeature = {
    * @default "stack"
    */
   groupedMode?: "stack" | "summary" | "collapsible";
+  /** Single active action or aggregate batch summary. Parallel work and attention remain
+   * aggregate. Defaults to current-action in classified turn progress, aggregate elsewhere;
+   * stack defaults to aggregate everywhere. Custom summary callbacks retain precedence. */
+  groupSummary?: "current-action" | "aggregate";
   /** Split adjacent tools at known iteration or execution changes. Missing metadata preserves adjacency. @default "adjacent" */
   groupBoundary?: "adjacent" | "iteration";
-  /** Keep group headers for single tools in stack/collapsible modes. Summary mode always keeps them.
-   * False shows the tool directly; iteration boundaries still apply. @default false */
-  groupSingletons?: boolean;
   /** Built-in collapsible header icon visibility. Inherits iconVisibility; child rows and custom summary content keep their own icons. */
   groupIconVisibility?: "always" | "active" | "never";
   /** Automatic elapsed timing in tool rows and collapsible group headers. Whole seconds (2s),
@@ -2831,8 +2843,8 @@ export type WidgetPreferenceSlice = {
     | "expandable"
     | "grouped"
     | "groupedMode"
+    | "groupSummary"
     | "groupBoundary"
-    | "groupSingletons"
     | "loadingAnimation"
   >;
   reasoningDisplay?: Pick<
@@ -6026,6 +6038,17 @@ export type AgentWidgetApprovalConfig = {
 };
 
 export type AgentWidgetToolCallConfig = {
+  /** Pure synchronous title adapter, keyed by the original tool/message (for example call id).
+   * A nonblank toolCall.actionTitle wins. Blank/null/undefined falls back to the safe tool
+   * label. Not persisted: reconstruct deterministically for replay, or inject/persist the
+   * title on toolCall. Does not alter wire events or inspect private tool arguments. */
+  resolveActionTitle?: (toolCall: AgentWidgetToolCall, message: AgentWidgetMessage) => string | null | undefined;
+  /** Completed row icon from the registry (including registerIcons), or a per-tool resolver.
+   * Undefined uses semantic icons in classified turn activity and check elsewhere.
+   * Active/attention states and iconVisibility retain precedence. Cards are unchanged.
+   * The callback returns a registry name, never DOM. Explicit "check" retains success color.
+   */
+  iconName?: string | ((toolCall: AgentWidgetToolCall) => string | undefined);
   /** @deprecated Prefer `theme.components.toolBubble.shadow`. Explicit legacy input still wins; `"none"` removes the shadow. */
   shadow?: string;
   /** Background color of the tool call bubble container.
@@ -6104,6 +6127,10 @@ export type AgentWidgetToolCallConfig = {
     message: AgentWidgetMessage;
     toolCall: AgentWidgetToolCall;
     defaultSummary: string;
+    /** Resolved descriptive title, independent of turn classification and display variant.
+     * Undefined when neither direct metadata nor the host adapter supplies a title.
+     * Cards retain their default header; renderers may opt into this text. */
+    actionTitle?: string;
     previewText: string;
     collapsedMode: AgentWidgetToolCallCollapsedMode;
     isActive: boolean;
@@ -6132,8 +6159,9 @@ export type AgentWidgetToolCallConfig = {
    * Override the summary content for grouped consecutive tool-call containers.
    * In `groupedMode: "summary"`, the summary owns the visible row starting
    * with the first tool so its DOM stays stable as more calls arrive.
-   * Other modes call this only for multiple tools unless groupSingletons is true.
-   * Return `null` to fall back to the built-in `Called [x] tools` summary.
+   * Other modes call this only for multiple tools.
+   * Return `null` to use the built-in summary: readable activity phrases for
+   * row/collapsible groups, or a tool count for legacy card groups.
    */
   renderGroupedSummary?: (context: {
     messages: AgentWidgetMessage[];
@@ -8381,6 +8409,8 @@ export type AgentWidgetConfig = {
    */
   colorScheme?: 'auto' | 'light' | 'dark';
   features?: AgentWidgetFeatureFlags;
+  /** Optional whole-turn activity view; requires explicit progress/final metadata. */
+  turnActivity?: AgentWidgetTurnActivityConfig;
   /**
    * Per-instance display overrides, applied over `features` through the
    * preference allowlist (security/capability keys cannot pass). String
@@ -9036,6 +9066,10 @@ export type AgentWidgetReasoning = {
 };
 
 export type AgentWidgetToolCall = {
+  /** Plain-text description of this call's action. Supply through injection/history or
+   * toolCall.resolveActionTitle for transport adapters; never inferred from arguments.
+   * Active default tool-call rows use it; card headers keep their existing layout. */
+  actionTitle?: string;
   /** Optional approval state for activity-row status chrome. */
   approvalStatus?: "pending" | "approved" | "denied" | "timeout";
   /** Terminal browser work whose callback was lost when the chat restarted. */
@@ -9105,6 +9139,38 @@ export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "ap
  */
 export type StopReasonKind = RuntypeStopReasonKind;
 
+/** Explicit presentation metadata; persist with history or reconstruct deterministically. */
+export type AgentWidgetTurnActivity = {
+  /** Stable identity for the whole response, across tool batches and reconnects. */
+  id: string;
+  /** Placement only: progress is disclosed; partial/final answers stay outside.
+   * "final" does not end the run; completion/outcome is separate. */
+  kind: "progress" | "final";
+  /** Measured Unix milliseconds. Missing timing never produces a fabricated duration. */
+  startedAt?: number;
+  completedAt?: number;
+  outcome?: "success" | "error" | "cancel";
+};
+
+export type AgentWidgetTurnActivityConfig = {
+  /** Opt-in whole-response disclosure. Default false. */
+  enabled?: boolean;
+  /** Pure synchronous adapter. Direct message metadata takes precedence; undefined
+   * falls back to native phase/execution metadata. Must be deterministic on history
+   * replay; results are not persisted. Never infer finality from completion or prose. */
+  resolveMessage?: (message: AgentWidgetMessage) => AgentWidgetTurnActivity | undefined;
+  /** Custom header content. Strings are plain text; HTMLElement content owns its loading effects. */
+  renderHeader?: (context: {
+    id: string;
+    messages: AgentWidgetMessage[];
+    active: boolean;
+    outcome?: "success" | "error" | "cancel";
+    elapsedMs?: number;
+    defaultSummary: string;
+    config: AgentWidgetConfig;
+  }) => HTMLElement | string | null | undefined;
+};
+
 /**
  * Represents a message in the chat conversation.
  *
@@ -9123,6 +9189,8 @@ export type StopReasonKind = RuntypeStopReasonKind;
  *                      Useful for implementing voice-specific behaviors like auto-reactivation.
  */
 export type AgentWidgetMessage = {
+  /** Opt-in whole-turn presentation metadata. Does not change model-visible content. */
+  turnActivity?: AgentWidgetTurnActivity;
   id: string;
   role: AgentWidgetMessageRole;
   content: string;
@@ -9494,6 +9562,8 @@ export type AgentWidgetStreamCheckpoint = {
   executionKindResolved: boolean;
   turnId: string | null;
   iteration: number;
+  /** Optional so checkpoints saved before native phases remain readable. */
+  textPhases?: Array<[string, AgentMessagePhase]>;
   nestedParents: Array<[string, string]>;
   nestedRaw: Array<[string, string]>;
   media: Array<[string, { mediaType?: string; toolCallId?: string; parts: string[] }]>;

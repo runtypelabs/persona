@@ -67,7 +67,7 @@ import {
  *  - CORE (below): every name the widget itself can emit —
  *    config DEFAULTS (bot, send, mic, x, …) plus the chrome names routed
  *    through `utils/buttons` / `utils/dropdown`. Always resolves synchronously.
- *  - EXTRA (63 names, `src/icons-extra.ts`): the config-only tail
+ *  - EXTRA (66 names, `src/icons-extra.ts`): the config-only tail
  *    (forms, commerce, media, …). The DATA ships in the lazy `icons-extra.js`
  *    sibling chunk; the first request for one of these names kicks the fetch
  *    and returns a correctly-sized empty placeholder SVG that fills in place
@@ -157,6 +157,9 @@ const CORE_LUCIDE_ICONS = {
  * `icons-partition.test.ts`).
  */
 export const EXTRA_ICON_NAMES = [
+  "circle",
+  "database",
+  "terminal",
   "user",
   "mail",
   "phone",

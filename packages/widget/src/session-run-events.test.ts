@@ -113,7 +113,7 @@ describe("session-owned run lifecycle", () => {
 });
 
 const toolMessage = (id: string, executionId?: string): AgentWidgetMessage => ({ id, role: 'assistant', content: '', createdAt: 'now', variant: 'tool', agentMetadata: executionId ? { executionId } : undefined, toolCall: { id, name: 'Search', status: 'complete' } });
-describe('current-run tool ownership', () => {
+describe('current-run message ownership', () => {
   it.each(['send', 'continue'] as const)('resets before %s renders and records new tools before observer notification', async next => {
     vi.useFakeTimers();
     const { session } = create();
@@ -123,17 +123,17 @@ describe('current-run tool ownership', () => {
       emit({ type: 'status', status: 'idle', terminal: true });
     });
     await session.sendMessage('first run'); await vi.runAllTimersAsync();
-    expect([...session.getRunToolIds()]).toEqual(['first']);
+    expect([...(session.getRunActivity()?.messageIds ?? new Set<string>())]).toEqual(['first']);
     dispatch.mockImplementation(async (_options, emit) => {
-      snapshots.push([...session.getRunToolIds()]);
+      snapshots.push([...(session.getRunActivity()?.messageIds ?? new Set<string>())]);
       emit({ type: 'message', message: toolMessage('second') });
-      snapshots.push([...session.getRunToolIds()]);
+      snapshots.push([...(session.getRunActivity()?.messageIds ?? new Set<string>())]);
       emit({ type: 'status', status: 'idle', terminal: true });
     });
     if (next === 'send') await session.sendMessage('second run'); else await session.continueConversation();
     expect(snapshots).toEqual([[], ['second']]);
     expect(session.getMessages().filter(message => message.role === 'user')).toHaveLength(next === 'send' ? 2 : 1);
-    session.hydrateMessages([toolMessage('first')]); expect(session.getRunToolIds().size).toBe(0);
+    session.hydrateMessages([toolMessage('first')]); expect((session.getRunActivity()?.messageIds ?? new Set<string>()).size).toBe(0);
     session.destroy();
   });
   it('retains ownership through approval pauses and stream reentry, then clears it with the transcript', async () => {
@@ -144,24 +144,24 @@ describe('current-run tool ownership', () => {
       emit({ type: 'status', status: 'idle' });
     });
     await session.sendMessage('hello'); await vi.runAllTimersAsync();
-    expect([...session.getRunToolIds()]).toEqual(['before-pause']);
+    expect([...(session.getRunActivity()?.messageIds ?? new Set<string>())]).toEqual(['before-pause', 'approval']);
     vi.spyOn(AgentWidgetClient.prototype, 'processStream').mockImplementation(async (_stream, emit) => {
-      expect([...session.getRunToolIds()]).toEqual(['before-pause']);
+      expect([...(session.getRunActivity()?.messageIds ?? new Set<string>())]).toEqual(['before-pause', 'approval']);
       emit({ type: 'message', message: toolMessage('after-pause') });
       emit({ type: 'status', status: 'idle', terminal: true });
     });
     await session.connectStream(new ReadableStream({ start(controller) { controller.close(); } }), { allowReentry: true });
-    expect([...session.getRunToolIds()]).toEqual(['before-pause', 'after-pause']);
-    session.clearMessages(); expect(session.getRunToolIds().size).toBe(0); session.destroy();
+    expect([...(session.getRunActivity()?.messageIds ?? new Set<string>())]).toEqual(['before-pause', 'approval', 'after-pause']);
+    session.clearMessages(); expect((session.getRunActivity()?.messageIds ?? new Set<string>()).size).toBe(0); session.destroy();
   });
-  it('seeds a durable parked execution using matching tool metadata only', () => {
+  it('seeds a durable parked execution using matching assistant metadata only', () => {
     const session = new AgentWidgetSession({ apiUrl: '/chat', reconnectStream: async () => new Response(), initialMessages: [
       toolMessage('matching', 'e1'), toolMessage('other', 'e2'), toolMessage('unknown'),
       { id: 'approval', role: 'assistant', content: '', createdAt: 'now', variant: 'approval', approval: { id: 'a', status: 'pending', executionId: 'e1' } } as AgentWidgetMessage,
     ] }, { onMessagesChanged: vi.fn(), onStatusChanged: vi.fn(), onStreamingChanged: vi.fn() });
-    expect(session.getRunToolIds().size).toBe(0);
+    expect((session.getRunActivity()?.messageIds ?? new Set<string>()).size).toBe(0);
     session.resumeFromHandle({ executionId: 'e1', after: '5' });
-    expect([...session.getRunToolIds()]).toEqual(['matching']); session.destroy();
+    expect([...(session.getRunActivity()?.messageIds ?? new Set<string>())]).toEqual(['matching']); session.destroy();
   });
 });
 
@@ -170,7 +170,7 @@ it('makes current tool ownership available inside the messages-changed callback'
   const observed: boolean[] = [];
   session = new AgentWidgetSession({ apiUrl: '/chat' }, {
     onMessagesChanged: messages => {
-      for (const message of messages) if (message.variant === 'tool') observed.push(session.getRunToolIds().has(message.id));
+      for (const message of messages) if (message.variant === 'tool') observed.push((session.getRunActivity()?.messageIds ?? new Set<string>()).has(message.id));
     }, onStatusChanged: vi.fn(), onStreamingChanged: vi.fn(),
   });
   vi.spyOn(AgentWidgetClient.prototype, 'dispatch').mockImplementation(async (_options, emit) => {
@@ -178,7 +178,7 @@ it('makes current tool ownership available inside the messages-changed callback'
     emit({ type: 'status', status: 'idle', terminal: true });
   });
   await session.continueConversation();
-  expect(observed).toEqual([true]); session.destroy(); expect(session.getRunToolIds().size).toBe(0);
+  expect(observed).toEqual([true]); session.destroy(); expect((session.getRunActivity()?.messageIds ?? new Set<string>()).size).toBe(0);
 });
 
 it('does not claim historical tools encountered in read-only replay', async () => {
@@ -189,5 +189,5 @@ it('does not claim historical tools encountered in read-only replay', async () =
   const { session } = create();
   await session.connectStream(new ReadableStream({ start(controller) { controller.close(); } }), { readOnlyReplay: true });
   expect(session.getMessages().some(message => message.id === 'historical')).toBe(true);
-  expect(session.getRunToolIds().size).toBe(0); session.destroy();
+  expect((session.getRunActivity()?.messageIds ?? new Set<string>()).size).toBe(0); session.destroy();
 });

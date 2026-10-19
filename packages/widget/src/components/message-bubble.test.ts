@@ -576,7 +576,7 @@ describe("createStandardBubble: stopReason notice", () => {
     expect(bubble.querySelector(".persona-message-stop-reason")).toBeNull();
   });
 
-  it("renders the default notice for max_tool_calls", () => {
+  it("reports the tool limit without claiming the entire run stopped", () => {
     const bubble = renderWithStopReason({
       content: "Used a tool.",
       stopReason: "max_tool_calls",
@@ -584,17 +584,17 @@ describe("createStandardBubble: stopReason notice", () => {
     const notice = bubble.querySelector(".persona-message-stop-reason");
     expect(notice).not.toBeNull();
     expect(notice?.getAttribute("data-stop-reason")).toBe("max_tool_calls");
-    expect(notice?.textContent).toBe(getDefaultStopReasonNoticeCopy("max_tool_calls"));
+    expect(notice?.textContent).toBe("Tool limit reached.");
   });
 
-  it("renders the default notice for length", () => {
+  it("reports an output token limit without requiring a follow-up", () => {
     const bubble = renderWithStopReason({
       content: "Long answer cut off.",
       stopReason: "length",
     });
     const notice = bubble.querySelector(".persona-message-stop-reason");
     expect(notice?.getAttribute("data-stop-reason")).toBe("length");
-    expect(notice?.textContent).toBe(getDefaultStopReasonNoticeCopy("length"));
+    expect(notice?.textContent).toBe("Output token limit reached.");
   });
 
   it("renders the default notice for content_filter", () => {

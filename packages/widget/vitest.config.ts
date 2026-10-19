@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@runtypelabs/persona/preferences-runtime": fileURLToPath(new URL("./src/preferences-runtime.ts", import.meta.url)),
+      "@runtypelabs/persona/turn-activity-ui": fileURLToPath(new URL("./src/turn-activity-ui.ts", import.meta.url)),
       "@runtypelabs/persona/activity-ui": fileURLToPath(new URL("./src/activity-ui.ts", import.meta.url)),
       "@runtypelabs/persona/loading-label-runtime": fileURLToPath(new URL("./src/loading-label-runtime.ts", import.meta.url)),
       "@runtypelabs/persona/composer-actions-runtime": fileURLToPath(new URL("./src/composer-actions-runtime.ts", import.meta.url)),

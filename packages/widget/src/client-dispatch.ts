@@ -77,11 +77,19 @@ const sortByCreatedAt = (messages: AgentWidgetMessage[]): AgentWidgetMessage[] =
     .slice()
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
+// Only replay explicit known assistant phase metadata; other widget metadata is private.
+const payloadPhase = (message: AgentWidgetMessage) => {
+  const phase = message.agentMetadata?.providerPhase ?? message.agentMetadata?.phase;
+  return message.role === "assistant" && (phase === "commentary" || phase === "partial_answer" || phase === "final_answer")
+    ? { phase } : {};
+};
+
 // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
 const toPayloadMessage = (message: AgentWidgetMessage) => ({
   role: message.role,
   content: message.contentParts ?? message.llmContent ?? message.rawContent ?? message.content,
-  createdAt: message.createdAt
+  createdAt: message.createdAt,
+  ...payloadPhase(message)
 });
 
 export class ClientDispatch {

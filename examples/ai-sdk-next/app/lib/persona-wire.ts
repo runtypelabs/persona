@@ -4,6 +4,8 @@ export type PersonaRequestMessage = {
   role: "system" | "user" | "assistant";
   content: unknown;
   createdAt?: string;
+  phase?: PersonaTextPhase;
+  agentMetadata?: { phase?: PersonaTextPhase; providerPhase?: PersonaTextPhase };
 };
 
 export type PersonaDispatchBody = {
@@ -12,13 +14,15 @@ export type PersonaDispatchBody = {
   metadata?: Record<string, unknown>;
 };
 
+export type PersonaTextPhase = "commentary" | "partial_answer" | "final_answer";
+
 /** The event-specific payloads this standalone adapter emits. */
 type WirePayloads = {
   execution_start: { kind: "agent"; agentId: string; agentName: string; startedAt: string };
   turn_start: { id: string; role: "assistant"; iteration: number };
-  text_start: { id: string };
+  text_start: { id: string; phase?: PersonaTextPhase };
   text_delta: { id: string; delta: string };
-  text_complete: { id: string };
+  text_complete: { id: string; phase?: PersonaTextPhase };
   tool_start: { toolCallId: string; toolName: string; toolType: string; parameters: unknown; iteration: number };
   tool_complete: { toolCallId: string; success: boolean; result: unknown };
   turn_complete: { id: string; role: "assistant"; iteration: number; stopReason: "end_turn"; completedAt: string };
@@ -31,7 +35,12 @@ export type PersonaSuggestion = string | { label: string; prompt?: string; descr
 
 export type PersonaStreamEmitter = {
   /** Stream a chunk of assistant text (`text_delta`). */
-  textDelta(text: string): void;
+  textDelta(text: string, options?: { id?: string; phase?: PersonaTextPhase }): void;
+  /** Close one provider content part without completing the assistant turn. */
+  textComplete(id: string, options?: { phase?: PersonaTextPhase }): void;
+  /** Begin a server-executed tool; complete it only after the provider confirms its result. */
+  toolStart(name: string, parameters: unknown, options: { toolCallId: string; toolType?: string }): void;
+  toolComplete(toolCallId: string, result: unknown, success?: boolean): void;
   /**
    * Emit a completed tool call (`tool_start` → `tool_complete`), fire-and-forget:
    * the widget renders the call and the run continues without pausing.
@@ -68,6 +77,8 @@ export type PersonaStreamContext = {
   emit: PersonaStreamEmitter;
   executionId: string;
   turnId: string;
+  /** Aborted when the incoming request or the response reader is cancelled. */
+  signal: AbortSignal;
 };
 
 const encoder = new TextEncoder();
@@ -102,9 +113,16 @@ const encoder = new TextEncoder();
  */
 export function createPersonaSSEStream(
   handler: (context: PersonaStreamContext) => Promise<void> | void,
+  options: { signal?: AbortSignal } = {},
 ): Response {
   const executionId = `exec_${crypto.randomUUID()}`;
   const turnId = `turn_${crypto.randomUUID()}`;
+
+  const abortController = new AbortController();
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, abortController.signal])
+    : abortController.signal;
+  let cancelled = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -113,6 +131,7 @@ export function createPersonaSSEStream(
       // faithful reference emits it.
       let seq = 0;
       const send = <T extends keyof WirePayloads>(event: T, payload: WirePayloads[T]) => {
+        if (cancelled) return;
         controller.enqueue(
           encoder.encode(
             `event: ${event}\ndata: ${JSON.stringify({ type: event, executionId, seq: seq++, ...payload })}\n\n`,
@@ -123,7 +142,8 @@ export function createPersonaSSEStream(
       // One turn, lazily opened. The text block opens on the first delta so an
       // empty turn never emits a stray `text_start`.
       let turnOpen = false;
-      let textBlockId: string | null = null;
+      const textBlocks = new Set<string>();
+      let defaultTextBlockId: string | null = null;
       let finished = false;
 
       const openTurn = () => {
@@ -132,43 +152,48 @@ export function createPersonaSSEStream(
           turnOpen = true;
         }
       };
-      const openTextBlock = () => {
-        openTurn();
-        if (textBlockId === null) {
-          textBlockId = `text_${crypto.randomUUID()}`;
-          send("text_start", { id: textBlockId });
-        }
+      const closeTextBlock = (id: string, phase?: PersonaTextPhase) => {
+        if (textBlocks.delete(id)) send("text_complete", { id, ...(phase ? { phase } : {}) });
+        if (defaultTextBlockId === id) defaultTextBlockId = null;
       };
-      const closeTextBlock = () => {
-        if (textBlockId !== null) {
-          send("text_complete", { id: textBlockId });
-          textBlockId = null;
-        }
+      const closeTextBlocks = () => {
+        for (const id of textBlocks) closeTextBlock(id);
       };
 
       const emit: PersonaStreamEmitter = {
-        textDelta(text) {
-          openTextBlock();
-          send("text_delta", { id: textBlockId!, delta: text });
-        },
-        toolCall(name, parameters, options) {
-          // Blocks don't nest: close any open text block first. A later
-          // `textDelta` lazily opens a fresh one.
-          closeTextBlock();
+        textDelta(text, options) {
+          if (finished || !text) return;
           openTurn();
-          const toolCallId = options?.toolCallId ?? `call_${crypto.randomUUID()}`;
+          const id = options?.id ?? defaultTextBlockId ?? `text_${crypto.randomUUID()}`;
+          if (!options?.id) defaultTextBlockId = id;
+          if (!textBlocks.has(id)) {
+            textBlocks.add(id);
+            send("text_start", { id, ...(options?.phase ? { phase: options.phase } : {}) });
+          }
+          send("text_delta", { id, delta: text });
+        },
+        textComplete(id, options) {
+          if (!finished) closeTextBlock(id, options?.phase);
+        },
+        toolStart(name, parameters, options) {
+          if (finished) return;
+          closeTextBlocks();
+          openTurn();
           send("tool_start", {
-            toolCallId,
+            toolCallId: options.toolCallId,
             toolName: name,
-            toolType: options?.toolType ?? "local",
+            toolType: options.toolType ?? "local",
             parameters,
             iteration: 1,
           });
-          send("tool_complete", {
-            toolCallId,
-            success: true,
-            result: options?.result ?? {},
-          });
+        },
+        toolComplete(toolCallId, result, success = true) {
+          if (!finished) send("tool_complete", { toolCallId, success, result });
+        },
+        toolCall(name, parameters, options) {
+          const toolCallId = options?.toolCallId ?? `call_${crypto.randomUUID()}`;
+          emit.toolStart(name, parameters, { toolCallId, toolType: options?.toolType });
+          emit.toolComplete(toolCallId, options?.result ?? {});
         },
         suggestReplies(items) {
           emit.toolCall(
@@ -180,7 +205,7 @@ export function createPersonaSSEStream(
         complete() {
           if (finished) return;
           finished = true;
-          closeTextBlock();
+          closeTextBlocks();
           if (turnOpen) {
             send("turn_complete", {
               id: turnId,
@@ -214,12 +239,17 @@ export function createPersonaSSEStream(
       });
 
       try {
-        await handler({ emit, executionId, turnId });
+        signal.throwIfAborted();
+        await handler({ emit, executionId, turnId, signal });
       } catch (error) {
         emit.error(error instanceof Error ? error.message : String(error));
       } finally {
-        controller.close();
+        if (!cancelled) controller.close();
       }
+    },
+    cancel(reason) {
+      cancelled = true;
+      abortController.abort(reason);
     },
   });
 
@@ -246,10 +276,18 @@ export function personaMessagesToModelMessages(
 export function personaMessagesToOpenAIInput(messages: PersonaRequestMessage[] = []) {
   return messages
     .filter((message) => message.role === "system" || message.role === "user" || message.role === "assistant")
-    .map((message) => ({
-      role: message.role,
-      content: flattenContent(message.content),
-    }));
+    .map((message) => {
+      const phase = message.phase ?? message.agentMetadata?.providerPhase ?? message.agentMetadata?.phase;
+      return {
+        role: message.role,
+        content: flattenContent(message.content),
+        // OpenAI accepts these two phases on assistant history. Never manufacture
+        // a final phase for unlabelled messages or send phase on user messages.
+        ...(message.role === "assistant" && (phase === "commentary" || phase === "final_answer")
+          ? { phase }
+          : {}),
+      };
+    });
 }
 
 function flattenContent(content: unknown): string {

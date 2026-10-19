@@ -256,3 +256,5 @@ The counts above are a snapshot of the initial shortlist. Later additions:
 | `pen-line` | Compose / write affordance. Distinct from `pencil`: the baseline stroke reads as "write something", not "edit this" |
 
 `image` was already registered under Media.
+
+`terminal` and `database` are lazy registry additions for command and database tool activity. `circle` represents pending activity; the activity renderer uses the initialized registry for these icons and disclosure chevrons.

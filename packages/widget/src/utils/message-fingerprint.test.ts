@@ -252,3 +252,10 @@ describe("MessageCache", () => {
     expect(cache.size).toBe(0);
   });
 });
+
+it("invalidates equal-length tool action title edits without output changes", () => {
+  const message = makeMessage({ toolCall: { status: "running", actionTitle: "Reading source A" } });
+  const before = computeMessageFingerprint(message, 0);
+  message.toolCall!.actionTitle = "Reading source B";
+  expect(computeMessageFingerprint(message, 0)).not.toBe(before);
+});

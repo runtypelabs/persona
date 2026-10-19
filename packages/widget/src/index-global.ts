@@ -340,3 +340,6 @@ setLoadingLabelRuntimeLoader(siblingChunk("loading-label-runtime.js"));
 // Request construction and dispatch are needed only when sending a turn.
 import { setClientDispatchLoader } from "./client-dispatch-loader";
 setClientDispatchLoader(siblingChunk("client-dispatch.js"));
+
+import { setTurnActivityUiLoader } from "./turn-activity-ui-loader";
+setTurnActivityUiLoader(siblingChunk("turn-activity-ui.js"));

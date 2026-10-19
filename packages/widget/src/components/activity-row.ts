@@ -1,28 +1,30 @@
 import { createDisclosureLifecycle } from "./disclosure-animation";
 import { applyLoadingLabel } from "../utils/loading-label-deps";
-import { resolveToolStyles } from "../utils/tool-styles";
-import { Circle, Clock } from "lucide";
-import { renderIconNode } from "../utils/icon-node";
+import { resolveToolIcon } from "../utils/tool-activity-summary";
+import { presentation } from "../utils/turn-activity-display";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { DEFAULT_TOOL_CALL_DISPLAY, DEFAULT_REASONING_DISPLAY, DEFAULT_TOOL_CALL_DISPLAY_V5, DEFAULT_REASONING_DISPLAY_V5 } from "../utils/activity-display-defaults";
 import { createElement } from "../utils/dom";
-import { formatElapsedMs } from "../utils/formatting";
-import { renderLucideIcon } from "./activity-deps";
+import { formatElapsedMs } from "../utils/activity-formatting";
+import { renderLucideIcon, resolveToolStyles } from "./activity-deps";
 import { appendHeaderToggle, createExpandableBubbleShell, createExpandableHeader } from "./expandable-bubble";
 
 export type ActivityKind = "tool" | "reasoning";
 
 /** Standalone builders and the full UI use the same versioned defaults. */
-export function activityDisplay(config: AgentWidgetConfig | undefined, kind: ActivityKind): AgentWidgetConfig {
-  const key = kind === "tool" ? "toolCallDisplay" : "reasoningDisplay";
+export function activityDisplay(config: AgentWidgetConfig | undefined, kind: ActivityKind, message?: AgentWidgetMessage): AgentWidgetConfig {
+  if (config && message) config = presentation(config, message);
+  const tool = kind === "tool";
+  const key = tool ? "toolCallDisplay" : "reasoningDisplay";
   return { ...config, features: { ...config?.features, [key]: {
-    ...(kind === "tool" ? DEFAULT_TOOL_CALL_DISPLAY : DEFAULT_REASONING_DISPLAY),
-    ...(config?.future?.v5Defaults === true ? kind === "tool" ? DEFAULT_TOOL_CALL_DISPLAY_V5 : DEFAULT_REASONING_DISPLAY_V5 : {}),
+    ...(tool ? DEFAULT_TOOL_CALL_DISPLAY : DEFAULT_REASONING_DISPLAY),
+    ...(config?.future?.v5Defaults === true ? tool ? DEFAULT_TOOL_CALL_DISPLAY_V5 : DEFAULT_REASONING_DISPLAY_V5 : {}),
     ...config?.features?.[key],
   } } };
 }
 
-export function activityVariant(config: AgentWidgetConfig | undefined, kind: ActivityKind): "card" | "row" {
+export function activityVariant(config: AgentWidgetConfig | undefined, kind: ActivityKind, message?: AgentWidgetMessage): "card" | "row" {
+  if (config && message) config = presentation(config, message);
   const key = kind === "tool" ? "toolCallDisplay" : "reasoningDisplay";
   return config?.features?.[key]?.variant ?? (config?.future?.v5Defaults ? "row" : "card");
 }
@@ -38,15 +40,15 @@ export function updateActivityElapsed(span: HTMLElement, now: number): void {
   const startedAt = Number(span.getAttribute("data-tool-elapsed"));
   if (!startedAt) return;
   const elapsed = now - startedAt;
-  span.textContent = span.classList.contains("persona-activity-duration") ? toolDuration(elapsed)
+  span.textContent = span.classList.contains("persona-activity-duration") ? toolDuration(elapsed, span.dataset.prefix)
     : span.closest(".persona-activity-row") ? activityDuration(elapsed) : formatElapsedMs(elapsed);
 }
 
-const toolDuration = (ms: number | undefined): string =>
-  ms !== undefined && Number.isFinite(ms) && ms >= 1000 ? activityDuration(ms) : "";
+const toolDuration = (ms: number | undefined, prefix = ""): string =>
+  Number.isFinite(ms) && ms! >= 1000 ? prefix + activityDuration(ms) : "";
 
 /** Reuses card content/render hooks while replacing only its visual chrome. */
-export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessage, config: AgentWidgetConfig, kind: ActivityKind, groupHeader = false): HTMLElement {
+export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessage, config: AgentWidgetConfig, kind: ActivityKind, groupHeader = false, completionIcon?: string): HTMLElement {
   if (!groupHeader && activityVariant(config, kind) !== "row") return bubble;
   bubble.className = `persona-message-bubble persona-${kind}-bubble persona-activity-row`;
   bubble.dataset.activityKind = kind;
@@ -59,18 +61,17 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
   const active = data?.status !== "complete";
   const approval = message.approval?.status ?? message.toolCall?.approvalStatus;
   const state = message.toolCall?.interrupted ? "interrupted"
-    : approval === "denied" ? "denied" : approval === "pending" ? "awaiting-approval"
+    : approval === "denied" || approval === "timeout" ? "denied" : approval === "pending" ? "awaiting-approval"
     : message.toolCall?.success === false ? "error" : !active ? "done"
     : data?.status === "pending" ? "pending" : "running";
   bubble.dataset.activityState = state;
   const icon = createElement("span", "persona-activity-icon");
   icon.dataset.activityIcon = state;
-  const names = { pending: "circle", running: "loader-circle", done: "check", error: "x", denied: "x", interrupted: "x", "awaiting-approval": "clock" };
+  const semanticIcon = kind === "tool" && state === "done" ? completionIcon ?? (groupHeader ? undefined : resolveToolIcon(message.toolCall!, config)) : undefined;
+  if (semanticIcon && semanticIcon !== "check") icon.style.color = "inherit";
   const customIcon = kind === "reasoning" ? config.features?.reasoningDisplay?.iconName : undefined;
-  const glyph = customIcon ? renderLucideIcon(customIcon, 16, "currentColor", 2)
-    : state === "pending" ? renderIconNode(Circle, 16, "currentColor", 2)
-    : state === "awaiting-approval" ? renderIconNode(Clock, 16, "currentColor", 2)
-    : renderLucideIcon(names[state], 16, "currentColor", 2);
+  let glyph = renderLucideIcon(customIcon || (state === "pending" ? "circle" : state === "awaiting-approval" ? "clock" : state === "running" ? "loader-circle" : state === "done" ? semanticIcon || "check" : "x"), 16, "currentColor", 2);
+  if (!glyph && semanticIcon) glyph = renderLucideIcon("activity", 16, "currentColor", 2);
   if (glyph) icon.appendChild(glyph);
   header.querySelector(".persona-reasoning-header-icon")?.remove();
   const displayKey = kind === "tool" ? "toolCallDisplay" : "reasoningDisplay";
@@ -80,9 +81,10 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
   const durationDisplay = config.features?.toolCallDisplay?.durationDisplay;
   if (kind === "tool" && data && (durationDisplay === "all" || durationDisplay === (groupHeader ? "group" : "tools"))) {
     const duration = createElement("span", "persona-activity-duration");
-    if (active && data.startedAt !== undefined && data.startedAt > 0 && data.startedAt <= Date.now()) duration.setAttribute("data-tool-elapsed", String(data.startedAt));
-    const elapsed = message.toolCall?.duration ?? data.durationMs ?? (data.completedAt !== undefined && data.startedAt !== undefined ? data.completedAt - data.startedAt : undefined);
-    duration.textContent = toolDuration(active && data.startedAt !== undefined ? (data.startedAt > 0 ? Date.now() - data.startedAt : undefined) : elapsed);
+    const { startedAt, completedAt, durationMs } = data;
+    if (active && startedAt! > 0 && startedAt! <= Date.now()) duration.setAttribute("data-tool-elapsed", String(startedAt));
+    const elapsed = message.toolCall?.duration ?? durationMs ?? (completedAt! - startedAt!);
+    duration.textContent = toolDuration(active && startedAt !== undefined ? (startedAt > 0 ? Date.now() - startedAt : undefined) : elapsed);
     header.appendChild(duration);
   }
   const label = header.querySelector<HTMLElement>(":scope > div:not(.persona-ml-auto)");
@@ -101,8 +103,8 @@ export function createActivityLifecycle(onCollapse: (id: string, kind: ActivityK
   type State = { seen?: boolean; manual?: boolean; finished?: boolean; timer?: ReturnType<typeof setTimeout> };
   const states = new Map<string, State>();
   const stateFor = (id: string) => {
-    let state = states.get(id);
-    if (!state) { state = {}; states.set(id, state); }
+    const state = states.get(id) ?? {};
+    states.set(id, state);
     return state;
   };
   const cancel = (state: State) => { clearTimeout(state.timer); state.timer = undefined; };
@@ -110,6 +112,8 @@ export function createActivityLifecycle(onCollapse: (id: string, kind: ActivityK
     observe(message: AgentWidgetMessage, kind: ActivityKind, expanded: Set<string>, options: { autoExpand?: boolean; autoCollapseDelay?: number | false } = {}, inheritFrom?: string) {
       const data = kind === "tool" ? message.toolCall : message.reasoning;
       if (!data) return;
+      const display = activityDisplay(getConfig(), kind, message).features;
+      options = { ...(kind === "tool" ? display?.toolCallDisplay : display?.reasoningDisplay), ...options };
       // A newly formed group inherits open child details and manual intent once.
       if (!states.has(message.id) && inheritFrom !== undefined) {
         expanded[inheritFrom ? "add" : "delete"](message.id);
@@ -144,7 +148,7 @@ export function createActivityLifecycle(onCollapse: (id: string, kind: ActivityK
 }
 
 /** A collapsible group uses the same accessible row and expansion contract. */
-export function createActivityGroup(message: AgentWidgetMessage, config: AgentWidgetConfig, expanded: boolean, label: string | HTMLElement): { bubble: HTMLElement; body: HTMLElement } {
+export function createActivityGroup(message: AgentWidgetMessage, config: AgentWidgetConfig, expanded: boolean, label: string | HTMLElement, animateLabel = typeof label === "string", completionIcon?: string): { bubble: HTMLElement; body: HTMLElement } {
   const bubble = createExpandableBubbleShell("persona-tool-bubble", message.id);
   const header = createExpandableHeader({ expandable: true, expanded, bubbleType: "tool" });
   const copy = createElement("div", "");
@@ -155,10 +159,10 @@ export function createActivityGroup(message: AgentWidgetMessage, config: AgentWi
   body.style.display = expanded ? "" : "none";
   body.inert = !expanded;
   bubble.append(header, body);
-  applyActivityRow(bubble, message, config, "tool", true);
+  applyActivityRow(bubble, message, config, "tool", true, completionIcon);
   bubble.dataset.personaToolGroup = "true";
   if (config.expansion?.animation === "height") bubble.dataset.personaDisclosureMotion = "height";
-  if (typeof label === "string" && (bubble.dataset.activityState === "running" || bubble.dataset.activityState === "pending")) {
+  if (animateLabel && (bubble.dataset.activityState === "running" || bubble.dataset.activityState === "pending")) {
     applyLoadingLabel(copy, config, "tool-group");
   }
   return { bubble, body };

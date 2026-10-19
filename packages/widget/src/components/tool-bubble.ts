@@ -1,11 +1,14 @@
-import { resolveToolStyles, applyToolPadding } from "../utils/tool-styles";
+import { resolveToolStyles, applyToolPadding } from "./activity-deps";
 import { appendToolDetails } from "./tool-details";
 import { applyActivityRow, activityDisplay, activityVariant } from "./activity-row";
 import { createElement, createNode } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { DEFAULT_TOOL_CALL_DISPLAY } from "../utils/activity-display-defaults";
-import { formatUnknownValue, describeToolTitle, resolveToolHeaderText, computeToolElapsed, parseFormattedTemplate } from "../utils/formatting";
+import { describeToolTitle, resolveToolHeaderText, computeToolElapsed, parseFormattedTemplate } from "../utils/activity-formatting";
 import { applyLoadingLabel } from "../utils/loading-label-deps";
+import { formatUnknownValue } from "../utils/format-value";
+import { currentToolLabel, needsAttention, resolveActionTitle } from "../utils/turn-activity-display";
+import { toolActivityLabel } from "../utils/tool-activity-summary";
 import {
   appendHeaderToggle,
   applyExpansionDisplay,
@@ -79,7 +82,8 @@ const getToolSummaryText = (
         message,
         toolDisplayConfig?.previewMaxLines ?? DEFAULT_TOOL_CALL_DISPLAY.previewMaxLines
       );
-  const defaultSummary = tool?.interrupted ? `${tool.name?.trim() || "Tool"} · Interrupted`
+  const defaultSummary = tool && activityVariant(config, "tool") === "row" && collapsedMode === "tool-call" ? toolActivityLabel({ ...tool, approvalStatus: message.approval?.status ?? tool.approvalStatus })
+    : tool?.interrupted ? `${tool.name?.trim() || "Tool"} · Interrupted`
     : tool ? (activityVariant(config, "tool") === "row" ? `${tool.status === "complete" ? "Used" : "Using"} ${tool.name?.trim() || "tool"}` : describeToolTitle(tool)) : "";
 
   if (!tool) {
@@ -88,7 +92,8 @@ const getToolSummaryText = (
 
   const isActive = tool.status !== "complete";
   const toolCallConfig = config?.toolCall ?? {};
-  let summary = defaultSummary;
+  let summary = isActive && activityVariant(config, "tool") === "row" && collapsedMode === "tool-call" && !needsAttention(message)
+    ? currentToolLabel(message, config) : defaultSummary;
   if (collapsedMode === "tool-name") {
     summary = tool.name?.trim() || defaultSummary;
   } else if (collapsedMode === "tool-preview" && previewText) {
@@ -106,6 +111,10 @@ const getToolSummaryText = (
     if (!summary.includes(" · Interrupted")) summary += " · Interrupted";
   } else if (tool.success === false) summary += " · Failed";
   else if (tool.superseded) summary += " · Approved, ran again below";
+  const approval = message.approval?.status ?? tool.approvalStatus;
+  if (approval === "pending") summary += " · Waiting for approval";
+  else if (approval === "denied") summary += " · Approval denied";
+  else if (approval === "timeout") summary += " · Approval expired";
   return { summary, previewText, isActive };
 };
 
@@ -129,7 +138,7 @@ export const createToolBubble = (
   config?: AgentWidgetConfig,
   expansionState = new Set<string>()
 ): HTMLElement => {
-  config = activityDisplay(config, "tool");
+  config = activityDisplay(config, "tool", message);
   const tool = message.toolCall;
   const toolCallConfig = resolveToolStyles(config);
 
@@ -191,6 +200,7 @@ export const createToolBubble = (
     message,
     toolCall: tool,
     defaultSummary: summary,
+    actionTitle: resolveActionTitle(message, config),
     previewText,
     collapsedMode: toolDisplayConfig.collapsedMode ?? DEFAULT_TOOL_CALL_DISPLAY.collapsedMode,
     isActive,
@@ -298,6 +308,10 @@ export const createToolBubble = (
   applyToolPadding(content, config, "content");
 
   if (config.future?.v5Defaults === true) {
+    if (tool.name) content.appendChild(createNode("div", {
+      className: "persona-text-xs persona-text-persona-muted",
+      attrs: { "data-persona-tool-name": "" }, text: tool.name,
+    }));
     appendToolDetails(content, message, config);
   } else {
     // Add tool name at the top of content

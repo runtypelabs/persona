@@ -1,8 +1,7 @@
 import type { AgentWidgetConfig } from "../types";
 import { animateDisclosure, disclosureSettings } from "./disclosure-animation";
 import { createElement } from "../utils/dom";
-import { ChevronRight } from "lucide";
-import { renderIconNode } from "../utils/icon-node";
+import { renderLucideIcon } from "./activity-deps";
 
 // Shared chrome for the two expandable transcript bubbles (tool + reasoning).
 // ui.ts drives both by delegation with DOM queries ('button[data-expand-header]',
@@ -87,7 +86,7 @@ export const renderToggleChevron = (
   // browser can interpolate from the currently displayed angle on reversal.
   let chevron: SVGElement | null = toggleIcon.querySelector("svg");
   if (!chevron) {
-    chevron = renderIconNode(ChevronRight, 16, iconColor, 1.5);
+    chevron = renderLucideIcon("chevron-right", 16, iconColor, 1.5);
     if (!chevron) return;
     toggleIcon.replaceChildren(chevron);
   }

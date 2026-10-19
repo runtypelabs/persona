@@ -3,7 +3,7 @@ import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "./activity-deps";
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { DEFAULT_REASONING_DISPLAY } from "../utils/activity-display-defaults";
-import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/formatting";
+import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/activity-formatting";
 import { applyLoadingLabel } from "../utils/loading-label-deps";
 import {
   appendHeaderToggle,
@@ -45,7 +45,7 @@ export const createReasoningBubble = (
   config?: AgentWidgetConfig,
   expansionState = new Set<string>()
 ): HTMLElement => {
-  config = activityDisplay(config, "reasoning");
+  config = activityDisplay(config, "reasoning", message);
   const reasoning = message.reasoning;
   const bubble = createExpandableBubbleShell("persona-reasoning-bubble", message.id);
 

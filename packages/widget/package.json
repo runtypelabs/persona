@@ -158,6 +158,11 @@
       "import": "./dist/loading-label-runtime.js",
       "require": "./dist/loading-label-runtime.cjs"
     },
+    "./turn-activity-ui": {
+      "types": "./dist/turn-activity-ui.d.ts",
+      "import": "./dist/turn-activity-ui.js",
+      "require": "./dist/turn-activity-ui.cjs"
+    },
     "./activity-ui": {
       "types": "./dist/activity-ui.d.ts",
       "import": "./dist/activity-ui.js",

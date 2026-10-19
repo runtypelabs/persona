@@ -9,6 +9,21 @@ afterEach(() => { controller?.destroy(); document.body.replaceChildren(); vi.use
 const inject = (id: string, status: 'running' | 'complete', chunks: string[] = []) => controller.injectTestMessage({ type: 'message', message: { id, role: 'assistant', content: '', createdAt: '2026-01-01T00:00:00Z', sequence: Number(id.slice(-1)), variant: 'tool', toolCall: { id, name: 'Search', status, chunks } } });
 const header = (id: string) => mount.querySelector<HTMLButtonElement>(`[data-message-id="${id}"] > button`)!;
 const start = (v5Defaults: boolean, toolCallDisplay: NonNullable<AgentWidgetConfig['features']>['toolCallDisplay']) => { controller = createAgentExperience(mount, { future: { v5Defaults }, apiUrl: '/test', persistState: false, launcher: { enabled: false }, features: { toolCallDisplay } }); };
+
+it.each([false, true])('keeps expired approval visible as attention (grouped %s)', grouped => {
+  start(true, { variant: 'row', grouped, groupedMode: 'collapsible', iconVisibility: 'active' });
+  controller.injectTestMessage({ type: 'message', message: {
+    id: 'expired1', role: 'assistant', content: '', createdAt: '2026-01-01', sequence: 1, variant: 'tool',
+    toolCall: { id: 'expired1', name: 'Edit', status: 'complete', approvalStatus: 'timeout' },
+  } });
+  if (grouped) inject('tool2', 'complete', ['Finished']);
+  const button = grouped ? mount.querySelector<HTMLButtonElement>('[data-persona-tool-group] > button')! : header('expired1');
+  expect(button.textContent).toContain('Approval expired');
+  expect(button.parentElement?.getAttribute('data-activity-state')).toBe('denied');
+  expect(button.querySelector('[data-activity-icon="denied"]')).not.toBeNull();
+  expect(button.querySelector('[data-activity-icon="done"]')).toBeNull();
+});
+
 describe.each([false, true])('activity UI (V5 %s)', v5Defaults => {
   it('uses version defaults for streaming tool and reasoning disclosure', () => {
     start(v5Defaults, { variant: 'row', grouped: false });
@@ -43,7 +58,7 @@ describe.each([false, true])('activity UI (V5 %s)', v5Defaults => {
     start(v5Defaults, { variant: 'row', grouped: true, groupedMode: 'collapsible' });
     inject('tool1', 'complete', ['one']); inject('tool2', 'complete', ['two']);
     const group = mount.querySelector('[data-persona-tool-group]')!;
-    expect(group.querySelector('button')?.textContent).toContain('Used 2 tools');
+    expect(group.querySelector('button')?.textContent).toContain('Search (2)');
     const children = group.querySelectorAll<HTMLElement>('.persona-activity-group-child'); expect(children).toHaveLength(2);
     expect(children[1].style.getPropertyValue('--persona-activity-stagger')).toBe('40ms');
     const chevron = () => header('tool-group-tool1').querySelector('.persona-activity-chevron')!.outerHTML;
@@ -90,25 +105,11 @@ it('copies current tool output after a streaming DOM update', async () => {
   }
 });
 
-it.each(['stack', 'summary', 'collapsible'] as const)('preserves %s group DOM from its singleton through later iterations', mode => {
-  start(true, { grouped: true, groupedMode: mode, groupBoundary: 'iteration', groupSingletons: true });
-  inject('tool1', 'running', ['one']);
-  const group = mount.querySelector('[data-persona-tool-group-row]')!;
-  const bubble = mount.querySelector('[data-persona-tool-group]')!;
-  const child = mount.querySelector('[data-wrapper-id="tool1"]');
-  inject('tool2', 'complete', ['two']);
-  expect(mount.querySelector('[data-persona-tool-group-row]')).toBe(group);
-  expect(mount.querySelector('[data-persona-tool-group]')).toBe(bubble);
-  if (mode !== 'summary') expect(mount.querySelector('[data-wrapper-id="tool1"]')).toBe(child);
-  inject('tool1', 'complete', ['updated']);
-  expect(mount.querySelector('[data-persona-tool-group-row]')).toBe(group);
-  if (mode !== 'summary') expect(mount.querySelector('[data-wrapper-id="tool1"]')).toBe(child);
-});
 it('keeps group icon overrides separate from actual child icons and custom label content', () => {
   controller = createAgentExperience(mount, { apiUrl: '/test', persistState: false, launcher: { enabled: false }, future: { v5Defaults: true },
-    features: { toolCallDisplay: { grouped: true, groupBoundary: 'iteration', groupSingletons: true, groupIconVisibility: 'always', iconVisibility: 'never' } },
+    features: { toolCallDisplay: { grouped: true, groupBoundary: 'iteration', groupIconVisibility: 'always', iconVisibility: 'never' } },
     toolCall: { renderGroupedSummary: () => { const icon = document.createElement('i'); icon.dataset.customIcon = 'true'; return icon; } } });
-  inject('tool1', 'complete', ['one']);
+  inject('tool1', 'complete', ['one']); inject('tool2', 'complete', ['two']);
   expect(header('tool-group-tool1').querySelector('.persona-activity-icon')).not.toBeNull();
   expect(header('tool-group-tool1').querySelector('[data-custom-icon]')).not.toBeNull();
   expect(header('tool1').querySelector('.persona-activity-icon')).toBeNull();
@@ -133,17 +134,17 @@ it.each(['stack', 'summary', 'collapsible'] as const)('collapses %s activity loc
 it.each(['stack', 'summary', 'collapsible'] as const)('manages loading effects on %s group labels, tools and reasoning through updates and completion', groupedMode => {
   const started: { kind: string; element: HTMLElement; update: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> }[] = [];
   controller = createAgentExperience(mount, { apiUrl: '/test', persistState: false, launcher: { enabled: false }, future: { v5Defaults: true },
-    features: { toolCallDisplay: { grouped: true, groupedMode, groupBoundary: 'iteration', groupSingletons: true } },
+    features: { toolCallDisplay: { grouped: true, groupedMode, groupBoundary: 'iteration' } },
     loadingLabel: { animate: ({ element, kind }) => {
       expect(element.isConnected).toBe(true);
       const entry = { element, kind, update: vi.fn(), destroy: vi.fn() }; started.push(entry); return entry;
     } } });
-  inject('tool1', 'running', ['one']);
+  inject('tool1', 'running', ['one']); inject('tool2', 'running', ['two']);
   const group = started.find(entry => entry.kind === 'tool-group')!;
   expect(group).toBeDefined();
   inject('tool2', 'running', ['two']);
   expect(started.filter(entry => entry.kind === 'tool-group')).toHaveLength(1);
-  expect(group.update).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('2 tools') }));
+  expect(group.update).toHaveBeenCalledWith(expect.objectContaining({ text: 'Search (2)' }));
   expect(started.filter(entry => entry.kind === 'tool')).toHaveLength(groupedMode === 'summary' ? 0 : 2);
   inject('tool1', 'complete', ['one']); inject('tool2', 'complete', ['two']);
   for (const entry of started) expect(entry.destroy).toHaveBeenCalledTimes(1);
@@ -176,24 +177,6 @@ it('keeps open singleton details visible when a second tool forms a group, then 
   expect(header('tool-group-tool1')).toBe(groupHeader);
   expect(groupHeader.getAttribute('aria-expanded')).toBe('false');
   expect(toolHeader.getAttribute('aria-expanded')).toBe('true');
-});
-
-it('toggles singleton grouping live without losing child expansion or its DOM', () => {
-  start(true, { groupBoundary: 'iteration', autoExpand: false, autoCollapseDelay: false });
-  inject('tool1', 'complete', ['visible details']);
-  const toolHeader = header('tool1');
-  toolHeader.click();
-  controller.update({ features: { toolCallDisplay: { groupSingletons: true } } });
-  expect(header('tool1')).toBe(toolHeader);
-  expect(header('tool-group-tool1').getAttribute('aria-expanded')).toBe('true');
-  controller.update({ features: { toolCallDisplay: { groupSingletons: false } } });
-  expect(mount.querySelector('[data-persona-tool-group]')).toBeNull();
-  expect(header('tool1')).toBe(toolHeader);
-  expect(toolHeader.getAttribute('aria-expanded')).toBe('true');
-  toolHeader.click();
-  controller.update({ features: { toolCallDisplay: { groupSingletons: true } } });
-  expect(header('tool1').getAttribute('aria-expanded')).toBe('false');
-  expect(header('tool-group-tool1').getAttribute('aria-expanded')).toBe('false');
 });
 
 it('preserves manually opened singleton details after group completion without disabling automatic groups', () => {

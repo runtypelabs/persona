@@ -42,7 +42,15 @@ for (const file of files) {
   let result = await minify(input, {
     ecma: 2020,
     module: !file.endsWith(".global.js"),
-    compress: { passes: 2, keep_fargs: false, hoist_funs: file.endsWith("theme-editor.js") || file.endsWith("activity-ui.js") },
+    compress: {
+      passes: 2, keep_fargs: false,
+      hoist_funs: file.endsWith("theme-editor.js") || file.endsWith("activity-ui.js"),
+      // Keeping repeated expressions and separate statements in this ESM entry
+      // compresses better under its gzip budget than folding them further.
+      ...(file.endsWith("activity-ui.js") ? { evaluate: false, sequences: false } : {}),
+      // Separate conditional branches compress slightly better in the stream parser.
+      ...(file.endsWith("client-stream.js") ? { conditionals: false } : {}),
+    },
     mangle: true,
     format: { comments: /@license|@preserve|^!/ },
     sourceMap: existsSync(mapFile)

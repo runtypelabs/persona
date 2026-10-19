@@ -77,6 +77,58 @@ event: execution_complete
 data: {"type":"execution_complete","executionId":"exec_...","seq":6,"kind":"agent","success":true,"completedAt":"..."}
 ```
 
+## OpenAI message phases and turn activity
+
+The OpenAI tab enables `turnActivity: { enabled: true }`. The Responses adapter
+keeps each provider message and content part separate, using
+`<item_id>:<content_index>` as the Persona text block ID and one stable
+`executionId` for the request. If the provider supplies an assistant message
+phase before its first text delta, the adapter copies it to `text_start.phase`:
+
+| Phase | Placement with turn activity enabled |
+| --- | --- |
+| `commentary` | Inside the turn activity disclosure |
+| `partial_answer` or `final_answer` | In the conversation |
+| Missing or unknown | In the conversation |
+
+The adapter does not classify text by its wording, message order, or completion
+status. A completed commentary message remains commentary. Reasoning content is
+not copied into assistant text.
+
+OpenAI's assistant message phase is optional and depends on the model and
+workflow. The default `gpt-4.1-mini` route remains useful as ordinary streaming
+chat. To try a model supporting phases and a real hosted search, set these
+server-side variables in `.env.local`, then restart the dev server:
+
+```dotenv
+OPENAI_RESPONSES_MODEL=gpt-5.4
+OPENAI_RESPONSES_REASONING_EFFORT=low
+OPENAI_RESPONSES_WEB_SEARCH=true
+OPENAI_RESPONSES_MAX_OUTPUT_TOKENS=2048
+```
+
+Select **OpenAI Responses** and try: “Give me a brief progress update, then use
+web search to find the official OpenAI Responses API documentation and summarize
+what it says about streaming.” An update in prose does not guarantee provider
+phase metadata. Hosted search emits a tool start when OpenAI adds the search
+item, followed by its actual result and completion status. Function execution
+and browser tools still require a separate execution/resume loop.
+
+Placement is frozen when a text block begins. If a phase first arrives with
+`response.output_item.done`, `text_complete.phase` preserves it as history-only
+`agentMetadata.providerPhase`; already-visible text stays in place. Persona's
+outbound assistant history uses the authoritative provider phase when known.
+`personaMessagesToOpenAIInput()` preserves `commentary` and `final_answer` on
+assistant history and never labels user messages. `partial_answer` is accepted
+by the Persona wire but is not sent to OpenAI, whose documented input phase
+values are `commentary` and `final_answer`.
+
+Only `response.completed` completes a successful run. Provider failures,
+incomplete responses (including token limits), and unexpected EOF terminate with
+`execution_error`; cancelling the request or response reader aborts the provider
+request. See OpenAI's [phase guidance](https://developers.openai.com/api/docs/guides/reasoning#phase-parameter)
+and [streaming event reference](https://developers.openai.com/api/reference/resources/responses/streaming-events).
+
 ## Follow-up suggestions
 
 The AI SDK route also shows the model-driven path to Persona's quick-reply

@@ -9,6 +9,8 @@
  */
 import type { RuntypeExecutionStreamEvent } from "./generated/runtype-openapi-contract";
 import type {
+  AgentMessagePhase,
+  AgentWidgetToolCall,
   AgentWidgetConfig,
   AgentWidgetStreamCheckpoint,
   AgentWidgetMessage,
@@ -28,6 +30,15 @@ import {
 } from "./utils/artifact-display";
 import { extractTextFromJson } from "./utils/formatting";
 
+/** Persona's optional text_start extension; not part of the generated API contract.
+ * The transport is untrusted, so validate phase before attaching it to messages. */
+type PersonaExecutionStreamEvent =
+  | Exclude<RuntypeExecutionStreamEvent, { type: "text_start" | "text_complete" }>
+  | (Extract<RuntypeExecutionStreamEvent, { type: "text_start" | "text_complete" }> & { phase?: unknown });
+
+const parsePhase = (phase: unknown): AgentMessagePhase | undefined =>
+  phase === "commentary" || phase === "partial_answer" || phase === "final_answer" ? phase : undefined;
+
 /**
  * Derive a download filename for `agent_media` parts that are delivered
  * without one. Maps a few well-known MIME types to friendly extensions and
@@ -38,15 +49,7 @@ function filenameFromMediaType(mediaType: string): string {
   // MIME types are case-insensitive (RFC 7231); compare against a lowercased
   // copy so callers that pass mixed casing still hit the friendly extensions.
   const lower = mediaType.toLowerCase();
-  const knownExtensions: Record<string, string> = {
-    "application/pdf": "pdf",
-    "application/json": "json",
-    "application/zip": "zip",
-    "text/plain": "txt",
-    "text/csv": "csv",
-    "text/markdown": "md"
-  };
-  const ext = knownExtensions[lower];
+  const ext = lower === "text/plain" ? "txt" : lower === "text/markdown" ? "md" : undefined;
   if (ext) return `attachment.${ext}`;
   const slash = lower.indexOf("/");
   if (slash > 0) {
@@ -58,8 +61,7 @@ function filenameFromMediaType(mediaType: string): string {
   return "attachment";
 }
 
-const looksStructured = (value: string) =>
-  value.startsWith("{") || value.startsWith("[") || value.startsWith("<");
+const looksStructured = (value: string) => /^[{[<]/.test(value);
 
 /**
  * Choose the best content source for sealed-segment reconciliation.
@@ -74,15 +76,14 @@ export function preferFinalStructuredContent(
 
   const rawTrimmed = rawBuffer.trim();
   const finalTrimmed = finalString.trim();
-  if (rawTrimmed.length === 0) return finalString;
-  if (finalTrimmed.length === 0) return rawBuffer;
+  if (!rawTrimmed) return finalString;
+  if (!finalTrimmed) return rawBuffer;
 
   const rawLooksStructured = looksStructured(rawTrimmed);
   const finalLooksStructured = looksStructured(finalTrimmed);
 
   if (!finalLooksStructured) return rawBuffer;
   if (!rawLooksStructured) return finalString;
-  if (finalTrimmed === rawTrimmed) return finalString;
   if (finalTrimmed.startsWith(rawTrimmed)) return finalString;
 
   const rawJsonText = extractTextFromJson(rawBuffer);
@@ -227,33 +228,15 @@ export async function streamResponse(
   let sequenceCounter = 0;
   const nextSequence = () => baseSequence + sequenceCounter++;
 
-  const cloneMessage = (msg: AgentWidgetMessage): AgentWidgetMessage => {
-    const reasoning = msg.reasoning
-      ? {
-          ...msg.reasoning,
-          chunks: [...msg.reasoning.chunks]
-        }
-      : undefined;
-    const toolCall = msg.toolCall
-      ? {
-          ...msg.toolCall,
-          chunks: msg.toolCall.chunks ? [...msg.toolCall.chunks] : undefined
-        }
-      : undefined;
-    const tools = msg.tools
-      ? msg.tools.map((tool) => ({
-          ...tool,
-          chunks: tool.chunks ? [...tool.chunks] : undefined
-        }))
-      : undefined;
-
-    return {
-      ...msg,
-      reasoning,
-      toolCall,
-      tools
-    };
-  };
+  const cloneTool = (tool: AgentWidgetToolCall): AgentWidgetToolCall => ({
+    ...tool, chunks: tool.chunks ? [...tool.chunks] : undefined,
+  });
+  const cloneMessage = (msg: AgentWidgetMessage): AgentWidgetMessage => ({
+    ...msg,
+    reasoning: msg.reasoning ? { ...msg.reasoning, chunks: [...msg.reasoning.chunks] } : undefined,
+    toolCall: msg.toolCall ? cloneTool(msg.toolCall) : undefined,
+    tools: msg.tools?.map(cloneTool),
+  });
 
   const shouldEmitMessage = (msg: AgentWidgetMessage): boolean => {
     if (msg.role !== "assistant" || msg.variant) return true;
@@ -304,8 +287,10 @@ export async function streamResponse(
   // running as that tool. Keyed by the wire block id, these route the block's
   // deltas into a message tagged `agentMetadata.parentToolId` (the parent tool's
   // row) instead of the top-level assistant/reasoning channel.
+  // Early phase belongs to placement; sealed blocks stay addressable for late history metadata.
+  const textPhases = new Map<string, AgentMessagePhase>(checkpoint?.textPhases);
   const nestedBlockParent = new Map<string, string>();
-  const nestedBlockMessages = new Map<string, AgentWidgetMessage>();
+  const blockMessages = new Map<string, AgentWidgetMessage>();
   const nestedBlockRaw = new Map<string, string>();
   const reasoningMessages = new Map<string, AgentWidgetMessage>();
   const toolMessages = new Map<string, AgentWidgetMessage>();
@@ -335,10 +320,13 @@ export async function streamResponse(
     if (message.variant === "tool" && message.toolCall?.id) toolMessages.set(message.toolCall.id, cloneMessage(message));
     if (message.variant === "reasoning" && message.reasoning?.id) reasoningMessages.set(message.reasoning.id, cloneMessage(message));
     const blockId = message.agentMetadata?.textBlockId;
+    if (blockId) {
+      blockMessages.set(blockId, message.id === assistantMessage?.id ? assistantMessage : cloneMessage(message));
+      if (message.agentMetadata?.phase) textPhases.set(blockId, message.agentMetadata.phase);
+    }
     const parentId = message.agentMetadata?.parentToolId;
     if (blockId && parentId) {
       nestedBlockParent.set(blockId, parentId);
-      nestedBlockMessages.set(blockId, cloneMessage(message));
       nestedBlockRaw.set(blockId, message.rawContent ?? message.content);
     }
   }
@@ -371,7 +359,7 @@ export async function streamResponse(
     return assistantMessage;
   };
 
-  const ensureReasoningMessage = (reasoningId: string) => {
+  const ensureReasoningMessage = (reasoningId: string, executionId?: string) => {
     const existing = reasoningMessages.get(reasoningId);
     if (existing) {
       return existing;
@@ -384,6 +372,7 @@ export async function streamResponse(
       createdAt: new Date().toISOString(),
       streaming: true,
       variant: "reasoning",
+      agentMetadata: { executionId },
       sequence: nextSequence(),
       reasoning: {
         id: reasoningId,
@@ -473,7 +462,7 @@ export async function streamResponse(
     }
     if (typeof value === "string") {
       const parsed = Number(value);
-      if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+      if (Number.isFinite(parsed)) {
         return parsed;
       }
       const dateParsed = Date.parse(value);
@@ -488,7 +477,7 @@ export async function streamResponse(
     if (typeof value === "string") {
       return value;
     }
-    if (value === null || value === undefined) {
+    if (value == null) {
       return "";
     }
     // Convert objects/arrays to JSON string
@@ -522,7 +511,7 @@ export async function streamResponse(
       // flows can have a short last bubble whose content is not a prefix of the
       // full step response.
       if (
-        cur.trim().length === 0 ||
+        !cur.trim() ||
         mergedDisplay.startsWith(cur) ||
         mergedDisplay.trimStart().startsWith(cur.trim())
       ) {
@@ -531,10 +520,8 @@ export async function streamResponse(
     };
 
     const finalizeCleanup = () => {
-      if (parser) {
-        const closeResult = parser.close?.();
-        if (closeResult instanceof Promise) closeResult.catch(() => {});
-      }
+      const closeResult = parser?.close?.();
+      if (closeResult instanceof Promise) closeResult.catch(() => {});
       streamParsers.delete(msg.id);
       rawContentBuffers.delete(msg.id);
       msg.streaming = false;
@@ -610,69 +597,38 @@ export async function streamResponse(
   const applyTextChunk = (
     assistant: AgentWidgetMessage,
     accumulatedRaw: string,
-    chunk: string,
-    chunkSeq: number | undefined
+    chunk: string
   ) => {
     assistant.rawContent = accumulatedRaw;
     if (!streamParsers.has(assistant.id)) {
       streamParsers.set(assistant.id, ctx.createStreamParser());
     }
     const parser = streamParsers.get(assistant.id)!;
-    const looksLikeJson =
-      accumulatedRaw.trim().startsWith("{") || accumulatedRaw.trim().startsWith("[");
+    const looksLikeJson = /^[{[]/.test(accumulatedRaw.trim());
     if (looksLikeJson) {
       rawContentBuffers.set(assistant.id, accumulatedRaw);
     }
-    const isPlainTextParser = (parser as any).__isPlainTextParser === true;
-    if (isPlainTextParser) {
-      assistant.content =
-        chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
+    const fallback = () => {
+      assistant.content += chunk;
       rawContentBuffers.delete(assistant.id);
       streamParsers.delete(assistant.id);
       assistant.rawContent = undefined;
       emitMessage(assistant);
+    };
+    if ((parser as AgentWidgetStreamParser & { __isPlainTextParser?: boolean }).__isPlainTextParser === true) {
+      fallback();
       return;
     }
-    const parsedResult = parser.processChunk(accumulatedRaw);
-    if (parsedResult instanceof Promise) {
-      parsedResult
-        .then((result) => {
-          const text = typeof result === "string" ? result : result?.text ?? null;
-          if (text !== null && text.trim() !== "") {
-            assistant.content = text;
-            emitMessage(assistant);
-          } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith("<")) {
-            assistant.content =
-              chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
-            rawContentBuffers.delete(assistant.id);
-            streamParsers.delete(assistant.id);
-            assistant.rawContent = undefined;
-            emitMessage(assistant);
-          }
-        })
-        .catch(() => {
-          assistant.content =
-            chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
-          rawContentBuffers.delete(assistant.id);
-          streamParsers.delete(assistant.id);
-          assistant.rawContent = undefined;
-          emitMessage(assistant);
-        });
-    } else {
-      const text =
-        typeof parsedResult === "string" ? parsedResult : parsedResult?.text ?? null;
+    const accept = (result: AgentWidgetStreamParserResult | string | null) => {
+      const text = typeof result === "string" ? result : result?.text ?? null;
       if (text !== null && text.trim() !== "") {
         assistant.content = text;
         emitMessage(assistant);
-      } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith("<")) {
-        assistant.content =
-          chunkSeq !== undefined ? accumulatedRaw : assistant.content + chunk;
-        rawContentBuffers.delete(assistant.id);
-        streamParsers.delete(assistant.id);
-        assistant.rawContent = undefined;
-        emitMessage(assistant);
-      }
-    }
+      } else if (!looksLikeJson && !accumulatedRaw.trim().startsWith("<")) fallback();
+    };
+    const parsedResult = parser.processChunk(accumulatedRaw);
+    if (parsedResult instanceof Promise) parsedResult.then(accept).catch(fallback);
+    else accept(parsedResult);
   };
 
   // Seal a flow text block at `text_complete`: run final structured extraction
@@ -683,13 +639,9 @@ export async function streamResponse(
     assistant: AgentWidgetMessage,
     finalContent?: unknown
   ) => {
-    const effectiveFinal =
-      finalContent !== undefined && finalContent !== null
-        ? finalContent
-        : assistant.content;
+    const effectiveFinal = finalContent ?? assistant.content;
     if (
-      effectiveFinal === undefined ||
-      effectiveFinal === null ||
+      effectiveFinal == null ||
       effectiveFinal === ""
     ) {
       assistant.streaming = false;
@@ -755,9 +707,10 @@ export async function streamResponse(
   const ensureNestedBlockMessage = (
     blockId: string,
     parentToolCallId: string,
-    variant?: "reasoning"
+    variant?: "reasoning",
+    executionId?: string
   ): AgentWidgetMessage => {
-    const existing = nestedBlockMessages.get(blockId);
+    const existing = blockMessages.get(blockId);
     if (existing) return existing;
     const message: AgentWidgetMessage = {
       id: `nested-${parentToolCallId}-${blockId}`,
@@ -770,9 +723,9 @@ export async function streamResponse(
       ...(variant === "reasoning"
         ? { reasoning: { id: blockId, status: "streaming", chunks: [] } }
         : {}),
-      agentMetadata: { parentToolId: parentToolCallId, textBlockId: blockId },
+      agentMetadata: { parentToolId: parentToolCallId, textBlockId: blockId, executionId, phase: textPhases.get(blockId) },
     };
-    nestedBlockMessages.set(blockId, message);
+    blockMessages.set(blockId, message);
     emitMessage(message);
     return message;
   };
@@ -782,7 +735,7 @@ export async function streamResponse(
   // below and rendered directly by the handler (no translation bridge), then
   // pushed here. The wire stream is a single, in-order SSE connection, so
   // frames drain straight through with no reordering.
-  const eventQueue: RuntypeExecutionStreamEvent[] = [];
+  const eventQueue: PersonaExecutionStreamEvent[] = [];
   // Declared here so later closures can reference it; assigned after all
   // handler-scoped variables are initialised (before the SSE loop).
   let drainReadyQueue: () => void;
@@ -848,11 +801,11 @@ export async function streamResponse(
             : null;
         if (rStartBlockId && rStartParent) {
           nestedBlockParent.set(rStartBlockId, rStartParent);
-          ensureNestedBlockMessage(rStartBlockId, rStartParent, "reasoning");
+          ensureNestedBlockMessage(rStartBlockId, rStartParent, "reasoning", payload.executionId);
           continue;
         }
         const reasoningId = payload.id;
-        const reasoningMessage = ensureReasoningMessage(reasoningId);
+        const reasoningMessage = ensureReasoningMessage(reasoningId, payload.executionId);
         reasoningMessage.reasoning = reasoningMessage.reasoning ?? {
           id: reasoningId,
           status: "streaming",
@@ -875,9 +828,9 @@ export async function streamResponse(
         if (
           rDeltaBlockId &&
           nestedBlockParent.has(rDeltaBlockId) &&
-          nestedBlockMessages.has(rDeltaBlockId)
+          blockMessages.has(rDeltaBlockId)
         ) {
-          const nested = nestedBlockMessages.get(rDeltaBlockId)!;
+          const nested = blockMessages.get(rDeltaBlockId)!;
           const nestedChunk = payload.delta;
           if (nestedChunk && nested.reasoning) {
             nested.reasoning.chunks.push(String(nestedChunk));
@@ -886,7 +839,7 @@ export async function streamResponse(
           continue;
         }
         const reasoningId = payload.id;
-        const reasoningMessage = ensureReasoningMessage(reasoningId);
+        const reasoningMessage = ensureReasoningMessage(reasoningId, payload.executionId);
         reasoningMessage.reasoning = reasoningMessage.reasoning ?? {
           id: reasoningId,
           status: "streaming",
@@ -905,9 +858,9 @@ export async function streamResponse(
         if (
           rCompleteBlockId &&
           nestedBlockParent.has(rCompleteBlockId) &&
-          nestedBlockMessages.has(rCompleteBlockId)
+          blockMessages.has(rCompleteBlockId)
         ) {
-          const nested = nestedBlockMessages.get(rCompleteBlockId)!;
+          const nested = blockMessages.get(rCompleteBlockId)!;
           if (nested.reasoning) {
             const nestedReflection =
               typeof payload.text === "string" ? payload.text : "";
@@ -919,7 +872,7 @@ export async function streamResponse(
             emitMessage(nested);
           }
           nestedBlockParent.delete(rCompleteBlockId);
-          nestedBlockMessages.delete(rCompleteBlockId);
+          blockMessages.delete(rCompleteBlockId);
           continue;
         }
         const reasoningId = payload.id;
@@ -931,7 +884,7 @@ export async function streamResponse(
         // common reflection case, where reasoning_start opened an empty bubble).
         const reflectionText = typeof payload.text === "string" ? payload.text : "";
         if (!reasoningMessages.get(reasoningId) && (reflectionText || payload.scope === "loop")) {
-          ensureReasoningMessage(reasoningId);
+          ensureReasoningMessage(reasoningId, payload.executionId);
         }
         const reasoningMessage = reasoningMessages.get(reasoningId);
         if (reasoningMessage?.reasoning) {
@@ -1122,6 +1075,13 @@ export async function streamResponse(
         // leave the top-level assistant bubble untouched (the nested deltas route
         // into the parent tool's row).
         const startBlockId = typeof payload.id === "string" ? payload.id : null;
+        if (startBlockId) {
+          // Only start metadata classifies placement. Late delta/complete fields
+          // never move text that has already appeared in the transcript.
+          const phase = parsePhase(payload.phase);
+          if (phase) textPhases.set(startBlockId, phase);
+          else textPhases.delete(startBlockId);
+        }
         const startParent =
           typeof payload.parentToolCallId === "string" && payload.parentToolCallId
             ? payload.parentToolCallId
@@ -1147,8 +1107,7 @@ export async function streamResponse(
           }
           assistantMessage = null;
         }
-        currentTextBlockId =
-          typeof payload.id === "string" ? payload.id : currentTextBlockId;
+        currentTextBlockId = startBlockId ?? currentTextBlockId;
         pendingTextRaw = "";
       } else if (payload.type === "text_delta") {
         // Nested flow-as-tool text: route to the parent tool's row, through the
@@ -1163,65 +1122,51 @@ export async function streamResponse(
           const nestedRaw = (nestedBlockRaw.get(deltaBlockId) ?? "") + nestedDelta;
           nestedBlockRaw.set(deltaBlockId, nestedRaw);
           if (nestedRaw.trim() === "") continue;
-          const nested = ensureNestedBlockMessage(deltaBlockId, nestedParent);
-          nested.agentMetadata = {
-            ...nested.agentMetadata,
-            textBlockId: deltaBlockId ?? undefined,
-            executionId: payload.executionId,
-            parentToolId: nestedParent,
-          };
-          applyTextChunk(nested, nestedRaw, nestedDelta, undefined);
+          const nested = ensureNestedBlockMessage(deltaBlockId, nestedParent, undefined, payload.executionId);
+          applyTextChunk(nested, nestedRaw, nestedDelta);
           continue;
         }
-        currentTextBlockId =
-          typeof payload.id === "string" ? payload.id : currentTextBlockId;
-        if (executionKind === "flow") {
-          // Flow prompt-step text can be structured JSON: accumulate the raw
-          // block and run it through the structured-content parser, keyed by the
-          // block-id bubble. Materialize lazily so a whitespace-only block
-          // (newlines around a tool boundary) never leaves a stray bubble.
-          const delta = typeof payload.delta === "string" ? payload.delta : "";
-          pendingTextRaw += delta;
-          if (pendingTextRaw.trim() === "") continue;
-          const assistant = ensureAssistantMessage();
-          assistant.agentMetadata = {
-            textBlockId: currentTextBlockId ?? undefined,
-            executionId: payload.executionId,
-            iteration: lastIterationSeen,
-          };
-          applyTextChunk(assistant, pendingTextRaw, delta, undefined);
-          lastAssistantInTurn = assistant;
-          continue;
-        }
-        // Agent text can be structured JSON too, whenever the host configures a
-        // custom `streamParser` (e.g. the page-context demo's `{"text": ...}` /
-        // `{"action": "add_to_cart", ...}` envelope). Accumulate the open block's
-        // raw text and run it through the same structured-content path the flow
-        // branch uses, so the parser sees the whole block and `rawContent` stays
-        // populated for the action manager. With the default plain-text parser
-        // this is byte-identical to appending the delta, so agent demos that
-        // stream prose are unaffected.
-        const agentDelta = typeof payload.delta === "string" ? payload.delta : "";
-        pendingTextRaw += agentDelta;
+        currentTextBlockId = deltaBlockId ?? currentTextBlockId;
+        // Both native text paths accumulate structured content per block.
+        // Flow whitespace-only blocks stay lazy; agent behavior remains eager.
+        const delta = typeof payload.delta === "string" ? payload.delta : "";
+        pendingTextRaw += delta;
+        if (executionKind === "flow" && pendingTextRaw.trim() === "") continue;
         const assistant = ensureAssistantMessage();
         assistant.agentMetadata = {
           textBlockId: currentTextBlockId ?? undefined,
+          phase: textPhases.get(currentTextBlockId ?? ""),
           executionId: payload.executionId,
           iteration: lastIterationSeen,
-          turnId: openTurnId ?? undefined,
-          agentName: agentExecution?.agentName
+          ...(executionKind === "flow" ? {} : {
+            turnId: openTurnId ?? undefined,
+            agentName: agentExecution?.agentName,
+          }),
         };
-        applyTextChunk(assistant, pendingTextRaw, agentDelta, undefined);
+        if (currentTextBlockId) blockMessages.set(currentTextBlockId, assistant);
+        applyTextChunk(assistant, pendingTextRaw, delta);
         lastAssistantInTurn = assistant;
       } else if (payload.type === "text_complete") {
         // Nested flow-as-tool text block close: seal its parent-tool-row message.
         const completeBlockId = typeof payload.id === "string" ? payload.id : null;
+        if (completeBlockId) textPhases.delete(completeBlockId);
+        const target = completeBlockId
+          ? blockMessages.get(completeBlockId)
+          : assistantMessage as AgentWidgetMessage | null;
+        const providerPhase = parsePhase(payload.phase);
+        if (target && providerPhase) target.agentMetadata = { ...target.agentMetadata, providerPhase };
         if (completeBlockId && nestedBlockParent.has(completeBlockId)) {
-          const nested = nestedBlockMessages.get(completeBlockId);
+          const nested = blockMessages.get(completeBlockId);
           if (nested) finalizeFlowTextBlock(nested);
           nestedBlockParent.delete(completeBlockId);
           nestedBlockRaw.delete(completeBlockId);
-          nestedBlockMessages.delete(completeBlockId);
+          blockMessages.delete(completeBlockId);
+          continue;
+        }
+        // A provider can classify a previously sealed block after opening the
+        // next one. Update that block's history without closing the live block.
+        if (completeBlockId && target !== assistantMessage) {
+          if (target) { target.streaming = false; emitMessage(target); }
           continue;
         }
         // Seal the current text block's bubble.
@@ -1615,9 +1560,6 @@ export async function streamResponse(
             status: "pending",
             agentId: agentExecution?.agentId ?? 'virtual',
             executionId: payload.executionId ?? agentExecution?.executionId ?? '',
-            ...(typeof payload.toolCallId === "string" && payload.toolCallId
-              ? { toolCallId: payload.toolCallId }
-              : {}),
             toolName: payload.toolName ?? '',
             toolType: payload.toolType,
             description: payload.description ?? `Execute ${payload.toolName ?? 'tool'}`,
@@ -1879,6 +1821,7 @@ export async function streamResponse(
               rawText: pendingTextRaw,
               executionKind, executionKindResolved,
               turnId: openTurnId, iteration: lastIterationSeen,
+              textPhases: [...textPhases],
               nestedParents: [...nestedBlockParent], nestedRaw: [...nestedBlockRaw],
               media: [...mediaBuffers].map(([id, media]) => [id, { ...media, parts: [...media.parts] }]),
               artifactContent: [...artifactContent].map(([id, content]) => [id, { ...content, props: content.props ? { ...content.props } : undefined }]), artifactTools: [...artifactToolCallIds],
@@ -1951,7 +1894,7 @@ export async function streamResponse(
         // The raw tap and custom parser above retain the original payload.
         // Known native branches use the generated union; unknown event types
         // fall through without rejecting a custom backend's stream.
-        eventQueue.push({ ...record, type: payloadType } as RuntypeExecutionStreamEvent);
+        eventQueue.push({ ...record, type: payloadType } as PersonaExecutionStreamEvent);
         drainReadyQueue();
       }
       advanceCursor();

@@ -46,6 +46,8 @@ export type {
   ArtifactConfigPayload,
   AgentWidgetInitOptions,
   AgentWidgetMessage,
+  AgentWidgetTurnActivity,
+  AgentWidgetTurnActivityConfig,
   AgentWidgetLauncherConfig,
   AgentWidgetLauncherTeaserConfig,
   AgentWidgetTooltipConfig,
@@ -188,6 +190,7 @@ export type {
   AgentRequestOptions,
   AgentExecutionState,
   AgentMessageMetadata,
+  AgentMessagePhase,
   AgentWidgetAgentRequestPayload,
   // Approval types
   AgentWidgetApproval,

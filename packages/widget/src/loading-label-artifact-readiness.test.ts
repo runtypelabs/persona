@@ -33,7 +33,8 @@ it("keeps direct internal builders synchronous after explicit runtime injection"
   vi.resetModules();
   const runtime = await import("./loading-label-runtime");
   const activity = await import("./activity-ui");
-  activity.initActivityUi(() => null, runtime);
+  const { activityDependencies } = await import("./activity-dependencies");
+  activity.initActivityUi(() => null, runtime, activityDependencies);
   const custom = document.createElement("strong"); custom.textContent = "Host effect";
   const message = { id: "tool", role: "assistant" as const, content: "", createdAt: "now", variant: "tool" as const,
     toolCall: { id: "tool", name: "Search", status: "running" as const, chunks: [] } };
@@ -46,4 +47,22 @@ it("keeps direct internal builders synchronous after explicit runtime injection"
   const { applyArtifactLoadingStatus } = await import("./utils/artifact-loading-status");
   const status = document.createElement("span"); applyArtifactLoadingStatus(status, "Generating", undefined);
   expect(status.querySelector(".persona-tool-char")).not.toBeNull();
+});
+
+it("requires explicit style adoption and uses the injected theme provenance for direct builders", async () => {
+  vi.resetModules();
+  const activity = await import("./activity-ui");
+  const runtime = await import("./loading-label-runtime");
+  const { activityDependencies } = await import("./activity-dependencies");
+  const message = { id: "themed", role: "assistant" as const, content: "", createdAt: "now", variant: "tool" as const,
+    toolCall: { id: "themed", name: "Read", status: "complete" as const } };
+  expect(() => activity.createToolBubble(message)).toThrow("Activity UI requires core style dependencies");
+  activity.initActivityUi(() => null, runtime, activityDependencies);
+  const config = { brand: { neutral: "#111111" }, darkTheme: { components: { toolBubble: {
+    background: "#223344", header: { padding: "12px" },
+  } } } };
+  const bubble = activity.createToolBubble(message, config);
+  expect(bubble.style.backgroundColor).toContain("--persona-components-toolBubble-background");
+  expect(bubble.querySelector("button")?.classList.contains("persona-theme-padding")).toBe(true);
+  expect(activity.createToolBubble(message, { ...config, toolCall: { backgroundColor: "red" } }).style.backgroundColor).toBe("red");
 });

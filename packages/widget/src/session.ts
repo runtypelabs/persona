@@ -297,24 +297,29 @@ function buildDispatchErrorContent(
 const isAutoResolvedLocalToolName = (name: string): boolean =>
   isWebMcpToolName(name) || name === SUGGEST_REPLIES_TOOL_NAME;
 
+export type SessionRunActivity = {
+  run: AgentWidgetRunStartedEvent & { outcome?: AgentWidgetRunFinishedEvent["outcome"] };
+  messageIds: Set<string>;
+};
+
 export class AgentWidgetSession {
   private client: AgentWidgetClient;
   private messages: AgentWidgetMessage[];
   private status: AgentWidgetSessionStatus = "idle";
   #activeRun: AgentWidgetRunStartedEvent | null = null;
-  #runToolIds = new Set<string>();
+  #runActivity?: SessionRunActivity;
   #runFailed = false;
   #runFinishTimer: ReturnType<typeof setTimeout> | null = null;
 
   #beginRun(executionId?: string): void {
     this.#finishRun("cancel");
-    this.#runToolIds.clear();
-    // Restoration only claims tools with the known resumed execution.
-    if (executionId) for (const message of this.messages) {
-      if (message.variant === "tool" && message.agentMetadata?.executionId === executionId) this.#runToolIds.add(message.id);
-    }
     this.#runFailed = false;
     this.#activeRun = { runId: `run-${generateAssistantMessageId()}`, timestamp: Date.now() };
+    this.#runActivity = { run: this.#activeRun, messageIds: new Set() };
+    // Only a known resumed execution may adopt existing assistant rows.
+    if (executionId) for (const message of this.messages) {
+      if (message.role === "assistant" && message.agentMetadata?.executionId === executionId) this.#runActivity.messageIds.add(message.id);
+    }
     this.callbacks.onRunStarted?.({ ...this.#activeRun });
   }
 
@@ -327,7 +332,12 @@ export class AgentWidgetSession {
     this.#runFinishTimer = null;
     const run = this.#activeRun;
     this.#activeRun = null;
-    if (run) this.callbacks.onRunFinished?.({ ...run, timestamp: Date.now(), outcome });
+    if (run) {
+      const finished = run as AgentWidgetRunFinishedEvent;
+      finished.timestamp = Date.now();
+      finished.outcome = outcome;
+      this.callbacks.onRunFinished?.(finished);
+    }
   }
 
   #scheduleRunFinish(): void {
@@ -1196,7 +1206,7 @@ export class AgentWidgetSession {
     this.#historyOpenEpoch += 1;
     this.#historyContextEpoch += 1;
     this.cancel();
-    this.#runToolIds.clear();
+    this.#runActivity = undefined;
     this.cleanupVoice();
     this.#visitorStoreUnsubscribe?.();
     this.#visitorStoreUnsubscribe = null;
@@ -1781,7 +1791,7 @@ export class AgentWidgetSession {
 
   /** Conversation-scoped caches that must not leak across records. */
   #resetConversationScopedState(): void {
-    this.#runToolIds.clear();
+    this.#runActivity = undefined;
     this.historyInternals.setStoredResumableHandle?.(null);
     this.agentExecution = null;
     this.#clearArtifactState();
@@ -2035,7 +2045,7 @@ export class AgentWidgetSession {
     }
     // Metadata first, transcript last: one persist covers both.
     this.#persistConversationMetadata();
-    this.#runToolIds.clear();
+    this.#runActivity = undefined;
     this.messages = this.#sortMessages(reconciled);
     this.callbacks.onMessagesChanged([...this.messages]);
   }
@@ -2412,9 +2422,7 @@ export class AgentWidgetSession {
     return this.status;
   }
 
-  public getRunToolIds(): ReadonlySet<string> {
-    return this.#runToolIds;
-  }
+  public getRunActivity() { return this.#runActivity; }
 
   public isStreaming() {
     return this.streaming;
@@ -3659,7 +3667,7 @@ export class AgentWidgetSession {
     // to be wiped, and a microtask-deferred resolve must not survive the clear.
     this.#abortWebMcpResolves();
     this.#actionsEpoch++;
-    this.#runToolIds.clear();
+    this.#runActivity = undefined;
     this.messages = [];
     this.agentExecution = null;
     this.#clearArtifactState();
@@ -3894,7 +3902,7 @@ export class AgentWidgetSession {
     // incoming snapshot is treated as a fresh conversation context.
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
-    this.#runToolIds.clear();
+    this.#runActivity = undefined;
     this.messages = this.#sortMessages(
       messages.map((message) => ({
         ...restoreBrowserToolState(message),
@@ -3941,7 +3949,7 @@ export class AgentWidgetSession {
     }
     if (event.type === "message") {
       // Only incoming run events establish ownership, before rendering.
-      if (this.#activeRun && !readOnlyReplay && event.message.variant === "tool") this.#runToolIds.add(event.message.id);
+      if (this.#activeRun && !readOnlyReplay && event.message.role === "assistant") this.#runActivity?.messageIds.add(event.message.id);
       this.upsertMessage(event.message);
       if (event.message.agentMetadata?.awaitingLocalTool ||
           (event.message.variant === "approval" && event.message.approval?.status === "pending")) {

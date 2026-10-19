@@ -143,8 +143,8 @@ const ROOT_NODE: PreferenceNode = {
       children: {
         collapsedMode: enumPreference("tool-call", "tool-name", "tool-preview"),
         groupedMode: enumPreference("stack", "summary", "collapsible"),
+        groupSummary: enumPreference("current-action", "aggregate"),
         groupBoundary: enumPreference("adjacent", "iteration"),
-        groupSingletons: BOOLEAN,
         loadingAnimation: enumPreference("none", "pulse", "shimmer", "shimmer-color", "rainbow"),
         expandable: BOOLEAN,
         grouped: BOOLEAN,

@@ -6869,3 +6869,26 @@
 @media (prefers-reduced-motion: reduce) {
   [data-persona-loading="default"] { animation: none; }
 }
+
+/* Whole-turn progress shares one spacing track. Message chrome is adjusted
+   only on built-in commentary; final answers and custom renderers keep theirs. */
+.persona-activity-row > .persona-turn-activity-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--persona-components-activity-transcriptGap, 16px);
+  margin-inline-start: 0;
+  padding: var(--persona-components-activity-bodyPadding, 16px 0);
+}
+.persona-turn-activity-body .persona-tool-bubble.persona-activity-row {
+  --persona-activity-height: var(--persona-components-toolBubble-rowHeight, var(--persona-components-activity-rowHeight, 28px));
+}
+.persona-turn-activity-body .persona-reasoning-bubble.persona-activity-row {
+  --persona-activity-height: var(--persona-components-reasoningBubble-rowHeight, var(--persona-components-activity-rowHeight, 28px));
+}
+.persona-turn-activity-body .persona-activity-row > .persona-activity-body:not(.persona-theme-padding) {
+  padding: var(--persona-components-activity-groupPadding, 2px 0);
+}
+
+.persona-turn-activity-duration { font-size: inherit; }
+
+[data-persona-turn-activity] > .persona-activity-header { width: 100%; border-radius: 0; border-bottom: 1px solid var(--persona-message-border); }

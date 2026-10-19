@@ -28,8 +28,8 @@ import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-hi
  * effects alongside screenshots. Not registered in examples-nav.
  */
 
-type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "browser-history";
-const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "browser-history"];
+type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "browser-history" | "turn-activity";
+const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "browser-history", "turn-activity"];
 
 const params = new URLSearchParams(window.location.search);
 const scenarioParam = params.get("scenario") ?? "echo";
@@ -180,6 +180,21 @@ function scenarioFrames(kind: Scenario, userText: string, executionId: string): 
         }),
         complete(executionId),
       ];
+    case "turn-activity":
+      return [
+        start(executionId),
+        ...buildAssistantTurnFrames({ executionId, turnId: `${executionId}-progress-1`, text: "I will inspect the files and check the result.", chunkSize: 20 }),
+        { type: "tool_start", executionId, toolCallId: `${executionId}-read`, toolName: "Read", parameters: { path: "example.ts" }, iteration: 1 },
+        { type: "tool_output_delta", executionId, toolCallId: `${executionId}-read`, delta: "Reading the example…" },
+        { type: "tool_complete", executionId, toolCallId: `${executionId}-read`, success: true, result: "Found the relevant function", executionTime: 840 },
+        { type: "tool_start", executionId, toolCallId: `${executionId}-read-docs`, toolName: "Read", parameters: { path: "README.md" }, iteration: 1 },
+        { type: "tool_complete", executionId, toolCallId: `${executionId}-read-docs`, success: true, result: "Confirmed the documented behavior", executionTime: 480 },
+        ...buildAssistantTurnFrames({ executionId, turnId: `${executionId}-progress-2`, text: "The implementation is consistent. I am checking the final output.", chunkSize: 20 }),
+        { type: "tool_start", executionId, toolCallId: `${executionId}-check`, toolName: "Bash", parameters: { command: "check" }, iteration: 2 },
+        { type: "tool_complete", executionId, toolCallId: `${executionId}-check`, success: true, result: "All checks passed", executionTime: 620 },
+        ...buildAssistantTurnFrames({ executionId, turnId: `${executionId}-final`, text: "The example works. The final answer stays outside the activity disclosure.", chunkSize: 20 }),
+        complete(executionId),
+      ];
     case "reasoning":
       return [
         start(executionId),
@@ -279,6 +294,11 @@ const baseConfig: AgentWidgetConfig = {
   ...(scenario === "browser-history" ? {
     features: { showToolCalls: true, history: { enabled: true, provider: browserHistoryProvider(), presentation: "panel" as const } },
   } : {}),
+  ...(scenario === "turn-activity" ? {
+    future: { v5Defaults: true },
+    expansion: { animation: "height" as const, duration: 160 },
+    turnActivity: { enabled: true },
+  } : {}),
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
   customFetch: async (url, init, payload) => {
     requests.push({ at: now(), url: String(url), body: payload });
@@ -290,7 +310,11 @@ const baseConfig: AgentWidgetConfig = {
     }
     turn += 1;
     const executionId = `exec_verify_${turn}`;
-    const frames = scenarioFrames(scenario, latestUserText(payload), executionId);
+    const frames = scenarioFrames(scenario, latestUserText(payload), executionId).map(frame =>
+      scenario === "turn-activity" && frame.type === "text_start"
+        ? { ...frame, phase: frame.id === `${executionId}-final-text` ? "final_answer" : "commentary" }
+        : frame,
+    );
     return createMockSSEResponse(sequenced(frames), { delayMs, signal: init?.signal });
   },
   approval: {
@@ -357,6 +381,8 @@ const controller: AgentWidgetController = initAgentWidget({
 });
 
 const RECORDED_EVENTS = [
+  "run:started",
+  "run:finished",
   "user:message",
   "assistant:complete",
   "approval:requested",

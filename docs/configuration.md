@@ -65,7 +65,6 @@ const config = {
       grouped: true,
       groupedMode: 'collapsible',
       groupBoundary: 'iteration',
-      groupSingletons: false,
     },
   },
 };
@@ -73,7 +72,66 @@ const config = {
 
 A single tool appears directly, so one click opens its details. Multiple tools share a group header. Iteration boundaries still apply when single tools have no group wrapper. If an open tool gains a sibling, its new group starts open; later updates respect manual group toggles.
 
-Set `groupSingletons: true` to retain a group header from the first tool, including custom `toolCall.renderGroupedSummary` content. This applies to stack and collapsible modes; summary mode always retains its consolidated summary. The default is false in V4 and V5. Summary callbacks run only for rendered group headers, but `isLatestGroup` considers every logical group, including unwrapped single tools.
+Summary mode always retains its consolidated summary, including one tool. Summary callbacks run only for rendered group headers, but `isLatestGroup` considers every logical group, including unwrapped single tools.
+
+## Optional whole-turn activity
+
+```typescript
+import type { AgentWidgetConfig } from '@runtypelabs/persona';
+
+const config: AgentWidgetConfig = {
+  turnActivity: { enabled: true },
+};
+```
+
+This creates one open **Working** disclosure across progress prose and tool batches. Completion collapses it to **Worked**, **Stopped**, or **Failed**. A manual open/close choice survives later updates and completion. Explicit final messages stay outside, including while their text streams. Built-in progress prose uses plain text without message action toolbars; partial and final answers keep normal message actions outside. Classified tools and reasoning use compact rows with details on expansion, and adjacent tools form collapsible semantic summaries by default in both V4 and V5; singleton tools remain direct. Authored display/grouping choices, custom message/tool renderers, themes, and activity spacing tokens still apply. Turning the feature off restores the ordinary presentation without resending a request. Approval controls stay visible while paused; a terminal cancellation/failure ends the waiting state. Expansion motion, reduced motion and shared loading-label settings are reused.
+
+Whole-turn bodies leave 16px below the Working/Worked divider and between prose and tool batches. Expanded tool groups use 2px around and between compact 28px child rows. Authored `theme.components.activity.transcriptGap`, `bodyPadding`, `groupGap`, `groupPadding`, and `rowHeight` override these scoped defaults; ordinary activity rows keep their existing spacing.
+
+Activity rows recognize exact common tool names, such as `web_search`, `Read`, `Bash`, and `apply_patch`, and use labels such as “Searched the web,” “Read a file,” or “Ran a command.” Homogeneous batches use a counted category such as “Web searches (5)” or “File reads (2),” so their headers differ from individual calls. Mixed batches combine repeated categories in their original order, such as “Read files, ran commands,” and shorten long lists while retaining failure, interruption, and approval indicators. Unknown or ambiguous names receive a readable generic label; Persona does not infer a tool's purpose from its arguments. Existing `toolCall.renderCollapsedSummary`, `toolCall.renderGroupedSummary`, and text templates override the defaults. Original tool names remain available in expanded details. Legacy card stack/summary groups retain their tool-count labels.
+
+Tool titles work independently of turn activity. Supply a plain-text `toolCall.actionTitle` on the tool call, or use the synchronous `config.toolCall.resolveActionTitle(toolCall, message)` hook. A nonblank direct title takes precedence over the resolver; absent or blank titles fall back to the mapped tool label. Active individual rows show the resolved title. Card headers retain their normal presentation, while `renderCollapsedSummary` receives an optional `context.actionTitle` for custom rendering. Persona does not extract titles from tool arguments, and the native SSE tool schema is unchanged.
+
+`features.toolCallDisplay.groupSummary` controls grouped labels across collapsible, summary-only, and stack modes:
+
+- `"current-action"`: when exactly one tool is active, show its resolved title or safe mapped label. Parallel active tools and completed batches retain aggregate summaries.
+- `"aggregate"`: retain the batch summary while tools run.
+
+When omitted, classified turn progress uses current-action for collapsible and summary-only groups; stack mode and ordinary groups use aggregate. Explicit configuration and stored preferences override those defaults. Stack children already show their individual active titles. Approval, error and interruption attention wins over current-action labels. Custom summary callbacks receive the resolved `defaultSummary`; returning null or undefined uses it. Custom summaries and active text templates retain precedence.
+
+```ts
+const config = {
+  features: { toolCallDisplay: { groupSummary: 'current-action' } },
+  toolCall: {
+    resolveActionTitle: (tool) => titlesByCallId.get(tool.id),
+  },
+};
+```
+
+Native Persona SSE supports an optional `phase: 'commentary' | 'partial_answer' | 'final_answer'` on `text_start`. With a stable `executionId`, commentary enters activity; partial and final answers stay outside. Tool and reasoning events from the same execution also enter activity. Phase describes placement, not completion: only the run lifecycle settles the disclosure. Unclassified text streams normally, without buffering or later relocation. Visible outside messages split activity into separate spans so later progress never moves ahead of an answer.
+
+For other transports, supply `message.turnActivity: { id, kind: 'progress' | 'final', startedAt?, completedAt?, outcome? }`, or return that shape from a pure synchronous `resolveMessage(message)`. Precedence is direct metadata, a defined resolver result, then native metadata. Use an id unique to the whole response across iterations and reconnects; per-iteration `turnId` may be too narrow. Host-authored teammate updates can be classified progress messages using existing message renderers; Persona does not discover or synthesize subagent activity.
+
+Completed tools inside enabled, classified turn activity use muted semantic icons: globe for web search, document for file reads, pencil for edits, terminal for commands, and database for queries. Exact known tool names determine the category; unknown tools and mixed-category groups use a neutral activity icon. Homogeneous groups share their children's icon. Running, failed, interrupted and approval states retain their status icons. Ordinary rows retain their existing check by default.
+
+Set `toolCall.iconName` to a registered icon name or a synchronous `(toolCall) => string | undefined` callback to override completed row icons per tool. A fixed string also overrides mixed-group icons; per-tool callbacks keep mixed categories neutral. Returning `undefined` keeps the default. Register custom icon data with the public `registerIcons()` API before rendering. The callback receives each original tool, never a synthetic group, and does not own the summary DOM. An unregistered name warns and falls back to the neutral activity icon. Explicit `"check"` retains its success color; other completion icons inherit the label color. `features.toolCallDisplay.iconVisibility` and `groupIconVisibility` still control visibility, including `"active"` and `"never"`.
+
+```ts
+registerIcons({ 'order-lookup': [['path', { d: 'M4 6h16M4 12h16M4 18h16' }]] });
+const config = {
+  turnActivity: { enabled: true },
+  toolCall: {
+    iconName: (tool) => tool.name === 'lookup_order' ? 'order-lookup' : undefined,
+  },
+};
+```
+
+
+The [OpenAI Responses example](../examples/ai-sdk-next) preserves provider item identities and phase supplied before text begins. A phase received only at completion is retained as `agentMetadata.providerPhase` for subsequent provider requests; it does not change the displayed message's original placement. `agentMetadata.phase` records the early phase. An adapter must forward these fields explicitly. Providers and models that omit phase remain ordinary streaming chat, with tool/reasoning activity still available. No heuristic classifies arbitrary prose as progress or an answer.
+
+`startedAt` and `completedAt` are measured Unix milliseconds. The header shows elapsed whole seconds after one second, then minutes/seconds, and keeps ticking through silent tool gaps. Missing/invalid timing produces no duration. Adapters must emit terminal tool statuses separately; whole-turn completion does not rewrite tool execution results. The local run lifecycle supplies a live terminal timestamp and outcome; it does not rewrite stored messages. To reproduce duration/outcome on historical replay, persist direct terminal metadata or reconstruct it deterministically in the resolver. A valid `completedAt` implies successful completion unless `outcome` states otherwise. Historical rows start collapsed and never claim ownership of a later run. Restored durable runs may claim existing messages only for the known resumed `executionId`.
+
+`resolveMessage` must be pure and synchronous. Its results are not persisted; a resolver reading a temporary in-memory map must restore that map when loading history. Native SSE parsing accepts the phase extension above; it does not forward arbitrary custom fields. Custom header strings are plain text. The built-in header owns its live clock; custom header content refreshes on transcript/configuration changes and can manage its own timer. A custom HTMLElement owns its effects and DOM content; callbacks should return fresh declarative content on each render. The header hook receives `id`, `messages`, `active`, `outcome`, `elapsedMs`, `defaultSummary`, and `config`. The optional renderer loads before configured UI reveal, including progress-only configurations with tools/reasoning hidden. Enabling during a live run uses the session's existing run snapshot and does not reactivate historical progress. The feature is disabled by default and code generation reports resolver/header functions as host JavaScript requirements.
 
 ## Animate tool and reasoning expansion
 

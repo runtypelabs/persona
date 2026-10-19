@@ -45,15 +45,15 @@ export const getDefaultStopReasonNoticeCopy = (
 ): string | null => {
   switch (stopReason) {
     case "max_tool_calls":
-      return "Stopped after calling a tool. Send a follow-up to continue.";
+      // The tool budget may be exhausted before a final, tool-free iteration.
+      // This message-level reason does not establish that the whole run stopped.
+      return "Tool limit reached.";
     case "length":
-      return "Response cut off as max tokens reached. Ask for more to continue.";
+      return "Output token limit reached.";
     case "content_filter":
       return "The provider filtered this response.";
     case "error":
       return "Something went wrong generating this response.";
-    case "end_turn":
-    case "unknown":
     default:
       return null;
   }
@@ -75,9 +75,7 @@ export const resolveStopReasonNoticeText = (
   // for those keys are intentionally ignored.
   if (fallback === null) return null;
   const override = overrides?.[stopReason];
-  const text = override !== undefined ? override : fallback;
-  if (!text) return null;
-  return text;
+  return (override === undefined ? fallback : override) || null;
 };
 
 /**
@@ -87,17 +85,12 @@ export const resolveStopReasonNoticeText = (
 const createStopReasonNotice = (
   stopReason: StopReasonKind,
   text: string
-): HTMLElement => {
-  const notice = createElement(
-    "div",
-    "persona-message-stop-reason persona-text-xs persona-mt-2 persona-italic"
-  );
-  notice.setAttribute("data-stop-reason", stopReason);
-  notice.setAttribute("role", "note");
-  notice.style.opacity = "0.75";
-  notice.textContent = text;
-  return notice;
-};
+): HTMLElement => createNode("div", {
+  className: "persona-message-stop-reason persona-text-xs persona-mt-2 persona-italic",
+  attrs: { "data-stop-reason": stopReason, role: "note" },
+  style: { opacity: "0.75" },
+  text,
+});
 
 /** Validate that an image src URL uses a safe scheme (blocks javascript: and SVG data URIs). */
 export const isSafeImageSrc = (src: string): boolean => {

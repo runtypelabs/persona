@@ -87,6 +87,7 @@ export function computeMessageFingerprint(
     message.reasoning?.chunks?.[message.reasoning.chunks.length - 1]?.slice(-32) ?? "",
     message.contentParts?.length ?? 0,
     message.stopReason ?? "",
+    message.toolCall?.actionTitle ?? "",
     configVersion,
   ].join("\x00");
 }
