@@ -3,7 +3,9 @@
 # published packages (widget + proxy) and their deps are installed: apps/ and
 # examples/ are demos and out of scope (see threat_model.md).
 FROM node:24-bookworm
-ENV CI=true
+# tsdown builds ~20 entries in parallel and exceeds the default V8 heap.
+ENV CI=true \
+    NODE_OPTIONS=--max-old-space-size=6144
 
 RUN corepack enable
 
