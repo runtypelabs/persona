@@ -1,0 +1,20 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e2]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e3]
+    - paragraph
+      - StaticText "Scenario: tool. Replies are scripted in-page; no backend."
+    - generic
+      - paragraph
+      - generic
+        - button "Used tool for 0.8 seconds" [expanded=true, ref=e7]
+        - StaticText "{\n  \"city\": \"Lisbon\",\n  \"unit\": \"celsius\"\n}"
+        - StaticText "{\n  \"city\": \"Lisbon\",\n  \"tempC\": 22,\n  \"conditions\": \"sunny\"\n}"
+        - StaticText "Duration: 840ms"
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e4]
+      - button "Start voice recognition" [disabled, ref=e5]
+      - button "Stop generating" [ref=e6]

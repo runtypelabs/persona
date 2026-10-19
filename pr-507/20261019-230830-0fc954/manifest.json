@@ -1,0 +1,136 @@
+{
+  "runId": "20261019-230830-0fc954",
+  "entries": [
+    {
+      "feature": "tool-calls",
+      "label": "2000 replayed, last bubble expanded",
+      "note": "connectStream replay of 2000 tool pairs: 298 ms, 2000 bubbles, heap 40 MB; last bubble expands to item_1999 details",
+      "files": [
+        "02-tool-calls-2000-replayed-last-bubble-expanded.png",
+        "02-tool-calls-2000-replayed-last-bubble-expanded.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify-replay.html?scenario=tool&pairs=2000",
+      "at": "2026-10-19T23:10:13.763Z",
+      "head": "2cb7fb54e43e1b4e566f0a1a9e27029849441e26",
+      "diffHash": "51dad451d3fc"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "replay 2000 tool calls - after fix",
+      "note": null,
+      "files": [
+        "01-tool-calls-replay-2000-tool-calls-after-fix.gif",
+        "01-tool-calls-replay-2000-tool-calls-after-fix.webm",
+        "01-tool-calls-replay-2000-tool-calls-after-fix.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify-replay.html?scenario=tool&pairs=2000",
+      "at": "2026-10-19T23:10:14.779Z",
+      "head": "2cb7fb54e43e1b4e566f0a1a9e27029849441e26",
+      "diffHash": "51dad451d3fc"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "before fix: 200 replayed on main",
+      "note": "main: connectStream replay of 200 tool pairs blocked the main thread for 5419 ms",
+      "files": [
+        "04-tool-calls-before-fix-200-replayed-on-main.png",
+        "04-tool-calls-before-fix-200-replayed-on-main.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify-replay.html?scenario=tool&pairs=200",
+      "at": "2026-10-19T23:11:08.631Z",
+      "head": "2cb7fb54e43e1b4e566f0a1a9e27029849441e26",
+      "diffHash": "452ef5887115"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "replay 200 tool calls - before fix (main)",
+      "note": null,
+      "files": [
+        "03-tool-calls-replay-200-tool-calls-before-fix-main.gif",
+        "03-tool-calls-replay-200-tool-calls-before-fix-main.webm",
+        "03-tool-calls-replay-200-tool-calls-before-fix-main.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify-replay.html?scenario=tool&pairs=200",
+      "at": "2026-10-19T23:11:09.127Z",
+      "head": "2cb7fb54e43e1b4e566f0a1a9e27029849441e26",
+      "diffHash": "452ef5887115"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "live tool turn, details expanded",
+      "note": null,
+      "files": [
+        "06-tool-calls-live-tool-turn-details-expanded.png",
+        "06-tool-calls-live-tool-turn-details-expanded.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250",
+      "at": "2026-10-19T23:11:30.938Z",
+      "head": "2cb7fb54e43e1b4e566f0a1a9e27029849441e26",
+      "diffHash": "51dad451d3fc"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "live tool turn via composer",
+      "note": null,
+      "files": [
+        "05-tool-calls-live-tool-turn-via-composer.gif",
+        "05-tool-calls-live-tool-turn-via-composer.webm",
+        "05-tool-calls-live-tool-turn-via-composer.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250",
+      "at": "2026-10-19T23:11:31.232Z",
+      "head": "2cb7fb54e43e1b4e566f0a1a9e27029849441e26",
+      "diffHash": "51dad451d3fc"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "live tool turn side effects",
+      "note": "1 request(s) crossed the network boundary, 3 controller event(s)",
+      "files": [
+        "07-tool-calls-live-tool-turn-side-effects.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250",
+      "at": "2026-10-19T23:11:31.334Z",
+      "head": "2cb7fb54e43e1b4e566f0a1a9e27029849441e26",
+      "diffHash": "51dad451d3fc"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "main baseline events (comparison)",
+      "note": "1 request(s) crossed the network boundary, 4 controller event(s)",
+      "files": [
+        "08-tool-calls-main-baseline-events-comparison.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250",
+      "at": "2026-10-19T23:11:48.998Z",
+      "head": "2cb7fb54e43e1b4e566f0a1a9e27029849441e26",
+      "diffHash": "452ef5887115"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "live tool turn side effects (settled)",
+      "note": "1 request(s) crossed the network boundary, 4 controller event(s)",
+      "files": [
+        "09-tool-calls-live-tool-turn-side-effects-settled.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250",
+      "at": "2026-10-19T23:12:06.578Z",
+      "head": "2cb7fb54e43e1b4e566f0a1a9e27029849441e26",
+      "diffHash": "51dad451d3fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "tool-calls",
+      "pass": true,
+      "skipped": false,
+      "note": "Live tool turn via composer: tool bubble, answer streams, 'Used tool' expands to details; 1 request, assistant:complete x2 at same timings as main (1572/4085 ms vs 1611/4130 ms)."
+    },
+    {
+      "feature": "streaming",
+      "pass": false,
+      "skipped": true,
+      "note": "Plain text streaming not separately driven; covered by unit tests (ui.streaming-coalescing)."
+    }
+  ]
+}

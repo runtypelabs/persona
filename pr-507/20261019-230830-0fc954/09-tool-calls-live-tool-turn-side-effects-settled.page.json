@@ -1,0 +1,103 @@
+{
+  "scenario": "tool",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 313,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "weather in lisbon",
+            "createdAt": "2026-10-19T23:12:02.107Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 304,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1792451522107
+      }
+    },
+    {
+      "at": 311,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvfvcu2j_br0lq2ke",
+        "role": "user",
+        "content": "weather in lisbon",
+        "createdAt": "2026-10-19T23:12:02.107Z",
+        "sequence": 1792451521821,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 1572,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "tool-call_weather",
+        "role": "assistant",
+        "content": "",
+        "createdAt": "2026-10-19T23:12:02.869Z",
+        "streaming": false,
+        "variant": "tool",
+        "sequence": 1792451522116,
+        "toolCall": {
+          "id": "call_weather",
+          "status": "complete",
+          "name": "get_weather",
+          "success": true,
+          "duration": 840,
+          "args": {
+            "city": "Lisbon",
+            "unit": "celsius"
+          },
+          "startedAt": 1792451522870,
+          "completedAt": 1792451523374,
+          "durationMs": 840,
+          "chunks": [
+            "Fetching forecast…"
+          ],
+          "result": {
+            "city": "Lisbon",
+            "tempC": 22,
+            "conditions": "sunny"
+          }
+        },
+        "agentMetadata": {
+          "executionId": "exec_verify_1",
+          "iteration": 1
+        }
+      }
+    },
+    {
+      "at": 4085,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1792451524379-6f6e18e391115",
+        "role": "assistant",
+        "content": "It's **22°C and sunny** in Lisbon right now.",
+        "createdAt": "2026-10-19T23:12:04.379Z",
+        "streaming": false,
+        "sequence": 1792451522117,
+        "agentMetadata": {
+          "executionId": "exec_verify_1",
+          "iteration": 1,
+          "turnId": "turn-2",
+          "agentName": "Verify Agent"
+        }
+      }
+    }
+  ]
+}
