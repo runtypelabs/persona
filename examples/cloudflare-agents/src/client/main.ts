@@ -18,8 +18,6 @@ let assistant: AgentWidgetInitHandle | undefined;
 const icons = {
   inbox: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 13h5l2 3h4l2-3h5"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
-  sparkle: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>',
-  arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
   chevron: '<path d="m9 5 7 7-7 7"/>',
   shield: '<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
@@ -38,11 +36,10 @@ root.innerHTML = `
     <div class="dock-boundary">
       <main id="support-workspace" class="support-workspace">
         <aside class="inbox" aria-label="Support conversations">
-          <div class="inbox-heading"><div><span class="section-eyebrow">CUSTOMER CARE</span><h1>Inbox <span>${tickets.length}</span></h1></div><span class="inbox-symbol">${icon("inbox")}</span></div>
+          <div class="inbox-heading"><h1>Inbox <span>${tickets.length}</span></h1><span class="inbox-symbol">${icon("inbox")}</span></div>
           <label class="search-box">${icon("search")}<input id="ticket-search" type="search" placeholder="Search conversations" aria-label="Search conversations" autocomplete="off" /></label>
           <div class="inbox-filters" aria-label="Filter conversations"><button data-filter="all" aria-pressed="true">All</button><button data-filter="open" aria-pressed="false">Open</button><button data-filter="waiting" aria-pressed="false">Waiting</button></div>
           <div id="ticket-list" class="ticket-list"></div>
-          <div class="inbox-footer"><span class="sample-dot"></span> A small team. A thoughtful response.</div>
         </aside>
         <section id="ticket-detail" class="ticket-detail" aria-label="Selected conversation"></section>
       </main>
@@ -70,12 +67,11 @@ function renderDetail() {
   const ticket = selected;
   const detail = root.querySelector<HTMLElement>("#ticket-detail")!;
   detail.innerHTML = `
-    <header class="ticket-toolbar"><button class="back-to-inbox" id="back-to-inbox" aria-label="Back to inbox">← Inbox</button><span class="ticket-breadcrumb">Inbox ${icon("chevron")} <span>${escape(ticket.id.replace("ticket-", "#"))}</span></span><span class="ticket-status"><i class="status-dot ${ticket.status}"></i>${ticket.status === "open" ? "Open conversation" : "Waiting on customer"}</span></header>
+    <header class="ticket-toolbar"><button class="back-to-inbox" id="back-to-inbox" aria-label="Back to inbox">← Inbox</button><span class="ticket-breadcrumb">Inbox ${icon("chevron")} <span>${escape(ticket.id.replace("ticket-", "#"))}</span></span><div class="ticket-actions"><span class="ticket-status"><i class="status-dot ${ticket.status}"></i>${ticket.status === "open" ? "Open conversation" : "Waiting on customer"}</span><button class="ask-assistant" id="ask-assistant">Ask assistant</button></div></header>
     <div class="ticket-scroll">
       <div class="ticket-title"><div class="ticket-category">${escape(ticket.category)}</div><h2 id="ticket-title-heading" tabindex="-1">${escape(ticket.subject)}</h2><div class="ticket-subtitle"><span>${escape(ticket.customer)}</span><span class="separator-dot">·</span>${escape(ticket.company)}<span class="separator-dot">·</span>${escape(ticket.email)}</div><div class="ticket-tags">${ticket.tags.map(tag => `<span>${escape(tag)}</span>`).join("")}</div></div>
       <div class="conversation-date"><span></span>Customer conversation<span></span></div>
       <div class="customer-thread">${ticket.messages.map(message => `<article class="thread-message ${message.role}"><span class="message-avatar ${message.role === "support" ? "support-avatar" : ""}">${escape(initials(message.author))}</span><div class="message-content"><div class="message-heading"><strong>${escape(message.author)}</strong><span>${message.role === "support" ? "Support team" : "Customer"}</span><time>${escape(message.time)}</time></div><div class="message-body">${escape(message.body).split("\n\n").map(paragraph => `<p>${paragraph.replaceAll("\n", "<br />")}</p>`).join("")}</div></div></article>`).join("")}</div>
-      <section class="assistant-invitation"><div class="invitation-symbol">${icon("sparkle")}</div><div><h3>A little context goes a long way.</h3><p>Review the conversation, check the runbook, and find the right next step.</p><button class="ask-assistant" id="ask-assistant">Ask Relay assistant ${icon("arrow")}</button></div></section>
       <section class="service-signals" aria-label="Conversation context"><div class="signal-item">${icon("shield")}<div><span>Customer context</span><strong>${escape(ticket.company)}</strong></div></div><div class="signal-item">${icon("clock")}<div><span>Service signals</span><button id="check-service">Check with assistant ↗</button></div></div></section>
       <p class="draft-only-note">Suggestions and drafts stay here. Nothing is sent to the customer.</p>
     </div>`;
@@ -86,7 +82,6 @@ function renderDetail() {
 function mountAssistant(keepOpen = false) {
   assistant?.destroy();
   conversationId = crypto.randomUUID();
-  const ticket = selected;
   assistant = initAgentWidget({
     target: "#support-workspace",
     config: {
@@ -105,12 +100,12 @@ function mountAssistant(keepOpen = false) {
         subtitle: mode === "preview" ? "Preview · Sample support workspace" : "Live · Cloudflare Agents",
         agentIconName: "sparkles",
       },
-      welcome: { title: "The right words.\nThe next step.", subtitle: `A second pair of eyes on ${ticket.customer.split(" ")[0]}’s conversation. I can help you understand, investigate, and draft.`, variant: "card" },
+      welcome: { title: "Ask about this conversation", subtitle: "", variant: "card", layout: "top", align: "start" },
       copy: { inputPlaceholder: "Ask about this conversation…" },
       turnActivity: { enabled: true },
       contextProviders: [() => ({ ticketId: selected.id, conversationId })],
-      suggestions: { starters: { items: ["Summarize this conversation", "Investigate the issue", "Draft a helpful reply"], variant: "chip", placement: "composer", maxItems: 3 } },
-      theme: { semantic: { colors: { accent: "#3864bd", primary: "#252b36", background: "#ffffff", surface: "#ffffff" } } },
+      suggestions: { starters: { items: ["Summarize this conversation", "Investigate the issue", "Draft a helpful reply"], variant: "chip", placement: "welcome", maxItems: 3 } },
+      theme: { components: { introCard: { padding: "0", title: { fontSize: "18px", lineHeight: "24px" } } }, semantic: { colors: { accent: "#3864bd", primary: "#252b36", background: "#ffffff", surface: "#ffffff" } } },
       toolCall: { renderCollapsedSummary: renderToolRow, renderGroupedSummary: renderToolSummary, resolveActionTitle: call => ({ read_ticket: "Review customer conversation", search_runbook: "Look up support guidance", check_service_status: "Check relevant service status" })[call.name ?? ""] },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     },

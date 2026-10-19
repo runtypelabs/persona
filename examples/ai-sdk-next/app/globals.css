@@ -203,24 +203,8 @@ a {
   gap:16px;
 }
 
-.workspaceLocation {
-  display:flex;
-  gap:15px;
-  align-items:center;
-  font-size:12px;
-  color:#96968f;
-}
-
-.workspaceLocation span {
-  color:#cececa;
-}
-
-.workspaceLocation strong {
-  font-weight:500;
-  color:#484842;
-}
-
 .headerControls {
+  margin-left:auto;
   display:flex;
   align-items:center;
   gap:16px;
@@ -302,7 +286,7 @@ a {
   flex-wrap:wrap;
   flex-shrink:0;
   align-items:center;
-  justify-content:space-between;
+  justify-content:flex-end;
   gap:12px;
   font-size:11px;
   color:#a0a099;
@@ -355,18 +339,6 @@ a {
   padding:48px 0;
 }
 
-.welcomeSymbol {
-  font-size:32px;
-  margin-bottom:28px;
-  color:#77776d;
-}
-
-.eyebrow {
-  font-size:11px;
-  letter-spacing:2px;
-  color:#92928a;
-}
-
 .setupState h1 {
   font-size:29px;
   line-height:1.2;
@@ -374,7 +346,7 @@ a {
   font-weight:500;
 }
 
-.setupState p:not(.eyebrow) {
+.setupState p {
   font-size:13px;
   line-height:1.8;
   color:#83837b;
@@ -436,9 +408,6 @@ a {
   }
   .workspaceHeader {
     padding:0 22px;
-  }
-  .workspaceLocation {
-    gap:10px;
   }
   .headerControls {
     gap:8px;
@@ -504,11 +473,7 @@ a {
     padding:0 14px;
     gap:8px;
   }
-  .workspaceLocation {
-    display:none;
-  }
   .headerControls {
-    margin-left:auto;
     gap:8px;
   }
   .adapterSelect select {

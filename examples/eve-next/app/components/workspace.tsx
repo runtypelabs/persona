@@ -39,7 +39,6 @@ export function Workspace({ liveAvailable }: { liveAvailable: boolean }) {
         <nav className="document-nav" aria-label="Documents">
           {documents.map((item, index) => <button key={item.id} type="button" className={selected === index ? "selected" : ""} aria-current={selected === index ? "page" : undefined} onClick={() => { setSelected(index); setMobileView("document"); }}><Icon name="document" size={16} /><span>{item.title}</span></button>)}
         </nav>
-        <div className="sidebar-note"><span className="small-square" />A little clarity goes a long way.<p>One project. Every perspective.</p></div>
         <div className="sidebar-footer"><span className="team-avatar">A</span><div>Atlas team<small>Sample workspace</small></div><span className="version-label">V5</span></div>
       </aside>
       <div className="workspace-main">
@@ -57,10 +56,8 @@ export function Workspace({ liveAvailable }: { liveAvailable: boolean }) {
               <p className="document-description">{document.description}</p>
               <div className="document-meta"><span className="owner-avatar">{document.owner.split(" ").map((name) => name[0]).join("")}</span><span>{document.owner}</span><span className="meta-divider" />Updated {document.updated}</div>
               <div className="document-rule" />
-              <div className="brief-callout"><span className="callout-icon"><Icon name="sparkle" size={17} /></span><p><strong>Make the next decision a little clearer.</strong> A shared reference for the team, from first insight to pilot launch.</p></div>
               {document.sections.map((section, index) => <section className="document-section" key={section.title}><div className="section-number">0{index + 1}</div><div><h2>{section.title}</h2><p>{section.content}</p></div></section>)}
               <section className="milestones"><div className="milestone-heading"><h2>The path to pilot</h2><span>OCTOBER 2026</span></div>{milestones.map((item) => <div className="milestone-row" key={item.title}><span className="milestone-date">{item.date}</span><div><strong>{item.title}</strong><small>{item.owner}</small></div><span className={item.status === "At risk" ? "milestone-status risk" : "milestone-status"}>{item.status}</span></div>)}</section>
-              <footer className="document-footer"><span>ATLAS / WORKING DOCUMENT</span><span>Ideas become decisions here.</span></footer>
             </div>
           </section>
           <aside className="copilot-pane" aria-label="Document copilot">

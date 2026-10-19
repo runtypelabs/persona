@@ -158,21 +158,10 @@ main {
   justify-content: space-between;
   margin-bottom: 35px;
 }
-.eyebrow {
-  font-size: 10px;
-  letter-spacing: 1.6px;
-  color: #858b7e;
-  margin-bottom: 12px;
-}
 h1 {
   font-weight: 500;
   font-size: 35px;
   letter-spacing: -1.4px;
-  margin: 0 0 11px;
-}
-.page-heading p {
-  font-size: 13px;
-  color: #7b8077;
   margin: 0;
 }
 .release-picker {
@@ -312,16 +301,6 @@ h1 {
   letter-spacing: -5px;
   line-height: 1;
 }
-.art-caption {
-  position: absolute;
-  bottom: 26px;
-  left: 17px;
-  font-size: 7px;
-  letter-spacing: 1.6px;
-  color: #9e9f8f;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-}
 .readiness-summary {
   background: #fff;
   border: 1px solid #e0e4d9;
@@ -378,13 +357,6 @@ h1 {
 .progress-bars span.complete {
   background: #8b9d73;
 }
-.summary-note {
-  font-size: 11px;
-  line-height: 1.8;
-  color: #838d78;
-  margin: 17px 0 20px;
-  max-width: 240px;
-}
 .review-button {
   border: 1px solid #dce1d4;
   border-radius: 6px;
@@ -396,6 +368,7 @@ h1 {
   gap: 9px;
   width: 100%;
   font-size: 11px;
+  margin-top: 20px;
 }
 .review-button span:last-child {
   margin-left: auto;
@@ -410,10 +383,6 @@ h1 {
   font-size: 14px;
   font-weight: 500;
   margin: 0;
-}
-.section-heading > span {
-  font-size: 11px;
-  color: #94998d;
 }
 .check-grid {
   display: grid;
@@ -643,20 +612,8 @@ h1 {
     gap: 16px;
     margin-bottom: 26px;
   }
-  .eyebrow {
-    font-size: 8px;
-    letter-spacing: 1px;
-  }
   h1 {
     font-size: 29px;
-  }
-  .page-heading p {
-    font-size: 11px;
-    line-height: 1.6;
-    max-width: 230px;
-  }
-  .release-picker {
-    margin-top: 20px;
   }
   .release-picker > span {
     display: none;
@@ -699,8 +656,8 @@ h1 {
   .readiness-summary {
     padding: 20px;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 24px;
+    grid-template-columns: 1fr;
+    gap: 0;
   }
   .card-eyebrow {
     grid-column: 1/-1;
@@ -716,21 +673,12 @@ h1 {
   .progress-bars {
     grid-column: 1;
   }
-  .summary-note {
-    grid-column: 2;
-    grid-row: 2/5;
-    margin: 15px 0 0;
-    font-size: 11px;
-  }
   .review-button {
     grid-column: 1/-1;
     margin-top: 17px;
   }
   .check-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  .section-heading > span {
-    font-size: 10px;
   }
   .table-head,
   .change-row {
@@ -751,9 +699,6 @@ h1 {
   }
   .table-head {
     padding-left: 2px;
-  }
-  .footer-tagline {
-    display: none;
   }
   .section-heading {
     margin-top: 27px;
@@ -788,13 +733,10 @@ button:hover.text-action {
 .change-row {
   font-size: 12px;
 }
-.page-heading p,
 .release-copy p,
-.summary-note,
 .readiness-summary > p,
 .check-card p,
 .check-top > span:last-child,
-.section-heading > span,
 .change-id,
 .area-tag,
 .contributor,
@@ -824,14 +766,8 @@ button:hover.text-action {
   .release-label {
     font-size: 10px;
   }
-  .eyebrow {
-    font-size: 9px;
-  }
   .check-card p {
     line-height: 1.7;
-  }
-  .section-heading > span {
-    font-size: 11px;
   }
   .release-art {
     opacity: 0.65;

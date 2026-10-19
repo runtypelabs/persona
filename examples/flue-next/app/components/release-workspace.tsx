@@ -98,13 +98,16 @@ export function ReleaseWorkspace({
           },
         },
         welcome: {
-          title: "A second pair of eyes.",
-          subtitle: `Review Orbit ${release.version}, find the loose ends, or put the release into words.`,
+          title: "Ask about this release",
+          subtitle: "",
           variant: "card",
+          layout: "top",
+          align: "start",
         },
         copy: { inputPlaceholder: "Ask Orbit about this release…" },
         contextProviders: [() => ({ release: releaseId, conversationId })],
         theme: {
+          components: { introCard: { padding: "0", title: { fontSize: "18px", lineHeight: "24px" } } },
           semantic: {
             colors: {
               accent: "#c34c2c",
@@ -121,7 +124,7 @@ export function ReleaseWorkspace({
               "Draft the release notes",
               "Summarize the changes",
             ],
-            placement: "composer",
+            placement: "welcome",
             variant: "chip",
             maxItems: 3,
           },
@@ -197,11 +200,7 @@ export function ReleaseWorkspace({
       </nav>
       <main id="release">
         <div className="page-heading">
-          <div>
-            <div className="eyebrow">MAKE SOMETHING WORTH SHIPPING</div>
-            <h1>Release room</h1>
-            <p>A clear view of what’s next. A little help getting there.</p>
-          </div>
+          <h1>Release room</h1>
           <label className="release-picker">
             <span>Release</span>
             <select
@@ -240,7 +239,6 @@ export function ReleaseWorkspace({
               <div className="art-orbit orbit-two" />
               <div className="art-planet" />
               <span className="art-version">{release.version}</span>
-              <span className="art-caption">A NEW PERSPECTIVE</span>
             </div>
           </div>
           <aside className="readiness-summary">
@@ -263,11 +261,6 @@ export function ReleaseWorkspace({
                 />
               ))}
             </div>
-            <div className="summary-note">
-              {passed === 4
-                ? "All the details are in place. This release is ready to share."
-                : "Looking good. Two final reviews will get this release over the line."}
-            </div>
             <button
               className="review-button"
               onClick={() =>
@@ -283,7 +276,6 @@ export function ReleaseWorkspace({
         <section className="readiness-section" id="readiness">
           <div className="section-heading">
             <h3>The final checks</h3>
-            <span>Every detail matters.</span>
           </div>
           <div className="check-grid">
             {release.checks.map((check) => (
@@ -362,7 +354,6 @@ export function ReleaseWorkspace({
               ? "Preview workspace · Sample data"
               : "Live assistant · Sample workspace"}
           </span>
-          <span className="footer-tagline">Made for the moments before you ship.</span>
           <div className="persona-attribution">
             <a href="https://persona-chat.dev" target="_blank" rel="noreferrer">
               <img src="/persona-js-icon.svg" width="16" height="16" alt="" />

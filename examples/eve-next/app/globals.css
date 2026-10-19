@@ -20,10 +20,7 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .document-nav button svg { flex-shrink: 0; }
 .document-nav button:hover { background: #eeeee9; }
 .document-nav button.selected { background: #eaeae6; color: #292925; font-weight: 550; }
-.sidebar-note { margin: auto 12px 29px; padding-top: 36px; font-size: 11px; color: #777771; line-height: 1.6; }
-.small-square { width: 5px; height: 5px; display: inline-block; background: #999990; margin-right: 7px; transform: rotate(45deg); }
-.sidebar-note p { margin: 5px 0 0 12px; color: #a4a49c; }
-.sidebar-footer { display: flex; align-items: center; gap: 10px; padding: 19px 8px; border-top: 1px solid #e6e6e1; font-size: 11px; }
+.sidebar-footer { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 19px 8px; border-top: 1px solid #e6e6e1; font-size: 11px; }
 .team-avatar { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid #deded7; border-radius: 7px; font-family: Georgia, serif; }
 .sidebar-footer small { display: block; color: #97978f; font-size: 11px; margin-top: 3px; }
 .version-label { margin-left: auto; font-size: 11px; color: #99998f; }
@@ -46,10 +43,6 @@ h1 { margin: 26px 0 13px; font-family: Georgia, "Times New Roman", serif; font-w
 .owner-avatar { width: 22px; height: 22px; border-radius: 50%; background: #efe9df; color: #9e8565; font-size: 11px; display: grid; place-items: center; }
 .meta-divider { width: 1px; height: 10px; background: #dddcd6; margin: 0 3px; }
 .document-rule { height: 1px; background: #ededeb; margin: 27px 0; }
-.brief-callout { border: 1px solid #e9e7e0; background: #faf9f6; border-radius: 5px; display: flex; align-items: flex-start; gap: 11px; padding: 14px; margin-bottom: 30px; }
-.callout-icon { padding-top: 2px; color: #92866d; }
-.brief-callout p { margin: 0; color: #8b8477; font-size: 12px; line-height: 1.8; }
-.brief-callout strong { color: #635c50; font-weight: 500; display: block; }
 .document-section { display: flex; gap: 16px; margin-bottom: 26px; }
 .section-number { padding-top: 3px; color: #aaa99f; font-size: 11px; font-variant-numeric: tabular-nums; }
 .document-section h2, .milestones h2 { margin: 0 0 10px; font-size: 16px; font-weight: 550; letter-spacing: -.15px; }
@@ -63,7 +56,6 @@ h1 { margin: 26px 0 13px; font-family: Georgia, "Times New Roman", serif; font-w
 .milestone-row small { color: #a2a298; font-size: 11px; display: block; margin-top: 4px; }
 .milestone-status { font-size: 11px; color: #94948b; margin-left: auto; white-space: nowrap; }
 .milestone-status.risk { color: #a67a42; }
-.document-footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 36px; color: #b0b0a6; font-size: 11px; letter-spacing: .6px; }
 .copilot-pane { width: clamp(350px, 31vw, 460px); flex-shrink: 0; border-left: 1px solid #e9e9e6; display: flex; flex-direction: column; min-height: 0; background: #fff; }
 .copilot-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 20px 21px 15px; }
 .copilot-title { display: flex; align-items: center; gap: 8px; }
@@ -90,7 +82,7 @@ h1 { margin: 26px 0 13px; font-family: Georgia, "Times New Roman", serif; font-w
 @media (min-width: 1500px) { .document-content { padding-top: 65px; } }
 @media (max-width: 1180px) { .sidebar { width: 206px; } .workspace-label { display: none; } .document-nav button { font-size: 12px; gap: 7px; } .copilot-pane { width: 365px; } .document-content { padding-left: 32px; padding-right: 32px; } .breadcrumbs { gap: 9px; } }
 @media (max-width: 980px) { .sidebar { width: 185px; padding-left: 8px; padding-right: 8px; } .copilot-pane { width: 340px; } .document-content { padding: 35px 24px 24px; } .document-eyebrow { flex-wrap: wrap; gap: 8px; } .document-meta { flex-wrap: wrap; } .workspace-header { padding: 0 20px; } .breadcrumbs > span:first-child, .breadcrumbs > span:nth-child(2) { display: none; } }
-@media (max-width: 800px) { .workspace { min-height: 0; } .sidebar { display: none; } .workspace-header { height: 53px; padding: 0 16px; } .breadcrumbs { font-size: 11px; } .mobile-tabs { display: flex; padding: 8px 16px; border-bottom: 1px solid #eaeae5; gap: 7px; } .mobile-tabs button { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #929288; border-radius: 5px; padding: 7px 13px; font-size: 11px; } .mobile-tabs button[aria-pressed="true"] { background: #efefea; color: #33332e; } .mobile-document .copilot-pane { display: none; } .mobile-copilot .document-pane { display: none; } .copilot-pane { width: 100%; border-left: 0; } .document-content { padding: 34px 26px; max-width: 660px; } h1 { font-size: 38px; } .document-section p { font-size: 14px; } .document-section h2 { font-size: 15px; } .document-description { font-size: 14px; } .document-eyebrow { font-size: 11px; } .document-meta { font-size: 11px; } .brief-callout p { font-size: 12px; } .milestone-row strong { font-size: 12px; } .persona-host { max-width: 650px; margin: auto; } }
+@media (max-width: 800px) { .workspace { min-height: 0; } .sidebar { display: none; } .workspace-header { height: 53px; padding: 0 16px; } .breadcrumbs { font-size: 11px; } .mobile-tabs { display: flex; padding: 8px 16px; border-bottom: 1px solid #eaeae5; gap: 7px; } .mobile-tabs button { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #929288; border-radius: 5px; padding: 7px 13px; font-size: 11px; } .mobile-tabs button[aria-pressed="true"] { background: #efefea; color: #33332e; } .mobile-document .copilot-pane { display: none; } .mobile-copilot .document-pane { display: none; } .copilot-pane { width: 100%; border-left: 0; } .document-content { padding: 34px 26px; max-width: 660px; } h1 { font-size: 38px; } .document-section p { font-size: 14px; } .document-section h2 { font-size: 15px; } .document-description { font-size: 14px; } .document-eyebrow { font-size: 11px; } .document-meta { font-size: 11px; } .milestone-row strong { font-size: 12px; } .persona-host { max-width: 650px; margin: auto; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
 
 .mobile-document-select { display: none; }

@@ -31,9 +31,11 @@ export function PersonaWidget({ apiUrl }: { apiUrl: string }) {
       layout: { embedded: true },
       composer: { placement: "block" },
       welcome: {
-        title: "A fresh perspective,\nright beside your work.",
-        subtitle: "Turn this document into a clear summary, a sharper question, or your next step.",
+        title: "Ask about this document",
+        subtitle: "",
         variant: "card",
+        layout: "top",
+        align: "start",
       },
       copy: { inputPlaceholder: "Ask about this document…" },
       suggestions: {
@@ -51,7 +53,7 @@ export function PersonaWidget({ apiUrl }: { apiUrl: string }) {
       theme: {
         semantic: { colors: { accent: "#252525", primary: "#252525", background: "#ffffff", surface: "#ffffff" } },
         components: {
-          introCard: { background: "transparent", shadow: "none" },
+          introCard: { background: "transparent", shadow: "none", padding: "0", title: { fontSize: "18px", lineHeight: "24px" } },
           input: { background: "#fff" },
           activity: { bodySurface: "transparent" },
         },

@@ -20,11 +20,11 @@ export function PersonaWidget({ apiUrl, conversationId, preview, onTitle }: Pers
       turnActivity: { enabled: true },
       launcher: { enabled: false, width: "100%" },
       layout: { embedded: true, showHeader: false },
-      welcome: { title: "Good ideas start with a question.", subtitle: "A little research. A clearer perspective. Your next move.", variant: "card" },
+      welcome: { title: "What can I help with?", subtitle: "", variant: "card", layout: "centered", anchor: "center" },
       copy: { inputPlaceholder: preview ? "Ask about a product launch…" : "Ask anything…" },
       theme: {
         semantic: { colors: { accent: "#202020", surface: "#ffffff", background: "#ffffff", primary: "#202020" } },
-        components: { introCard: { background: "transparent", shadow: "none" }, panel: { border: "none", borderRadius: "0", shadow: "none" } },
+        components: { introCard: { background: "transparent", shadow: "none", padding: "0" }, panel: { border: "none", borderRadius: "0", shadow: "none" } },
       },
       toolCall: { renderGroupedSummary: renderToolActivitySummary },
       suggestions: { starters: { items: starters, variant: "chip", placement: "composer", overflow: "wrap", maxItems: 3 } },

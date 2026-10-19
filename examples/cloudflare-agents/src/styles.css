@@ -37,8 +37,7 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 .support-workspace { display: grid; grid-template-columns: 300px minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; flex: 1; }
 .inbox { display: flex; flex-direction: column; min-height: 0; background: #fcfdff; border-right: 1px solid #e7eaf0; overflow: hidden; }
 .inbox-heading { padding: 28px 22px 21px; display: flex; align-items: center; justify-content: space-between; }
-.section-eyebrow { font-size: 11px; font-weight: 500; color: #97a0af; letter-spacing: 1.4px; }
-.inbox h1 { display: flex; align-items: center; gap: 11px; font-size: 23px; font-weight: 550; letter-spacing: -.7px; margin: 9px 0 0; }
+.inbox h1 { display: flex; align-items: center; gap: 11px; font-size: 23px; font-weight: 550; letter-spacing: -.7px; margin: 0; }
 .inbox h1 span { font-size: 12px; font-weight: 500; border: 1px solid #dfe5ee; color: #8893a4; background: white; padding: 2px 6px; border-radius: 5px; letter-spacing: 0; }
 .inbox-symbol { display: grid; place-items: center; width: 33px; height: 33px; color: #b1b9c5; border: 1px solid #e8ecf2; border-radius: 50%; }
 .search-box { margin: 0 20px 20px; height: 35px; display: flex; align-items: center; gap: 8px; padding: 0 9px; background: #f6f8fb; border: 1px solid #e8ecf2; border-radius: 6px; }
@@ -66,8 +65,6 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 .status-pill i, .status-dot { height: 5px; width: 5px; border-radius: 50%; background: #6486c4; }
 .status-pill.waiting i, .status-dot.waiting { background: #c9a267; }
 .priority-pill { margin-left: auto; color: #b08e69; font-size: 11px; }
-.inbox-footer { margin-top: auto; padding: 22px 20px; font-size: 11px; color: #a0a9b8; display: flex; align-items: center; gap: 7px; line-height: 1.6; }
-.sample-dot { height: 4px; width: 4px; border-radius: 50%; background: #a7b2c1; flex-shrink: 0; }
 .empty-inbox { padding: 36px 23px; font-size: 13px; color: #67758a; }
 .empty-inbox span { display: block; margin-top: 7px; font-size: 12px; color: #9aa4b3; }
 .ticket-detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; }
@@ -75,6 +72,7 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 .ticket-breadcrumb { display: flex; align-items: center; gap: 10px; color: #9ca6b5; font-size: 12px; }
 .ticket-breadcrumb svg { width: 11px; height: 11px; color: #bec6d2; }
 .ticket-breadcrumb span { color: #7e8ba0; }
+.ticket-actions { display: flex; align-items: center; gap: 16px; margin-left: auto; }
 .ticket-status { display: flex; align-items: center; gap: 6px; color: #8794a8; font-size: 11px; }
 .ticket-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 37px 40px 70px; }
 .ticket-title { max-width: 810px; margin: 0 auto; }
@@ -100,13 +98,7 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 .thread-message.support .message-body { background: #f9fafc; border-color: #edf0f4; }
 .message-body p { margin: 0 0 12px; }
 .message-body p:last-child { margin-bottom: 0; }
-.assistant-invitation { max-width: 810px; margin: 34px auto 22px; display: flex; align-items: flex-start; gap: 14px; padding: 22px 24px; border: 1px solid #e1e8f4; border-radius: 9px; background: linear-gradient(110deg, #f6f9fe, #fdfefe); }
-.invitation-symbol { width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center; color: #87a1cb; border: 1px solid #dde6f4; border-radius: 9px; background: white; }
-.invitation-symbol svg { width: 16px; height: 16px; }
-.assistant-invitation h3 { font-size: 13px; font-weight: 500; color: #4a6590; margin: 1px 0 7px; }
-.assistant-invitation p { font-size: 12px; color: #95a4bb; line-height: 1.7; margin: 0; }
-.ask-assistant { display: flex; align-items: center; gap: 10px; padding: 0; background: transparent; border: 0; color: #6487be; font-size: 12px; margin-top: 15px; }
-.ask-assistant svg { width: 15px; height: 15px; }
+.ask-assistant { padding: 7px 10px; background: #f5f8fd; border: 1px solid #dfe7f3; border-radius: 5px; color: #5175ad; font-size: 12px; white-space: nowrap; }
 .service-signals { display: flex; max-width: 810px; gap: 26px; margin: 0 auto; padding: 7px 0; }
 .signal-item { display: flex; gap: 10px; align-items: center; flex: 1; min-width: 0; }
 .signal-item svg { color: #abb8cb; width: 17px; height: 17px; }
@@ -127,7 +119,6 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
   [data-persona-dock-open=true] .ticket-title h2 { font-size: 24px; }
   [data-persona-dock-open=true] .service-signals { gap: 14px; }
   [data-persona-dock-open=true] .message-body { padding: 13px 15px; }
-  [data-persona-dock-open=true] .assistant-invitation { padding: 18px; }
 }
 @media (max-width: 780px) {
   .app-header { padding: 0 17px; }
@@ -146,9 +137,10 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
   .ticket-subject { font-size: 14px; }
   .ticket-row p { font-size: 12px; }
   .ticket-customer { font-size: 13px; }
-  .ticket-customer small, .ticket-time, .ticket-row-footer, .status-pill, .priority-pill, .inbox-footer { font-size: 12px; }
+  .ticket-customer small, .ticket-time, .ticket-row-footer, .status-pill, .priority-pill { font-size: 12px; }
   .customer-avatar { height: 35px; width: 35px; font-size: 12px; }
-  .ticket-toolbar { padding: 0 20px; height: 57px; min-height: 57px; }
+  .ticket-toolbar { padding: 0 20px; height: auto; min-height: 57px; flex-wrap: wrap; gap: 8px 12px; padding-block: 10px; }
+  .ticket-actions { flex-wrap: wrap; gap: 8px 12px; }
   .ticket-breadcrumb { display: none; }
   .back-to-inbox { display: block; padding: 6px 0; font-size: 12px; border: 0; background: transparent; color: #7389aa; }
   .ticket-scroll { padding: 30px 21px 80px; }
@@ -159,8 +151,6 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
   .message-heading span { display: none; }
   .message-heading time { font-size: 12px; }
   .thread-message { gap: 9px; }
-  .assistant-invitation { padding: 20px 16px; }
-  .assistant-invitation p, .ask-assistant { font-size: 12px; }
   .service-signals { gap: 18px; }
   .signal-item { align-items: flex-start; }
   .draft-only-note { font-size: 12px; }
