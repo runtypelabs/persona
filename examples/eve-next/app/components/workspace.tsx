@@ -67,9 +67,10 @@ export function Workspace({ liveAvailable }: { liveAvailable: boolean }) {
             <header className="copilot-header"><div className="copilot-title"><Icon name="sparkle" size={17} /><strong>Copilot</strong></div><div className="copilot-controls"><label className="mode-select"><span className="sr-only">Response mode</span><select aria-label="Response mode" value={mode} onChange={(event) => setMode(event.target.value as "preview" | "live")}><option value="preview">Preview</option><option value="live" disabled={!liveAvailable}>Live Eve{liveAvailable ? "" : " · not connected"}</option></select></label><button type="button" className="icon-button" aria-label="Start a new conversation" title="Start a new conversation" onClick={() => setConversation((value) => value + 1)}><Icon name="reset" size={16} /></button></div></header>
             <div className="context-strip"><Icon name="document" size={14} /><span>{document.title}</span><span className="context-badge">In context</span></div>
             <PersonaWidget key={`${document.id}-${mode}-${conversation}`} apiUrl={`/api/eve/dispatch?mode=${mode}&document=${document.id}`} />
-            <div className="copilot-footnote">{mode === "preview" ? "Preview · prepared responses, no model connected" : "Live Eve · answers grounded in your sample project"}<span>Persona + Eve</span></div>
+            <div className="copilot-footnote">{mode === "preview" ? "Preview · prepared responses, no model connected" : "Live Eve · answers grounded in your sample project"}</div>
           </aside>
         </div>
+        <footer className="workspace-attribution"><span className="persona-attribution"><a href="https://persona-chat.dev" target="_blank" rel="noreferrer"><img src="/persona-js-icon.svg" width="16" height="16" alt="" />Built with persona.js</a><span>· by <a href="https://runtype.com" target="_blank" rel="noreferrer">Runtype</a></span></span></footer>
       </div>
     </main>
   );

@@ -159,7 +159,6 @@ export function ReleaseWorkspace({
           orbit<span className="workspace-name">/ &nbsp; Acme workspace</span>
         </a>
         <div className="topbar-right">
-          <span className="powered">Persona + Flue</span>
           <span className="avatar">MC</span>
         </div>
       </header>
@@ -363,7 +362,14 @@ export function ReleaseWorkspace({
               ? "Preview workspace · Sample data"
               : "Live assistant · Sample workspace"}
           </span>
-          <span>Made for the moments before you ship.</span>
+          <span className="footer-tagline">Made for the moments before you ship.</span>
+          <div className="persona-attribution">
+            <a href="https://persona-chat.dev" target="_blank" rel="noreferrer">
+              <img src="/persona-js-icon.svg" width="16" height="16" alt="" />
+              Built with persona.js
+            </a>
+            <span>· by <a href="https://runtype.com" target="_blank" rel="noreferrer">Runtype</a></span>
+          </div>
         </footer>
       </main>
       <div ref={host} id="orbit-assistant" />

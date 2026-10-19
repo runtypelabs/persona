@@ -67,7 +67,7 @@ export function Workspace({ liveAvailable }: { liveAvailable: boolean }) {
       {mobile && sidebarOpen && <button className="sidebarScrim" tabIndex={-1} aria-hidden="true" onClick={() => setSidebarOpen(false)} />}
       <aside id="conversation-navigation" ref={sidebarRef} className="sidebar" data-open={sidebarOpen} aria-label="Conversation navigation" role={mobile ? "dialog" : undefined} aria-modal={mobile && sidebarOpen ? true : undefined} aria-hidden={mobile && !sidebarOpen ? true : undefined} inert={mobile && !sidebarOpen}>
         <button ref={closeRef} className="sidebarClose" aria-label="Close navigation" onClick={() => setSidebarOpen(false)}>Close <span aria-hidden="true">×</span></button>
-        <a className="brand" href="/" aria-label="Persona workspace home"><span className="brandMark">p</span> Persona <span className="brandEdition">Workspace</span></a>
+        <a className="brand" href="/" aria-label="Persona workspace home"><img className="brandLogo" src="/persona-js.svg" width="112" height="31" alt="persona.js" /><span className="brandEdition">Workspace</span></a>
         <button className="newChat" onClick={() => start()}><span aria-hidden="true">＋</span> New conversation <span className="shortcut" aria-hidden="true">↗</span></button>
         <div className="navLabel">YOUR CONVERSATIONS</div>
         <nav className="conversationList" aria-label="Conversations in this visit">
@@ -88,7 +88,7 @@ export function Workspace({ liveAvailable }: { liveAvailable: boolean }) {
         {conversations.map(item => <div key={item.id} className="conversationPane" hidden={item.id !== active}>
           {item.mode === "live" && !liveAvailable ? <div className="setupState"><div className="welcomeSymbol">↗</div><p className="eyebrow">MAKE IT YOURS</p><h1>Connect your own intelligence.</h1><p>Add <code>OPENAI_API_KEY</code> to your server’s <code>.env.local</code> and restart the app to chat with a live model.</p><button className="primaryButton" onClick={() => start({ mode: "preview" })}>Explore the preview</button><a href="https://github.com/runtypelabs/persona/tree/main/examples/ai-sdk-next" target="_blank" rel="noreferrer">Read the setup guide ↗</a></div> : <PersonaWidget apiUrl={item.mode === "preview" ? `/api/preview/dispatch?adapter=${item.adapter}` : `/api/${item.adapter}/dispatch`} conversationId={item.id} onTitle={updateTitle} preview={item.mode === "preview"} />}
         </div>)}
-        <footer className="workspaceFooter">{current.mode === "preview" ? "A guided preview with sample data. No live search or model calls." : "AI can make mistakes. Review important details."}<a href="https://persona-chat.dev" target="_blank" rel="noreferrer">Built with Persona <span>↗</span></a></footer>
+        <footer className="workspaceFooter">{current.mode === "preview" ? "A guided preview with sample data. No live search or model calls." : "AI can make mistakes. Review important details."}<span className="persona-attribution"><a href="https://persona-chat.dev" target="_blank" rel="noreferrer"><img src="/persona-js-icon.svg" width="16" height="16" alt="" />Built with persona.js</a><span>· by <a href="https://runtype.com" target="_blank" rel="noreferrer">Runtype</a></span></span></footer>
       </section>
     </main>
   );

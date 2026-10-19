@@ -62,21 +62,15 @@ a {
   padding:0 10px;
 }
 
-.brandMark {
-  display:grid;
-  place-items:center;
-  background:#242424;
-  color:white;
-  width:29px;
-  height:29px;
-  border-radius:8px;
-  font-family:Georgia,serif;
-  font-size:27px;
-  line-height:1;
-  padding-bottom:5px;
+.brandLogo {
+  display:block;
+  width:112px;
+  height:auto;
+  min-width:0;
 }
 
 .brandEdition {
+  flex-shrink:0;
   font-size:12px;
   letter-spacing:0;
   font-weight:500;
@@ -305,6 +299,8 @@ a {
 
 .workspaceFooter {
   display:flex;
+  flex-wrap:wrap;
+  flex-shrink:0;
   align-items:center;
   justify-content:space-between;
   gap:12px;
@@ -313,13 +309,34 @@ a {
   padding:12px 34px 18px;
 }
 
-.workspaceFooter a {
-  white-space:nowrap;
-  color:#8c8c84;
+.persona-attribution {
+  display:inline-flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:center;
+  gap:4px 6px;
+  color:#666;
+  font-size:12px;
+  line-height:1.5;
 }
 
-.workspaceFooter a span {
-  margin-left:4px;
+.persona-attribution > a {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+
+.persona-attribution a, .persona-attribution > span {
+  white-space:nowrap;
+}
+
+.persona-attribution a:hover, .persona-attribution a:focus-visible {
+  text-decoration:underline;
+  text-underline-offset:3px;
+}
+
+.persona-attribution img {
+  flex-shrink:0;
 }
 
 .providerError {
@@ -510,9 +527,6 @@ a {
     justify-content:center;
     text-align:center;
     font-size:11px;
-  }
-  .workspaceFooter a {
-    display:none;
   }
   .setupState {
     padding:32px 15px;

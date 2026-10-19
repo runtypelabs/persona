@@ -34,7 +34,7 @@ root.innerHTML = `
     <div class="header-right"><span class="sample-badge">Sample workspace</span><div class="mode-switch" aria-label="Assistant connection mode"><button data-mode="preview" aria-pressed="true">Preview</button><button data-mode="live" aria-pressed="false" disabled title="Configure a provider to enable Live">Live</button></div><span class="team-avatar" aria-label="Support team">AC</span></div>
   </header>
   <div class="app-stage">
-    <nav class="navigation-rail" aria-label="Workspace navigation"><button class="rail-button active" id="inbox-home" aria-label="Show all conversations" title="Inbox">${icon("inbox")}</button><a class="rail-button rail-help" href="https://persona-chat.dev" target="_blank" rel="noreferrer" aria-label="About Persona" title="Built with Persona">p</a></nav>
+    <nav class="navigation-rail" aria-label="Workspace navigation"><button class="rail-button active" id="inbox-home" aria-label="Show all conversations" title="Inbox">${icon("inbox")}</button></nav>
     <div class="dock-boundary">
       <main id="support-workspace" class="support-workspace">
         <aside class="inbox" aria-label="Support conversations">
@@ -47,7 +47,13 @@ root.innerHTML = `
         <section id="ticket-detail" class="ticket-detail" aria-label="Selected conversation"></section>
       </main>
     </div>
-  </div>`;
+  </div>
+  <footer class="app-footer">
+    <div class="persona-attribution">
+      <a href="https://persona-chat.dev" target="_blank" rel="noreferrer"><img src="/persona-js-icon.svg" width="16" height="16" alt="" />Built with persona.js</a>
+      <span>· by <a href="https://runtype.com" target="_blank" rel="noreferrer">Runtype</a></span>
+    </div>
+  </footer>`;
 
 function matchingTickets() {
   const normalized = query.toLowerCase();
