@@ -8,13 +8,6 @@ import { createAgentExperience } from "./ui";
 import { createStandardBubble } from "./components/message-bubble";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "./types";
 
-const stylesheet = document.createElement("style");
-beforeAll(() => {
-  stylesheet.textContent = readFileSync(resolve(process.cwd(), "src/styles/widget.css"), "utf8");
-  document.head.appendChild(stylesheet);
-});
-afterAll(() => stylesheet.remove());
-
 const createMount = () => {
   const mount = document.createElement("div");
   document.body.appendChild(mount);
@@ -48,6 +41,15 @@ const renderTypingBubble = async (
 };
 
 describe("standalone typing indicator bubble", () => {
+  // Only this suite asserts computed styles. Keeping the full stylesheet out of
+  // the lifecycle suites avoids repeated jsdom style recalculation on updates.
+  const stylesheet = document.createElement("style");
+  beforeAll(() => {
+    stylesheet.textContent = readFileSync(resolve(process.cwd(), "src/styles/widget.css"), "utf8");
+    document.head.appendChild(stylesheet);
+  });
+  afterAll(() => stylesheet.remove());
+
   afterEach(() => {
     document.body.innerHTML = "";
     if (typeof localStorage !== "undefined") localStorage.clear();

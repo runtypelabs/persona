@@ -671,17 +671,44 @@ for (const boundary of ["adjacent", "iteration"] as const) {
       { type: "turn_start", executionId, id: "turn-2", role: "assistant", iteration: 2 },
       ...toolFrames("third", 2),
     ]);
-    await expect(groups).toHaveCount(boundary === "adjacent" ? 1 : 2);
-    await expect.poll(() => page.evaluate(() => {
-      const w = window as unknown as { __summaries: Array<{ ids: string[] }> };
-      return w.__summaries.some(summary => summary.ids.includes("third"));
-    })).toBe(true);
-    expect(await groups.first().evaluate(node => node === (window as unknown as { __firstGroup: Element }).__firstGroup)).toBe(true);
+    await expect(groups).toHaveCount(1);
     if (boundary === "iteration") {
+      const third = page.locator('[data-message-id="tool-third"]');
+      await expect(third).toHaveAttribute("data-activity-state", "done");
+      expect(await third.evaluate(node => node.closest('[data-persona-tool-group]'))).toBeNull();
+      await expect.poll(() => page.evaluate(() => (window as unknown as {
+        __summaries: Array<{ ids: string[]; streaming: boolean; latest: boolean; current: boolean }>;
+      }).__summaries.at(-1))).toEqual({ ids: ["first", "second"], streaming: true, latest: false, current: true });
+      expect(await page.evaluate(() => (window as unknown as { __summaries: Array<{ ids: string[] }> }).__summaries
+        .some(summary => summary.ids.includes("third")))).toBe(false);
+
+      // A singleton keeps its own disclosure until another tool in its iteration forms a group.
+      const thirdHeader = third.locator(":scope > .persona-activity-header");
+      await thirdHeader.click();
+      await expect(thirdHeader).toHaveAttribute("aria-expanded", "true");
+      await third.evaluate(node => {
+        (window as unknown as { __thirdTool: Element }).__thirdTool = node;
+      });
+      await emit(toolFrames("fourth", 2));
+      await expect(groups).toHaveCount(2);
+      await expect(groups.last()).toHaveAttribute("data-activity-state", "done");
+      await expect(groups.last().locator('[data-message-id="tool-third"]')).toHaveCount(1);
+      await expect(groups.last().locator('[data-message-id="tool-fourth"]')).toHaveCount(1);
+      expect(await third.evaluate(node => node === (window as unknown as { __thirdTool: Element }).__thirdTool)).toBe(true);
+      await expect(thirdHeader).toHaveAttribute("aria-expanded", "true");
+      await expect(groups.last().locator(":scope > .persona-activity-header")).toHaveAttribute("aria-expanded", "true");
+      await expect.poll(() => page.evaluate(() => (window as unknown as {
+        __summaries: Array<{ ids: string[]; streaming: boolean; latest: boolean; current: boolean }>;
+      }).__summaries.at(-1))).toEqual({ ids: ["third", "fourth"], streaming: true, latest: true, current: true });
       // Even the first pending emission must have metadata: no temporary merged group.
       expect(await page.evaluate(() => (window as unknown as { __summaries: Array<{ ids: string[] }> }).__summaries
         .some(summary => summary.ids.includes("first") && summary.ids.includes("third")))).toBe(false);
+    } else {
+      await expect.poll(() => page.evaluate(() => (window as unknown as {
+        __summaries: Array<{ ids: string[]; streaming: boolean; latest: boolean; current: boolean }>;
+      }).__summaries.at(-1))).toEqual({ ids: ["first", "second", "third"], streaming: true, latest: true, current: true });
     }
+    expect(await groups.first().evaluate(node => node === (window as unknown as { __firstGroup: Element }).__firstGroup)).toBe(true);
     await emit([{ type: "execution_complete", executionId, kind: "agent", success: true, stopReason: "end_turn" }], true);
     await expect(groups.first()).toHaveAttribute("data-activity-state", "done");
     await expect.poll(() => page.evaluate(() => (window as unknown as {

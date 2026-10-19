@@ -66,7 +66,7 @@ describe.each([false, true])("live expansion updates (initially expanded: %s)", 
       expect(arrow().style.transitionDuration).toBe(duration);
       expect(arrow().style.transitionTimingFunction).toBe(easing);
     };
-    expectState(expanded ? "rotate(90deg)" : "rotate(0deg)", "0ms", "ease-out");
+    expectState(expanded ? "rotate(90deg)" : "rotate(0deg)", "160ms", "ease-out");
 
     // No message changes or toggles after initial setup: update() must repaint
     // cached message wrappers as well as the synthetic group header.
@@ -82,6 +82,6 @@ describe.each([false, true])("live expansion updates (initially expanded: %s)", 
     expectState(expanded ? "rotate(0deg)" : "rotate(90deg)", "300ms", "linear");
 
     controller.update({ expansion: undefined });
-    expectState(expanded ? "rotate(90deg)" : "rotate(0deg)", "0ms", "ease-out");
+    expectState(expanded ? "rotate(90deg)" : "rotate(0deg)", "160ms", "ease-out");
   });
 });
