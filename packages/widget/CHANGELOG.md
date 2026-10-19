@@ -1,5 +1,12 @@
 # @runtypelabs/persona
 
+## 4.29.2
+
+### Patch Changes
+
+- 5db41a2: Fix `connectStream` replay of long tool-heavy transcripts hanging and crashing the tab. While a turn streams, transcript updates now render once per animation frame (user messages, approvals, and pending local tools still apply immediately), unchanged rows stay in place instead of being cloned and re-morphed on every pass, and the session no longer re-sorts the whole transcript on each streamed message. Replay cost is now linear in the number of frames.
+- a5e0e92: Regenerate the Runtype OpenAPI contract types (adds `voice.priorToolResults` to the client chat request).
+
 ## 4.29.1
 
 ### Patch Changes

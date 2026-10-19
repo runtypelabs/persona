@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.29.2
+
+### Patch Changes
+
+- a5e0e92: Add `PHONE_RECEPTIONIST_AGENT`, a server-pinned Sunrise Travel receptionist on PhoneLLM Mini (`phonellm-mini`) with keyless weather and office-hours tools, for the Phone Agent demo.
+
 ## 4.28.2
 
 ### Patch Changes
