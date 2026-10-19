@@ -316,3 +316,117 @@ describe("pure streaming text update coalescing", () => {
     stream.close();
   });
 });
+
+describe("streaming tool update coalescing", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const sendToolPair = (stream: ReturnType<typeof createStreamHarness>, index: number) => {
+    const toolCallId = `call_${index}`;
+    stream.send("tool_start", {
+      executionId: "exec-1",
+      toolCallId,
+      toolName: "get_item",
+      toolType: "mcp",
+      parameters: { id: `item_${index}` },
+      startedAt: new Date().toISOString(),
+    });
+    stream.send("tool_complete", {
+      executionId: "exec-1",
+      toolCallId,
+      toolName: "get_item",
+      success: true,
+      result: `{"id":"item_${index}"}`,
+      executionTime: 12,
+    });
+  };
+
+  const toolRows = (mount: HTMLElement) => mount.querySelectorAll(".persona-tool-bubble").length;
+
+  it("renders a burst of tool frames once per animation frame", async () => {
+    const raf = installRafMock();
+    const stream = createStreamHarness();
+    global.fetch = stream.fetchMock;
+    const saves: AgentWidgetStoredState[] = [];
+    const { mount, controller } = createWidget((state) => saves.push(state));
+    await startTurn(mount);
+    stream.send("execution_start", { kind: "agent", executionId: "exec-1" });
+    await flushMicrotasks();
+    raf.flush();
+    const beforeBurst = saves.length;
+
+    for (let index = 0; index < 5; index += 1) sendToolPair(stream, index);
+    await flushMicrotasks(60);
+
+    expect(toolRows(mount)).toBe(0);
+    expect(saves).toHaveLength(beforeBurst);
+    raf.step();
+    expect(toolRows(mount)).toBe(5);
+    expect(saves).toHaveLength(beforeBurst + 1);
+
+    controller.destroy();
+    stream.close();
+  });
+
+  it("emits assistant:complete for a message that starts and finishes within one frame", async () => {
+    const raf = installRafMock();
+    const stream = createStreamHarness();
+    global.fetch = stream.fetchMock;
+    const { mount, controller } = createWidget(() => {});
+    const completed = vi.fn();
+    controller.on("assistant:complete", completed);
+    await startTurn(mount);
+
+    startText(stream, ["Hello", " world"]);
+    finishText(stream);
+    await flushMicrotasks(60);
+    raf.flush();
+
+    expect(controller.getState().streaming).toBe(false);
+    expect(completed).toHaveBeenCalledTimes(1);
+    expect(completed.mock.calls[0][0].content).toBe("Hello world");
+    controller.destroy();
+  });
+
+  it("leaves unchanged transcript rows in place across render passes", async () => {
+    const raf = installRafMock();
+    const stream = createStreamHarness();
+    global.fetch = stream.fetchMock;
+    const { mount, controller } = createWidget(() => {});
+    await startTurn(mount);
+    stream.send("execution_start", { kind: "agent", executionId: "exec-1" });
+    sendToolPair(stream, 0);
+    await flushMicrotasks(40);
+    raf.flush();
+
+    const firstRow = mount
+      .querySelector<HTMLElement>(".persona-tool-bubble")!
+      .closest<HTMLElement>("[data-wrapper-id]")!;
+    // A marker no render produces: re-morphing the row from the cache strips it.
+    firstRow.setAttribute("data-test-live", "true");
+
+    sendToolPair(stream, 1);
+    await flushMicrotasks(40);
+    raf.flush();
+
+    expect(toolRows(mount)).toBe(2);
+    const rowAfter = mount.querySelector<HTMLElement>(
+      `[data-wrapper-id="${firstRow.getAttribute("data-wrapper-id")}"]`
+    );
+    expect(rowAfter).toBe(firstRow);
+    expect(rowAfter?.getAttribute("data-test-live")).toBe("true");
+    expect(rowAfter?.querySelector(".persona-tool-bubble")).not.toBeNull();
+    controller.destroy();
+    stream.close();
+  });
+});

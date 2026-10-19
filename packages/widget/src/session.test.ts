@@ -226,6 +226,29 @@ describe('AgentWidgetSession - Message Injection', () => {
       expect(messages[0].content).toBe('First message');
       expect(messages[1].content).toBe('Second message');
     });
+
+    it('should re-sort when an update moves a message past its neighbors', () => {
+      session.injectMessage({
+        id: 'a',
+        role: 'user',
+        content: 'A',
+        createdAt: '2025-01-01T00:00:01.000Z'
+      });
+      session.injectMessage({
+        id: 'b',
+        role: 'assistant',
+        content: 'B',
+        createdAt: '2025-01-01T00:00:02.000Z'
+      });
+      session.injectMessage({
+        id: 'a',
+        role: 'user',
+        content: 'A, later',
+        createdAt: '2025-01-01T00:00:03.000Z'
+      });
+
+      expect(messages.map((message) => message.content)).toEqual(['B', 'A, later']);
+    });
   });
 
   describe('backward compatibility', () => {

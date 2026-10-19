@@ -441,8 +441,9 @@ describe("createAgentExperience streaming scroll", () => {
     metrics.setScrollHeight(1080);
     emitStreamingMessage(controller, "Chunk two");
 
-    // Only run the scheduled auto-scroll frame, not the whole animation.
-    raf.step(1);
+    // Run the coalesced render frame and the auto-scroll frame it schedules,
+    // not the whole animation.
+    raf.step(2);
 
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 
@@ -1077,6 +1078,8 @@ describe("createAgentExperience streaming scroll", () => {
     // header of the streaming reply). No handoff.
     metrics.setScrollHeight(1284);
     emitStreamingMessage(controller, "Streaming response");
+    // Streaming updates render on the next animation frame.
+    raf.step(1);
     const streamBubble = scrollContainer!.querySelector<HTMLElement>(
       `[data-message-id="${STREAM_MESSAGE_ID}"]`
     );
@@ -1269,6 +1272,8 @@ describe("createAgentExperience streaming scroll", () => {
     // so the anchor hands off to the block: target = 600 - 16 = 584. This is
     // the stranded case the handoff exists for (tall send / tool prelude).
     emitStreamingMessage(controller, "Streaming response");
+    // Streaming updates render on the next animation frame.
+    raf.step(1);
     const streamBubble = scrollContainer!.querySelector<HTMLElement>(
       `[data-message-id="${STREAM_MESSAGE_ID}"]`
     );
