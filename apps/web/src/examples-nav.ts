@@ -310,6 +310,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     gallery: false,
   },
   {
+    slug: "phone-agent-demo",
+    href: "/phone-agent-demo.html",
+    title: "Phone Agent",
+    blurb: "Low-latency voice receptionist on PhoneLLM Mini, calling a live weather tool.",
+    tier: "start",
+    tags: ["agent", "voice", "tool-use"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "dynamic-form-fields",
     href: "/dynamic-form-fields.html",
     title: "Form Field Reference",
