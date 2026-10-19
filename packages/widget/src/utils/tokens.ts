@@ -587,6 +587,13 @@ export const DEFAULT_SEMANTIC = DEFAULT_SEMANTIC_V4;
 export const DEFAULT_COMPONENTS_V4 = DEFAULT_COMPONENTS_BASE;
 export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
   ...DEFAULT_COMPONENTS_BASE,
+  scrollToBottom: {
+    ...DEFAULT_COMPONENTS_BASE.scrollToBottom,
+    background: 'semantic.colors.surface',
+    foreground: 'semantic.colors.text',
+    border: 'semantic.colors.border',
+    size: '32px',
+  },
   messageActions: {
     background: 'transparent',
     border: 'none',

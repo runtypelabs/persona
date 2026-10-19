@@ -766,6 +766,152 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
+  it.each([false, true])("positions the jump 16px above composer content as it grows (custom: %s)", custom => {
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", persistState: false, launcher: { enabled: false },
+      plugins: custom ? [{ id: "custom-composer", renderComposer: createCustomComposer }] : []
+    });
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const form = footer.querySelector<HTMLElement>("[data-persona-composer-form]")!;
+    const button = getScrollToBottomButton(mount)!;
+    let height = 120;
+    const scale = 0.8;
+    Object.defineProperty(footer, "offsetHeight", { configurable: true, get: () => height });
+    Object.defineProperties(form, {
+      offsetHeight: { configurable: true, get: () => height - 44 },
+      offsetTop: { configurable: true, value: 28 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    vi.spyOn(footer, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, 500, 400, height * scale));
+    vi.spyOn(form, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, 500 + 28 * scale, 400, (height - 44) * scale));
+    resize.trigger();
+    // The transparent 28px inset no longer makes the visible gap 40px.
+    expect(parseFloat(button.style.bottom)).toBeCloseTo(108);
+
+    height = 200; // Multiline text or previews inside the card grow its surface.
+    resize.trigger();
+    expect(parseFloat(button.style.bottom)).toBeCloseTo(188);
+
+    const row = document.createElement("div");
+    footer.prepend(row);
+    Object.defineProperties(row, {
+      offsetHeight: { configurable: true, value: 16 },
+      offsetTop: { configurable: true, value: 8 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    vi.spyOn(row, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, 500 + 8 * scale, 400, 16 * scale));
+    resize.trigger();
+    expect(parseFloat(button.style.bottom)).toBeCloseTo(208);
+    row.hidden = true; // Hidden suggestion hosts can retain CSS box spacing.
+    resize.trigger();
+    expect(parseFloat(button.style.bottom)).toBeCloseTo(188);
+
+    // A completely hidden footer also discards a formerly raised composer.
+    mount.style.setProperty("--persona-composer-lift", "80px");
+    controller.update({ layout: { showFooter: false } });
+    expect(button.style.bottom).toBe("16px");
+    controller.destroy();
+  });
+
+  it("clears attachment rows inside a display:contents composer header", () => {
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", persistState: false, launcher: { enabled: false }
+    });
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const form = footer.querySelector<HTMLElement>("[data-persona-composer-form]")!;
+    const header = document.createElement("div");
+    header.setAttribute("data-persona-composer-header", "");
+    header.style.display = "contents";
+    const attachments = document.createElement("div");
+    header.append(attachments);
+    footer.prepend(header);
+    Object.defineProperty(footer, "offsetHeight", { configurable: true, value: 200 });
+    Object.defineProperties(form, {
+      offsetHeight: { configurable: true, value: 100 },
+      offsetTop: { configurable: true, value: 80 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    Object.defineProperties(attachments, {
+      offsetHeight: { configurable: true, value: 56 },
+      offsetTop: { configurable: true, value: 16 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    vi.spyOn(footer, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 400, 400, 200));
+    vi.spyOn(form, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 480, 400, 100));
+    vi.spyOn(attachments, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 416, 400, 56));
+    resize.trigger();
+    expect(getScrollToBottomButton(mount)!.style.bottom).toBe("200px");
+    attachments.style.visibility = "hidden";
+    resize.trigger();
+    expect(getScrollToBottomButton(mount)!.style.bottom).toBe("136px");
+    controller.destroy();
+  });
+
+  it.each(["anchor-top", "follow", "none"] as const)("ignores composer reserve after layout settles without changing %s reading intent", mode => {
+    const raf = installRafMock();
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", persistState: false, launcher: { enabled: false },
+      features: { scrollBehavior: { mode } }
+    });
+    const body = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+    const messages = mount.querySelector<HTMLElement>(".persona-widget-messages")!;
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const metrics = installScrollMetrics(body, { scrollHeight: 1138, clientHeight: 468 });
+    body.style.paddingBottom = "118px";
+    let contentBottom = 1020;
+    let footerTop = 525.2;
+    Object.defineProperty(messages, "offsetHeight", { configurable: true, get: () => contentBottom });
+    vi.spyOn(body, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, 151.2, 400, 468));
+    vi.spyOn(footer, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, footerTop, 400, 94));
+
+    emitStreamingMessage(controller, "A final answer");
+    raf.flush();
+    body.dispatchEvent(new WheelEvent("wheel", { deltaY: -100 }));
+    metrics.setScrollTop(551.5);
+    body.dispatchEvent(new Event("scroll"));
+    const button = getScrollToBottomButton(mount)!;
+    expect(button.style.display).toBe("");
+
+    // Final actions/disclosure layout shrinks after the render. More than
+    // 24px of scroll range remains, but the whole answer is readable.
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    contentBottom = 937;
+    metrics.setScrollHeight(1055);
+    resize.trigger();
+    raf.flush();
+    expect(button.style.display).toBe("none");
+    expect(metrics.getScrollTop()).toBe(551.5);
+
+    metrics.setScrollTop(510);
+    body.dispatchEvent(new Event("scroll"));
+    expect(button.style.display).toBe("");
+    metrics.setScrollTop(551.5);
+    body.dispatchEvent(new Event("scroll"));
+    expect(button.style.display).toBe("none");
+
+    // A paused reader stays paused: newly hidden content brings the control
+    // back, including content behind the overlay but inside the body box.
+    contentBottom = 976;
+    metrics.setScrollHeight(1094);
+    resize.trigger();
+    raf.flush();
+    expect(button.style.display).toBe("");
+    expect(metrics.getScrollTop()).toBe(551.5);
+
+    // A block composer below the body does not obscure that same content.
+    footerTop = 619.2;
+    resize.trigger();
+    raf.flush();
+    expect(button.style.display).toBe("none");
+    controller.destroy();
+  });
+
   it("hides the transcript affordance when scroll-to-bottom is disabled", () => {
     const raf = installRafMock();
     const mount = createMount();

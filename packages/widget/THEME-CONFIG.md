@@ -1735,10 +1735,10 @@ present rather than dead:
 
 | Token | Default Reference |
 |-------|-------------------|
-| `background` | `components.button.primary.background` |
-| `foreground` | `components.button.primary.foreground` |
-| `border` | `semantic.colors.primary` |
-| `size` | `"40px"` |
+| `background` | V4: `components.button.primary.background`; V5: `semantic.colors.surface` |
+| `foreground` | V4: `components.button.primary.foreground`; V5: `semantic.colors.text` |
+| `border` | V4: `semantic.colors.primary`; V5: `semantic.colors.border` |
+| `size` | V4: `"40px"`; V5: `"32px"` |
 | `borderRadius` | `palette.radius.full` |
 | `shadow` | `palette.shadows.sm` |
 | `padding` | `"0.5rem 0.875rem"` |

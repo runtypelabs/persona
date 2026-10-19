@@ -1491,7 +1491,7 @@ export const createAgentExperience = (
   let attachmentPreviewsContainer: HTMLElement | null = panelElements.attachmentPreviewsContainer;
   container.classList.add("persona-relative");
   body.classList.add("persona-relative");
-  const SCROLL_TO_BOTTOM_EDGE_OFFSET = 12;
+  const SCROLL_TO_BOTTOM_EDGE_OFFSET = 16;
 
   const isScrollToBottomEnabled = () => config.features?.scrollToBottom?.enabled !== false;
   // Default is "anchor-top" (see DEFAULT_WIDGET_CONFIG). This `??` only applies
@@ -1598,11 +1598,33 @@ export const createAgentExperience = (
     parseFloat(mount.style.getPropertyValue("--persona-composer-lift")) ||
     0;
 
+  // Walk offsetParents up to the positioned ancestor (`body` by default) to get a
+  // node's top relative to the scroll content. offsetTop avoids skew from any
+  // in-flight entrance transforms. Mirrors the anchor-top geometry.
+  const offsetTopWithinBody = (el: HTMLElement, ancestor: HTMLElement = body): number => {
+    let top = 0;
+    let node: HTMLElement | null = el;
+    while (node && node !== ancestor) {
+      top += node.offsetTop;
+      node = node.offsetParent as HTMLElement | null;
+    }
+    return top;
+  };
+
   const updateScrollToBottomButtonOffset = () => {
     const footerHidden = footer.style.display === "none";
-    const footerHeight = footerHidden ? 0 : footer.offsetHeight;
-    // Both placements raise the footer, so the affordance clears the lift too.
-    scrollToBottomButton.style.bottom = `${footerHeight + readLiftPx() + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
+    let footerHeight = footerHidden ? 0 : footer.offsetHeight;
+    if (footerHeight > 0) {
+      let contentTop = Infinity;
+      // Clear the visible surface, not the footer's transparent top padding.
+      // Header children also cover the pill's display:contents attachment row.
+      for (const child of footer.querySelectorAll<HTMLElement>(":scope > *, [data-persona-composer-header] > *")) {
+        if (child.hidden || !child.offsetHeight || getComputedStyle(child).visibility === "hidden") continue;
+        contentTop = Math.min(contentTop, offsetTopWithinBody(child, container));
+      }
+      if (contentTop < Infinity) footerHeight -= contentTop - offsetTopWithinBody(footer, container);
+    }
+    scrollToBottomButton.style.bottom = `${footerHeight + (footerHidden ? 0 : readLiftPx()) + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
   };
   updateScrollToBottomButtonOffset();
 
@@ -5351,27 +5373,25 @@ export const createAgentExperience = (
     updateScrollToBottomCountBadge();
   };
 
-  // "Near the latest content", ignoring anchor-spacer air: while a turn is
-  // anchored, the spacer keeps scrollable space below the last message, so
-  // container-bottom distance reads "away" even with the whole reply on
-  // screen (and flickers as the spacer drains). Measure against the real
-  // content bottom instead; the button only appears once content actually
-  // extends below the viewport.
+  // Spacer air and composer reserve are scrollable, but aren't unread content.
+  // Compare the real content bottom with the readable viewport instead. An
+  // overlay footer clips that viewport; a block footer sits below it.
   const isNearLatestContent = () => {
-    const spacerHeight = anchorState?.spacerHeight ?? 0;
-    if (spacerHeight <= 0) return isElementNearBottom(body, BOTTOM_THRESHOLD);
-    const contentHeight = measureContentHeight(spacerHeight);
-    return (
-      contentHeight - body.scrollTop - body.clientHeight <= BOTTOM_THRESHOLD
-    );
+    const contentHeight = measureContentHeight(anchorState?.spacerHeight ?? 0, false);
+    const bodyRect = body.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    const readableHeight = footerRect.height > 0 && footerRect.bottom > bodyRect.top
+      ? Math.min(body.clientHeight, Math.max(0, footerRect.top - bodyRect.top - body.clientTop))
+      : body.clientHeight;
+    return contentHeight - body.scrollTop - readableHeight <= BOTTOM_THRESHOLD;
   };
 
   // Whether the user is currently away from the latest content: drives both
-  // the scroll-to-bottom affordance and the new-messages badge. When following
-  // the bottom (follow mode, or a no-anchor anchor-top fallback turn) that's
-  // "auto-follow paused"; otherwise it's simply "not near the bottom".
+  // the scroll-to-bottom affordance and the new-messages badge. Effective
+  // follow must be paused, and every mode requires actual content below the
+  // readable viewport. Reaching visible content never changes follow intent.
   const isAwayFromLatest = () =>
-    isFollowEffective() ? !autoFollow.isFollowing() : !isNearLatestContent();
+    (!isFollowEffective() || !autoFollow.isFollowing()) && !isNearLatestContent();
 
   // Empty transcript = welcome-only view: there is no "latest message" to
   // follow, jump to, or badge, and bottom-scrolling clips the greeting when
@@ -5512,19 +5532,6 @@ export const createAgentExperience = (
     syncScrollToBottomButton();
   };
 
-  // Walk offsetParents up to `body` (the positioned scroll ancestor) to get a
-  // node's top relative to the scroll content. offsetTop avoids skew from any
-  // in-flight entrance transforms. Mirrors the anchor-top geometry.
-  const offsetTopWithinBody = (el: HTMLElement): number => {
-    let top = 0;
-    let node: HTMLElement | null = el;
-    while (node && node !== body) {
-      top += node.offsetTop;
-      node = node.offsetParent as HTMLElement | null;
-    }
-    return top;
-  };
-
   // Defined here (rather than beside the scroll listeners) because
   // `maybeAnchorToFirstUnread` runs on every render and would otherwise hit
   // these consts in their temporal dead zone on a synchronous first paint.
@@ -5601,17 +5608,18 @@ export const createAgentExperience = (
   // anchor target then sits past maxScrollTop, the ease clamps early, and
   // every transient content dip during streaming bounces the viewport.
   // Layoutless environments (jsdom) measure 0; fall back to the naive value.
-  const measureContentHeight = (previousSpacerHeight: number): number => {
+  const measureContentHeight = (previousSpacerHeight: number, includePadding = true): number => {
     const paddingBottom =
       parseFloat(getComputedStyle(body).paddingBottom) || 0;
     let bottom = 0;
-    for (const child of Array.from(body.children) as HTMLElement[]) {
+    for (const node of body.children) {
+      const child = node as HTMLElement;
       if (child === anchorSpacer || child.offsetHeight === 0) continue;
-      const childBottom = offsetTopWithinBody(child) + child.offsetHeight;
-      if (childBottom > bottom) bottom = childBottom;
+      bottom = Math.max(bottom, offsetTopWithinBody(child) + child.offsetHeight);
     }
     const naive = body.scrollHeight - previousSpacerHeight;
-    return bottom > 0 ? Math.min(bottom + paddingBottom, naive) : naive;
+    const height = bottom > 0 ? Math.min(bottom + paddingBottom, naive) : naive;
+    return includePadding ? height : height - paddingBottom;
   };
 
   // Stream-end spacer trim: the ResizeObserver drain is growth-driven, so it
@@ -5763,6 +5771,7 @@ export const createAgentExperience = (
   // stays constant and nothing jumps).
   const handleContentResize = () => {
     if (isFollowEffective()) {
+      syncScrollToBottomButton();
       if (!autoFollow.isFollowing()) return;
       if (isElementNearBottom(body, 1)) return;
       scheduleAutoScroll(!isStreaming);
@@ -10865,6 +10874,7 @@ export const createAgentExperience = (
   if (typeof ResizeObserver !== "undefined") {
     footerResizeObserver = new ResizeObserver(() => {
       syncComposerOverlayMetrics();
+      syncScrollToBottomButton();
     });
     observeComposerFooter();
     destroyCallbacks.push(() => {
@@ -10936,18 +10946,14 @@ export const createAgentExperience = (
     });
     lastScrollTop = nextLastScrollTop;
 
-    if (action === "resume") {
-      // Drag-selecting downward near the bottom edge auto-scrolls down and
-      // would otherwise read as a resume gesture; keep follow paused while a
-      // transcript selection is active so it isn't yanked mid-drag.
-      if (!hasActiveTranscriptSelection()) {
-        resumeAutoScroll();
-      }
-      return;
-    }
-
-    if (action === "pause") {
+    // Drag-selecting near the bottom can look like a resume gesture. Keep
+    // follow paused during selection, but still refresh content visibility.
+    if (action === "resume" && !hasActiveTranscriptSelection()) {
+      resumeAutoScroll();
+    } else if (action === "pause") {
       pauseAutoScroll();
+    } else {
+      syncScrollToBottomButton();
     }
   };
 
