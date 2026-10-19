@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentWidgetToolCall } from "../types";
-import { summarizeToolActivity, toolActivityLabel, toolActivityIcon, groupActivityIcon } from "./tool-activity-summary";
+import { summarizeToolActivity, toolActivityLabel, toolActivityIcon, groupActivityIcon, resolveToolIcon } from "./tool-activity-summary";
 
 const tool = (name: string, extra: Partial<AgentWidgetToolCall> = {}): AgentWidgetToolCall => ({ id: name, name, status: "complete", ...extra });
 
@@ -50,6 +50,25 @@ describe("semantic tool activity", () => {
     expect(summarizeToolActivity([tool("lookup_order"), tool("lookup_order")])).toBe("Lookup order (2)");
   });
 
+  it("counts completed mixed tools only when compact summaries are requested", () => {
+    const tools = [tool("Read"), tool("read_text_file"), tool("Bash")];
+    expect(summarizeToolActivity(tools, true)).toBe("3 activities");
+    expect(summarizeToolActivity(tools)).toBe("Read files, ran commands");
+    expect(summarizeToolActivity([tool("Read"), tool("read_text_file")], true)).toBe("File reads (2)");
+    expect(summarizeToolActivity([tool("Read")], true)).toBe("Read files");
+    expect(summarizeToolActivity([], true)).toBe("");
+  });
+
+  it.each([
+    { status: "running" as const }, { status: "pending" as const },
+    { approvalStatus: "pending" as const }, { approvalStatus: "denied" as const }, { approvalStatus: "timeout" as const },
+    { success: false }, { interrupted: true }, { superseded: true }, { error: "Tool failed" },
+  ])("preserves active and attention summaries when compact summaries are requested: %o", state => {
+    const tools = [tool("Read"), tool("Bash", state)];
+    expect(summarizeToolActivity(tools, true)).toBe(summarizeToolActivity(tools));
+    expect(summarizeToolActivity(tools, true)).not.toBe("2 activities");
+  });
+
   it("retains all attention states in counted homogeneous groups", () => {
     expect(summarizeToolActivity([tool("web_search"), tool("WebSearch", { success: false })])).toBe("Web searches (2) · Failed");
     expect(summarizeToolActivity([tool("Read", { approvalStatus: "pending" }), tool("Read", { approvalStatus: "denied" })])).toBe("File reads (2) · Waiting for approval · Approval denied");
@@ -78,11 +97,11 @@ describe("semantic tool activity", () => {
  ])("maps the completed icon for %s without guessing", (name, icon) => expect(toolActivityIcon(tool(name))).toBe(icon));
 
  it("keeps homogeneous group icons and uses square-text for mixed categories", () => {
-   const config = { toolCall: { iconName: toolActivityIcon } };
+   const config = {};
    expect(groupActivityIcon([tool("web_search"), tool("WebSearch")], config)).toBe("globe");
    expect(groupActivityIcon([tool("web_search"), tool("Read")], config)).toBe("square-text");
    expect(groupActivityIcon([tool("web_search"), tool("web_fetch")], config)).toBe("square-text");
-   expect(groupActivityIcon([tool("web_search"), tool("Read")], {})).toBeUndefined();
+   expect(groupActivityIcon([], config)).toBeUndefined();
  });
 
  it("keeps custom icon overrides and neutral unknown-tool groups", () => {
@@ -90,4 +109,14 @@ describe("semantic tool activity", () => {
    expect(groupActivityIcon(tools, { toolCall: { iconName: toolActivityIcon } })).toBe("square-text");
    expect(groupActivityIcon(tools, { toolCall: { iconName: "check" } })).toBe("check");
    expect(groupActivityIcon([tool("Read"), tool("read_text_file")], { toolCall: { iconName: () => "pencil" } })).toBe("pencil");
+   expect(groupActivityIcon([tool("web_search"), tool("Read")], { toolCall: { iconName: () => "pencil" } })).toBe("square-text");
+   expect(groupActivityIcon([tool("Read"), tool("read_text_file")], { toolCall: { iconName: () => undefined } })).toBe("file-text");
+ });
+
+ it("resolves mapped defaults, callback fallbacks and explicit checks consistently", () => {
+   expect(resolveToolIcon(tool("Read"), {})).toBe("file-text");
+   expect(resolveToolIcon(tool("lookup"), {})).toBe("square-text");
+   expect(resolveToolIcon(tool("Read"), { toolCall: { iconName: () => undefined } })).toBe("file-text");
+   expect(resolveToolIcon(tool("Read"), { toolCall: { iconName: "check" } })).toBe("check");
+   expect(resolveToolIcon(tool("Read"), { toolCall: { iconName: () => "check" } })).toBe("check");
  });

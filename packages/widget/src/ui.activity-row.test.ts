@@ -213,3 +213,27 @@ it('changes reasoning layout and appearance live without resetting manual disclo
   expect(header('r1').parentElement?.classList.contains('persona-activity-row')).toBe(true);
   expect(header('r1').getAttribute('aria-expanded')).toBe('true');
 });
+
+it.each([false, true])('updates group appearance across layouts without losing summaries or disclosure state (V5 %s)', v5Defaults => {
+  start(v5Defaults, { grouped: true, groupedMode: 'collapsible', autoExpand: false, autoCollapseDelay: false });
+  controller.update({ toolCall: { renderGroupedSummary: () => {
+    const label = document.createElement('em'); label.textContent = 'Host activity'; return label;
+  } } });
+  inject('tool1', 'complete', ['one']); inject('tool2', 'complete', ['two']);
+  header('tool-group-tool1').click();
+  if (header('tool1').getAttribute('aria-expanded') === 'false') header('tool1').click();
+  for (const groupedMode of ['collapsible', 'stack'] as const) {
+    for (const groupAppearance of ['inset', 'plain', undefined] as const) {
+      controller.update({ features: { toolCallDisplay: { groupedMode, groupAppearance } } });
+      const group = mount.querySelector<HTMLElement>('[data-persona-tool-group]')!;
+      expect(group.parentElement?.dataset.groupAppearance).toBe(groupAppearance ?? (v5Defaults ? 'inset' : undefined));
+      expect(group.querySelector('em')?.textContent).toBe('Host activity');
+      expect(group.querySelector('[data-persona-tool-group-stack]')).not.toBeNull();
+      expect(header('tool1').getAttribute('aria-expanded')).toBe('true');
+      if (groupedMode === 'collapsible') expect(header('tool-group-tool1').getAttribute('aria-expanded')).toBe('true');
+    }
+  }
+  controller.update({ features: { toolCallDisplay: { groupedMode: 'summary', groupAppearance: 'inset' } } });
+  expect(mount.querySelector('[data-persona-tool-group-stack]')).toBeNull();
+  expect(mount.querySelector('[data-persona-tool-group] em')?.textContent).toBe('Host activity');
+});

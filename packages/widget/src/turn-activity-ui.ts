@@ -171,7 +171,7 @@ export function render(options: ActivityGroupOptions, deps: TurnActivityDependen
     // V5 emits ordinary activity defaults; authored spacing takes precedence.
     // The injected checker shares activity-ui's initialized provenance service.
     for (const [token, value] of [["transcriptGap", "16px"], ["bodyPadding", "16px 0"],
-      ["groupPadding", "2px 0"], ["groupGap", "2px"], ["rowHeight", "28px"]]) {
+      ["groupIndent", "16px"], ["groupPadding", "2px 0"], ["groupGap", "2px"], ["rowHeight", "28px"]]) {
       if (!deps.hasExplicitThemeStyle(config, `activity.${token}`)) {
         row.bubble.style.setProperty(`--persona-components-activity-${token}`, value);
       }

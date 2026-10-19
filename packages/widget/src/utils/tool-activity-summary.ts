@@ -27,7 +27,7 @@ const aliases = new Map(categories.flatMap(([names, ...labels]) =>
 
 const humanize = (name: string) => {
   const words = name.replace(/([a-z\d])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/\s+/g, " ").toLowerCase();
-  return words.charAt(0).toUpperCase() + words.slice(1);
+  return words[0].toUpperCase() + words.slice(1);
 };
 const labels = (tool: AgentWidgetToolCall) => {
   const name = tool.name?.trim() || "tool";
@@ -37,16 +37,15 @@ const labels = (tool: AgentWidgetToolCall) => {
 /** Exact-name categories keep unfamiliar tools neutral. */
 export const toolActivityIcon = (tool: AgentWidgetToolCall): string => labels(tool)[3] ?? "square-text";
 
-/** The host can select a registered icon per tool without replacing its renderer. */
-export const resolveToolIcon = (tool: AgentWidgetToolCall, config: AgentWidgetConfig): string | undefined => {
+/** Host overrides fall back to the same mapped icon on every activity surface. */
+export const resolveToolIcon = (tool: AgentWidgetToolCall, config: AgentWidgetConfig): string => {
   const icon = config.toolCall?.iconName;
-  return typeof icon === "function" ? icon(tool) : icon;
+  return (typeof icon === "function" ? icon(tool) : icon) ?? toolActivityIcon(tool);
 };
 
 export function groupActivityIcon(tools: AgentWidgetToolCall[], config: AgentWidgetConfig): string | undefined {
   if (typeof config.toolCall?.iconName === "string") return config.toolCall.iconName;
   const icons = tools.map(tool => resolveToolIcon(tool, config));
-  if (!icons.some(Boolean)) return;
   return tools.every((tool, index) => labels(tool)[0] === labels(tools[0])[0] && icons[index] === icons[0]) ? icons[0] : "square-text";
 }
 
@@ -73,17 +72,25 @@ export const toolActivityLabel = (tool: AgentWidgetToolCall): string => {
 };
 
 /** Stable first-occurrence categories; attention survives deduplication and truncation. */
-export function summarizeToolActivity(tools: AgentWidgetToolCall[]): string {
+export function summarizeToolActivity(tools: AgentWidgetToolCall[], compactCompleted?: boolean): string {
   const groups = new Map<string, AgentWidgetToolCall>();
   for (const tool of tools) {
+    if (tool.status !== "complete" || attention(tool) || tool.error) compactCompleted = false;
     const key = labels(tool)[0];
     const previous = groups.get(key);
     // Retain the first active/attention representative for each category.
     if (!previous || previous.status === "complete" && !attention(previous)) groups.set(key, tool);
   }
-  const phrases = [...groups.values()].slice(0, 3).map(activityLabel);
-  if (groups.size > 3) phrases.push(`and ${groups.size - 3} other activit${groups.size === 4 ? "y" : "ies"}`);
-  let summary = tools.length > 1 && groups.size === 1 ? `${labels(tools[0])[2]} (${tools.length})` : phrases.map((phrase, index) => index ? phrase.charAt(0).toLowerCase() + phrase.slice(1) : phrase).join(", ");
+  // Completed mixed batches need a count; active and attention summaries keep
+  // their descriptive phrases and every status suffix.
+  if (compactCompleted && groups.size > 1) {
+    return `${tools.length} activities`;
+  }
+  let summary = tools.length > 1 && groups.size === 1 ? `${labels(tools[0])[2]} (${tools.length})` : [...groups.values()].slice(0, 3).map((tool, index) => {
+    const phrase = activityLabel(tool);
+    return index ? phrase[0].toLowerCase() + phrase.slice(1) : phrase;
+  }).join(", ");
+  if (groups.size > 3) summary += `, and ${groups.size - 3} other activit${groups.size === 4 ? "y" : "ies"}`;
   for (const [key, value, label] of states) if (tools.some(tool => tool[key] === value)) summary += ` · ${label}`;
   return summary;
 }

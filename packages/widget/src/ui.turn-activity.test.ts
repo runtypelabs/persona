@@ -73,6 +73,10 @@ it("keeps a manual close/open choice through streaming and completion", async ()
 it.each([
   ["instant", false], ["height", false], ["instant", true], ["height", true],
 ] as const)("anchors the turn header through %s collapse (reader scrolled: %s)", async (animation, readerScrolled) => {
+  // Vitest's global performance and JSDOM frame timestamps can have different
+  // origins. Match the browser's shared clock so the 220ms ease stays bounded.
+  const requestFrame = globalThis.requestAnimationFrame;
+  vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(callback => requestFrame(() => callback(performance.now())));
   await setup({ expansion: { animation, duration: 160 } });
   const body = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
   Object.defineProperties(body, {
@@ -447,7 +451,7 @@ it.each([false, true])("separates outer turn spacing from compact nested groups 
   const turn = mount.querySelector<HTMLElement>('[data-persona-turn-activity]')!;
   const body = turn.querySelector<HTMLElement>(":scope > .persona-turn-activity-body")!;
   expect([...body.children].map(row => (row as HTMLElement).dataset.wrapperId)).toEqual(["before-batch", "tool-group-single-search", "after-batch"]);
-  for (const [token, expected] of [["transcriptGap", "16px"], ["bodyPadding", "16px 0"], ["groupGap", "2px"], ["groupPadding", "2px 0"], ["rowHeight", "28px"]]) {
+  for (const [token, expected] of [["transcriptGap", "16px"], ["bodyPadding", "16px 0"], ["groupIndent", "16px"], ["groupGap", "2px"], ["groupPadding", "2px 0"], ["rowHeight", "28px"]]) {
     expect(turn.style.getPropertyValue(`--persona-components-activity-${token}`)).toBe(expected);
   }
   const group = body.querySelector('[data-persona-tool-group]')!;
@@ -459,15 +463,33 @@ it.each([false, true])("separates outer turn spacing from compact nested groups 
 });
 
 it("preserves authored outer and nested spacing, then restores defaults when cleared", async () => {
-  await setup({ theme: { components: { activity: { transcriptGap: "19px", bodyPadding: "17px 0", groupGap: "3px", groupPadding: "4px 0", rowHeight: "36px" } } } });
+  await setup({ theme: { components: { activity: { transcriptGap: "19px", bodyPadding: "17px 0", groupIndent: "0px", groupGap: "3px", groupPadding: "4px 0", rowHeight: "36px" } } } });
   inject(message("authored-spacing"));
   const turn = () => mount.querySelector<HTMLElement>('[data-persona-turn-activity]')!;
-  for (const token of ["transcriptGap", "bodyPadding", "groupGap", "groupPadding", "rowHeight"]) {
+  for (const token of ["transcriptGap", "bodyPadding", "groupIndent", "groupGap", "groupPadding", "rowHeight"]) {
     expect(turn().style.getPropertyValue(`--persona-components-activity-${token}`)).toBe("");
   }
-  controller.update({ theme: { components: { activity: { transcriptGap: undefined, bodyPadding: undefined, groupGap: undefined, groupPadding: undefined, rowHeight: undefined } } } });
+  controller.update({ theme: { components: { activity: { transcriptGap: undefined, bodyPadding: undefined, groupIndent: undefined, groupGap: undefined, groupPadding: undefined, rowHeight: undefined } } } });
   expect(turn().style.getPropertyValue("--persona-components-activity-transcriptGap")).toBe("16px");
   expect(turn().style.getPropertyValue("--persona-components-activity-groupGap")).toBe("2px");
+  expect(turn().style.getPropertyValue("--persona-components-activity-groupIndent")).toBe("16px");
+});
+
+it.each(["plain", "inset"] as const)("retains per-kind %s group overrides below scoped turn defaults", async groupAppearance => {
+  await setup({ features: { toolCallDisplay: { groupAppearance } }, theme: { components: {
+    activity: { groupIndent: "20px", groupGap: "4px", groupPadding: "6px 0" },
+    toolBubble: { groupIndent: "0px", groupGap: "0px", groupPadding: "0px" },
+  } } });
+  for (const id of ["kind-one", "kind-two"]) inject({ ...message(id), variant: "tool", toolCall: { id, name: "Read", status: "complete" } });
+  const turn = mount.querySelector<HTMLElement>('[data-persona-turn-activity]')!;
+  expect(turn.querySelector<HTMLElement>('[data-persona-tool-group-row]')?.dataset.groupAppearance).toBe(groupAppearance);
+  for (const field of ["groupIndent", "groupGap", "groupPadding"]) {
+    expect(mount.style.getPropertyValue(`--persona-components-toolBubble-${field}`)).toBe("0px");
+    expect(turn.style.getPropertyValue(`--persona-components-activity-${field}`)).toBe("");
+  }
+  controller.update({ theme: { components: { activity: { groupIndent: undefined, groupGap: undefined, groupPadding: undefined } } } });
+  expect(mount.querySelector<HTMLElement>('[data-persona-turn-activity]')!.style.getPropertyValue("--persona-components-activity-groupIndent")).toBe("16px");
+  expect(mount.style.getPropertyValue("--persona-components-toolBubble-groupIndent")).toBe("0px");
 });
 
 const iconFor = (id: string) => mount.querySelector<HTMLElement>(`[data-message-id="${id}"] > button > .persona-activity-icon`);
@@ -476,19 +498,20 @@ const toolMessage = (id: string, name: string, extra: Partial<NonNullable<AgentW
   ...message(id), variant: "tool", toolCall: { id, name, status: "complete", ...extra },
 });
 
-it("uses muted semantic completion icons only in classified enabled turn activity", async () => {
-  await setup({ features: { toolCallDisplay: { grouped: false, iconVisibility: "always" } } });
+it.each([false, true])("uses mapped completion icons inside and outside turn activity (V5 %s)", async v5Defaults => {
+  await setup({ future: { v5Defaults }, features: { toolCallDisplay: { variant: "row", grouped: false, iconVisibility: "always" } } });
   inject(toolMessage("search", "web_search"));
   expect(iconFor("search")?.innerHTML).toBe(iconMarkup("globe"));
   expect(iconFor("search")?.style.color).toBe("inherit");
   inject({ ...toolMessage("outside", "web_search"), turnActivity: undefined });
-  expect(iconFor("outside")?.innerHTML).toBe(iconMarkup("check"));
+  expect(iconFor("outside")?.innerHTML).toBe(iconMarkup("globe"));
+  expect(iconFor("outside")?.style.color).toBe("inherit");
   controller.update({ turnActivity: { enabled: false } });
-  expect(iconFor("search")?.innerHTML).toBe(iconMarkup("check"));
+  expect(iconFor("search")?.innerHTML).toBe(iconMarkup("globe"));
 });
 
-it("resolves group icons by category and preserves custom summary content", async () => {
-  await setup({ toolCall: { renderGroupedSummary: () => {
+it.each([[false, false], [false, true], [true, false], [true, true]])("resolves group icons and preserves custom summaries (V5 %s, turn %s)", async (v5Defaults, enabled) => {
+  await setup({ future: { v5Defaults }, turnActivity: { enabled }, features: { toolCallDisplay: { variant: "row", grouped: true, groupedMode: "collapsible", iconVisibility: "always", groupIconVisibility: "always" } }, toolCall: { renderGroupedSummary: () => {
     const custom = document.createElement("span"); custom.dataset.customSummary = "true"; custom.textContent = "Custom batch"; return custom;
   } } });
   inject(toolMessage("one", "web_search")); inject(toolMessage("two", "WebSearch"));
@@ -530,6 +553,7 @@ it.each(["active", "never"] as const)("keeps completion icon visibility %s autho
 });
 
 it.each([
+  [{ status: "pending" }, "circle", "pending"],
   [{ status: "running" }, "loader-circle", "running"],
   [{ success: false }, "x", "error"],
   [{ interrupted: true }, "x", "interrupted"],
@@ -591,7 +615,7 @@ it("projects the sole running action into a stable batch header and restores agg
   inject(tool("search", "web_search", "complete"));
   expect(original.textContent?.replace(/\s/g, " ")).toContain("Testing the example");
   inject(tool("parallel", "Bash", "complete"));
-  expect(original.textContent?.replace(/\s/g, " ")).toContain("Read files, searched the web, ran commands");
+  expect(original.textContent?.replace(/\s/g, " ")).toContain("3 activities");
   expect(batch()).toBe(original);
 });
 

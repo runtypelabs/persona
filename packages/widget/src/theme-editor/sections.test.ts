@@ -514,6 +514,9 @@ it('offers collapsible groups and explicit iteration boundaries in preferences',
   const fields = getThemeEditorTabs().flatMap(tab => tab.sections).flatMap(section => section.fields);
   expect(fields.find(field => field.path === 'features.toolCallDisplay.groupedMode')?.options?.map(option => option.value)).toEqual(['stack', 'summary', 'collapsible']);
   expect(fields.find(field => field.path === 'features.toolCallDisplay.groupBoundary')?.options?.map(option => option.value)).toEqual(['adjacent', 'iteration']);
+  const appearance = fields.find(field => field.path === 'features.toolCallDisplay.groupAppearance')!;
+  expect(appearance.options?.map(option => option.value)).toEqual(['plain', 'inset']);
+  expect(appearance.unsettable).toBe(true);
   expect(fields.some(field => field.path === 'features.toolCallDisplay.groupIconVisibility')).toBe(false);
 });
 

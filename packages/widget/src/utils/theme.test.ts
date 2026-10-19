@@ -1534,7 +1534,7 @@ describe.each([false, true])('welcome typography defaults (V5: %s)', (v5Defaults
 describe.each([false, true])('activity aliases (V5 %s)', v5Defaults => {
   it('emits versioned spacing and preserves independent spacing overrides', () => {
     const defaults = themeToCssVariables(getActiveTheme({ future: { v5Defaults } }));
-    const expected = { indent: '0px', groupIndent: '0px', groupGap: '0px', groupPadding: '0px', transcriptGap: '0px', responseGap: '12px', bodyPadding: '4px 0', bodyFontWeight: '400', sectionGap: '8px' };
+    const expected = { indent: '0px', groupIndent: '16px', groupGap: '2px', groupPadding: '2px 0', transcriptGap: '0px', responseGap: '12px', bodyPadding: '4px 0', bodyFontWeight: '400', sectionGap: '8px' };
     for (const [key, value] of Object.entries(expected)) {
       expect(defaults[`--persona-components-activity-${key}`]).toBe(v5Defaults ? value : undefined);
     }
@@ -1543,6 +1543,14 @@ describe.each([false, true])('activity aliases (V5 %s)', v5Defaults => {
     for (const [key, value] of Object.entries(activity)) {
       expect(overridden[`--persona-components-activity-${key}`]).toBe(value);
     }
+  });
+  it('keeps shared and per-kind group geometry independent, including zero overrides', () => {
+    const values = { groupIndent: '0px', groupGap: '0px', groupPadding: '0px' };
+    const defaults = themeToCssVariables(getActiveTheme({ future: { v5Defaults }, theme: { components: {
+      activity: { groupIndent: '20px', groupGap: '4px', groupPadding: '6px 0' }, toolBubble: values,
+    } } }));
+    for (const [field, value] of Object.entries(values)) expect(defaults[`--persona-components-toolBubble-${field}`]).toBe(value);
+    expect(defaults['--persona-components-activity-groupIndent']).toBe('20px');
   });
   it('keeps legacy values usable while preferring explicit activity tokens', () => {
     const vars = (activity?: { labelSize?: string; bodySurface?: string }) => themeToCssVariables(getActiveTheme({ future: { v5Defaults }, theme: { components: {

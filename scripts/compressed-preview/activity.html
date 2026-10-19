@@ -23,6 +23,22 @@
     <section><h2>20px · configured</h2><div id="header-configured" class="widget" style="height:170px"></div></section>
   </div>
 </section>
+<section id="group-hierarchy-comparison" style="margin:28px 0">
+  <h2>Group hierarchy and summaries</h2>
+  <p>The same fixed, keyless history in both views: a mixed three-tool batch, two file reads, and a direct singleton. Expand a child to inspect its details. These controls affect only this comparison.</p>
+  <div class="controls">
+    <label>Compare <select id="hierarchy-comparison"><option value="appearance">Indentation vs inset line</option><option value="spacing">Summary and spacing</option></select></label>
+    <label>Comparison layout <select id="hierarchy-mode"><option value="collapsible">Collapsible groups</option><option value="stack">Stack with children</option></select></label>
+    <label><input id="hierarchy-turn" type="checkbox" checked>Inside turn activity</label>
+    <label><input id="hierarchy-animation" type="checkbox" checked>Default expansion (160 ms)</label>
+    <label>Comparison spacing <select id="hierarchy-spacing"><option value="">Default</option><option value="shared">Shared padding · 24px indent · 6px 8px padding</option><option value="tool">Tool override · 16px indent · 2px 4px padding</option><option value="zero">Zero indent</option></select></label>
+  </div>
+  <div class="grid">
+    <section><h2 id="hierarchy-previous-title">Plain · indentation only</h2><p id="hierarchy-previous-description" class="explanation">Default 16px child indent, 2px gaps and 2px 0 padding.</p><div id="hierarchy-previous" class="widget" style="height:660px"></div></section>
+    <section><h2 id="hierarchy-proposed-title">Inset · V5 default</h2><p id="hierarchy-proposed-description" class="explanation">The V5 default, with no appearance override: one subtle line beside expanded children.</p><div id="hierarchy-proposed" class="widget" style="height:660px"></div></section>
+  </div>
+  <div id="hierarchy-ready" class="context" role="status">Loading comparison…</div>
+</section>
 <section id="live-tester">
   <h2>Live agent</h2>
   <p id="live-description"></p>
@@ -63,6 +79,18 @@
 <p>Overflow controls update existing history immediately. Each tool Request and Response scrolls separately. Only edges with hidden content fade; labels, copy buttons and focus outlines stay clear. Enable long mocks before a run, then compare shared caps, per-kind overrides, no fades and unlimited content. The compatibility reasoning height wins over theme caps when set.</p>
 <p>Panel theme controls update existing tools and reasoning immediately, including live-agent history, without sending another request. Choose reasoning Row + Panel to compare all fields. Component overrides change only their listed properties; the other properties stay shared. Plain/inset reasoning, approval details, and outer cards keep their own appearance.</p>
 <p>Rendering and summary choices apply to the live agent, runnable mocks, and their saved history. The completion icon comparison keeps fixed settings. The default group summary follows the current action inside turn activity, except stacks; other groups keep their aggregate. Cards keep their original header.</p>
+<section id="completion-icon-comparison" style="margin:28px 0">
+  <h2>Completion icon defaults</h2>
+  <p>The same fixed, keyless history: web searches keep their globe, an unfamiliar tool and a mixed file/command group use square-text. Expand groups to inspect child icons. Compare the mapped default with an explicit check override, inside or outside turn activity and with either version's defaults.</p>
+  <div class="controls">
+    <label><input id="completion-turn" type="checkbox" checked>Inside turn activity</label>
+    <label><input id="completion-v5" type="checkbox" checked>V5 defaults</label>
+  </div>
+  <div class="grid">
+    <section><h2>Mapped · default</h2><div id="completion-icons" class="widget"></div></section>
+    <section><h2>Check · explicit override</h2><div id="completion-checks" class="widget"></div></section>
+  </div>
+</section>
 <h2 style="margin-top:28px">Mocked comparisons</h2>
 <div class="controls">
   <button id="run" disabled>Run all</button>
@@ -74,7 +102,7 @@
   <label>Label cycle <select id="duration"><option value="1800">1.8 seconds</option><option value="3600">3.6 seconds</option></select></label>
   <label>Elapsed timing <select id="timing"><option value="none">Off (default)</option><option value="tools">Per tool</option><option value="group">Group</option><option value="all">Group and tools</option></select></label>
   <label>Mock tool time <select id="tool-time"><option value="700">700 ms</option><option value="2400">2.4 seconds</option><option value="12000">12 seconds</option></select></label>
-  <label>Expansion <select id="expansion"><option value="instant">Instant</option><option value="height">Height</option></select></label>
+  <label>Expansion <select id="expansion"><option value="default">Version default (V5 height / V4 instant)</option><option value="instant">Instant</option><option value="height">Height</option></select></label>
   <label>Expansion duration <select id="expansion-duration"><option value="90">90 ms</option><option value="120">120 ms</option><option value="150">150 ms</option><option value="160" selected>160 ms</option><option value="180">180 ms</option><option value="250">250 ms</option><option value="300">300 ms</option><option value="600">600 ms</option><option value="1200">1.2 seconds</option></select></label>
   <label>Expansion easing <select id="expansion-easing"><option value="ease-out">Ease out</option><option value="ease-in-out">Ease in/out</option><option value="linear">Linear</option></select></label>
   <label><input id="auto-expand" type="checkbox">Auto expand/collapse tools</label>
@@ -85,7 +113,6 @@
   <section><h2>Adjacent groups</h2><p class="explanation">One group stays working during the pauses between batches.</p><div id="adjacent" class="widget"></div><div id="adjacent-phase" class="phase" role="status">Ready to run</div><div id="adjacent-context" class="context">Summary context appears here when tools arrive.</div></section>
   <section><h2>Iteration groups</h2><p class="explanation">Two two-tool groups and one direct tool row. The second pair runs in parallel; each iteration finishes independently.</p><div id="iteration" class="widget"></div><div id="iteration-phase" class="phase" role="status">Ready to run</div><div id="iteration-context" class="context">Summary context appears here when tools arrive.</div></section>
   <section><h2>Whole-turn activity · opt in</h2><label><input id="mock-turn" type="checkbox" checked>Turn activity for this mock</label><p class="explanation">Compare the same progress and tools inside or outside the turn disclosure. The final answer stays outside.</p><div id="turn" class="widget"></div><div id="turn-phase" class="phase" role="status">Ready to run</div><div id="turn-context" class="context">Explicit block identities classify progress and final answers.</div></section>
-  <section><h2>Completion icon defaults</h2><p class="explanation">Fixed, read-only comparison: web searches keep their globe; an unfamiliar tool and a mixed file/command group use square-text. Expand the groups to compare child icons. Controls above apply to the other widgets.</p><div id="completion-icons" class="widget"></div></section>
 </div>
 <p id="ready" role="status">Loading the widgets…</p>
 <details open><summary>What to check</summary><ul>
@@ -103,7 +130,7 @@
 <li>“Custom summaries” uses all three context flags to show a custom working label for the latest group in this run. Earlier iteration groups stay done.</li>
 <li>Change the label animation before or during a run. Thinking, individual tools, and running groups share the selected style. Custom summaries own their appearance.</li>
 <li>Enable Long reasoning before a mock run, then open its reasoning details. Switch Shared overflow live between the V5 default, a custom cap, no fades, and Unlimited. Set per-kind overflow overrides to compare independent caps and fades; enable Long tool request/response to test each section separately. Reasoning compatibility height remains an explicit cap override. Check Plain/Inset/Panel and Row/Card, scroll the trace with the keyboard, and toggle it during height motion.</li>
-<li>Choose Height expansion, then open/close a group or child tool. Reverse it mid-motion: the transition starts from its current height. Headers stay in place while the inner content moves down 8 pixels when opening and up when closing, with a subtle fade; streamed details keep updating. Longer durations make this easier to inspect.</li>
+<li>The version default uses height expansion in V5 and instant disclosure in V4. Choose an explicit expansion override, then open/close a group or child tool. Reverse it mid-motion: the transition starts from its current height. Headers stay in place while the inner content moves down 8 pixels when opening and up when closing, with a subtle fade; streamed details keep updating. Longer durations make this easier to inspect.</li>
 <li>Change expansion settings mid-transition to settle immediately. Enable auto expand/collapse before a new run to check automatic tool transitions. Reduced motion makes all disclosures instant.</li>
 <li>“Custom pulse” uses the loading-label hook and the Web Animations API. Reduced motion disables loading animations.</li>
 <li>Choose a Thinking icon before or during a run. Custom icons stay still by default; icon animation is independent of the text effect. The diamond is registered through the public icon registry.</li>
@@ -129,16 +156,21 @@ const iconTools = [
   agentMetadata:{executionId:'icon-comparison', iteration},
   toolCall:{id, name, status:'complete', success:true, result:'Complete'},
 }));
-const iconPreview = AgentWidget.initAgentWidget({target:'#completion-icons', config:{
-  persistState:false, future:{v5Defaults:true}, launcher:{enabled:false,fullHeight:true},
+const completionTurn = document.querySelector('#completion-turn'), completionV5 = document.querySelector('#completion-v5');
+const completionDisplay = () => ({
+  future:{v5Defaults:completionV5.checked}, turnActivity:{enabled:completionTurn.checked},
+  features:{toolCallDisplay:{layout:'row',grouped:true,groupedMode:'collapsible',groupBoundary:'iteration',iconVisibility:'always',groupIconVisibility:'always',autoExpand:false,autoCollapseDelay:false}},
+});
+const iconPreviews = ['icons', 'checks'].map(kind => AgentWidget.initAgentWidget({target:'#completion-' + kind, config:{
+  persistState:false, launcher:{enabled:false,fullHeight:true},
   layout:{showHeader:false,showFooter:false}, voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
-  welcome:{variant:'none'}, turnActivity:{enabled:true}, initialMessages:[
+  welcome:{variant:'none'}, composer:{inputDisabled:true}, toolCall:{iconName:kind === 'checks' ? 'check' : undefined}, initialMessages:[
     {id:'icon-request',role:'user',content:'Compare the default tool icons.',createdAt:'2026-01-01T00:00:00Z'},
-    ...iconTools,
-    {id:'icon-answer',role:'assistant',content:'Known tools keep their own icons; unfamiliar tools and mixed groups use square-text.',createdAt:'2026-01-01T00:00:01Z'},
+    ...structuredClone(iconTools),
+    {id:'icon-answer',role:'assistant',content:'Compare the completed group and child icons.',createdAt:'2026-01-01T00:00:01Z'},
   ],
-  features:{toolCallDisplay:{groupBoundary:'iteration',iconVisibility:'always',groupIconVisibility:'always'}},
-}});
+  ...completionDisplay(),
+}}));
 const headerPreviews = ['default', 'configured'].map(size => AgentWidget.initAgentWidget({
   target:'#header-' + size,
   config:{
@@ -148,10 +180,85 @@ const headerPreviews = ['default', 'configured'].map(size => AgentWidget.initAge
     welcome:{variant:'none'}, voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
   },
 }));
-iconPreview.ready.then(() => {
-  iconPreview.update({layout:{showFooter:false}});
-  const disclosure = document.querySelector('#completion-icons [data-persona-turn-activity] > button');
-  if (disclosure?.getAttribute('aria-expanded') === 'false') disclosure.click();
+function openCompletionTurns() {
+  for (const disclosure of document.querySelectorAll('#completion-icon-comparison [data-persona-turn-activity] > button')) {
+    if (disclosure.getAttribute('aria-expanded') === 'false') disclosure.click();
+  }
+}
+Promise.all(iconPreviews.map(handle => handle.ready)).then(openCompletionTurns);
+for (const input of [completionTurn, completionV5]) input.addEventListener('change', () => {
+  for (const handle of iconPreviews) handle.update(completionDisplay());
+  requestAnimationFrame(openCompletionTurns);
+});
+// Independent fixed history: no provider request or live-tester control changes.
+const hierarchyMessages = [
+  {id:'hierarchy-request',role:'user',content:'Inspect the source and check the fix.',createdAt:'2026-01-01T00:00:00Z'},
+  ...[
+    ['read-source', 'Read', 1, 'Read source', {path:'src/client.ts'}, 'The streaming client forwards tool events.'],
+    ['run-check', 'Bash', 1, 'Run focused checks', {command:'pnpm test:run'}, 'All focused checks passed.'],
+    ['edit-source', 'Edit', 1, 'Update the renderer', {path:'src/activity-groups.ts'}, 'Applied the renderer update.'],
+    ['read-config', 'Read', 2, 'Read display configuration', {path:'src/defaults.ts'}, 'Confirmed the display defaults.'],
+    ['read-tests', 'read_text_file', 2, 'Read related tests', {path:'src/activity-groups.test.ts'}, 'Confirmed group coverage.'],
+    ['check-repo', 'git_status', 3, 'Check repository changes', {}, 'Only the expected files changed.'],
+  ].map(([id,name,iteration,actionTitle,args,result]) => ({
+    id,role:'assistant',content:'',createdAt:'2026-01-01T00:00:01Z',variant:'tool',
+    turnActivity:{id:'hierarchy-turn',kind:'progress',outcome:'success'},
+    agentMetadata:{executionId:'hierarchy-turn',iteration},
+    toolCall:{id,name,actionTitle,args,result,status:'complete',success:true},
+  })),
+  {id:'hierarchy-answer',role:'assistant',content:'The update is ready. Focused checks passed.',createdAt:'2026-01-01T00:00:02Z'},
+];
+const hierarchyMode = document.querySelector('#hierarchy-mode'), hierarchyTurn = document.querySelector('#hierarchy-turn'), hierarchyComparison = document.querySelector('#hierarchy-comparison'), hierarchyAnimation = document.querySelector('#hierarchy-animation'), hierarchySpacing = document.querySelector('#hierarchy-spacing');
+const hierarchyPreviousSummary = ({toolCalls}) => {
+  if (toolCalls.every(tool => ['Read','read_text_file'].includes(tool.name))) return `File reads (${toolCalls.length})`;
+  const labels = {Read:'Read files',read_text_file:'Read files',Bash:'Ran commands',Edit:'Edited files',git_status:'Checked repository changes'};
+  return [...new Set(toolCalls.map(tool => labels[tool.name] || tool.name))].map((label,index) => index ? label.charAt(0).toLowerCase() + label.slice(1) : label).join(', ');
+};
+function hierarchyConfig(side) {
+  const flat = hierarchyComparison.value === 'spacing' && side === 'previous';
+  const padded = ['shared','tool'].includes(hierarchySpacing.value), toolOverride = !flat && hierarchySpacing.value === 'tool';
+  return {
+    turnActivity:{enabled:hierarchyTurn.checked},
+    expansion:{animation:hierarchyAnimation.checked ? undefined : 'instant'},
+    features:{toolCallDisplay:{layout:'row',grouped:true,groupedMode:hierarchyMode.value,groupAppearance:side === 'proposed' ? undefined : 'plain',groupBoundary:'iteration',groupSummary:'aggregate',iconVisibility:'always',groupIconVisibility:'always',autoExpand:false,autoCollapseDelay:false}},
+    theme:{components:{activity:{groupIndent:flat || hierarchySpacing.value === 'zero' ? '0px' : padded ? '24px' : undefined,groupGap:flat ? '0px' : undefined,groupPadding:flat ? '0px' : padded ? '6px 8px' : undefined},toolBubble:{groupIndent:toolOverride ? '16px' : undefined,groupPadding:toolOverride ? '2px 4px' : undefined}}},
+    toolCall:{renderGroupedSummary:flat ? hierarchyPreviousSummary : undefined},
+  };
+}
+const hierarchyPreviews = ['previous','proposed'].map(side => ({side,handle:AgentWidget.initAgentWidget({
+  target:'#hierarchy-' + side, config:{
+    persistState:false,future:{v5Defaults:true},initialMessages:structuredClone(hierarchyMessages),
+    launcher:{enabled:false,fullHeight:true},layout:{showHeader:false,showFooter:false},
+    composer:{inputDisabled:true},welcome:{variant:'none'},voiceRecognition:{enabled:false},suggestions:{starters:{items:[]}},
+    ...hierarchyConfig(side),
+  },
+})}));
+function openHierarchyGroups() {
+  for (const {side} of hierarchyPreviews) {
+    const host = document.querySelector('#hierarchy-' + side);
+    for (const button of host.querySelectorAll('[data-persona-turn-activity] > button, [data-persona-tool-group] > button')) {
+      if (button.getAttribute('aria-expanded') === 'false') button.click();
+    }
+  }
+}
+Promise.all(hierarchyPreviews.map(({handle}) => handle.ready)).then(() => {
+  openHierarchyGroups();
+  document.querySelector('#hierarchy-ready').textContent = 'Fixed history ready. Both groups start expanded; singleton details open directly.';
+}).catch(error => { document.querySelector('#hierarchy-ready').textContent = 'Comparison failed: ' + error.message; });
+for (const input of [hierarchyMode,hierarchyTurn,hierarchyComparison,hierarchyAnimation,hierarchySpacing]) input.addEventListener('change', () => {
+  const spacing = hierarchyComparison.value === 'spacing';
+  const spacingDescription = {
+    '':'Default 16px child indent, 2px gaps and 2px 0 padding.',
+    shared:'Shared 24px indent plus 6px 8px padding: children start 32px from the header edge.',
+    tool:'Tool override: 16px indent plus 2px 4px padding. Children start 20px from the header edge.',
+    zero:'Zero indentation. The inset line is hidden so it cannot overlap the children.',
+  }[hierarchySpacing.value];
+  for (const [side,title,description] of spacing ? [['previous','Flat · descriptive','Explicit zero group spacing with a custom descriptive summary.'],['proposed','Counted summary',spacingDescription]] : [['previous','Plain · indentation only',spacingDescription],['proposed','Inset · V5 default',hierarchySpacing.value === 'zero' ? spacingDescription : 'The V5 default, with no appearance override: one subtle line beside expanded children.']]) {
+    document.querySelector('#hierarchy-' + side + '-title').textContent = title;
+    document.querySelector('#hierarchy-' + side + '-description').textContent = description;
+  }
+  for (const {handle,side} of hierarchyPreviews) handle.update(hierarchyConfig(side));
+  requestAnimationFrame(openHierarchyGroups);
 });
 const toolSummary = document.querySelector('#tool-summary');
 const toolRendering = document.querySelector('#tool-rendering');
@@ -212,7 +319,7 @@ function resolveTurn(message) {
 }
 const animation = document.querySelector('#animation'), duration = document.querySelector('#duration');
 const expansion = document.querySelector('#expansion'), expansionDuration = document.querySelector('#expansion-duration'), expansionEasing = document.querySelector('#expansion-easing'), autoExpand = document.querySelector('#auto-expand');
-const expansionSettings = () => ({animation:expansion.value, duration:Number(expansionDuration.value), easing:expansionEasing.value});
+const expansionSettings = () => ({animation:expansion.value === 'default' ? undefined : expansion.value, duration:Number(expansionDuration.value), easing:expansionEasing.value});
 const timing = document.querySelector('#timing'), toolTime = document.querySelector('#tool-time');
 const thinkingIcon = document.querySelector('#thinking-icon'), thinkingMotion = document.querySelector('#thinking-motion');
 AgentWidget.registerIcons({'preview-diamond': [['path', {d:'M12 3 21 12 12 21 3 12Z'}], ['path', {d:'M12 8v8M8 12h8'}]]});

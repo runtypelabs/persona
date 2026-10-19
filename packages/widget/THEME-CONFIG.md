@@ -2695,6 +2695,7 @@ Automatic group timing spans the earliest known tool start through the latest kn
 | `previewMaxLines` | `3` | Maximum preview lines for collapsed active tool calls |
 | `grouped` | `false` | Visually group consecutive tool call rows |
 | `groupedMode` | `"stack"` | `"stack"`, `"summary"`, or `"collapsible"` (V5 default) |
+| `groupAppearance` | `"inset"` in V5; legacy tree in V4 | `"plain"` uses indentation alone; `"inset"` adds one subtle vertical line beside children. Independent of stack/collapsible layout; summary-only groups have no line. |
 | `groupBoundary` | `"adjacent"` | `"iteration"` splits visible neighbors when both have different known iterations or execution IDs; unknown metadata retains adjacency |
 | `groupIconVisibility` | inherits `iconVisibility` | `"always"`, `"active"`, or `"never"` for the built-in collapsible group header only |
 | `durationDisplay` | `"none"` | Automatic timing: `"tools"`, `"group"`, or `"all"`. Tool rows, V5 cards, and collapsible group headers show compact elapsed times (`2s`, `12s`, `1m 5s`), omitting sub-second or unknown times. Authored `{duration}` placeholders, custom timer elements, and exact timing metadata remain available. |
@@ -3438,8 +3439,10 @@ frame and never nests another panel. V5 defaults to collapsed rows with inset
 details; V4 retains its card panel, and V4 rows retain plain details. Classified
 turn progress defaults to row/inset in either version. Explicit layout and
 appearance choices, theme body-surface/spacing tokens, and custom renderers win.
-These settings use the existing expansion and chevron animation controls and do
-not alter disclosure state when changed live. `layout` on either display and
+These settings use the shared `expansion` and chevron controls. V5 defaults to
+height motion at 160ms with `ease-out`; V4 remains instant. Set
+`expansion.animation: "instant"` to disable it. Initial/restored state and reduced
+motion remain instant. Changing these settings live preserves disclosure state. `layout` on either display and
 reasoning `appearance` are supported in persisted preferences and the theme editor.
 
 Both display configs accept `iconVisibility: "always" | "active" | "never"`.
@@ -3502,15 +3505,19 @@ pending automatic collapse; final completion can schedule it again without reope
 the group or overriding a manual toggle.
 
 `theme.components.activity` accepts `rowHeight` (32px), `labelSize` (13px),
-`iconSize` (16px), `indent` (0px for details), `groupIndent` (0px for grouped children),
+`iconSize` (16px), `indent` (0px for details), `groupIndent` (16px for grouped children),
 `transcriptGap` (0px between consecutive activity entries), `responseGap` (12px
-before an assistant response), `groupGap` (0px extra between child rows), `groupPadding` (0px around children), `bodyPadding` (4px 0), `bodySize` (14px), `bodyLineHeight` (1.55), and `bodyFontWeight` (400) for
+before an assistant response), `groupGap` (2px extra between child rows), `groupPadding` (2px 0 around children), `bodyPadding` (4px 0), `bodySize` (14px), `bodyLineHeight` (1.55), and `bodyFontWeight` (400) for
 expanded reasoning text, `sectionGap` (8px between detail sections), and `bodySurface` (transparent). These are V5
 rendered defaults; reasoning typography falls back in the stylesheet until explicitly themed. V4 retains its existing row spacing fallbacks. Per-kind aliases with the same names
 under `toolBubble` and `reasoningBubble` remain available. Explicit shared activity
-tokens take precedence over those aliases; explicit legacy `collapsibleWidget.surface`
+`rowHeight`, `labelSize`, `iconSize`, and `indent` take precedence over their legacy aliases; explicit legacy `collapsibleWidget.surface`
 still supplies the activity body surface when no activity body surface is specified.
 Legacy tool/reasoning shadow tokens remain supported (V5 defaults to none).
+
+V5 grouped children default to `features.toolCallDisplay.groupAppearance: "inset"`: a single 2px line using the same border color as inset reasoning, with no branches or dots. Set `"plain"` for indentation alone. This applies to both collapsible and always-expanded stack groups, preserves group spacing tokens, and leaves custom summaries intact. Summary-only groups have no empty rail. An explicit `"plain"` also selects indentation alone in V4; leaving the option unset preserves the V4 stack tree.
+
+V5 completed mixed tool groups use a short count such as “3 activities”; homogeneous groups retain counted categories such as “File reads (3)”. Active groups and groups needing attention keep descriptive summaries and their status. Custom `renderGroupedSummary` results still take precedence. Collapsible and stack children share the group spacing controls above. For group geometry, `toolBubble.groupIndent`, `toolBubble.groupGap`, and `toolBubble.groupPadding` override the matching shared activity values independently, including scoped turn defaults.
 
 V5 expanded reasoning uses the body typography in both row and card layouts, across plain, inset, and panel appearances. `theme.components.activity.overflow` shares `{ maxHeight, fadeHeight }` between reasoning and every tool detail section (V5 rendered defaults: `"240px"` and `"12px"`). Set `maxHeight: "none"` for unlimited height or `fadeHeight: "0px"` for no fades. Each property in `toolBubble.overflow` or `reasoningBubble.overflow` overrides only the matching shared property. For example, shared `{ maxHeight: "360px", fadeHeight: "16px" }` plus `toolBubble.overflow: { maxHeight: "160px" }` gives tools a 160px cap with the shared 16px fade. Request and Response scroll independently. Top and bottom fades appear only when content is hidden beyond that edge; panel chrome, labels, copy controls, and focus outlines remain outside the mask. Streaming, resizing, and live theme updates refresh the edge state; reset an authored property to `undefined` to inherit again. V4 retains uncapped reasoning and the legacy tool cap with no fades until configured.
 
@@ -3908,8 +3915,8 @@ adapter. Use `turnActivity.renderHeader` for a custom heading.
 See [the complete host contract](../../docs/configuration.md#optional-whole-turn-activity)
 for identity, replay, measured timing, local cancellation/failure and adapter limits.
 Its scoped defaults leave 16px below the divider and between prose/tool batches,
-with 2px around/between nested tool children and compact 28px rows. Authored
-activity `transcriptGap`, `bodyPadding`, `groupGap`, `groupPadding`, and `rowHeight`
+with 16px of child indentation, 2px around/between nested tool children, and compact 28px rows. Authored
+activity `transcriptGap`, `bodyPadding`, `groupIndent`, `groupGap`, `groupPadding`, and `rowHeight`
 win over these defaults in both V4 and V5. The view reuses activity chrome and
 `expansion` motion; the body is styled with
 `.persona-turn-activity-body`, and automatic timing with

@@ -791,11 +791,11 @@ export interface ActivityTokens {
   panel?: ActivityPanelTokens;
   /** Minimum activity row height. */
   rowHeight?: string;
-  /** Group child indentation; falls back to indent when unset. V5: 0px. */
+  /** Group child indentation; falls back to indent when unset. V5: 16px. */
   groupIndent?: string;
-  /** Extra vertical gap between grouped rows. V5: 0px. */
+  /** Extra vertical gap between grouped rows. V5: 2px. */
   groupGap?: string;
-  /** Padding around expanded group children. V5: 0px. */
+  /** Padding around expanded group children. V5: 2px 0. */
   groupPadding?: string;
   /** Gap between consecutive activity entries. V5: 0px. */
   transcriptGap?: string;

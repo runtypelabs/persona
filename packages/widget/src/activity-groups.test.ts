@@ -36,6 +36,27 @@ it.each(['summary', 'stack', 'collapsible'] as const)('summarizes semantic categ
   expect(summary).toHaveBeenCalledWith(expect.objectContaining({ defaultSummary: 'Read files, running commands' }));
 });
 
+it.each(['summary', 'stack', 'collapsible'] as const)('counts completed mixed V5 %s groups while preserving custom and V4 summaries', mode => {
+  const a = tool('read'), b = tool('command'); a.toolCall!.name = 'Read'; b.toolCall!.name = 'Bash';
+  const settings = config(mode); settings.features!.toolCallDisplay!.variant = 'row';
+  settings.future = { v5Defaults: true };
+  const summary = () => render([a, b], settings).querySelector('[data-persona-tool-group-row]')?.textContent;
+  expect(summary()).toBe('2 activities');
+  const custom = vi.fn(() => 'Host summary'); settings.toolCall = { renderGroupedSummary: custom };
+  expect(summary()).toBe('Host summary');
+  expect(custom).toHaveBeenCalledWith(expect.objectContaining({ defaultSummary: '2 activities' }));
+  delete settings.toolCall; settings.future.v5Defaults = false;
+  expect(summary()).toBe('Read files, ran commands');
+});
+
+it('keeps descriptive mixed summaries during active V5 gaps between batches', () => {
+  const a = tool('read'), b = tool('command'); a.toolCall!.name = 'Read'; b.toolCall!.name = 'Bash';
+  const settings = config('collapsible', 'adjacent'); settings.future = { v5Defaults: true };
+  const summary = (streaming: boolean) => render([a, b], settings, streaming, ['read', 'command']).querySelector('[data-persona-tool-group] > button')?.textContent?.replace(/\s/g, ' ');
+  expect(summary(true)).toBe('Read files, ran commands');
+  expect(summary(false)).toBe('2 activities');
+});
+
 it('keeps legacy card stack summaries unchanged', () => {
   expect(render([tool('a'), tool('b')], config('stack')).querySelector('.persona-tool-group-summary')?.textContent).toBe('Called 2 tools');
 });

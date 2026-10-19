@@ -91,6 +91,7 @@ export function groupToolRows(options: ActivityGroupOptions) {
       const id = `tool-group-${group[0].id}`;
       const groupWrapper = createMessageRow(id, "assistant");
       groupWrapper.dataset.personaToolGroupRow = "true";
+      if (display.groupAppearance || config.future?.v5Defaults) groupWrapper.dataset.groupAppearance = display.groupAppearance ?? "inset";
 
       const tools = group.map(item => item.toolCall!);
       const interrupted = tools.some(tool => tool.interrupted);
@@ -100,7 +101,7 @@ export function groupToolRows(options: ActivityGroupOptions) {
         streaming, isLatestGroup, isCurrentRunGroup };
 
       const approvals = group.map(item => item.approval?.status ?? item.toolCall?.approvalStatus);
-      const approvalStatus = approvals.includes("pending") ? "pending" : approvals.includes("denied") ? "denied" : approvals.includes("timeout") ? "timeout" : undefined;
+      const approvalStatus = (["pending", "denied", "timeout"] as const).find(status => approvals.includes(status));
       const success = !tools.some(tool => tool.success === false);
       const attention = interrupted || !success || approvalStatus;
       const running = tools.some(tool => tool.status !== "complete");
@@ -108,10 +109,12 @@ export function groupToolRows(options: ActivityGroupOptions) {
         (!iterationBoundary && streaming && isLatestGroup && isCurrentRunGroup && !attention);
       const toolCount = `${group.length} tool${group.length === 1 ? "" : "s"}`;
       const aggregate = display.groupedMode === "collapsible" || activityLayout(config, "tool") === "row"
-        ? summarizeToolActivity(tools.map((tool, index) => ({ ...tool, approvalStatus: approvals[index] }))) || "Tool activity"
+        ? summarizeToolActivity(tools.map((tool, index) => ({ ...tool, approvalStatus: approvals[index] })), config.future?.v5Defaults && !active)
         : interrupted ? `${toolCount} · Interrupted` : `Called ${toolCount}`;
 
       const defaultSummary = groupToolSummary(group, config, aggregate);
+      const renderedSummary = config.toolCall?.renderGroupedSummary?.({ ...context, defaultSummary }) ?? defaultSummary;
+      wrappers[0].before(groupWrapper);
 
       if (display.groupedMode === "collapsible") {
         const synthetic: AgentWidgetMessage = { ...group[0], id, approval: undefined, toolCall: {
@@ -130,11 +133,9 @@ export function groupToolRows(options: ActivityGroupOptions) {
         }
         activityIds.add(id);
         activityLifecycle.observe(synthetic, "tool", toolExpansionState, display, group.find(item => toolExpansionState.has(item.id))?.id ?? "");
-        const custom = config.toolCall?.renderGroupedSummary?.({ ...context, defaultSummary });
-        const row = createActivityGroup(synthetic, config, toolExpansionState.has(id), custom ?? defaultSummary, undefined, !active && !attention ? groupActivityIcon(tools, config) : undefined);
+        const row = createActivityGroup(synthetic, config, toolExpansionState.has(id), renderedSummary, undefined, !active && !attention ? groupActivityIcon(tools, config) : undefined);
         row.bubble.classList.add("persona-tool-group");
         row.body.dataset.personaToolGroupStack = "true";
-        wrappers[0].before(groupWrapper);
         groupWrapper.appendChild(row.bubble);
         wrappers.forEach((wrapper, index) => {
           fillRow(wrapper);
@@ -151,29 +152,21 @@ export function groupToolRows(options: ActivityGroupOptions) {
       const summary = createElement("div", "persona-tool-group-summary persona-text-xs persona-text-persona-muted");
       summary.id = `tool-group-summary-${group[0].id}`;
 
-      const renderedSummary = config.toolCall?.renderGroupedSummary?.({
-        ...context,
-        defaultSummary,
-      });
-      appendRenderedValue(summary, renderedSummary ?? defaultSummary);
+      appendRenderedValue(summary, renderedSummary);
       if (!(renderedSummary instanceof HTMLElement) && active && !attention) applyLoadingLabel(summary, config, "tool-group");
 
+      groupContainer.appendChild(summary);
+      groupWrapper.appendChild(groupContainer);
+      if (summaryOnly) {
+        for (const wrapper of wrappers) wrapper.remove();
+        return;
+      }
       const stack = createElement("div", "persona-tool-group-stack persona-flex persona-flex-col");
       stack.id = `tool-group-stack-${group[0].id}`;
       stack.dataset.personaToolGroupStack = "true";
-
-      groupContainer.appendChild(summary);
-      if (!summaryOnly) {
-        groupContainer.appendChild(stack);
-      }
-      groupWrapper.appendChild(groupContainer);
-      wrappers[0].before(groupWrapper);
+      groupContainer.appendChild(stack);
 
       wrappers.forEach((wrapper, wrapperIndex) => {
-        if (summaryOnly) {
-          wrapper.remove();
-          return;
-        }
         // The outer group row owns role sizing. Inner message rows fill that
         // resolved track instead of applying the role max-width a second
         // time (which would turn an 85% cap into 72.25%).

@@ -1,4 +1,4 @@
-import { createDisclosureLifecycle } from "./disclosure-animation";
+import { createDisclosureLifecycle, disclosureSettings } from "./disclosure-animation";
 import { applyLoadingLabel } from "../utils/loading-label-deps";
 import { resolveToolIcon } from "../utils/tool-activity-summary";
 import { presentation } from "../utils/turn-activity-display";
@@ -163,7 +163,7 @@ export function createActivityGroup(message: AgentWidgetMessage, config: AgentWi
   bubble.append(header, body);
   applyActivityRow(bubble, message, config, "tool", true, completionIcon);
   bubble.dataset.personaToolGroup = "true";
-  if (config.expansion?.animation === "height") bubble.dataset.personaDisclosureMotion = "height";
+  if (disclosureSettings(config).animation === "height") bubble.dataset.personaDisclosureMotion = "height";
   if (animateLabel && (bubble.dataset.activityState === "running" || bubble.dataset.activityState === "pending")) {
     applyLoadingLabel(copy, config, "tool-group");
   }

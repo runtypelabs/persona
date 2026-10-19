@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { disclosureSettings } from "./components/disclosure-animation";
 import {
   DEFAULT_WIDGET_CONFIG,
   mergeWithDefaults,
@@ -16,6 +17,16 @@ describe.each([false, true])("defaults resolver (v5Defaults: %s)", (v5Defaults) 
     for (const enabled of [false, true]) {
       expect(mergeWithDefaults({ future, features: { artifacts: { enabled } } })
         .features?.artifacts?.enabled).toBe(enabled);
+    }
+  });
+
+  it("selects disclosure motion and preserves partial and explicit overrides", () => {
+    const animation = v5Defaults ? "height" : "instant";
+    expect(disclosureSettings(mergeWithDefaults({ future })).animation).toBe(animation);
+    expect(disclosureSettings(mergeWithDefaults({ future, expansion: { duration: 300, chevron: { collapsed: "left" } } })))
+      .toEqual({ animation, duration: 300, easing: "ease-out" });
+    for (const animation of ["instant", "height"] as const) {
+      expect(disclosureSettings(mergeWithDefaults({ future, expansion: { animation } })).animation).toBe(animation);
     }
   });
 

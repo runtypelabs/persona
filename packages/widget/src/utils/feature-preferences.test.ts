@@ -348,3 +348,12 @@ test('persists activity layouts and reasoning appearances as independent choices
   expect(applyFeaturePreferences({}, [preferences])).toEqual(preferences);
   expect(parseWidgetPreferenceSlice({ reasoningDisplay: { appearance: 'unknown' } }).issues).toEqual([expect.objectContaining({ path: 'reasoningDisplay.appearance', code: 'invalid_value' })]);
 });
+
+test.each(['plain', 'inset'] as const)('persists %s group appearance independently of layout and group mode', groupAppearance => {
+  const preferences = { toolCallDisplay: { groupAppearance, layout: 'card' as const, groupedMode: 'stack' as const } };
+  expect(parseWidgetPreferenceSlice(preferences).preferences).toEqual(preferences);
+  expect(applyFeaturePreferences({}, [preferences]).toolCallDisplay).toEqual(preferences.toolCallDisplay);
+  expect(parseWidgetPreferenceSlice({ toolCallDisplay: { groupAppearance: 'tree' } }).issues).toEqual([
+    expect.objectContaining({ path: 'toolCallDisplay.groupAppearance', code: 'invalid_value' }),
+  ]);
+});

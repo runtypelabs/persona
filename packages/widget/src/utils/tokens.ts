@@ -602,7 +602,12 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
     borderRadius: 'palette.radius.md',
   },
   launcher: CIRCLE_LAUNCHER_TOKENS,
-  activity: { rowHeight: "32px", labelSize: "13px", iconSize: "16px", indent: "0px", groupIndent: "0px", groupGap: "0px", groupPadding: "0px", transcriptGap: "0px", responseGap: "12px", bodyPadding: "4px 0", bodyFontWeight: "400", sectionGap: "8px", bodySurface: "transparent" },
+  activity: {
+    rowHeight: "32px", labelSize: "13px", iconSize: "16px", indent: "0px",
+    transcriptGap: "0px", responseGap: "12px",
+    groupIndent: "16px", groupGap: "2px", groupPadding: "2px 0",
+    bodyPadding: "4px 0", bodyFontWeight: "400", sectionGap: "8px", bodySurface: "transparent",
+  },
   toolBubble: { shadow: "none" },
   reasoningBubble: { shadow: "none" },
   input: { ...DEFAULT_COMPONENTS_BASE.input, borderRadius: 'palette.radius.full' },

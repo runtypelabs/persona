@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { disclosureSettings } from "../components/disclosure-animation";
 import { mergeConfigUpdate } from "./config-merge";
 import { DEFAULT_FLOATING_LAUNCHER_WIDTH, mergeWithDefaults } from "../defaults";
 import { getPanelAliasProvenance } from "./panel-config";
@@ -455,6 +456,25 @@ describe("live defaults version changes", () => {
     const v5Again = mergeConfigUpdate(v4, { future: { v5Defaults: true } });
     expect(v5Again.layout?.messages?.assistant?.width).toBe("full");
     expect(v5Again.composer?.layout).toBe("single-row");
+  });
+
+  it("moves inherited disclosure motion between versions while preserving overrides and resets", () => {
+    const v5 = mergeConfigUpdate(base(), { future: { v5Defaults: true } });
+    expect(disclosureSettings(v5).animation).toBe("height");
+    const instant = mergeConfigUpdate(v5, { expansion: { animation: "instant", duration: 300, chevron: { collapsed: "left" } } });
+    const v4 = mergeConfigUpdate(instant, { future: undefined });
+    expect(disclosureSettings(v4).animation).toBe("instant");
+    const v5Again = mergeConfigUpdate(v4, { future: { v5Defaults: true } });
+    expect(disclosureSettings(v5Again).animation).toBe("instant");
+    const reset = mergeConfigUpdate(v5Again, { expansion: { animation: undefined } });
+    expect(disclosureSettings(reset)).toEqual({ animation: "height", duration: 300, easing: "ease-out" });
+    expect(reset.expansion?.chevron).toEqual({ collapsed: "left" });
+    expect(disclosureSettings(mergeConfigUpdate(reset, { future: undefined })))
+      .toEqual({ animation: "instant", duration: 300, easing: "ease-out" });
+    expect(disclosureSettings(mergeConfigUpdate(instant, { expansion: undefined })))
+      .toEqual({ animation: "height", duration: 160, easing: "ease-out" });
+    expect(disclosureSettings(mergeConfigUpdate(v5, { future: undefined })).animation).toBe("instant");
+    expect(disclosureSettings(instant).animation).toBe("instant");
   });
 
   it("retains host choices even when they equal a previous version default", () => {

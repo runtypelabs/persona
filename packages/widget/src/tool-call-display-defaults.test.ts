@@ -25,6 +25,14 @@ describe("tool call display defaults", () => {
     });
   });
 
+  it("defaults V5 groups to inset while retaining explicit plain and V4 defaults", () => {
+    expect(mergeWithDefaults({ future: { v5Defaults: true } }).features?.toolCallDisplay?.groupAppearance).toBe("inset");
+    expect(mergeWithDefaults({
+      future: { v5Defaults: true }, features: { toolCallDisplay: { groupAppearance: "plain" } },
+    }).features?.toolCallDisplay?.groupAppearance).toBe("plain");
+    expect(mergeWithDefaults({}).features?.toolCallDisplay?.groupAppearance).toBeUndefined();
+  });
+
   it("fills omitted tool display options when one option is overridden", () => {
     const override = { collapsedMode: "tool-name" as const, expandable: false };
     expect(mergeWithDefaults({ features: { toolCallDisplay: override } }).features?.toolCallDisplay)

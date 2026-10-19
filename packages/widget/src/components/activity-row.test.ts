@@ -54,6 +54,13 @@ describe.each([false, true])('activity rows (V5 %s)', v5Defaults => {
     const node = createReasoningBubble(m, { future: { v5Defaults }, features: { reasoningDisplay: { variant: 'row' } } });
     expect(node.textContent).toContain('Thought for a moment');
   });
+  it('keeps card headers without a leading completion icon', () => {
+    const m = message('complete'); m.toolCall!.name = 'Read';
+    for (const iconName of [undefined, 'check', 'file-text']) {
+      const node = createToolBubble(m, { future: { v5Defaults }, features: { toolCallDisplay: { layout: 'card', iconVisibility: 'always' } }, toolCall: { iconName } });
+      expect(node.querySelector('.persona-activity-icon')).toBeNull();
+    }
+  });
 });
 it.each([['pending', 'pending'], ['running', 'running'], ['complete', 'done']] as const)('maps %s status to %s', (status, expected) => {
   const node = createToolBubble(message(status), { features: { toolCallDisplay: { variant: 'row' } } });

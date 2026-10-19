@@ -10,7 +10,7 @@ const running = new WeakMap<HTMLElement, Running>();
 export function disclosureSettings(config?: AgentWidgetConfig): Settings {
   const options = config?.expansion;
   return {
-    animation: options?.animation ?? "instant",
+    animation: options?.animation ?? (config?.future?.v5Defaults ? "height" : "instant"),
     duration: Number.isFinite(options?.duration) ? Math.max(0, options!.duration!) : 160,
     easing: options?.easing ?? "ease-out",
   };

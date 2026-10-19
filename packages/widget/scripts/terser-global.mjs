@@ -81,13 +81,25 @@ for (const file of files) {
       format: { comments: /@license|@preserve|^!/, preamble: [...notices].join("\n") },
       sourceMap: result.map ? { content: result.map, url: basename(mapFile) } : false,
     });
+    // A final remangle can improve Brotli after hoisting. Keep it only when
+    // smaller, retaining legal notices and chained source maps.
+    const optimized = await minify(result.code, {
+      ecma: 2020,
+      compress: { passes: 3, keep_fargs: false, hoist_vars: true, reduce_funcs: false },
+      mangle: true,
+      format: { comments: /@license|@preserve|^!/ },
+      sourceMap: result.map ? { content: result.map, url: basename(mapFile) } : false,
+    });
+    if (brotliBytes(optimized.code) < brotliBytes(result.code)) result = optimized;
   }
-  if (file.endsWith("activity-ui.js")) {
-    // Keep the activity chunk within its gzip budget without changing exports
+  if (file.endsWith("activity-ui.js") || file.endsWith("theme-editor.js")) {
+    // Keep these entries within their gzip budgets without changing exports
     // or enabling unsafe transforms. Only retain a smaller result.
     const optimized = await minify(result.code, {
       ecma: 2020, module: true,
-      compress: { passes: 3, keep_fargs: false, hoist_vars: true, evaluate: false },
+      compress: { passes: 3, keep_fargs: false, hoist_vars: true,
+        ...(file.endsWith("theme-editor.js") ? { reduce_vars: false } : { evaluate: false, sequences: false }),
+      },
       mangle: true,
       format: { comments: /@license|@preserve|^!/ },
       sourceMap: result.map ? { content: result.map, url: basename(mapFile) } : false,

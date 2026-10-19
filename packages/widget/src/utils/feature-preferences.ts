@@ -144,6 +144,7 @@ const ROOT_NODE: PreferenceNode = {
         layout: enumPreference("row", "card"),
         collapsedMode: enumPreference("tool-call", "tool-name", "tool-preview"),
         groupedMode: enumPreference("stack", "summary", "collapsible"),
+        groupAppearance: enumPreference("plain", "inset"),
         groupSummary: enumPreference("current-action", "aggregate"),
         groupBoundary: enumPreference("adjacent", "iteration"),
         loadingAnimation: enumPreference("none", "pulse", "shimmer", "shimmer-color", "rainbow"),

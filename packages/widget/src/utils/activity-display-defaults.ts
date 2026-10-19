@@ -21,7 +21,7 @@ export const DEFAULT_REASONING_DISPLAY = {
 
 // Keep the shipped resolved alias and its author-intent provenance on live updates.
 export const DEFAULT_TOOL_CALL_DISPLAY_V5 = {
-  layout: "row", variant: "row", iconVisibility: "active", autoExpand: false, grouped: true, groupedMode: "collapsible", loadingAnimation: "shimmer",
+  layout: "row", variant: "row", iconVisibility: "active", autoExpand: false, grouped: true, groupedMode: "collapsible", groupAppearance: "inset", loadingAnimation: "shimmer",
 } satisfies NonNullable<NonNullable<AgentWidgetConfig["features"]>["toolCallDisplay"]>;
 
 export const DEFAULT_REASONING_DISPLAY_V5 = {

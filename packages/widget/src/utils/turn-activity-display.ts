@@ -1,5 +1,5 @@
 import type { AgentWidgetConfig, AgentWidgetMessage, AgentWidgetTurnActivity } from "../types";
-import { toolActivityIcon, resolveToolIcon, toolActivityLabel } from "./tool-activity-summary";
+import { toolActivityLabel } from "./tool-activity-summary";
 import { getActivityStyles } from "../components/activity-deps";
 
 /** Event types classify tool/reasoning activity; prose requires an explicit phase. */
@@ -63,10 +63,7 @@ export function presentation(config: AgentWidgetConfig, message: AgentWidgetMess
   features.toolCallDisplay = { ...features.toolCallDisplay,
     groupSummary: features.toolCallDisplay?.groupSummary ?? (features.toolCallDisplay?.groupedMode === "stack" ? "aggregate" : "current-action"),
   };
-  const result = { ...config, features, toolCall: { ...config.toolCall,
-    iconName: typeof config.toolCall?.iconName === "string" ? config.toolCall.iconName
-      : (tool: NonNullable<AgentWidgetMessage["toolCall"]>) => resolveToolIcon(tool, config) ?? toolActivityIcon(tool),
-  } };
+  const result = { ...config, features };
   presentations.set(config, result);
   return result;
 }

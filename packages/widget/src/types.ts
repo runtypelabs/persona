@@ -2471,6 +2471,10 @@ export type AgentWidgetToolCallDisplayFeature = {
    * @default "stack"
    */
   groupedMode?: "stack" | "summary" | "collapsible";
+  /** Child treatment, independent of groupedMode: indentation alone or one subtle
+   * vertical line. V5 defaults to inset; unset V4 retains its legacy stack tree.
+   * Summary-only groups have no child treatment. */
+  groupAppearance?: "plain" | "inset";
   /** Single active action or aggregate batch summary. Parallel work and attention remain
    * aggregate. Defaults to current-action in classified turn progress, aggregate elsewhere;
    * stack defaults to aggregate everywhere. Custom summary callbacks retain precedence. */
@@ -2856,6 +2860,7 @@ export type WidgetPreferenceSlice = {
     | "expandable"
     | "grouped"
     | "groupedMode"
+    | "groupAppearance"
     | "groupSummary"
     | "groupBoundary"
     | "loadingAnimation"
@@ -6057,7 +6062,7 @@ export type AgentWidgetToolCallConfig = {
    * title on toolCall. Does not alter wire events or inspect private tool arguments. */
   resolveActionTitle?: (toolCall: AgentWidgetToolCall, message: AgentWidgetMessage) => string | null | undefined;
   /** Completed row icon from the registry (including registerIcons), or a per-tool resolver.
-   * Undefined uses semantic icons in classified turn activity and check elsewhere.
+   * Undefined uses mapped icons on visible rows and collapsible group headers.
    * Active/attention states and iconVisibility retain precedence. Cards are unchanged.
    * The callback returns a registry name, never DOM. Explicit "check" retains success color.
    */
@@ -6174,7 +6179,8 @@ export type AgentWidgetToolCallConfig = {
    * with the first tool so its DOM stays stable as more calls arrive.
    * Other modes call this only for multiple tools.
    * Return `null` to use the built-in summary: readable activity phrases for
-   * row/collapsible groups, or a tool count for legacy card groups.
+   * active/attention row groups, counted categories or activities for completed
+   * V5 row groups, or a tool count for legacy card groups.
    */
   renderGroupedSummary?: (context: {
     messages: AgentWidgetMessage[];
@@ -8056,7 +8062,7 @@ export type AgentWidgetExpansionConfig = {
     collapsed?: "up" | "down" | "left" | "right";
     expanded?: "up" | "down" | "left" | "right";
   };
-  /** Disclosure motion. Initial/restored state and reduced motion are always instant. @default "instant" */
+  /** Disclosure motion. Defaults to height in V5 and instant in V4. Initial/restored state and reduced motion are always instant. */
   animation?: "instant" | "height";
   /** Transition duration in milliseconds; zero disables motion. @default 160 */
   duration?: number;

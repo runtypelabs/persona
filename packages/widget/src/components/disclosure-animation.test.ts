@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
+import { mergeWithDefaults } from "../defaults";
 import { morphMessages } from "../utils/morph";
 import { createToolBubble, updateToolBubbleUI } from "./tool-bubble";
 import { createReasoningBubble, updateReasoningBubbleUI } from "./reasoning-bubble";
@@ -61,13 +62,47 @@ function harness(config: AgentWidgetConfig = height) {
   } };
 }
 
-it("keeps instant defaults and normalizes invalid durations", () => {
+it("keeps V4 instant and normalizes invalid durations", () => {
   expect(disclosureSettings()).toEqual({ animation: "instant", duration: 160, easing: "ease-out" });
   expect(disclosureSettings({ expansion: { duration: -20 } }).duration).toBe(0);
   expect(disclosureSettings({ expansion: { duration: NaN } }).duration).toBe(160);
   const h = harness({}); h.toggle(true); h.toggle(false);
   expect(effects).toHaveLength(0); expect(body(h.bubble).style.display).toBe("none");
   expect(HTMLElement.prototype.getBoundingClientRect).not.toHaveBeenCalled();
+  h.lifecycle.destroy();
+});
+
+it("shares V5 motion defaults between standalone and merged builders, respecting instant overrides", () => {
+  const future = { v5Defaults: true };
+  const cases: AgentWidgetConfig[] = [
+    { future },
+    { future, expansion: { chevron: { collapsed: "left" } } },
+    mergeWithDefaults({ future }) as AgentWidgetConfig,
+    mergeWithDefaults({ future, expansion: { duration: 160 } }) as AgentWidgetConfig,
+  ];
+  for (const config of cases) {
+    expect(disclosureSettings(config)).toEqual({ animation: "height", duration: 160, easing: "ease-out" });
+    const group = createActivityGroup({ ...message, id: "group" }, config, false, "Two tools");
+    expect(group.bubble.dataset.personaDisclosureMotion).toBe("height");
+    const count = effects.length;
+    const h = harness(config);
+    expect(effects).toHaveLength(count); // Initial state never animates.
+    h.toggle(true);
+    expect(effects).toHaveLength(count + 1);
+    expect(effects[count].options).toMatchObject({ duration: 160, easing: "ease-out" });
+    h.lifecycle.destroy();
+  }
+  effects.length = 0;
+  for (const config of [{ future, expansion: { animation: "instant" as const } }, mergeWithDefaults({ future, expansion: { animation: "instant" } }) as AgentWidgetConfig]) {
+    const group = createActivityGroup({ ...message, id: "group" }, config, false, "Two tools");
+    expect(group.bubble.dataset.personaDisclosureMotion).toBeUndefined();
+    const h = harness(config); h.toggle(true); h.toggle(false);
+    expect(effects).toHaveLength(0);
+    h.lifecycle.destroy();
+  }
+  motion.matches = true;
+  const h = harness({ future }); h.toggle(true);
+  expect(effects).toHaveLength(0);
   h.lifecycle.destroy();
 });
 

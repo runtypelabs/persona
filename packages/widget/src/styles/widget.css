@@ -4309,6 +4309,47 @@
   z-index: 1;
 }
 
+/* Modern groups indent children without the legacy tree. V4 keeps its tree
+   until an appearance is selected; both layouts share the spacing tokens. */
+:is([data-persona-root][data-persona-defaults="v5"], [data-persona-root] [data-persona-turn-activity], [data-persona-root] [data-group-appearance]) .persona-tool-group-summary {
+  padding-left: 0;
+  margin-bottom: 0;
+}
+:is([data-persona-root][data-persona-defaults="v5"], [data-persona-root] [data-persona-turn-activity], [data-persona-root] [data-group-appearance]) :is(.persona-tool-group-summary, .persona-tool-group-stack, .persona-tool-group-item)::before,
+:is([data-persona-root][data-persona-defaults="v5"], [data-persona-root] [data-persona-turn-activity], [data-persona-root] [data-group-appearance]) :is(.persona-tool-group-summary, .persona-tool-group-stack, .persona-tool-group-item)::after {
+  display: none;
+}
+:is([data-persona-root][data-persona-defaults="v5"], [data-persona-root] [data-persona-turn-activity], [data-persona-root] [data-group-appearance]) .persona-tool-group-stack,
+[data-persona-root] [data-group-appearance="inset"] > .persona-tool-group > [data-persona-tool-group-stack] {
+  --persona-group-indent: var(--persona-components-toolBubble-groupIndent, var(--persona-components-activity-groupIndent, 16px));
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--persona-group-indent) minmax(0, 1fr);
+  margin-left: 0;
+  padding: var(--persona-components-toolBubble-groupPadding, var(--persona-components-activity-groupPadding, 2px 0));
+}
+:is([data-persona-root][data-persona-defaults="v5"], [data-persona-root] [data-persona-turn-activity], [data-persona-root] [data-group-appearance]) .persona-tool-group-stack {
+  gap: var(--persona-components-toolBubble-groupGap, var(--persona-components-activity-groupGap, 2px)) 0;
+}
+:is([data-persona-root][data-persona-defaults="v5"], [data-persona-root] [data-persona-turn-activity], [data-persona-root] [data-group-appearance]) .persona-tool-group-stack > *,
+[data-persona-root] [data-group-appearance="inset"] > .persona-tool-group > [data-persona-tool-group-stack] > * {
+  grid-column: 2;
+}
+/* The inset rail stays inside the disclosure's clipping boundary. The grid
+   gutter preserves child indentation and authored padding without extra DOM. */
+[data-persona-root] [data-group-appearance="inset"] > .persona-tool-group > [data-persona-tool-group-stack]::before {
+  content: "";
+  display: block;
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: min(2px, var(--persona-group-indent));
+  background: var(--persona-cw-border, var(--persona-border, #e5e7eb));
+  transform: none;
+  pointer-events: none;
+}
+
 /* ============================================
    Approval Bubble Theme Styles
    ============================================ */
@@ -6529,8 +6570,8 @@
 .persona-activity-duration { font-size:12px; white-space:nowrap; }
 .persona-activity-row > .persona-activity-body { margin-left:var(--persona-activity-indent); padding:var(--persona-components-activity-bodyPadding, 8px 0); border:0; background:var(--persona-activity-body-bg); }
 .persona-activity-row[data-persona-tool-group] > .persona-activity-body {
-  margin-left:var(--persona-components-activity-groupIndent, var(--persona-activity-indent));
-  padding:var(--persona-components-activity-groupPadding, var(--persona-components-activity-bodyPadding, 8px 0));
+  margin-left:var(--persona-components-toolBubble-groupIndent, var(--persona-components-activity-groupIndent, var(--persona-activity-indent)));
+  padding:var(--persona-components-toolBubble-groupPadding, var(--persona-components-activity-groupPadding, var(--persona-components-activity-bodyPadding, 8px 0)));
 }
 /* Theme padding beats utility, suggestion, and activity-row geometry;
    explicit legacy axes stay inline. Controls share this shorthand transport. */
@@ -6544,7 +6585,7 @@
   margin-top:var(--persona-components-activity-sectionGap, 12px);
 }
 .persona-activity-row > [data-persona-tool-group-stack] > .persona-activity-group-child + .persona-activity-group-child {
-  margin-top:var(--persona-components-activity-groupGap, 0px);
+  margin-top:var(--persona-components-toolBubble-groupGap, var(--persona-components-activity-groupGap, 0px));
 }
 .persona-activity-row[data-activity-state="done"] > .persona-activity-header > .persona-activity-icon { color:var(--persona-success, #16a34a); }
 .persona-activity-row[data-activity-state="error"] > .persona-activity-header > .persona-activity-icon { color:var(--persona-danger, #dc2626); }
@@ -6912,7 +6953,7 @@
 .persona-turn-activity-body .persona-reasoning-bubble.persona-activity-row {
   --persona-activity-height: var(--persona-components-reasoningBubble-rowHeight, var(--persona-components-activity-rowHeight, 28px));
 }
-.persona-turn-activity-body .persona-activity-row > .persona-activity-body:not(.persona-theme-padding) {
+.persona-turn-activity-body .persona-activity-row:not([data-persona-tool-group]) > .persona-activity-body:not(.persona-theme-padding) {
   padding: var(--persona-components-activity-groupPadding, 2px 0);
 }
 
