@@ -1531,7 +1531,7 @@ describe.each([false, true])('welcome typography defaults (V5: %s)', (v5Defaults
 describe.each([false, true])('activity aliases (V5 %s)', v5Defaults => {
   it('emits versioned spacing and preserves independent spacing overrides', () => {
     const defaults = themeToCssVariables(getActiveTheme({ future: { v5Defaults } }));
-    const expected = { indent: '0px', groupIndent: '0px', groupGap: '0px', groupPadding: '0px', transcriptGap: '0px', responseGap: '12px', bodyPadding: '4px 0', bodySize: '13px', bodyLineHeight: '1.5', bodyFontWeight: '400', sectionGap: '8px' };
+    const expected = { indent: '0px', groupIndent: '0px', groupGap: '0px', groupPadding: '0px', transcriptGap: '0px', responseGap: '12px', bodyPadding: '4px 0', bodyFontWeight: '400', sectionGap: '8px' };
     for (const [key, value] of Object.entries(expected)) {
       expect(defaults[`--persona-components-activity-${key}`]).toBe(v5Defaults ? value : undefined);
     }
@@ -1612,4 +1612,30 @@ it('preserves V4 artifact card and inline CSS fallbacks', () => {
   expect(css['--persona-artifact-card-radius']).toBeUndefined();
   expect(css['--persona-artifact-inline-bg']).toBeUndefined();
   expect(css['--persona-artifact-inline-radius']).toBeUndefined();
+});
+
+
+describe("activity overflow theme inheritance", () => {
+  it.each([false, true])("keeps shared and per-kind properties independent (V5 %s)", v5Defaults => {
+    const variables = themeToCssVariables(getActiveTheme({ future: { v5Defaults }, theme: { components: {
+      activity: { overflow: { maxHeight: "360px", fadeHeight: "16px" } },
+      toolBubble: { overflow: { maxHeight: "140px" } },
+      reasoningBubble: { overflow: { fadeHeight: "0px" } },
+    } } }));
+    expect(variables["--persona-components-activity-overflow-maxHeight"]).toBe("360px");
+    expect(variables["--persona-components-activity-overflow-fadeHeight"]).toBe("16px");
+    expect(variables["--persona-components-toolBubble-overflow-maxHeight"]).toBe("140px");
+    expect(variables["--persona-components-toolBubble-overflow-fadeHeight"]).toBeUndefined();
+    expect(variables["--persona-components-reasoningBubble-overflow-maxHeight"]).toBeUndefined();
+    expect(variables["--persona-components-reasoningBubble-overflow-fadeHeight"]).toBe("0px");
+  });
+  it("removes theme overrides live without materializing duplicate defaults", () => {
+    const root = document.createElement("div");
+    const config = { future: { v5Defaults: true }, theme: { components: { toolBubble: { overflow: { maxHeight: "none", fadeHeight: "0px" } } } } };
+    applyThemeVariables(root, config);
+    expect(root.style.getPropertyValue("--persona-components-toolBubble-overflow-maxHeight")).toBe("none");
+    applyThemeVariables(root, { future: { v5Defaults: true } });
+    expect(root.style.getPropertyValue("--persona-components-toolBubble-overflow-maxHeight")).toBe("");
+    expect(root.style.getPropertyValue("--persona-components-toolBubble-overflow-fadeHeight")).toBe("");
+  });
 });

@@ -2683,12 +2683,13 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 
 **Example:** `"Calling {toolName}... ~{duration}~"` renders the duration in a muted/dim style.
 
-Automatic group timing spans the earliest known tool start through the latest known completion, so overlapping calls are never summed. Gaps between batches are included once the next tool arrives. While no child is running, a still-working group holds the latest measured span. Missing or invalid timestamp metadata omits group timing. This measures tool activity rather than the whole response. `durationDisplay` can be updated live and affects automatic row timing only; V4 cards retain their existing authored summaries.
+Automatic group timing spans the earliest known tool start through the latest known completion, so overlapping calls are never summed. Gaps between batches are included once the next tool arrives. While no child is running, a still-working group holds the latest measured span. Missing or invalid timestamp metadata omits group timing. This measures tool activity rather than the whole response. `durationDisplay` can be updated live and controls automatic header timing on tool rows, V5 cards, and collapsible group headers. V4 cards retain their legacy timed default summaries. Whole-turn timing remains independent. Expanded details have no automatic duration footer in either version; custom renderers retain the original `duration`, `durationMs`, `startedAt`, and `completedAt` metadata, along with elapsed helpers and grouped `toolCalls`.
 
 ### Display Features (`config.features.toolCallDisplay.*`)
 | Property | Default | Description |
 |----------|---------|-------------|
 | `collapsedMode` | `"tool-call"` | What collapsed rows show: `"tool-call"` \| `"tool-name"` \| `"tool-preview"` |
+| `showToolName` | `false` | Show the raw tool name above expanded details in rows/cards, including V4. Header labels and authored templates remain independent. |
 | `activePreview` | `false` | Show a lightweight preview block on active collapsed tool calls |
 | `activeMinHeight` |: | CSS min-height for active collapsed rows (e.g. `"100px"`) |
 | `previewMaxLines` | `3` | Maximum preview lines for collapsed active tool calls |
@@ -2696,7 +2697,7 @@ Automatic group timing spans the earliest known tool start through the latest kn
 | `groupedMode` | `"stack"` | `"stack"`, `"summary"`, or `"collapsible"` (V5 default) |
 | `groupBoundary` | `"adjacent"` | `"iteration"` splits visible neighbors when both have different known iterations or execution IDs; unknown metadata retains adjacency |
 | `groupIconVisibility` | inherits `iconVisibility` | `"always"`, `"active"`, or `"never"` for the built-in collapsible group header only |
-| `durationDisplay` | `"none"` | Automatic timing: `"tools"`, `"group"`, or `"all"`. Tool rows and collapsible group headers show whole seconds (`2s`, `12s`), omitting sub-second or unknown times. Authored `{duration}` placeholders, custom timer elements, and exact milliseconds in expanded details remain available. |
+| `durationDisplay` | `"none"` | Automatic timing: `"tools"`, `"group"`, or `"all"`. Tool rows, V5 cards, and collapsible group headers show compact elapsed times (`2s`, `12s`, `1m 5s`), omitting sub-second or unknown times. Authored `{duration}` placeholders, custom timer elements, and exact timing metadata remain available. |
 | `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
 | `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
 | `completedVisibility` | `"kept"` | `"removed"` renders no row once the tool call completes, so the transcript gap closes with it. The tool call stays on the message and in `getMessages()` |
@@ -3417,7 +3418,7 @@ These options work in both defaults modes. V4 typography and corner defaults are
 
 ### Tool and reasoning activity rows
 
-`features.toolCallDisplay.variant` and `features.reasoningDisplay.variant` accept
+`features.toolCallDisplay.layout` and `features.reasoningDisplay.layout` accept
 `"card"` or `"row"` in either defaults mode. V4 keeps the existing card DOM; V5
 selects compact rows with status icons, a label, a disclosure chevron immediately
 after the label, and indented details. Tool labels use readable activity phrases for exact known names (`Read a file`,
@@ -3425,6 +3426,21 @@ after the label, and indented details. Tool labels use readable activity phrases
 `Used Search`); completed reasoning shows `Thought for a moment` or a duration such
 as `Thought for 1m 5s`. Existing text templates and custom summary/body render hooks
 remain available. `expandable: false` disables disclosure.
+
+The shipped `variant` keys remain deprecated aliases. An authored `layout` wins;
+clearing it with `undefined` restores an authored `variant`, or the version default.
+This precedence also applies to live updates and classified turn activity.
+
+`features.reasoningDisplay.appearance` controls the expanded trace independently:
+`"plain"` leaves text unframed, `"inset"` gives it an indented leading rule, and
+`"panel"` gives row details the same subtle, borderless surface as tool details. Card layout already supplies its
+frame and never nests another panel. V5 defaults to collapsed rows with inset
+details; V4 retains its card panel, and V4 rows retain plain details. Classified
+turn progress defaults to row/inset in either version. Explicit layout and
+appearance choices, theme body-surface/spacing tokens, and custom renderers win.
+These settings use the existing expansion and chevron animation controls and do
+not alter disclosure state when changed live. `layout` on either display and
+reasoning `appearance` are supported in persisted preferences and the theme editor.
 
 Both display configs accept `iconVisibility: "always" | "active" | "never"`.
 V5 defaults to `"active"`: pending/running, error, denied, and approval-waiting
@@ -3488,13 +3504,17 @@ the group or overriding a manual toggle.
 `theme.components.activity` accepts `rowHeight` (32px), `labelSize` (13px),
 `iconSize` (16px), `indent` (0px for details), `groupIndent` (0px for grouped children),
 `transcriptGap` (0px between consecutive activity entries), `responseGap` (12px
-before an assistant response), `groupGap` (0px extra between child rows), `groupPadding` (0px around children), `bodyPadding` (4px 0), `bodySize` (13px), `bodyLineHeight` (1.5), and `bodyFontWeight` (400) for
+before an assistant response), `groupGap` (0px extra between child rows), `groupPadding` (0px around children), `bodyPadding` (4px 0), `bodySize` (14px), `bodyLineHeight` (1.55), and `bodyFontWeight` (400) for
 expanded reasoning text, `sectionGap` (8px between detail sections), and `bodySurface` (transparent). These are V5
-emitted defaults. V4 retains its existing row spacing fallbacks. Per-kind aliases with the same names
+rendered defaults; reasoning typography falls back in the stylesheet until explicitly themed. V4 retains its existing row spacing fallbacks. Per-kind aliases with the same names
 under `toolBubble` and `reasoningBubble` remain available. Explicit shared activity
 tokens take precedence over those aliases; explicit legacy `collapsibleWidget.surface`
 still supplies the activity body surface when no activity body surface is specified.
 Legacy tool/reasoning shadow tokens remain supported (V5 defaults to none).
+
+V5 expanded reasoning uses the body typography in both row and card layouts, across plain, inset, and panel appearances. `theme.components.activity.overflow` shares `{ maxHeight, fadeHeight }` between reasoning and every tool detail section (V5 rendered defaults: `"240px"` and `"12px"`). Set `maxHeight: "none"` for unlimited height or `fadeHeight: "0px"` for no fades. Each property in `toolBubble.overflow` or `reasoningBubble.overflow` overrides only the matching shared property. For example, shared `{ maxHeight: "360px", fadeHeight: "16px" }` plus `toolBubble.overflow: { maxHeight: "160px" }` gives tools a 160px cap with the shared 16px fade. Request and Response scroll independently. Top and bottom fades appear only when content is hidden beyond that edge; panel chrome, labels, copy controls, and focus outlines remain outside the mask. Streaming, resizing, and live theme updates refresh the edge state; reset an authored property to `undefined` to inherit again. V4 retains uncapped reasoning and the legacy tool cap with no fades until configured.
+
+The compatibility option `features.reasoningDisplay.maxHeight` is the highest-priority explicit reasoning cap. Leave it unset to inherit per-kind, shared, then version defaults. Its `"none"` value disables the cap, and an `undefined` reset restores theme inheritance. The inner text supports keyboard scrolling while the outer disclosure retains its existing animation boundary.
 
 The row status uses pending/running/complete and tool `success: false` for errors.
 An attached approval or optional `toolCall.approvalStatus` supplies pending approval
@@ -3526,6 +3546,62 @@ blocks. Empty requests (absent, null, blank, empty object or array) are omitted.
 Response shows streamed chunks until a completed tool supplies a result, which
 replaces the chunks. Errors remain visible. Text uses the UI font; objects and
 arrays use monospace. Long output scrolls inside the block.
+
+These blocks share their subtle fill, borderless 8px corners, and 10px/12px
+internal padding with row reasoning details using `appearance: "panel"`.
+Disclosure spacing still follows the activity body padding; reasoning keeps its
+muted prose typography. Card reasoning retains its existing outer frame.
+
+Customize both surfaces with `theme.components.activity.panel`:
+
+```js
+theme: {
+  components: {
+    activity: {
+      panel: {
+        background: '#f3f7fc',
+        borderColor: '#cbd5e1',
+        borderWidth: '1px',
+        borderRadius: '12px',
+        padding: '14px 16px',
+      },
+    },
+    toolBubble: { panel: { background: '#f0f8f2' } },
+    reasoningBubble: { panel: { borderWidth: '0px' } },
+  },
+}
+```
+
+`panel` accepts `background` and `borderColor` (raw colors or color token
+references), plus CSS `borderWidth`, `borderRadius`, and `padding`. Every
+property resolves independently: the specified `toolBubble.panel` or
+`reasoningBubble.panel` property wins over `activity.panel`, then the existing
+default applies. In this example tools keep the shared border, corners, and
+padding; reasoning keeps the shared fill, corners, and padding but removes its
+border. Defaults remain a subtle muted fill, transparent border with `0`
+width, `8px` corners, and `10px 12px` padding. Setting `borderColor` alone does
+not enable a border; specify `borderWidth` too.
+
+These tokens affect tool Request/Response blocks and row reasoning with
+`appearance: 'panel'`. They leave plain/inset reasoning, the outer card frame,
+and approval details independent. `activity.bodyPadding` controls the spacing
+outside the panel; `panel.padding` controls its inside spacing. Existing
+`bodySurface` values remain a background fallback below explicit panel
+backgrounds. Keep using `bodySurface` for plain/inset details.
+
+For compatibility, explicit `toolCall.codeBlockBackgroundColor` and
+`codeBlockBorderColor` retain historical precedence over all panel tokens.
+Authored `toolBubble.codeBlock.background` and `.borderColor` also win over
+panel colors, below explicit legacy values. Either existing code-block border
+color override still implies a `1px` border, including when a new panel width is
+`0px`. `codeBlock.foreground`/`codeBlockTextColor` and label colors continue to
+control text independently. To use the new panel border width, clear the old
+code-block border color override.
+
+Theme updates restyle existing details without new requests. Clear a component
+`panel` (or one of its properties) with `undefined` to restore shared
+inheritance; clear the shared panel to restore the defaults.
+
 
 The copy icon appears on hover or keyboard focus, and stays visible on touch
 screens. It copies the complete block and changes to a check for 1.8 seconds.

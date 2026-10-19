@@ -766,8 +766,29 @@ export interface AttachmentTokens {
   };
 }
 
-/** Tool-call row chrome (collapsible tool bubbles). */
+/** Expanded activity detail panel; border color alone keeps the default zero width. */
+export interface ActivityPanelTokens {
+  background?: TokenReference<'color'>;
+  borderColor?: TokenReference<'color'>;
+  borderWidth?: string;
+  borderRadius?: string;
+  padding?: string;
+}
+
+/** Scroll limits shared by expanded reasoning and each tool detail section. */
+export interface ActivityOverflowTokens {
+  /** CSS max-height; "none" disables the cap. V5: 240px. */
+  maxHeight?: string;
+  /** Edge fade height; "0px" disables fades. V5: 12px. */
+  fadeHeight?: string;
+}
+
+/** Shared tool and reasoning activity chrome. */
 export interface ActivityTokens {
+  /** Per-kind overflow properties override shared activity properties individually. */
+  overflow?: ActivityOverflowTokens;
+  /** Shared detail panel defaults; per-kind panel properties override individually. */
+  panel?: ActivityPanelTokens;
   /** Minimum activity row height. */
   rowHeight?: string;
   /** Group child indentation; falls back to indent when unset. V5: 0px. */

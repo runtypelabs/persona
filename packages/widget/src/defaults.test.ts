@@ -71,7 +71,7 @@ describe.each([false, true])("defaults resolver (v5Defaults: %s)", (v5Defaults) 
     expect(result.launcher?.title).toBe("Custom title");
     expect(result.features?.reasoningDisplay).toEqual({
       ...DEFAULT_WIDGET_CONFIG.features?.reasoningDisplay,
-      ...(v5Defaults ? { variant: "row", iconVisibility: "active", autoExpand: false, loadingAnimation: "shimmer" } : {}),
+      ...(v5Defaults ? { layout: "row", variant: "row", appearance: "inset", iconVisibility: "active", autoExpand: false, loadingAnimation: "shimmer" } : {}),
       expandable: false,
     });
     expect(result.theme?.components?.header).toEqual(config.theme.components.header);

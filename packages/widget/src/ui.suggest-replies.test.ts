@@ -695,7 +695,7 @@ describe("suggest_replies chips UI", () => {
 
     expect(chipButtons(mount, "Tell me more")).toHaveLength(0);
     // The generic tool bubble renders instead, keeping the parked call visible.
-    expect(mount.textContent).toContain("suggest_replies");
+    expect(mount.querySelector('.persona-tool-bubble[data-message-id="sr-1"]')).not.toBeNull();
 
     controller.destroy();
   });

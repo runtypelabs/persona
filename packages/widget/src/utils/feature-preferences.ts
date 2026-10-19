@@ -141,6 +141,7 @@ const ROOT_NODE: PreferenceNode = {
     toolCallDisplay: {
       kind: "object",
       children: {
+        layout: enumPreference("row", "card"),
         collapsedMode: enumPreference("tool-call", "tool-name", "tool-preview"),
         groupedMode: enumPreference("stack", "summary", "collapsible"),
         groupSummary: enumPreference("current-action", "aggregate"),
@@ -152,7 +153,7 @@ const ROOT_NODE: PreferenceNode = {
     },
     reasoningDisplay: {
       kind: "object",
-      children: { expandable: BOOLEAN, activePreview: BOOLEAN },
+      children: { layout: enumPreference("row", "card"), appearance: enumPreference("plain", "inset", "panel"), expandable: BOOLEAN, activePreview: BOOLEAN },
     },
     artifacts: {
       kind: "object",

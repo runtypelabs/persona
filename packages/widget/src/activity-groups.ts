@@ -6,7 +6,7 @@ import { appendRenderedValue } from "./components/expandable-bubble";
 import { createElement } from "./utils/dom";
 import { applyLoadingLabel } from "./utils/loading-label-deps";
 import { summarizeToolActivity, groupActivityIcon } from "./utils/tool-activity-summary";
-import { activityVariant, createActivityGroup, type createActivityLifecycle } from "./components/activity-row";
+import { activityLayout, createActivityGroup, type createActivityLifecycle } from "./components/activity-row";
 
 /** Group visible tool rows only after the activity renderer has loaded. */
 export type ActivityGroupOptions = {
@@ -107,7 +107,7 @@ export function groupToolRows(options: ActivityGroupOptions) {
       const active = running ||
         (!iterationBoundary && streaming && isLatestGroup && isCurrentRunGroup && !attention);
       const toolCount = `${group.length} tool${group.length === 1 ? "" : "s"}`;
-      const aggregate = display.groupedMode === "collapsible" || activityVariant(config, "tool") === "row"
+      const aggregate = display.groupedMode === "collapsible" || activityLayout(config, "tool") === "row"
         ? summarizeToolActivity(tools.map((tool, index) => ({ ...tool, approvalStatus: approvals[index] }))) || "Tool activity"
         : interrupted ? `${toolCount} · Interrupted` : `Called ${toolCount}`;
 

@@ -1,29 +1,21 @@
-import { applyActivityRow, activityDisplay, activityVariant, activityDuration } from "./activity-row";
-import { createElement } from "../utils/dom";
+import { applyActivityRow, activityDisplay, activityLayout, activityDuration } from "./activity-row";
+import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "./activity-deps";
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { DEFAULT_REASONING_DISPLAY } from "../utils/activity-display-defaults";
-import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/activity-formatting";
+import { describeReasonStatus, computeReasoningElapsed } from "../utils/activity-formatting";
 import { applyLoadingLabel } from "../utils/loading-label-deps";
 import {
+  activityPreview,
   appendHeaderToggle,
+  appendActivitySummary,
+  renderActivityTitle,
   applyExpansionDisplay,
   createCollapsedPreviewSection,
   createExpandableBubbleShell,
   createExpandableHeader,
   updateExpandableBubbleUI,
 } from "./expandable-bubble";
-
-const getReasoningPreviewText = (message: AgentWidgetMessage, maxLines: number): string => {
-  const text = message.reasoning?.chunks.join("").trim() ?? "";
-  if (!text) return "";
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, maxLines)
-    .join("\n");
-};
 
 // Helper function to update reasoning bubble UI after expansion state changes
 export const updateReasoningBubbleUI = (
@@ -35,7 +27,6 @@ export const updateReasoningBubbleUI = (
   updateExpandableBubbleUI(messageId, bubble, {
     stateSet: expansionState,
     config,
-    previewKind: "reasoning",
     iconColor: "currentColor",
   });
 };
@@ -53,21 +44,22 @@ export const createReasoningBubble = (
     return applyActivityRow(bubble, message, config, "reasoning");
   }
 
-  const reasoningDisplayConfig = config?.features?.reasoningDisplay ?? {};
+  const reasoningDisplayConfig = config.features!.reasoningDisplay!;
   const expandable = reasoningDisplayConfig.expandable ?? DEFAULT_REASONING_DISPLAY.expandable;
   const expanded = expandable && expansionState.has(message.id);
   const isActive = reasoning.status !== "complete";
-  const previewText = getReasoningPreviewText(
-    message,
+  const previewText = activityPreview(
+    message.reasoning?.chunks.join("") ?? "", 0,
     reasoningDisplayConfig.previewMaxLines ?? DEFAULT_REASONING_DISPLAY.previewMaxLines
   );
   const header = createExpandableHeader({ expandable, expanded, bubbleType: "reasoning" });
 
   const headerContent = createElement("div", "persona-flex persona-flex-col persona-text-left");
   const title = createElement("span", "persona-text-xs persona-text-persona-primary");
-  const row = activityVariant(config, "reasoning") === "row";
-  const defaultSummary = row && !isActive ? `Thought for ${activityDuration(reasoning.durationMs ?? (reasoning.completedAt !== undefined && reasoning.startedAt !== undefined ? reasoning.completedAt - reasoning.startedAt : undefined))}` : "Thinking...";
-  const reasoningConfig = config?.reasoning ?? {};
+  const row = activityLayout(config, "reasoning") === "row";
+  bubble.dataset.appearance = reasoningDisplayConfig.appearance ?? (config.future?.v5Defaults ? "inset" : row ? "plain" : "panel");
+  const defaultSummary = row && !isActive ? `Thought for ${activityDuration(reasoning.durationMs ?? (reasoning.completedAt! - reasoning.startedAt! || undefined))}` : "Thinking...";
+  const reasoningConfig = config.reasoning ?? {};
 
   // Elapsed helpers: defined early so they're available to renderCollapsedSummary
   const startedAt = String(reasoning.startedAt ?? Date.now());
@@ -85,19 +77,11 @@ export const createReasoningBubble = (
     defaultSummary,
     previewText,
     isActive,
-    config: config ?? {},
+    config,
     elapsed: computeReasoningElapsed(reasoning),
     createElapsedElement: createElapsedSpan,
   });
-  if (typeof customSummary === "string" && customSummary.trim()) {
-    title.textContent = customSummary;
-    headerContent.appendChild(title);
-  } else if (customSummary instanceof HTMLElement) {
-    headerContent.appendChild(customSummary);
-  } else {
-    title.textContent = defaultSummary;
-    headerContent.appendChild(title);
-  }
+  const skipCustomElement = appendActivitySummary(headerContent, title, customSummary, defaultSummary);
 
   // Status span: used in the legacy (no-template) path
   const status = createElement("span", "persona-text-xs persona-text-persona-primary");
@@ -108,39 +92,11 @@ export const createReasoningBubble = (
   const activeTemplate = reasoningConfig.activeTextTemplate;
   const completeTemplate = reasoningConfig.completeTextTemplate;
   const currentTemplate = isActive ? activeTemplate : completeTemplate;
-  const skipCustomElement = customSummary instanceof HTMLElement;
-
-  /**
-   * Renders a template into the title element, handling:
-   * - Inline formatting markers: **bold**, *italic*, ~dim~
-   * - {duration} as a live-updating elapsed span (active) or static text (complete)
-   */
-  const renderFormattedTitle = (template: string) => {
-    title.textContent = "";
-    const segments = parseFormattedTemplate(template, "");
-
-    for (const seg of segments) {
-      const parent = seg.styles.length > 0
-        ? (() => {
-            const w = createElement("span", seg.styles.map(s => `persona-tool-text-${s}`).join(" "));
-            title.appendChild(w);
-            return w;
-          })()
-        : title;
-
-      if (seg.isDuration && isActive) {
-        parent.appendChild(createElapsedSpan());
-      } else {
-        const text = seg.isDuration ? computeReasoningElapsed(reasoning) : seg.text;
-        parent.appendChild(document.createTextNode(text));
-      }
-    }
-  };
 
   if (!skipCustomElement) {
     if (currentTemplate) {
       status.style.display = "none";
-      renderFormattedTitle(currentTemplate);
+      renderActivityTitle(title, currentTemplate, "", isActive, computeReasoningElapsed(reasoning), createElapsedSpan);
     }
     title.style.display = !currentTemplate && !isActive && !row ? "none" : "";
     if (isActive) applyLoadingLabel(title, config, "reasoning");
@@ -180,12 +136,12 @@ export const createReasoningBubble = (
     activePreview: reasoningDisplayConfig.activePreview,
     activeMinHeight: reasoningDisplayConfig.activeMinHeight,
     renderPreview: () =>
-      config?.reasoning?.renderCollapsedPreview?.({
+      config.reasoning?.renderCollapsedPreview?.({
         message,
         reasoning,
         defaultPreview: previewText,
         isActive,
-        config: config ?? {},
+        config,
       }),
   });
 
@@ -198,18 +154,16 @@ export const createReasoningBubble = (
     "div",
     "persona-border-t persona-border-gray-200 persona-bg-gray-50 persona-px-4 persona-py-3"
   );
-  content.style.display = expanded ? "" : "none";
-
-  const text = reasoning.chunks.join("");
-  const body = createElement(
-    "div",
-    "persona-whitespace-pre-wrap persona-text-xs persona-leading-snug persona-text-persona-muted"
-  );
-  body.textContent =
-    text ||
-    (reasoning.status === "complete"
-      ? "No additional context was shared."
-      : "Waiting for details…");
+  // Scroll the inner text; the outer body remains the disclosure motion boundary.
+  const maxHeight = reasoningDisplayConfig.maxHeight;
+  const body = createNode("div", {
+    className: "persona-whitespace-pre-wrap",
+  }, createNode("div", {
+    className: "persona-activity-scroll",
+    text: reasoning.chunks.join("") || (isActive ? "Waiting for details…" : "No additional context was shared."),
+    style: { maxHeight },
+    attrs: { tabindex: "0", role: "region", "aria-label": "Reasoning" },
+  }));
   content.appendChild(body);
 
   applyExpansionDisplay({ expanded, header, toggleIcon, content, collapsedPreview, iconColor, config });

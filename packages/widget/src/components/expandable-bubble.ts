@@ -1,5 +1,6 @@
 import type { AgentWidgetConfig } from "../types";
 import { animateDisclosure, disclosureSettings } from "./disclosure-animation";
+import { parseFormattedTemplate } from "../utils/activity-formatting";
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "./activity-deps";
 
@@ -183,7 +184,7 @@ export const applyExpansionDisplay = (params: {
 export const updateExpandableBubbleUI = (
   messageId: string,
   bubble: HTMLElement,
-  options: { stateSet: Set<string>; previewKind: string; iconColor: string; config?: AgentWidgetConfig }
+  options: { stateSet: Set<string>; iconColor: string; config?: AgentWidgetConfig }
 ): void => {
   const expanded = options.stateSet.has(messageId);
   const header = bubble.querySelector('button[data-expand-header="true"]') as HTMLElement;
@@ -202,3 +203,30 @@ export const updateExpandableBubbleUI = (
 
   animateDisclosure(bubble, expanded, options.config);
 };
+
+/** Shared activity templates preserve authored formatting and live elapsed spans. */
+export const renderActivityTitle = (
+  title: HTMLElement, template: string, toolName: string, active: boolean,
+  elapsed: string, createElapsed: () => HTMLElement
+): void => {
+  title.textContent = "";
+  for (const segment of parseFormattedTemplate(template, toolName)) {
+    const parent = segment.styles.length
+      ? title.appendChild(createElement("span", segment.styles.map(style => `persona-tool-text-${style}`).join(" ")))
+      : title;
+    parent.append(segment.isDuration ? active ? createElapsed() : elapsed : segment.text);
+  }
+};
+
+export const appendActivitySummary = (
+  container: HTMLElement, title: HTMLElement, value: HTMLElement | string | null | undefined, fallback: string
+): boolean => {
+  const customElement = value instanceof HTMLElement;
+  title.textContent = typeof value === "string" && value.trim() ? value : fallback;
+  container.appendChild(customElement ? value : title);
+  return customElement;
+};
+
+/** Shared plain-text preview normalization; callers choose head or tail lines. */
+export const activityPreview = (text: string, start: number, end?: number): string =>
+  text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(start, end).join("\n");

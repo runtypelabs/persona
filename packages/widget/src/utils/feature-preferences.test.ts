@@ -340,3 +340,11 @@ test.each(['current-action', 'aggregate'] as const)('preserves %s tool group sum
   expect(parsed.issues).toEqual([]);
   expect(parsed.preferences.toolCallDisplay?.groupSummary).toBe(groupSummary);
 });
+
+
+test('persists activity layouts and reasoning appearances as independent choices', () => {
+  const preferences = { toolCallDisplay: { layout: 'card' as const }, reasoningDisplay: { layout: 'row' as const, appearance: 'inset' as const } };
+  expect(parseWidgetPreferenceSlice(preferences)).toEqual({ preferences, issues: [] });
+  expect(applyFeaturePreferences({}, [preferences])).toEqual(preferences);
+  expect(parseWidgetPreferenceSlice({ reasoningDisplay: { appearance: 'unknown' } }).issues).toEqual([expect.objectContaining({ path: 'reasoningDisplay.appearance', code: 'invalid_value' })]);
+});

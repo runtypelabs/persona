@@ -31,9 +31,29 @@
 </section>
 <div class="controls">
   <label>Tool rendering <select id="tool-rendering"><option value="collapsible">Collapsible groups</option><option value="row">Individual rows</option><option value="summary">Summary only</option><option value="stack">Stack with children</option><option value="card">Individual cards</option></select></label>
+  <label>Reasoning layout <select id="reasoning-layout"><option value="">Version default</option><option value="row">Row</option><option value="card">Card</option></select></label>
+  <label>Reasoning details <select id="reasoning-appearance"><option value="">Version default</option><option value="plain">Plain</option><option value="inset">Inset</option><option value="panel">Panel</option></select></label>
+  <label>Reasoning compatibility height <select id="reasoning-height"><option value="">Inherit theme overflow</option><option value="140px">Custom: 140px</option><option value="none">Unlimited</option></select></label>
+  <label><input id="long-reasoning" type="checkbox">Long reasoning (next mock run)</label>
+  <label><input id="long-tools" type="checkbox">Long tool request/response (next mock run)</label>
   <label>Group summary <select id="tool-summary"><option value="">Default for this view</option><option value="current-action">Current action</option><option value="aggregate">Aggregate batch</option></select></label>
+  <label><input id="raw-tool-name" type="checkbox">Show raw tool names in details</label>
   <label><input id="action-titles" type="checkbox" checked>Descriptive titles (mock)</label>
 </div>
+<div class="controls">
+  <label>Shared detail panel <select id="shared-panel"><option value="">Default subtle panel</option><option value="bordered">Blue fill · 1px border · 12px radius · 16px padding</option><option value="spacious">Warm fill · 2px border · 4px radius · 20px padding</option><option value="color-only">Border color only · default 0px width</option></select></label>
+  <label>Tool panel override <select id="tool-panel"><option value="">Inherit shared panel</option><option value="tint">Green fill only</option><option value="borderless">0px border only</option><option value="compact">6px padding · 3px radius only</option></select></label>
+  <label>Reasoning panel override <select id="reasoning-panel"><option value="">Inherit shared panel</option><option value="tint">Purple fill only</option><option value="borderless">0px border only</option><option value="compact">6px padding · 3px radius only</option></select></label>
+  <button id="reset-panels">Reset panel theme</button>
+</div>
+<div class="controls">
+  <label>Shared overflow <select id="shared-overflow"><option value="">Version default (V5: 240px · 12px fade)</option><option value="short">140px cap · 20px fade</option><option value="nofade">240px cap · no fade</option><option value="unlimited">Unlimited</option></select></label>
+  <label>Tool overflow override <select id="tool-overflow"><option value="">Inherit shared overflow</option><option value="short">100px cap only</option><option value="nofade">No fade only</option><option value="unlimited">Unlimited only</option></select></label>
+  <label>Reasoning overflow override <select id="reasoning-overflow"><option value="">Inherit shared overflow</option><option value="short">180px cap only</option><option value="nofade">No fade only</option><option value="unlimited">Unlimited only</option></select></label>
+  <button id="reset-overflow">Reset overflow theme</button>
+</div>
+<p>Overflow controls update existing history immediately. Each tool Request and Response scrolls separately. Only edges with hidden content fade; labels, copy buttons and focus outlines stay clear. Enable long mocks before a run, then compare shared caps, per-kind overrides, no fades and unlimited content. The compatibility reasoning height wins over theme caps when set.</p>
+<p>Panel theme controls update existing tools and reasoning immediately, including live-agent history, without sending another request. Choose reasoning Row + Panel to compare all fields. Component overrides change only their listed properties; the other properties stay shared. Plain/inset reasoning, approval details, and outer cards keep their own appearance.</p>
 <p>Rendering and summary choices apply to all widgets and saved history. The default group summary follows the current action inside turn activity, except stacks; other groups keep their aggregate. Cards keep their original header.</p>
 <h2 style="margin-top:28px">Mocked comparisons</h2>
 <div class="controls">
@@ -60,16 +80,20 @@
 </div>
 <p id="ready" role="status">Loading the widgets…</p>
 <details open><summary>What to check</summary><ul>
+<li>Compare Reasoning layout and Reasoning details before or during a run, or after replay. V5 defaults to a collapsed row with inset details; V4 keeps its card panel. All three detail treatments use the same disclosure and chevron motion.</li>
+<li>Choose Reasoning layout “Row”, Reasoning details “Panel”, and Tool rendering “Individual rows”. After Run all, expand the reasoning and a tool: their detail panels share a subtle fill, borderless 8px corners, 10px/12px inner padding, and disclosure spacing. Reasoning stays muted prose; tools keep Request/Response labels and monospace structured values. Compare inside and outside whole-turn activity.</li>
+<li>Change Shared detail panel after a run, then set Green fill only for tools and 0px border only for reasoning: each override keeps the remaining shared properties. Reset panel theme restores the original subtle panels without another request. Border color only remains borderless. Compare ordinary and whole-turn details.</li>
 <li>Choose a Tool rendering and switch Group summary during a run. Current action changes from “Checking the streaming documentation” to “Reading the adapter source.” Parallel tools and completed batches keep aggregate labels. Individual rows use descriptive titles independently of grouping or turn activity.</li>
 <li>Stacks default to an aggregate header above their titled children. Summary only hides child details. Cards retain their normal header; Custom summaries can display the resolved title. Turn off Descriptive titles to check the generic fallback. Live calls use safe labels unless their adapter supplies titles.</li>
 <li>Single-tool iterations open their details directly. An open tool stays visible when a second tool joins its group.</li>
-<li>Elapsed timing is off by default. Per-tool timing omits sub-second calls; exact milliseconds remain in expanded details. Group timing measures the tool-activity span, including gaps between batches; it holds the latest measured interval when no child is running. Switch modes during a run or after completion.</li>
+<li>Elapsed timing is off by default. Per-tool timing omits sub-second calls. Expanded details have no duration footer. Custom summaries demonstrate authored timing; the whole-turn timer is independent. V4 card titles retain their legacy timing. Group timing measures the tool-activity span, including gaps between batches; it holds the latest measured interval when no child is running. Switch modes during a run or after completion.</li>
 <li>During “Thinking between batches,” the adjacent header keeps working; finished iteration headers stay done.</li>
 <li>Expand a group during the run. Its controls and tool rows should stay in place as more calls arrive.</li>
 <li>Run again after completion. Old groups stay done while the new response waits for its first tool.</li>
 <li>“Hide group icons” removes only header icons. Expanded child rows keep their icons.</li>
 <li>“Custom summaries” uses all three context flags to show a custom working label for the latest group in this run. Earlier iteration groups stay done.</li>
 <li>Change the label animation before or during a run. Thinking, individual tools, and running groups share the selected style. Custom summaries own their appearance.</li>
+<li>Enable Long reasoning before a mock run, then open its reasoning details. Switch Shared overflow live between the V5 default, a custom cap, no fades, and Unlimited. Set per-kind overflow overrides to compare independent caps and fades; enable Long tool request/response to test each section separately. Reasoning compatibility height remains an explicit cap override. Check Plain/Inset/Panel and Row/Card, scroll the trace with the keyboard, and toggle it during height motion.</li>
 <li>Choose Height expansion, then open/close a group or child tool. Reverse it mid-motion: the transition starts from its current height. Headers stay in place while the inner content moves down 8 pixels when opening and up when closing, with a subtle fade; streamed details keep updating. Longer durations make this easier to inspect.</li>
 <li>Change expansion settings mid-transition to settle immediately. Enable auto expand/collapse before a new run to check automatic tool transitions. Reduced motion makes all disclosures instant.</li>
 <li>“Custom pulse” uses the loading-label hook and the Web Animations API. Reduced motion disables loading animations.</li>
@@ -88,25 +112,59 @@ const turnRecords = new Map();
 const actionTitles = new Map();
 const toolSummary = document.querySelector('#tool-summary');
 const toolRendering = document.querySelector('#tool-rendering');
+const rawToolName = document.querySelector('#raw-tool-name');
+const reasoningLayout = document.querySelector('#reasoning-layout');
+const reasoningAppearance = document.querySelector('#reasoning-appearance');
+const reasoningHeight = document.querySelector('#reasoning-height'), longReasoning = document.querySelector('#long-reasoning');
+const reasoningDisplay = () => ({layout:reasoningLayout.value || undefined, appearance:reasoningAppearance.value || undefined, maxHeight:reasoningHeight.value || undefined});
+const sharedOverflow = document.querySelector('#shared-overflow'), toolOverflow = document.querySelector('#tool-overflow'), reasoningOverflow = document.querySelector('#reasoning-overflow'), longTools = document.querySelector('#long-tools');
+function overflowTheme(select, height) {
+  return {maxHeight:undefined,fadeHeight:undefined,...({short:{maxHeight:height,...(select === sharedOverflow ? {fadeHeight:'20px'} : {})},nofade:{...(select === sharedOverflow ? {maxHeight:'240px'} : {}),fadeHeight:'0px'},unlimited:{maxHeight:'none'}}[select.value])};
+}
+const sharedPanel = document.querySelector('#shared-panel'), toolPanel = document.querySelector('#tool-panel'), reasoningPanel = document.querySelector('#reasoning-panel');
+function panelTheme() {
+  const replace = panel => panel && {background:undefined,borderColor:undefined,borderWidth:undefined,borderRadius:undefined,padding:undefined,...panel};
+  const shared = {
+    bordered:{background:'#eff6ff',borderColor:'#93b4dd',borderWidth:'1px',borderRadius:'12px',padding:'16px'},
+    spacious:{background:'#fff8e9',borderColor:'#c8a66c',borderWidth:'2px',borderRadius:'4px',padding:'20px'},
+    'color-only':{borderColor:'#dd6688'},
+  }[sharedPanel.value];
+  const override = (select, background) => ({
+    tint:{background}, borderless:{borderWidth:'0px'}, compact:{padding:'6px',borderRadius:'3px'},
+  }[select.value]);
+  return {components:{activity:{panel:replace(shared),overflow:overflowTheme(sharedOverflow,'140px')},toolBubble:{panel:replace(override(toolPanel,'#edf8ef')),overflow:overflowTheme(toolOverflow,'100px')},reasoningBubble:{panel:replace(override(reasoningPanel,'#f6eeff')),overflow:overflowTheme(reasoningOverflow,'180px')}}};
+}
+function updatePanels() {
+  for (const {handle} of configurableHandles()) handle.update({theme:panelTheme()});
+}
+for (const select of [sharedPanel, toolPanel, reasoningPanel, sharedOverflow, toolOverflow, reasoningOverflow]) select.addEventListener('change', updatePanels);
+document.querySelector('#reset-overflow').addEventListener('click', () => {
+  for (const select of [sharedOverflow, toolOverflow, reasoningOverflow, reasoningHeight]) select.value = '';
+  for (const {handle} of configurableHandles()) handle.update({theme:panelTheme(),features:{reasoningDisplay:reasoningDisplay()}});
+});
+document.querySelector('#reset-panels').addEventListener('click', () => {
+  for (const select of [sharedPanel, toolPanel, reasoningPanel]) select.value = '';
+  updatePanels();
+});
 const descriptiveTitles = document.querySelector('#action-titles');
 const mockTurn = document.querySelector('#mock-turn');
 function toolDisplay() {
   const mode = toolRendering.value;
-  return {variant:mode === 'card' ? 'card' : 'row', grouped:!['row','card'].includes(mode),
+  return {layout:mode === 'card' ? 'card' : 'row', grouped:!['row','card'].includes(mode),
     groupedMode:['row','card'].includes(mode) ? 'collapsible' : mode,
-    groupSummary:toolSummary.value || undefined};
+    groupSummary:toolSummary.value || undefined, showToolName:rawToolName.checked, durationDisplay:timing.value};
 }
 function toolOverrides(boundary) {
   return {
     resolveActionTitle:descriptiveTitles.checked ? tool => actionTitles.get(tool.id) : undefined,
     renderGroupedSummary:summary(boundary),
-    renderCollapsedSummary:context => custom.checked ? `Custom · ${context.actionTitle || context.defaultSummary}` : null,
+    renderCollapsedSummary:context => custom.checked ? `Custom · ${context.actionTitle || context.defaultSummary} · ${context.elapsed}` : null,
   };
 }
 function resolveTurn(message) {
   const block = message.agentMetadata?.textBlockId;
   const record = turnRecords.get(message.agentMetadata?.executionId);
-  if (!record || (!block && message.variant !== 'tool')) return undefined;
+  if (!record || (!block && !['tool','reasoning'].includes(message.variant))) return undefined;
   return {...record, kind:block?.endsWith('-answer') ? 'final' : 'progress'};
 }
 const animation = document.querySelector('#animation'), duration = document.querySelector('#duration');
@@ -175,19 +233,29 @@ function mockStream(boundary) {
         const tool = async (iteration, name) => {
           const toolCallId = executionId + '-' + iteration + '-' + name;
           actionTitles.set(toolCallId, {web_search:'Checking the streaming documentation', Read:'Reading the adapter source', Compare:'Comparing provider contracts', Inspect:'Inspecting example coverage', Summarize:'Preparing the comparison'}[name]);
-          emit('tool_start', {iteration, toolCallId, toolName: name, parameters: {iteration}});
+          emit('tool_start', {iteration, toolCallId, toolName: name, parameters: longTools.checked ? {iteration,checks:Array.from({length:30},(_,i)=>({step:i+1,description:'Compare the provider contract and verify the adapter event ordering for this step.'}))} : {iteration}});
           const elapsed = Number(toolTime.value);
           await wait(elapsed / 2);
           emit('tool_output_delta', {toolCallId, delta: 'Processing sample data…'});
           await wait(elapsed / 2);
-          emit('tool_complete', {iteration, toolCallId, toolName: name, success: true, result: 'Complete', executionTime: elapsed});
+          emit('tool_complete', {iteration, toolCallId, toolName: name, success: true, result: longTools.checked ? Array.from({length:30},(_,i)=>`Finding ${i+1}: The adapter preserves request order and streams a readable response while the surrounding transcript stays easy to follow.`).join('\n\n') : 'Complete', executionTime: elapsed});
         };
         (async () => {
           try {
             phase.textContent = 'Starting a new response — no tools yet';
             emit('execution_start', {kind:'agent', agentId:'preview', agentName:'Preview', maxTurns:3});
             if (boundary === 'turn') prose('opening-progress', 'I’ll trace the issue through the source and compare the relevant files.');
+            emit('reasoning_start', {id:executionId + '-reasoning'});
+            const reasoningText = 'I’ll compare the streaming contracts, inspect the adapter source, and check how progress is distinguished from final answers.\n\nEach step should preserve readable details without adding another disclosure.';
+            emit('reasoning_delta', {id:executionId + '-reasoning', delta:reasoningText});
+            if (longReasoning.checked) {
+              for (let step = 1; step <= 12; step++) {
+                await wait(120);
+                emit('reasoning_delta', {id:executionId + '-reasoning', delta:`\n\nCheckpoint ${step}. I’m tracing this part of the response through the adapter, comparing the documented event order with the visible progress, and checking that every paragraph stays readable. A long trace should scroll within its own details while keeping the surrounding conversation easy to follow.`});
+              }
+            }
             await wait(1800);
+            emit('reasoning_complete', {id:executionId + '-reasoning'});
             for (let iteration = 1; iteration <= 3; iteration++) {
               phase.textContent = `Running iteration ${iteration} of 3`;
               emit('turn_start', {id:executionId + '-turn-' + iteration, role:'assistant', iteration});
@@ -226,10 +294,10 @@ function mockStream(boundary) {
 for (const boundary of ['adjacent', 'iteration', 'turn']) {
   const handle = AgentWidget.initAgentWidget({target:'#' + boundary, config:{
     apiUrl:'/api/chat', persistState:false, future:{v5Defaults:true},
-    loadingLabel:labelSettings(), expansion:expansionSettings(),
+    loadingLabel:labelSettings(), expansion:expansionSettings(), theme:panelTheme(),
     launcher:{enabled:false, fullHeight:true}, layout:{showHeader:false},
     voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
-    features:{toolCallDisplay:{...toolDisplay(), groupBoundary:boundary === 'turn' ? 'iteration' : boundary, iconVisibility:'always', groupIconVisibility:boundary === 'turn' ? 'never' : 'always', autoExpand:false, autoCollapseDelay:false}},
+    features:{reasoningDisplay:reasoningDisplay(), toolCallDisplay:{...toolDisplay(), groupBoundary:boundary === 'turn' ? 'iteration' : boundary, iconVisibility:'always', groupIconVisibility:boundary === 'turn' ? 'never' : 'always', autoExpand:false, autoCollapseDelay:false}},
     turnActivity:{enabled:boundary === 'turn' && mockTurn.checked, resolveMessage:resolveTurn, renderHeader:context => custom.checked ? 'Investigation · ' + context.defaultSummary : null},
     toolCall:toolOverrides(boundary), customFetch:mockStream(boundary)
   }});
@@ -267,8 +335,8 @@ async function mountLive(initialMessages = []) {
     future:{v5Defaults:liveV5.checked}, turnActivity:{enabled:liveTurn.checked},
     launcher:{enabled:false, fullHeight:true}, layout:{showHeader:false},
     voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
-    loadingLabel:labelSettings(), expansion:expansionSettings(),
-    features:{showToolCalls:true, showReasoning:true, toolCallDisplay:toolDisplay()},
+    loadingLabel:labelSettings(), expansion:expansionSettings(), theme:panelTheme(),
+    features:{showToolCalls:true, showReasoning:true, reasoningDisplay:reasoningDisplay(), toolCallDisplay:toolDisplay()},
     toolCall:toolOverrides('live'),
   }});
   liveHandle.on('run:started', () => {
@@ -287,8 +355,8 @@ async function mountLive(initialMessages = []) {
     livePhase.textContent = 'Ready. Run the example or type your own prompt.';
   } catch (error) { liveV5.disabled = liveProvider.disabled = false; liveError.textContent = 'Loading failed: ' + error.message; }
 }
-for (const select of [toolSummary, toolRendering]) select.addEventListener('change', () => {
-  for (const {handle} of configurableHandles()) handle.update({features:{toolCallDisplay:toolDisplay()}});
+for (const select of [toolSummary, toolRendering, reasoningLayout, reasoningAppearance, reasoningHeight]) select.addEventListener('change', () => {
+  for (const {handle} of configurableHandles()) handle.update({features:{toolCallDisplay:toolDisplay(), reasoningDisplay:reasoningDisplay()}});
 });
 descriptiveTitles.addEventListener('change', () => {
   for (const {handle,boundary} of configurableHandles()) handle.update({toolCall:toolOverrides(boundary)});
@@ -333,8 +401,8 @@ replay.addEventListener('click', async () => {
     apiUrl:'/api/chat', persistState:false, future:{v5Defaults:true},
     launcher:{enabled:false, fullHeight:true}, layout:{showHeader:false},
     voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
-    initialMessages:messages, turnActivity:{enabled:mockTurn.checked, resolveMessage:resolveTurn, renderHeader:context => custom.checked ? 'Investigation · ' + context.defaultSummary : null}, expansion:expansionSettings(), loadingLabel:labelSettings(),
-    features:{toolCallDisplay:{...toolDisplay(), groupBoundary:'iteration',groupIconVisibility:'never',autoExpand:false,autoCollapseDelay:false}},
+    initialMessages:messages, theme:panelTheme(), turnActivity:{enabled:mockTurn.checked, resolveMessage:resolveTurn, renderHeader:context => custom.checked ? 'Investigation · ' + context.defaultSummary : null}, expansion:expansionSettings(), loadingLabel:labelSettings(),
+    features:{reasoningDisplay:reasoningDisplay(), toolCallDisplay:{...toolDisplay(), groupBoundary:'iteration',groupIconVisibility:'never',autoExpand:false,autoCollapseDelay:false}},
     toolCall:toolOverrides('turn'),
     customFetch:mockStream('turn')
   }});
@@ -347,8 +415,8 @@ for (const input of [custom, icons]) input.addEventListener('change', () => {
     toolCall:toolOverrides(boundary)
   });
 });
-timing.addEventListener('change', () => {
-  for (const {handle} of configurableHandles()) handle.update({features:{toolCallDisplay:{durationDisplay:timing.value}}});
+for (const input of [timing, rawToolName]) input.addEventListener('change', () => {
+  for (const {handle} of configurableHandles()) handle.update({features:{toolCallDisplay:{durationDisplay:timing.value, showToolName:rawToolName.checked}}});
 });
 for (const select of [animation, duration]) select.addEventListener('change', () => {
   for (const {handle} of configurableHandles()) handle.update({loadingLabel:labelSettings()});

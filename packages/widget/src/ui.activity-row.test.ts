@@ -158,7 +158,6 @@ it.each(['stack', 'summary', 'collapsible'] as const)('manages loading effects o
   expect(reason.destroy).toHaveBeenCalledTimes(1);
 });
 
-
 it('keeps open singleton details visible when a second tool forms a group, then respects a manual group close', () => {
   start(true, { groupBoundary: 'iteration', autoExpand: false, autoCollapseDelay: false });
   inject('tool1', 'running', ['first output']);
@@ -190,4 +189,27 @@ it('preserves manually opened singleton details after group completion without d
   vi.advanceTimersByTime(200);
   expect(header('tool-group-tool1').getAttribute('aria-expanded')).toBe('true');
   expect(header('tool1').getAttribute('aria-expanded')).toBe('true');
+});
+
+it('changes reasoning layout and appearance live without resetting manual disclosure or custom summaries', () => {
+  const renderCollapsedSummary = () => { const element = document.createElement('em'); element.textContent = 'Host summary'; return element; };
+  controller = createAgentExperience(mount, { apiUrl: '/test', persistState: false, launcher: { enabled: false }, future: { v5Defaults: true }, reasoning: { renderCollapsedSummary }, features: { reasoningDisplay: { layout: undefined, appearance: undefined } } });
+  const message: AgentWidgetMessage = { id: 'r1', role: 'assistant', content: '', createdAt: '2026-01-01', variant: 'reasoning', reasoning: { id: 'r1', status: 'complete', chunks: ['Trace details'] } };
+  controller.injectTestMessage({ type: 'message', message });
+  expect(header('r1').getAttribute('aria-expanded')).toBe('false');
+  expect(header('r1').parentElement?.dataset.appearance).toBe('inset');
+  header('r1').click();
+  for (const layout of ['row', 'card'] as const) for (const appearance of ['plain', 'inset', 'panel'] as const) {
+    controller.update({ features: { reasoningDisplay: { layout, appearance } } });
+    const bubble = header('r1').parentElement!;
+    expect(bubble.classList.contains('persona-activity-row')).toBe(layout === 'row');
+    expect(bubble.dataset.appearance).toBe(appearance);
+    expect(bubble.querySelector('em')?.textContent).toBe('Host summary');
+    expect(header('r1').getAttribute('aria-expanded')).toBe('true');
+    expect(bubble.querySelector<HTMLElement>('.persona-border-t')?.inert).not.toBe(true);
+  }
+  controller.update({ features: { reasoningDisplay: { layout: undefined, appearance: undefined } } });
+  expect(header('r1').parentElement?.dataset.appearance).toBe('inset');
+  expect(header('r1').parentElement?.classList.contains('persona-activity-row')).toBe(true);
+  expect(header('r1').getAttribute('aria-expanded')).toBe('true');
 });

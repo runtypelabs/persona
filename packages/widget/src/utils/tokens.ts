@@ -595,7 +595,7 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
     borderRadius: 'palette.radius.md',
   },
   launcher: CIRCLE_LAUNCHER_TOKENS,
-  activity: { rowHeight: "32px", labelSize: "13px", iconSize: "16px", indent: "0px", groupIndent: "0px", groupGap: "0px", groupPadding: "0px", transcriptGap: "0px", responseGap: "12px", bodyPadding: "4px 0", bodySize: "13px", bodyLineHeight: "1.5", bodyFontWeight: "400", sectionGap: "8px", bodySurface: "transparent" },
+  activity: { rowHeight: "32px", labelSize: "13px", iconSize: "16px", indent: "0px", groupIndent: "0px", groupGap: "0px", groupPadding: "0px", transcriptGap: "0px", responseGap: "12px", bodyPadding: "4px 0", bodyFontWeight: "400", sectionGap: "8px", bodySurface: "transparent" },
   toolBubble: { shadow: "none" },
   reasoningBubble: { shadow: "none" },
   input: { ...DEFAULT_COMPONENTS_BASE.input, borderRadius: 'palette.radius.full' },
@@ -811,27 +811,12 @@ function mergeRecords(
   return result;
 }
 
-function deepMergeComponents(
-  base: ComponentTokens,
-  override?: Partial<ComponentTokens>
-): ComponentTokens {
-  if (!override) return base;
-  return mergeRecords(
-    base as unknown as Record<string, unknown>,
-    override as unknown as Record<string, unknown>
-  ) as unknown as ComponentTokens;
-}
-
 export function createTheme(
   userConfig?: DeepPartial<PersonaTheme>,
   options: CreateThemeOptions = {}
 ): PersonaTheme {
-  const defaults = resolveThemeDefaults(options.future);
-  const baseTheme: PersonaTheme = {
-    palette: defaults.palette as PersonaTheme['palette'],
-    semantic: defaults.semantic as PersonaTheme['semantic'],
-    components: defaults.components as PersonaTheme['components'],
-  };
+  const baseTheme = resolveThemeDefaults(options.future) as PersonaTheme;
+  const components = userConfig?.components;
 
   let theme: PersonaTheme = {
     palette: {
@@ -886,34 +871,34 @@ export function createTheme(
         ...userConfig?.semantic?.typography,
       },
     },
-    components: deepMergeComponents(
-      baseTheme.components,
-      userConfig?.components as Partial<ComponentTokens> | undefined
-    ),
+    components: components ? mergeRecords(
+      baseTheme.components as unknown as Record<string, unknown>,
+      components as Record<string, unknown>
+    ) as unknown as ComponentTokens : baseTheme.components,
   } as PersonaTheme;
 
-  // A shared header padding is also the minimal-layout override unless the
-  // host supplies the more specific token. Both keys remain emitted CSS vars,
-  // so live updates and scheme changes restyle existing header DOM in place.
-  const activity = userConfig?.components?.activity;
+  // Project shared activity aliases without mutating the versioned defaults.
+  const activity = components?.activity;
   for (const kind of ['toolBubble', 'reasoningBubble'] as const) {
+    const tokens = theme.components[kind] = { ...theme.components[kind] };
     for (const field of ['rowHeight', 'labelSize', 'iconSize', 'indent', 'bodySurface'] as const) {
-      if (activity?.[field] !== undefined && (field !== 'bodySurface' || userConfig?.components?.[kind]?.bodySurface === undefined)) theme.components[kind][field] = activity[field];
+      if (activity?.[field] !== undefined && (field !== 'bodySurface' || components?.[kind]?.bodySurface === undefined)) tokens[field] = activity[field];
     }
   }
-  const legacySurface = userConfig?.components?.collapsibleWidget?.surface;
+  const legacySurface = components?.collapsibleWidget?.surface;
   // V4 keeps the historical shared surface. V5 separates activity from code
   // widgets; callers use activity.bodySurface (or the per-kind override).
   if (resolveDefaultsVersion(options) === 'v4' && legacySurface !== undefined && activity?.bodySurface === undefined) {
     theme.components.activity = { ...theme.components.activity, bodySurface: legacySurface };
   }
 
-  const suppliedHeader = userConfig?.components?.header;
+  // Shared header padding also supplies minimal padding unless authored separately.
+  const suppliedHeader = components?.header;
   if (suppliedHeader?.padding !== undefined && suppliedHeader.minimalPadding === undefined) {
     theme.components.header.minimalPadding = theme.components.header.padding;
   }
 
-  const suppliedComposer = userConfig?.components?.composer;
+  const suppliedComposer = components?.composer;
   // An input-only override leaves the composer's defaults shared after merging.
   // Derive expanded values on a fresh object so a brand cannot mutate defaults
   // for a sibling instance or survive removal from the current configuration.
@@ -921,11 +906,11 @@ export function createTheme(
   if (suppliedComposer?.padding !== undefined && suppliedComposer.expandedPadding === undefined) {
     theme.components.composer.expandedPadding = suppliedComposer.padding;
   }
-  if (userConfig?.components?.input?.borderRadius !== undefined && suppliedComposer?.expandedBorderRadius === undefined) {
-    theme.components.composer.expandedBorderRadius = userConfig.components.input.borderRadius;
+  if (components?.input?.borderRadius !== undefined && suppliedComposer?.expandedBorderRadius === undefined) {
+    theme.components.composer.expandedBorderRadius = components.input.borderRadius;
   }
 
-  const suppliedMessage = userConfig?.components?.message;
+  const suppliedMessage = components?.message;
   if (suppliedMessage?.gap !== undefined && suppliedMessage.fullscreenGap === undefined) {
     theme.components.message.fullscreenGap = theme.components.message.gap;
   }

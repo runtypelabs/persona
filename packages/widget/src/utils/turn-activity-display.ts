@@ -14,7 +14,7 @@ function nativeActivity(message: AgentWidgetMessage): AgentWidgetTurnActivity | 
 
 const compactDisplay = {
   toolCallDisplay: { variant: "row", grouped: true, groupedMode: "collapsible", autoExpand: false, iconVisibility: "always" },
-  reasoningDisplay: { variant: "row", autoExpand: false, iconVisibility: "always" },
+  reasoningDisplay: { appearance: "inset", variant: "row", autoExpand: false, iconVisibility: "always" },
 } as const;
 const compactPaths = Object.entries(compactDisplay).flatMap(([key, values]) =>
   Object.keys(values).map(leaf => `features.${key}.${leaf}`));

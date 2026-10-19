@@ -207,7 +207,7 @@ describe("pure streaming text update coalescing", () => {
       },
     });
     expect(save.mock.calls.length).toBeGreaterThan(beforeTool);
-    expect(mount.textContent).toContain("search");
+    expect(mount.querySelector('.persona-tool-bubble[data-message-id="tool-1"]')).not.toBeNull();
 
     const beforeApproval = save.mock.calls.length;
     controller.injectTestMessage({

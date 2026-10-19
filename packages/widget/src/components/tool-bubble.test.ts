@@ -64,10 +64,10 @@ describe("semantic activity row labels", () => {
   const message = () => ({ ...makeMessage(), toolCall: { ...makeMessage().toolCall!, name: "web_search" } });
   const header = (settings = config) => createToolBubble(message(), settings).querySelector("button")!.textContent;
 
-  it("uses the semantic default and retains the original name in expanded details", () => {
+  it("uses the semantic default without a standalone raw name", () => {
     const bubble = createToolBubble(message(), config);
     expect(bubble.querySelector("button")?.textContent).toBe("Searched the web");
-    expect(bubble.querySelector("[data-persona-tool-name]")?.textContent).toBe("web_search");
+    expect(bubble.querySelector("[data-persona-tool-name]")).toBeNull();
   });
   it("preserves explicit display modes, authored templates and custom renderers", () => {
     expect(header({ ...config, features: { toolCallDisplay: { collapsedMode: "tool-name" } } })).toBe("web_search");
@@ -130,5 +130,21 @@ describe("descriptive action titles without turn classification", () => {
     } });
     expect(received).toBe("Checking citations");
     expect(bubble.querySelector("button")!.textContent).not.toContain("Checking citations");
+  });
+});
+
+describe("tool preview normalization", () => {
+  it("uses argument head lines, output tail lines, and ignores blank lines and CRLF", () => {
+    const message = makeMessage();
+    message.toolCall!.status = "running";
+    message.toolCall!.args = "  request one\r\n\r\n request two \r\nrequest three  ";
+    message.toolCall!.chunks = ["  \n "];
+    const config: AgentWidgetConfig = { features: { toolCallDisplay: { collapsedMode: "tool-preview", previewMaxLines: 2 } } };
+    const title = () => createToolBubble(message, config).querySelector("button > div > span")?.textContent;
+    expect(title()).toBe("request one\nrequest two");
+    message.toolCall!.chunks = [" output one\r\n  \r\n output two \r\n output three  "];
+    expect(title()).toBe("output two\noutput three");
+    config.features!.toolCallDisplay!.previewMaxLines = 0;
+    expect(title()).toBe("output one\noutput two\noutput three");
   });
 });

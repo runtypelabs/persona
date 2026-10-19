@@ -2425,19 +2425,23 @@ export type AgentWidgetLoadingLabelConfig = {
 };
 
 export type AgentWidgetToolCallDisplayFeature = {
-  /** Activity chrome. Defaults to card in V4 and row with future.v5Defaults. */
+  /** Activity layout. Defaults to card in V4 and row with future.v5Defaults. */
+  layout?: "card" | "row";
+  /** @deprecated Use layout. An explicit layout takes precedence. */
   variant?: "card" | "row";
   /** Row status icons: always, active/attention-needed only, or never. V5 defaults to active; V4 to always. */
   iconVisibility?: "always" | "active" | "never";
-  /** Row variant: open when the first content chunk arrives. Default false in V5; true in V4. */
+  /** Row layout: open when the first content chunk arrives. Default false in V5; true in V4. */
   autoExpand?: boolean;
-  /** Row variant: collapse once after completion, in ms; false disables. Default 1000. */
+  /** Row layout: collapse once after completion, in ms; false disables. Default 1000. */
   autoCollapseDelay?: number | false;
   /**
    * Controls what collapsed tool call rows show in their header/summary area.
    * @default "tool-call"
    */
   collapsedMode?: AgentWidgetToolCallCollapsedMode;
+  /** Show the raw tool name above expanded details. Independent of header labels. @default false */
+  showToolName?: boolean;
   /**
    * When true, active collapsed tool calls can render a lightweight preview block.
    * @default false
@@ -2475,10 +2479,10 @@ export type AgentWidgetToolCallDisplayFeature = {
   groupBoundary?: "adjacent" | "iteration";
   /** Built-in collapsible header icon visibility. Inherits iconVisibility; child rows and custom summary content keep their own icons. */
   groupIconVisibility?: "always" | "active" | "never";
-  /** Automatic elapsed timing in tool rows and collapsible group headers. Whole seconds (2s),
+  /** Automatic elapsed timing in tool rows, V5 cards, and collapsible group headers. Whole seconds (2s),
    * hidden below 1s or without known timing. Groups span earliest start to latest completion,
    * including gaps/overlap, and tick only while a child runs. Authored templates/renderers
-   * and exact timing in expanded details are independent. @default "none" */
+   * retain timing metadata and elapsed helpers independently. @default "none" */
   durationDisplay?: "none" | "tools" | "group" | "all";
   /**
    * What happens to a tool call row once it completes.
@@ -2512,13 +2516,21 @@ export type AgentWidgetToolCallDisplayFeature = {
 export type AgentWidgetToolCallCompletedVisibility = "kept" | "removed";
 
 export type AgentWidgetReasoningDisplayFeature = {
-  /** Activity chrome. Defaults to card in V4 and row with future.v5Defaults. */
+  /** Explicit compatibility override for theme.components.reasoningBubble/activity.overflow.maxHeight.
+   * CSS length or "none"; unset inherits the theme (V5 240px, V4 uncapped). */
+  maxHeight?: string;
+  /** Expanded detail treatment, independent of layout: plain text, an inset trace,
+   * or a subtle panel. V5 defaults to inset; V4 keeps its legacy row/card treatment. */
+  appearance?: "plain" | "inset" | "panel";
+  /** Activity layout. Defaults to card in V4 and row with future.v5Defaults. */
+  layout?: "card" | "row";
+  /** @deprecated Use layout. An explicit layout takes precedence. */
   variant?: "card" | "row";
   /** Row status icons: always, active/attention-needed only, or never. V5 defaults to active; V4 to always. */
   iconVisibility?: "always" | "active" | "never";
-  /** Row variant: open when the first content chunk arrives. Default false in V5; true in V4. */
+  /** Row layout: open when the first content chunk arrives. Default false in V5; true in V4. */
   autoExpand?: boolean;
-  /** Row variant: collapse once after completion, in ms; false disables. Default 1000. */
+  /** Row layout: collapse once after completion, in ms; false disables. Default 1000. */
   autoCollapseDelay?: number | false;
   /**
    * When true, active collapsed reasoning rows can render a lightweight preview block.
@@ -2839,6 +2851,7 @@ export type WidgetPreferenceSlice = {
   showReasoning?: boolean;
   toolCallDisplay?: Pick<
     AgentWidgetToolCallDisplayFeature,
+    | "layout"
     | "collapsedMode"
     | "expandable"
     | "grouped"
@@ -2849,7 +2862,7 @@ export type WidgetPreferenceSlice = {
   >;
   reasoningDisplay?: Pick<
     AgentWidgetReasoningDisplayFeature,
-    "expandable" | "activePreview"
+    "layout" | "appearance" | "expandable" | "activePreview"
   >;
   artifacts?: {
     /**

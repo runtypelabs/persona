@@ -10,6 +10,10 @@
   --persona-welcome-max-width: 640px;
   /* Reset on every root so a nested V4 widget keeps its own control treatment. */
   --persona-internal-composer-action-font-size: 0.875rem;
+  --persona-internal-activity-max-height: initial;
+  --persona-internal-activity-fade-height: 0px;
+  --persona-internal-reasoning-size: 12px;
+  --persona-internal-reasoning-line-height: initial;
   --persona-internal-composer-selected-mode-radius: var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem));
   
   /* Theme-aware markdown variables - inherit from theme colors set by JavaScript */
@@ -26,6 +30,10 @@
 
 [data-persona-root][data-persona-defaults="v5"] {
   --persona-internal-composer-action-font-size: 0.8125rem;
+  --persona-internal-activity-max-height: 240px;
+  --persona-internal-activity-fade-height: 12px;
+  --persona-internal-reasoning-size: 14px;
+  --persona-internal-reasoning-line-height: 1.55;
   --persona-internal-composer-selected-mode-radius: var(--persona-button-radius, 9999px);
 }
 
@@ -6573,19 +6581,40 @@
   margin-top:calc(var(--persona-components-activity-responseGap, var(--persona-transcript-gap)) - var(--persona-transcript-gap));
 }
 
-.persona-reasoning-bubble.persona-activity-row > .persona-activity-body > .persona-whitespace-pre-wrap {
-  font-size:var(--persona-components-activity-bodySize, 12px);
-  line-height:var(--persona-components-activity-bodyLineHeight, inherit);
+.persona-reasoning-bubble > .persona-border-t > .persona-whitespace-pre-wrap {
+  color: var(--persona-muted, #6b7280);
+  font-size:var(--persona-components-activity-bodySize, var(--persona-components-reasoningBubble-bodySize, var(--persona-internal-reasoning-size, 12px)));
+  line-height:var(--persona-components-activity-bodyLineHeight, var(--persona-components-reasoningBubble-bodyLineHeight, var(--persona-internal-reasoning-line-height, 1.375)));
   font-weight:var(--persona-components-activity-bodyFontWeight, inherit);
 }
+.persona-reasoning-bubble.persona-activity-row > .persona-activity-body > .persona-whitespace-pre-wrap {
+  line-height:var(--persona-components-activity-bodyLineHeight, var(--persona-components-reasoningBubble-bodyLineHeight, var(--persona-internal-reasoning-line-height, inherit)));
+}
 
-/* V5 tool details: a single request/response surface, plain text or structured data. */
+/* Detail panels share a frame inside the disclosure's spacing/motion boundary. */
 .persona-tool-detail {
-  position: relative;
   padding: 10px 12px;
   border: 0 solid transparent;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--persona-muted) 5%, transparent);
+  background: var(--persona-detail-surface, color-mix(in srgb, var(--persona-muted) 5%, transparent));
+}
+/* Panel tokens affect tool request/response and row reasoning only. Approval
+   details share the base class but retain their independent presentation. */
+.persona-tool-detail[data-persona-tool-detail],
+.persona-reasoning-bubble.persona-activity-row[data-appearance="panel"] > .persona-border-t > div {
+  padding: var(--persona-detail-padding, var(--persona-components-activity-panel-padding, 10px 12px));
+  border: var(--persona-detail-border-width, var(--persona-components-activity-panel-borderWidth, 0)) solid var(--persona-detail-border-color, var(--persona-components-activity-panel-borderColor, transparent));
+  border-radius: var(--persona-detail-radius, var(--persona-components-activity-panel-borderRadius, 8px));
+  background: var(--persona-detail-background, var(--persona-components-activity-panel-background, var(--persona-detail-surface, color-mix(in srgb, var(--persona-muted) 5%, transparent))));
+}
+.persona-tool-detail {
+  position: relative;
+  --persona-detail-surface: var(--persona-components-toolBubble-bodySurface);
+  --persona-detail-background: var(--persona-components-toolBubble-panel-background);
+  --persona-detail-border-color: var(--persona-components-toolBubble-panel-borderColor);
+  --persona-detail-border-width: var(--persona-components-toolBubble-panel-borderWidth);
+  --persona-detail-radius: var(--persona-components-toolBubble-panel-borderRadius);
+  --persona-detail-padding: var(--persona-components-toolBubble-panel-padding);
 }
 .persona-tool-detail-label {
   font-size: 11px;
@@ -6608,8 +6637,6 @@
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 240px;
-  overflow: auto;
 }
 .persona-tool-detail .persona-tool-detail-code { font-family: var(--persona-font-mono, monospace); font-size: 12px; }
 .persona-tool-detail-copy {
@@ -6892,3 +6919,64 @@
 .persona-turn-activity-duration { font-size: inherit; }
 
 [data-persona-turn-activity] > .persona-activity-header { width: 100%; border-radius: 0; border-bottom: 1px solid var(--persona-message-border); }
+
+/* Detail treatments reuse existing disclosure content. Card layout already
+   supplies the panel frame, so it never receives a second bordered box. */
+.persona-reasoning-bubble:not(.persona-activity-row)[data-appearance="panel"] > .persona-border-t {
+  background: var(--persona-components-reasoningBubble-bodySurface, var(--persona-components-activity-bodySurface, var(--persona-cw-container, #f9fafb)));
+}
+.persona-reasoning-bubble[data-appearance="plain"] > .persona-border-t {
+  border: 0;
+  background: var(--persona-components-reasoningBubble-bodySurface, var(--persona-components-activity-bodySurface, transparent));
+}
+.persona-reasoning-bubble[data-appearance="inset"] > .persona-border-t {
+  border: 0;
+  background: var(--persona-components-reasoningBubble-bodySurface, var(--persona-components-activity-bodySurface, transparent));
+  border-inline-start: 2px solid var(--persona-cw-border, var(--persona-border, #e5e7eb));
+  margin: 4px 16px 12px;
+  padding: var(--persona-components-activity-bodyPadding, 4px 12px);
+}
+.persona-reasoning-bubble.persona-activity-row[data-appearance="inset"] > .persona-border-t {
+  margin: 4px 0 8px var(--persona-activity-indent);
+  padding: var(--persona-components-activity-bodyPadding, 8px 12px);
+}
+
+.persona-reasoning-bubble[data-appearance="inset"] > .persona-border-t > div {
+  margin-inline-start: 12px;
+}
+
+.persona-reasoning-bubble.persona-activity-row[data-appearance="panel"] > .persona-border-t > div {
+  /* Authored shared surfaces propagate to this per-kind alias. Unset aliases
+     fall back to the shared panel fill instead of the transparent row body. */
+  --persona-detail-surface: var(--persona-components-reasoningBubble-bodySurface);
+  --persona-detail-background: var(--persona-components-reasoningBubble-panel-background);
+  --persona-detail-border-color: var(--persona-components-reasoningBubble-panel-borderColor);
+  --persona-detail-border-width: var(--persona-components-reasoningBubble-panel-borderWidth);
+  --persona-detail-radius: var(--persona-components-reasoningBubble-panel-borderRadius);
+  --persona-detail-padding: var(--persona-components-reasoningBubble-panel-padding);
+}
+
+/* Only the scroll viewport is masked; its frame keeps panel chrome and focus visible. */
+.persona-tool-bubble {
+  --persona-activity-max-height: var(--persona-components-toolBubble-overflow-maxHeight, var(--persona-components-activity-overflow-maxHeight, var(--persona-internal-activity-max-height, calc(11rem - 2px))));
+  --persona-activity-fade-height: var(--persona-components-toolBubble-overflow-fadeHeight, var(--persona-components-activity-overflow-fadeHeight, var(--persona-internal-activity-fade-height, 0px)));
+}
+.persona-reasoning-bubble {
+  --persona-activity-max-height: var(--persona-components-reasoningBubble-overflow-maxHeight, var(--persona-components-activity-overflow-maxHeight, var(--persona-internal-activity-max-height, none)));
+  --persona-activity-fade-height: var(--persona-components-reasoningBubble-overflow-fadeHeight, var(--persona-components-activity-overflow-fadeHeight, var(--persona-internal-activity-fade-height, 0px)));
+}
+.persona-activity-scroll {
+  display: block;
+  max-height: var(--persona-activity-max-height);
+  overflow: auto;
+  outline: none;
+  --persona-activity-fade-top: 0px;
+  --persona-activity-fade-bottom: 0px;
+}
+.persona-activity-scroll[data-persona-scroll-top] { --persona-activity-fade-top: var(--persona-activity-fade-height); }
+.persona-activity-scroll[data-persona-scroll-bottom] { --persona-activity-fade-bottom: var(--persona-activity-fade-height); }
+.persona-activity-scroll[data-persona-scroll-top], .persona-activity-scroll[data-persona-scroll-bottom] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--persona-activity-fade-top), #000 calc(100% - var(--persona-activity-fade-bottom)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--persona-activity-fade-top), #000 calc(100% - var(--persona-activity-fade-bottom)), transparent);
+}
+:has(> .persona-activity-scroll:focus-visible) { outline: 2px solid var(--persona-primary); outline-offset: 2px; }

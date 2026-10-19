@@ -7,15 +7,7 @@ export const formatReasoningDuration = (reasoning: AgentWidgetReasoning) => {
     reasoning.durationMs !== undefined
       ? reasoning.durationMs
       : Math.max(0, end - start);
-  const seconds = durationMs / 1000;
-  if (seconds < 0.1) {
-    return "Thought for <0.1 seconds";
-  }
-  const formatted =
-    seconds >= 10
-      ? Math.round(seconds).toString()
-      : seconds.toFixed(1).replace(/\.0$/, "");
-  return `Thought for ${formatted} seconds`;
+  return `Thought for ${formatElapsedMs(durationMs).slice(0, -1)} seconds`;
 };
 
 export const describeReasonStatus = (reasoning: AgentWidgetReasoning) => {
@@ -57,15 +49,7 @@ export const formatToolDuration = (tool: AgentWidgetToolCall) => {
             (tool.completedAt ?? Date.now()) -
               (tool.startedAt ?? tool.completedAt ?? Date.now())
           );
-  const seconds = durationMs / 1000;
-  if (seconds < 0.1) {
-    return "Used tool for <0.1 seconds";
-  }
-  const formatted =
-    seconds >= 10
-      ? Math.round(seconds).toString()
-      : seconds.toFixed(1).replace(/\.0$/, "");
-  return `Used tool for ${formatted} seconds`;
+  return `Used tool for ${formatElapsedMs(durationMs).slice(0, -1)} seconds`;
 };
 
 export const describeToolStatus = (status: AgentWidgetToolCall["status"]) => {

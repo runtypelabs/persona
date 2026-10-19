@@ -444,10 +444,14 @@ export function mergeWithDefaults(
         toolCallDisplay: {
           ...defaults.features?.toolCallDisplay,
           ...config.features?.toolCallDisplay,
+          ...(config.features?.toolCallDisplay?.layout === undefined && config.features?.toolCallDisplay?.variant !== undefined
+            ? { layout: config.features.toolCallDisplay.variant } : {}),
         },
         reasoningDisplay: {
           ...defaults.features?.reasoningDisplay,
           ...config.features?.reasoningDisplay,
+          ...(config.features?.reasoningDisplay?.layout === undefined && config.features?.reasoningDisplay?.variant !== undefined
+            ? { layout: config.features.reasoningDisplay.variant } : {}),
         },
         ...(mergedScrollToBottom !== undefined ? { scrollToBottom: mergedScrollToBottom } : {}),
         ...(mergedScrollBehavior !== undefined ? { scrollBehavior: mergedScrollBehavior } : {}),

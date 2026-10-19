@@ -56,6 +56,42 @@ const config = {
 
 `composer.send` styles the idle send control. Its `size` applies to icon mode; padding supports icon and text modes. The existing `button.stop` group styles the streaming stop state and inherits idle send colors when omitted. Use the same paths under `darkTheme.components` for dark exceptions. Control `borderColor` is a color and `borderWidth` is a CSS length; both are needed for a visible border. Base component `border` tokens such as `header.border` are colors, while `introCard.border` and artifact pane borders are full CSS shorthands such as `'1px solid #ddd'`. See [advanced surface recipes and migration mappings](style-migrations.md#close-clear-submit-and-mic) for voice, approval, tools, questions and artifacts.
 
+## Reasoning layout and details
+
+```typescript
+const config = {
+  future: { v5Defaults: true },
+  features: {
+    toolCallDisplay: { layout: 'row' },
+    reasoningDisplay: { layout: 'row', appearance: 'inset' },
+  },
+};
+```
+
+Both `layout` controls accept `'row'` or `'card'`. Reasoning `appearance` accepts `'plain'`, `'inset'`, or `'panel'` for its expanded details. V5 defaults to collapsed rows with inset reasoning details; V4 preserves the card panel and plain details when rows are selected. Turn progress defaults to row/inset in either version. A card provides the panel frame itself, without a second nested box. Theme body surfaces and spacing, custom summaries, and manual disclosure choices continue to apply during live updates. The existing `expansion` and `expansion.chevron` options animate every appearance.
+
+V5 expanded reasoning uses 14px text with a 1.55 line height. Expanded reasoning and each tool Request/Response default to a 240px inner scroll cap with 12px edge fades. Set `theme.components.activity.overflow: { maxHeight: '360px', fadeHeight: '16px' }` to customize both kinds. Override either property independently in `theme.components.reasoningBubble.overflow` or `theme.components.toolBubble.overflow`; a per-kind property wins over the corresponding shared property. Tool Request and Response have separate scroll positions. Use `maxHeight: 'none'` for unlimited height or `fadeHeight: '0px'` to disable fades. Fades appear only where content remains out of view, leaving labels, copy buttons, panel frames, and keyboard focus outlines clear. Controls update existing history live; reset a property to `undefined` to inherit again. V4 retains uncapped reasoning and its legacy tool cap without fades unless themed.
+
+`features.reasoningDisplay.maxHeight` remains an explicit compatibility override: a supplied CSS length or `'none'` wins over shared and per-reasoning theme caps. Leave it unset (or reset it to `undefined`) to inherit the theme. Typography is controlled by `theme.components.activity.bodySize` and `bodyLineHeight`; scrolling remains inside the disclosure animation boundary.
+
+`variant` remains a deprecated alias for `layout` because it shipped in Persona 4.24.0. An explicit `layout` wins; resetting it to `undefined` falls back to an authored `variant` and then the version default. Both layout controls and reasoning appearance can also be persisted through `preferences`.
+
+Customize tool Request/Response surfaces and row reasoning with `appearance: 'panel'`
+through `theme.components.activity.panel`. Its `background`, `borderColor`,
+`borderWidth`, `borderRadius`, and `padding` properties are individually overridden
+by `toolBubble.panel` and `reasoningBubble.panel`. Unspecified properties keep
+the shared value, then the existing subtle fill, borderless `8px` corners and
+`10px 12px` padding. A border color alone keeps width `0`; provide a width to
+show it. Plain/inset reasoning and outer card frames keep their independent
+styles. Existing `bodySurface` remains a fallback below explicit panel fills.
+Legacy tool-call code-block overrides, then authored `toolBubble.codeBlock`
+colors, keep precedence over panel colors; an old code-block border color still
+implies a `1px` border. See the [panel examples and complete precedence](../packages/widget/THEME-CONFIG.md#v5-tool-details).
+
+Panel theme updates apply to rendered history without another request. Set a
+component panel or property to `undefined` to inherit the shared panel again;
+clear the shared panel to restore defaults.
+
 ## Group tool activity without extra nesting
 
 ```typescript
@@ -88,7 +124,12 @@ This creates one open **Working** disclosure across progress prose and tool batc
 
 Whole-turn bodies leave 16px below the Working/Worked divider and between prose and tool batches. Expanded tool groups use 2px around and between compact 28px child rows. Authored `theme.components.activity.transcriptGap`, `bodyPadding`, `groupGap`, `groupPadding`, and `rowHeight` override these scoped defaults; ordinary activity rows keep their existing spacing.
 
-Activity rows recognize exact common tool names, such as `web_search`, `Read`, `Bash`, and `apply_patch`, and use labels such as “Searched the web,” “Read a file,” or “Ran a command.” Homogeneous batches use a counted category such as “Web searches (5)” or “File reads (2),” so their headers differ from individual calls. Mixed batches combine repeated categories in their original order, such as “Read files, ran commands,” and shorten long lists while retaining failure, interruption, and approval indicators. Unknown or ambiguous names receive a readable generic label; Persona does not infer a tool's purpose from its arguments. Existing `toolCall.renderCollapsedSummary`, `toolCall.renderGroupedSummary`, and text templates override the defaults. Original tool names remain available in expanded details. Legacy card stack/summary groups retain their tool-count labels.
+Activity rows recognize exact common tool names, such as `web_search`, `Read`, `Bash`, and `apply_patch`, and use labels such as “Searched the web,” “Read a file,” or “Ran a command.” Homogeneous batches use a counted category such as “Web searches (5)” or “File reads (2),” so their headers differ from individual calls. Mixed batches combine repeated categories in their original order, such as “Read files, ran commands,” and shorten long lists while retaining failure, interruption, and approval indicators. Unknown or ambiguous names receive a readable generic label; Persona does not infer a tool's purpose from its arguments. Existing `toolCall.renderCollapsedSummary`, `toolCall.renderGroupedSummary`, and text templates override the defaults. Raw tool names are hidden above expanded details by default; enable `features.toolCallDisplay.showToolName` for a developer-facing name line. This setting is independent of header labels and applies to both rows and cards, including V4. Legacy card stack/summary groups retain their tool-count labels.
+
+`features.toolCallDisplay.durationDisplay` defaults to `"none"`. Use `"tools"`, `"group"`, or `"all"` for compact header timing on tool rows, V5 cards, and collapsible group headers. Sub-second and unknown times are omitted. Expanded details have no automatic duration footer in either version. V4 card default summaries retain their legacy “Used tool for…” wording; custom templates and summary hooks keep their timing behavior. Whole-turn activity timing is independent of this setting.
+
+Custom renderers still receive the original `toolCall.duration`, `durationMs`, `startedAt`, and `completedAt` data. `toolCall.renderCollapsedSummary` also receives `elapsed` and `createElapsedElement()`; `renderGroupedSummary` receives the original `toolCalls` array. Use these to author precise diagnostic timing without a built-in detail footer.
+
 
 Tool titles work independently of turn activity. Supply a plain-text `toolCall.actionTitle` on the tool call, or use the synchronous `config.toolCall.resolveActionTitle(toolCall, message)` hook. A nonblank direct title takes precedence over the resolver; absent or blank titles fall back to the mapped tool label. Active individual rows show the resolved title. Card headers retain their normal presentation, while `renderCollapsedSummary` receives an optional `context.actionTitle` for custom rendering. Persona does not extract titles from tool arguments, and the native SSE tool schema is unchanged.
 

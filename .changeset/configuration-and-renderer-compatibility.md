@@ -15,7 +15,7 @@ Improve configuration authoring, component theming, and renderer compatibility.
 - Refresh the generated Runtype public API contract for execution outcomes, tool annotations, steering submission modes, spoken-voice metadata, and prior tool results in voice requests.
 - Add opt-in shared height transitions for tool, tool-group, and reasoning disclosures, with coordinated inner-content motion, a default duration of 160ms, instant defaults, reduced-motion support, reversible transitions, streaming-safe rendering, and cleanup across live updates. Prevent grouped child entry effects from flashing during disclosure. Add configurable disclosure chevrons, defaulting to right/down under V5 while retaining V4 directions. Lighten disclosure chevrons and rotate them using the expansion timing, respecting reduced motion.
 
-- Hide automatic tool-row timing by default. Add optional whole-second per-tool or group elapsed timing, preserving authored timers and exact milliseconds in expanded details. Measure groups by known wall-clock timestamps rather than summing overlapping tools.
+- Hide automatic tool-row and V5 card timing by default. Add optional compact per-tool or group header timing, preserving authored timers and exact timing metadata for custom renderers. Hide raw names above tool details by default with a `features.toolCallDisplay.showToolName` opt-in, and remove the automatic duration footer from expanded details in both versions. Retain V4 card timed default summaries. Measure groups by known wall-clock timestamps rather than summing overlapping tools.
 
 - Render single-tool groups directly in stack/collapsible modes while preserving iteration boundaries. Preserve open details when a standalone tool gains siblings.
 
@@ -32,3 +32,13 @@ Improve configuration authoring, component theming, and renderer compatibility.
 - Anchor grouped progress to its visible turn header so automatic collapse keeps “Worked for…” readable above the final answer, preserving manual scroll intent.
 
 - Add per-tool descriptive action titles and a synchronous host title resolver independent of turn classification. Use titles on active rows, expose them to card summary renderers without changing card layout, and add current-action or aggregate group summaries across collapsible, summary-only and stack groups. Keep parallel/completed batches aggregate and preserve authored templates, custom renderers, attention states, and disclosure behavior.
+
+- Add canonical tool and reasoning `layout` controls while preserving shipped `variant` aliases, authored precedence, and live resets. Add plain, inset, and panel reasoning details on the existing disclosure body, with collapsed row/inset defaults in V5 and classified turn progress, preserved V4 presentation, theme/editor preferences, and shared expansion motion.
+
+- Align row reasoning panels with tool Request/Response details using shared subtle, borderless surfaces, 8px corners, 10px/12px internal padding, and consistent disclosure spacing. Preserve reasoning prose, structured tool typography, card framing, and authored theme overrides.
+
+- Add shared `activity.panel` background, border color/width, radius, and padding tokens with per-property tool/reasoning panel overrides. Restyle existing details live, retain body-surface and explicit code-block/legacy precedence, and preserve independent plain/inset reasoning, approval details, and outer card frames.
+
+- Make V5 expanded reasoning easier to read with 14px text, a 1.55 line height, and a configurable 240px inner scroll cap across layouts and appearances. Add `features.reasoningDisplay.maxHeight` for custom or unlimited height, keyboard scrolling, and live resets while preserving disclosure motion and V4 uncapped defaults.
+
+- Share expanded activity overflow controls through `activity.overflow` with per-property reasoning/tool overrides, 240px caps and 12px edge-aware fades in V5. Keep labels, copy controls, panel chrome and keyboard focus outside the mask; refresh on streaming, resize and live updates, and preserve V4 defaults and explicit reasoning cap compatibility.

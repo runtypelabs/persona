@@ -20,13 +20,14 @@ export function activityDisplay(config: AgentWidgetConfig | undefined, kind: Act
     ...(tool ? DEFAULT_TOOL_CALL_DISPLAY : DEFAULT_REASONING_DISPLAY),
     ...(config?.future?.v5Defaults === true ? tool ? DEFAULT_TOOL_CALL_DISPLAY_V5 : DEFAULT_REASONING_DISPLAY_V5 : {}),
     ...config?.features?.[key],
+    layout: activityLayout(config, kind),
   } } };
 }
 
-export function activityVariant(config: AgentWidgetConfig | undefined, kind: ActivityKind, message?: AgentWidgetMessage): "card" | "row" {
+export function activityLayout(config: AgentWidgetConfig | undefined, kind: ActivityKind, message?: AgentWidgetMessage): "card" | "row" {
   if (config && message) config = presentation(config, message);
   const key = kind === "tool" ? "toolCallDisplay" : "reasoningDisplay";
-  return config?.features?.[key]?.variant ?? (config?.future?.v5Defaults ? "row" : "card");
+  return config?.features?.[key]?.layout ?? config?.features?.[key]?.variant ?? (config?.future?.v5Defaults ? "row" : "card");
 }
 
 export function activityDuration(ms: number | undefined): string {
@@ -49,16 +50,26 @@ const toolDuration = (ms: number | undefined, prefix = ""): string =>
 
 /** Reuses card content/render hooks while replacing only its visual chrome. */
 export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessage, config: AgentWidgetConfig, kind: ActivityKind, groupHeader = false, completionIcon?: string): HTMLElement {
-  if (!groupHeader && activityVariant(config, kind) !== "row") return bubble;
+  const row = groupHeader || activityLayout(config, kind) === "row";
+  const header = bubble.querySelector<HTMLButtonElement>(":scope > button");
+  const data = kind === "tool" ? message.toolCall : message.reasoning;
+  const active = data?.status !== "complete";
+  const durationDisplay = config.features?.toolCallDisplay?.durationDisplay;
+  if (header && (row || config.future?.v5Defaults) && kind === "tool" && data && (durationDisplay === "all" || durationDisplay === (groupHeader ? "group" : "tools"))) {
+    const duration = createElement("span", "persona-activity-duration");
+    const { startedAt, completedAt, durationMs } = data;
+    if (active && startedAt! > 0 && startedAt! <= Date.now()) duration.setAttribute("data-tool-elapsed", String(startedAt));
+    const elapsed = message.toolCall?.duration ?? durationMs ?? (completedAt! - startedAt!);
+    duration.textContent = toolDuration(active && startedAt !== undefined ? (startedAt > 0 ? Date.now() - startedAt : undefined) : elapsed);
+    header.appendChild(duration);
+  }
+  if (!row) return bubble;
   bubble.className = `persona-message-bubble persona-${kind}-bubble persona-activity-row`;
   bubble.dataset.activityKind = kind;
   if (kind === "tool" && config.toolCall?.shadow === undefined) bubble.style.boxShadow = "var(--persona-tool-bubble-shadow, none)";
-  const header = bubble.querySelector<HTMLButtonElement>(":scope > button");
   if (!header) return bubble;
   header.className = header.classList.contains("persona-theme-padding")
     ? "persona-activity-header persona-theme-padding" : "persona-activity-header";
-  const data = kind === "tool" ? message.toolCall : message.reasoning;
-  const active = data?.status !== "complete";
   const approval = message.approval?.status ?? message.toolCall?.approvalStatus;
   const state = message.toolCall?.interrupted ? "interrupted"
     : approval === "denied" || approval === "timeout" ? "denied" : approval === "pending" ? "awaiting-approval"
@@ -78,15 +89,6 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
   const visibility = (groupHeader ? config.features?.toolCallDisplay?.groupIconVisibility : undefined) ?? config.features?.[displayKey]?.iconVisibility ??
     (config.future?.v5Defaults ? "active" : "always");
   if (visibility === "always" || (visibility === "active" && state !== "done")) header.prepend(icon);
-  const durationDisplay = config.features?.toolCallDisplay?.durationDisplay;
-  if (kind === "tool" && data && (durationDisplay === "all" || durationDisplay === (groupHeader ? "group" : "tools"))) {
-    const duration = createElement("span", "persona-activity-duration");
-    const { startedAt, completedAt, durationMs } = data;
-    if (active && startedAt! > 0 && startedAt! <= Date.now()) duration.setAttribute("data-tool-elapsed", String(startedAt));
-    const elapsed = message.toolCall?.duration ?? durationMs ?? (completedAt! - startedAt!);
-    duration.textContent = toolDuration(active && startedAt !== undefined ? (startedAt > 0 ? Date.now() - startedAt : undefined) : elapsed);
-    header.appendChild(duration);
-  }
   const label = header.querySelector<HTMLElement>(":scope > div:not(.persona-ml-auto)");
   label?.classList.add("persona-activity-label");
   const meta = header.querySelector<HTMLElement>(".persona-ml-auto");

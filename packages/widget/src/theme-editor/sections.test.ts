@@ -516,3 +516,18 @@ it('offers collapsible groups and explicit iteration boundaries in preferences',
   expect(fields.find(field => field.path === 'features.toolCallDisplay.groupBoundary')?.options?.map(option => option.value)).toEqual(['adjacent', 'iteration']);
   expect(fields.some(field => field.path === 'features.toolCallDisplay.groupIconVisibility')).toBe(false);
 });
+
+
+it('exposes independent activity layouts and layout-dependent reasoning detail defaults', () => {
+  const fields = CONFIGURE_SECTIONS.flatMap(section => section.fields);
+  for (const path of ['features.toolCallDisplay.layout', 'features.reasoningDisplay.layout']) {
+    const field = fields.find(field => field.path === path)!;
+    expect(field.options?.map(option => option.value)).toEqual(['row', 'card']);
+    expect(resolveEditorFieldDefault(field, { v5Defaults: true })).toBe('row');
+    expect(resolveEditorFieldDefault(field, { v5Defaults: false })).toBe('card');
+  }
+  const field = fields.find(field => field.path === 'features.reasoningDisplay.appearance')!;
+  expect(field.options?.map(option => option.value)).toEqual(['plain', 'inset', 'panel']);
+  expect(resolveEditorFieldDefault(field, { v5Defaults: true })).toBe('inset');
+  expect(resolveEditorFieldDefault(field, { v5Defaults: false })).toBeUndefined();
+});

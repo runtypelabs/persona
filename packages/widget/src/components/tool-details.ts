@@ -43,10 +43,9 @@ export function appendToolDetails(content: HTMLElement, message: AgentWidgetMess
     });
     const text = formatUnknownValue(value);
     const pre = createNode("pre", {
-      className: `persona-tool-detail-value${isStructured(value) ? " persona-tool-detail-code" : ""}`,
+      className: `persona-activity-scroll persona-tool-detail-value${isStructured(value) ? " persona-tool-detail-code" : ""}`,
       text,
-      attrs: text.length > 420 || text.split("\n").length > 7
-        ? { tabindex: "0", "aria-label": `${label} content` } : {},
+      attrs: { tabindex: "0", role: "region", "aria-label": `${label} content` },
       style: { color: styles.codeBlockTextColor ?? styles.contentTextColor },
     });
     const copy = createNode("button", {

@@ -1225,18 +1225,20 @@ export const ARTIFACT_DISPLAY_PREFERENCE_SECTION: SectionDef = {
 const streamDisplayPreferencesSectionDef: SectionDef = {
   id: 'stream-display-preferences',
   title: 'Tool calls and reasoning',
-  description: 'Control how agent activity appears in the conversation.',
   fields: [
     { id: 'pref-show-tools', label: 'Show tool calls', type: 'toggle', path: 'features.showToolCalls', defaultValue: true, unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-layout', label: 'Tool layout', type: 'select', path: 'features.toolCallDisplay.layout', defaultValue: 'card', options: [{ value: 'row', label: 'Row' }, { value: 'card', label: 'Card' }], unsettable: true, requiresCapability: 'tools' },
     { id: 'pref-tool-collapsed-mode', label: 'Tool call summary', type: 'select', path: 'features.toolCallDisplay.collapsedMode', defaultValue: 'tool-call', options: [{ value: 'tool-call', label: 'Tool call' }, { value: 'tool-name', label: 'Tool name' }, { value: 'tool-preview', label: 'Tool preview' }], unsettable: true, requiresCapability: 'tools' },
-    { id: 'pref-tool-expandable', label: 'Tool calls expandable', type: 'toggle', path: 'features.toolCallDisplay.expandable', defaultValue: true, unsettable: true, requiresCapability: 'tools' },
-    { id: 'pref-tool-grouped', label: 'Group sequential tool calls', type: 'toggle', path: 'features.toolCallDisplay.grouped', defaultValue: false, unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-expandable', label: 'Expandable tools', type: 'toggle', path: 'features.toolCallDisplay.expandable', defaultValue: true, unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-grouped', label: 'Group tool calls', type: 'toggle', path: 'features.toolCallDisplay.grouped', defaultValue: false, unsettable: true, requiresCapability: 'tools' },
     { id: 'pref-tool-group-boundary', label: 'Group tools by', type: 'select', path: 'features.toolCallDisplay.groupBoundary', defaultValue: 'adjacent', options: [{ value: 'adjacent', label: 'Adjacent tools' }, { value: 'iteration', label: 'Agent iteration' }], unsettable: true, requiresCapability: 'tools' },
-    { id: 'pref-tool-grouped-mode', label: 'Grouped tool detail', type: 'select', path: 'features.toolCallDisplay.groupedMode', defaultValue: 'stack', options: [{ value: 'stack', label: 'Show steps' }, { value: 'summary', label: 'Summary only' }, { value: 'collapsible', label: 'Expandable group' }], unsettable: true, requiresCapability: 'tools' },
-    { id: 'pref-tool-loading-animation', label: 'Tool loading animation', type: 'select', path: 'features.toolCallDisplay.loadingAnimation', defaultValue: 'none', options: [{ value: 'none', label: 'None' }, { value: 'pulse', label: 'Pulse' }, { value: 'shimmer', label: 'Shimmer' }, { value: 'shimmer-color', label: 'Color shimmer' }, { value: 'rainbow', label: 'Rainbow' }], unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-grouped-mode', label: 'Group details', type: 'select', path: 'features.toolCallDisplay.groupedMode', defaultValue: 'stack', options: [{ value: 'stack', label: 'Show steps' }, { value: 'summary', label: 'Summary only' }, { value: 'collapsible', label: 'Expandable group' }], unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-loading-animation', label: 'Tool animation', type: 'select', path: 'features.toolCallDisplay.loadingAnimation', defaultValue: 'none', options: [{ value: 'none', label: 'None' }, { value: 'pulse', label: 'Pulse' }, { value: 'shimmer', label: 'Shimmer' }, { value: 'shimmer-color', label: 'Color shimmer' }, { value: 'rainbow', label: 'Rainbow' }], unsettable: true, requiresCapability: 'tools' },
     { id: 'pref-show-reasoning', label: 'Show reasoning', type: 'toggle', path: 'features.showReasoning', defaultValue: true, unsettable: true, requiresCapability: 'reasoning' },
+    { id: 'pref-reasoning-layout', label: 'Reasoning layout', type: 'select', path: 'features.reasoningDisplay.layout', defaultValue: 'card', options: [{ value: 'row', label: 'Row' }, { value: 'card', label: 'Card' }], unsettable: true, requiresCapability: 'reasoning' },
+    { id: 'pref-reasoning-appearance', label: 'Reasoning details', type: 'select', path: 'features.reasoningDisplay.appearance', options: [{ value: 'plain', label: 'Plain' }, { value: 'inset', label: 'Inset' }, { value: 'panel', label: 'Panel' }], unsettable: true, requiresCapability: 'reasoning' },
     { id: 'pref-reasoning-expandable', label: 'Reasoning expandable', type: 'toggle', path: 'features.reasoningDisplay.expandable', defaultValue: true, unsettable: true, requiresCapability: 'reasoning' },
-    { id: 'pref-reasoning-active-preview', label: 'Reasoning preview while active', type: 'toggle', path: 'features.reasoningDisplay.activePreview', defaultValue: false, unsettable: true, requiresCapability: 'reasoning' },
+    { id: 'pref-reasoning-active-preview', label: 'Active reasoning preview', type: 'toggle', path: 'features.reasoningDisplay.activePreview', defaultValue: false, unsettable: true, requiresCapability: 'reasoning' },
   ],
 };
 

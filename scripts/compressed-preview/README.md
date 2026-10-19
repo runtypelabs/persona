@@ -76,8 +76,17 @@ production authentication, account loading, and remote server overhead.
 ## Grouped activity preview
 
 Open http://localhost:5204/activity to compare adjacent and iteration groups using
-the built widget. **Run all** streams five mocked tool calls over three iterations,
+the built widget. **Run all** streams a reasoning trace and five mocked tool calls over three iterations,
 with pauses between batches. Run again to check that historical groups stay done.
+
+Shared detail panel presets customize fill, border color/width, radius, and
+padding live. Tool and reasoning pickers offer partial overrides to check
+per-property inheritance: choose shared bordered, then tool green fill and
+reasoning borderless. Switching presets clears previous values; Reset panel
+theme restores the subtle defaults. These controls restyle current mock and
+live-agent history without sending a new request. Choose reasoning Row + Panel
+to compare both surfaces; plain/inset reasoning and outer cards stay independent.
+
 Single-tool iterations render directly. The switches
 exercise custom summaries and group-only icon visibility; expand a
 group to check its child rows. The animation selector applies the same style to
@@ -135,6 +144,14 @@ never sends a provider request.
 
 The **Tool rendering** selector compares individual rows, collapsible groups,
 summary-only groups, stacks, and cards across all widgets without another request.
+**Reasoning layout** selects a row or card, independently of **Reasoning details**
+(plain, inset, or panel). Version default preserves V4 presentation and uses
+collapsed rows with inset details in V5. Open a reasoning trace, then switch these
+controls live or after replay to compare the same content. Manual disclosure,
+expansion motion, chevron motion, and turn activity remain coordinated; card layout
+provides its own frame without a second nested panel. These controls also apply
+to live-provider responses without another request.
+
 **Group summary** selects the view's default, current action, or aggregate batch.
 By default, turn activity uses current-action summaries except in stacks; the
 ordinary widgets use aggregate summaries. Explicit selections apply to every view.
@@ -149,3 +166,15 @@ labels. Cards keep their normal headers; **Custom summaries** demonstrates using
 tools, parallel tools, and completed aggregate labels. The same controls apply to
 saved history and the live example; live tools fall back to mapped labels because
 the mock resolver has no titles for their call IDs.
+
+**Show raw tool names in details** toggles the developer-facing name line in all
+widgets and saved history. Names are hidden by default in rows and cards, including
+V4. **Elapsed timing** controls compact automatic timing on rows, V5 cards, and
+collapsible group headers; sub-second calls remain quiet. Expanded details have
+no duration footer. V4 card titles retain their legacy timing, and whole-turn
+timing stays independent. **Custom summaries** demonstrates authored elapsed
+context; render hooks still receive exact timing metadata for diagnostic displays.
+
+Enable **Long reasoning (next mock run)** before starting the mocked widgets to stream twelve additional paragraphs. Open reasoning details and use **Reasoning height** to switch live between the V5 240px default, a custom 140px cap, and unlimited height. Compare each appearance and layout, keyboard scrolling, and height expansion without making an external request.
+
+**Shared overflow**, **Tool overflow override**, and **Reasoning overflow override** update existing mock and live-agent history. Compare the V5 240px cap/12px fade, a shorter shared cap, height-only per-kind overrides, fade-only overrides, no fades, unlimited height, and reset. Enable **Long reasoning** and **Long tool request/response** before a mock run. Scroll each Request and Response separately: only hidden edges fade, while labels, copy controls, panel frames and focus outlines remain clear. Compare all reasoning appearances/layouts and both defaults versions. **Reasoning compatibility height** explicitly overrides theme height; resetting restores inheritance.
