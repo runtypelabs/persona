@@ -22,6 +22,7 @@ export const LEGACY_STYLE_PATHS: readonly string[] = /* @__PURE__ */ (() => [
 export const OPT_IN_THEME_STYLE_PATHS: readonly string[] = [
   "voice.recording.border", "voice.processing.icon", "voice.processing.background", "voice.speaking.icon",
   "approval.requested.text", "approval.approve.foreground", "approval.deny.foreground", "approval.deny.background",
+  "reasoningBubble.shadow", "toolBubble.shadow",
 ];
 const TRACKED_PATHS = /* @__PURE__ */ (() => [
   ...LEGACY_STYLE_PATHS,

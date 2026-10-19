@@ -6547,7 +6547,7 @@
   --persona-activity-body-bg: var(--persona-components-toolBubble-bodySurface, var(--persona-components-activity-bodySurface, transparent));
 }
 .persona-reasoning-bubble.persona-activity-row {
-  box-shadow: var(--persona-reasoning-bubble-shadow, none);
+  box-shadow: var(--persona-consumer-reasoningBubble-shadow, none);
   --persona-activity-height: var(--persona-components-reasoningBubble-rowHeight, var(--persona-components-activity-rowHeight, 32px));
   --persona-activity-label-size: var(--persona-components-reasoningBubble-labelSize, var(--persona-components-activity-labelSize, 13px));
   --persona-activity-icon-size: var(--persona-components-reasoningBubble-iconSize, var(--persona-components-activity-iconSize, 16px));

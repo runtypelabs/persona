@@ -23,6 +23,22 @@
     <section><h2>20px · configured</h2><div id="header-configured" class="widget" style="height:170px"></div></section>
   </div>
 </section>
+<section id="shadow-comparison" style="margin:28px 0">
+  <h2>Row and card shadows</h2>
+  <p>Fixed history, ready to inspect without a request. Tool and reasoning rows start flat in both versions; cards retain their version defaults. Theme overrides apply to both kinds. A legacy tool shadow takes precedence over the tool theme, including group and turn headers.</p>
+  <div class="controls">
+    <label><input id="shadow-v5" type="checkbox">V5 defaults</label>
+    <label>Shadows <select id="shadow-override"><option value="">Version defaults</option><option value="theme">Theme overrides · blue tools, purple reasoning</option><option value="legacy">Legacy tool override · orange, above blue theme</option><option value="none">Explicit none</option></select></label>
+    <label>Color scheme <select id="shadow-scheme"><option value="light">Light</option><option value="dark">Dark · stronger theme shadows</option></select></label>
+    <label><input id="shadow-group" type="checkbox" checked>Group tools in row view</label>
+    <label><input id="shadow-turn" type="checkbox">Row view inside turn activity</label>
+  </div>
+  <div class="grid">
+    <section><h2>Rows · flat by default</h2><div id="shadow-rows" class="widget" style="height:540px"></div></section>
+    <section><h2>Cards · original defaults</h2><div id="shadow-cards" class="widget" style="height:540px"></div></section>
+  </div>
+  <div id="shadow-ready" class="context" role="status">Loading shadow comparison…</div>
+</section>
 <section id="group-hierarchy-comparison" style="margin:28px 0">
   <h2>Group hierarchy and summaries</h2>
   <p>The same fixed, keyless history in both views: a mixed three-tool batch, two file reads, and a direct singleton. Expand a child to inspect its details. These controls affect only this comparison.</p>
@@ -189,6 +205,45 @@ Promise.all(iconPreviews.map(handle => handle.ready)).then(openCompletionTurns);
 for (const input of [completionTurn, completionV5]) input.addEventListener('change', () => {
   for (const handle of iconPreviews) handle.update(completionDisplay());
   requestAnimationFrame(openCompletionTurns);
+});
+const shadowV5 = document.querySelector('#shadow-v5'), shadowOverride = document.querySelector('#shadow-override'), shadowScheme = document.querySelector('#shadow-scheme'), shadowGroup = document.querySelector('#shadow-group'), shadowTurn = document.querySelector('#shadow-turn');
+const shadowMessages = [
+  {id:'shadow-request',role:'user',content:'Check the widget styling.',createdAt:'2026-01-01T00:00:00Z'},
+  {id:'shadow-reason',role:'assistant',content:'',createdAt:'2026-01-01T00:00:01Z',variant:'reasoning',turnActivity:{id:'shadow-turn',kind:'progress',outcome:'success'},reasoning:{id:'shadow-reason',status:'complete',chunks:['Compare the tool and reasoning surfaces. Rows should blend into the transcript.'],durationMs:1800}},
+  ...[['shadow-read','Read','Read the component source'],['shadow-check','Bash','Check the focused tests']].map(([id,name,actionTitle]) => ({
+    id,role:'assistant',content:'',createdAt:'2026-01-01T00:00:02Z',variant:'tool',turnActivity:{id:'shadow-turn',kind:'progress',outcome:'success'},
+    toolCall:{id,name,actionTitle,status:'complete',success:true,args:{check:actionTitle},result:'The check passed.'},
+  })),
+  {id:'shadow-answer',role:'assistant',content:'Compare the outer surfaces, then expand the details.',createdAt:'2026-01-01T00:00:03Z'},
+];
+function shadowConfig(layout) {
+  const override = shadowOverride.value, themed = ['theme','legacy'].includes(override), none = override === 'none';
+  const theme = opacity => ({components:{
+    toolBubble:{shadow:none ? 'none' : themed ? `0 3px 10px rgba(37,99,235,${opacity})` : undefined},
+    reasoningBubble:{shadow:none ? 'none' : themed ? `0 3px 10px rgba(147,51,234,${opacity})` : undefined},
+  }});
+  return {
+    future:{v5Defaults:shadowV5.checked},colorScheme:shadowScheme.value,turnActivity:{enabled:layout === 'row' && shadowTurn.checked},
+    features:{toolCallDisplay:{layout,grouped:layout === 'row' && shadowGroup.checked,groupedMode:'collapsible',autoExpand:false,autoCollapseDelay:false},reasoningDisplay:{layout,autoExpand:false}},
+    theme:theme(.28),darkTheme:theme(.65),toolCall:{shadow:override === 'legacy' ? '0 3px 10px rgba(234,88,12,.4)' : undefined},
+  };
+}
+const shadowPreviews = ['rows','cards'].map(kind => ({kind,handle:AgentWidget.initAgentWidget({target:'#shadow-' + kind,config:{
+  persistState:false,launcher:{enabled:false,fullHeight:true},layout:{showHeader:false,showFooter:false},
+  welcome:{variant:'none'},composer:{inputDisabled:true},voiceRecognition:{enabled:false},suggestions:{starters:{items:[]}},
+  initialMessages:structuredClone(shadowMessages),...shadowConfig(kind === 'rows' ? 'row' : 'card'),
+}})}));
+function openShadowGroups() {
+  for (const button of document.querySelectorAll('#shadow-comparison [data-persona-turn-activity] > button, #shadow-comparison [data-persona-tool-group] > button')) {
+    if (button.getAttribute('aria-expanded') === 'false') button.click();
+  }
+}
+Promise.all(shadowPreviews.map(({handle}) => handle.ready)).then(() => {
+  openShadowGroups(); document.querySelector('#shadow-ready').textContent = 'Ready. Change versions or overrides to update the saved history immediately. Select Version defaults to reset.';
+}).catch(error => { document.querySelector('#shadow-ready').textContent = 'Comparison failed: ' + error.message; });
+for (const input of [shadowV5,shadowOverride,shadowScheme,shadowGroup,shadowTurn]) input.addEventListener('change', () => {
+  for (const {handle,kind} of shadowPreviews) handle.update(shadowConfig(kind === 'rows' ? 'row' : 'card'));
+  requestAnimationFrame(openShadowGroups);
 });
 // Independent fixed history: no provider request or live-tester control changes.
 const hierarchyMessages = [

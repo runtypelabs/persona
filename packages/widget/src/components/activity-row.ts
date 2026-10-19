@@ -6,7 +6,7 @@ import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { DEFAULT_TOOL_CALL_DISPLAY, DEFAULT_REASONING_DISPLAY, DEFAULT_TOOL_CALL_DISPLAY_V5, DEFAULT_REASONING_DISPLAY_V5 } from "../utils/activity-display-defaults";
 import { createElement } from "../utils/dom";
 import { formatElapsedMs } from "../utils/activity-formatting";
-import { renderLucideIcon, resolveToolStyles } from "./activity-deps";
+import { getActivityStyles, renderLucideIcon, resolveToolStyles } from "./activity-deps";
 import { appendHeaderToggle, createExpandableBubbleShell, createExpandableHeader } from "./expandable-bubble";
 
 export type ActivityKind = "tool" | "reasoning";
@@ -66,7 +66,11 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
   if (!row) return bubble;
   bubble.className = `persona-message-bubble persona-${kind}-bubble persona-activity-row`;
   bubble.dataset.activityKind = kind;
-  if (kind === "tool" && config.toolCall?.shadow === undefined) bubble.style.boxShadow = "var(--persona-tool-bubble-shadow, none)";
+  // Card defaults do not add elevation to rows; only host-authored shadows do.
+  if (kind === "tool") {
+    const shadow = getActivityStyles().getExplicitLegacyStyle(config, "toolCall.shadow");
+    bubble.style.boxShadow = typeof shadow === "string" ? shadow.trim() || "none" : "var(--persona-consumer-toolBubble-shadow, none)";
+  }
   if (!header) return bubble;
   header.className = header.classList.contains("persona-theme-padding")
     ? "persona-activity-header persona-theme-padding" : "persona-activity-header";
