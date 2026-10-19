@@ -429,4 +429,73 @@ describe("streaming tool update coalescing", () => {
     controller.destroy();
     stream.close();
   });
+  it("saves the newest coalesced snapshot alongside the durable cursor", async () => {
+    const raf = installRafMock();
+    const saves: AgentWidgetStoredState[] = [];
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      clientToken: "ct_test",
+      launcher: { enabled: false },
+      storageAdapter: { save: (state) => { saves.push(state); } },
+    });
+    const at = (second: number) => `2026-07-11T00:00:0${second}.000Z`;
+    controller.injectTestMessage({ type: "status", status: "connecting" });
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "reply-1",
+        role: "assistant",
+        content: "Working",
+        createdAt: at(0),
+        streaming: true,
+        agentMetadata: { executionId: "exec-1" },
+      },
+    });
+    controller.injectTestMessage({ type: "cursor", id: "1" });
+    raf.flush();
+    await flushMicrotasks();
+
+    // One SSE chunk: an approval (applied now, its save queued) then a tool
+    // update (coalesced to the next frame) that advances the cursor.
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "approval-1",
+        role: "assistant",
+        content: "",
+        createdAt: at(1),
+        streaming: false,
+        variant: "approval",
+        approval: {
+          id: "approval-1",
+          status: "pending",
+          agentId: "agent-1",
+          executionId: "exec-1",
+          toolName: "Approve search",
+          description: "Approval test",
+        },
+      },
+    });
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "tool-1",
+        role: "assistant",
+        content: "",
+        createdAt: at(2),
+        streaming: true,
+        variant: "tool",
+        toolCall: { id: "tool-1", name: "search", status: "running", chunks: [] },
+      },
+    });
+    controller.injectTestMessage({ type: "cursor", id: "2" });
+    await flushMicrotasks();
+
+    const saved = saves.at(-1)!;
+    expect(saved.metadata?.durableResume).toMatchObject({ after: "2" });
+    expect(saved.messages?.map((message) => message.id)).toContain("tool-1");
+    controller.destroy();
+  });
 });

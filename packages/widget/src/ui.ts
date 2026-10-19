@@ -4936,7 +4936,7 @@ export const createAgentExperience = (
   let isStreaming = false;
   const messageCache = createMessageCache();
   // Assistant message ids seen streaming in a coalesced (never-applied)
-  // transcript snapshot; see `noteCoalescedStreaming`.
+  // transcript snapshot; see `coalesceStreamingChange`.
   const coalescedStreamingIds = new Set<string>();
   // Fingerprint each live transcript row was last morphed to, by message id.
   // A row whose message still has that fingerprint is left in place by the
@@ -8656,35 +8656,29 @@ export const createAgentExperience = (
     message.agentMetadata?.awaitingLocalTool === true ||
     isAskUserQuestionMessage(message);
 
-  const hasImmediateChange = (
-    previous: AgentWidgetMessage[],
-    next: AgentWidgetMessage[]
-  ) => {
-    if (next.length < previous.length) return true;
-    // The session copies only the messages it changes, so identity marks the
-    // changed entries and this stays a cheap pointer scan.
-    for (let index = 0; index < next.length; index += 1) {
-      const message = next[index];
-      if (message !== previous[index] && needsImmediateApply(message)) return true;
-    }
-    return false;
-  };
-
   /**
-   * Remember assistant messages that streamed inside a coalesced burst, so
-   * `trackMessages` still emits `assistant:complete` when a message starts and
-   * finishes between two applied snapshots.
+   * One pass over a streaming update: returns false when a changed entry needs
+   * an immediate apply, and otherwise remembers assistant messages that
+   * streamed inside the coalesced burst, so `trackMessages` still emits
+   * `assistant:complete` when a message starts and finishes between two
+   * applied snapshots. The session copies only the messages it changes, so
+   * identity marks the changed entries; this pointer scan costs no more than
+   * the array copy the session makes for every update.
    */
-  const noteCoalescedStreaming = (
+  const coalesceStreamingChange = (
     previous: AgentWidgetMessage[],
     next: AgentWidgetMessage[]
   ) => {
+    if (next.length < previous.length) return false;
     for (let index = 0; index < next.length; index += 1) {
       const message = next[index];
-      if (message !== previous[index] && message.role === "assistant" && message.streaming) {
+      if (message === previous[index]) continue;
+      if (needsImmediateApply(message)) return false;
+      if (message.role === "assistant" && message.streaming) {
         coalescedStreamingIds.add(message.id);
       }
     }
+    return true;
   };
 
   let lastAppliedMessages: AgentWidgetMessage[] | null = null;
@@ -8698,7 +8692,9 @@ export const createAgentExperience = (
     queueMicrotask(() => {
       if (pendingDurablePersistenceMessages === messages) {
         pendingDurablePersistenceMessages = null;
-        persistState(messages);
+        // The resume cursor is read now, so save the newest snapshot: updates
+        // coalesced after this one (still waiting on a frame) already advanced it.
+        persistState(pendingMessages ?? messages);
       }
     });
   };
@@ -8791,8 +8787,7 @@ export const createAgentExperience = (
       return;
     }
     const comparison = pendingMessages ?? lastAppliedMessages;
-    if (isStreaming && comparison && !hasImmediateChange(comparison, messages)) {
-      noteCoalescedStreaming(comparison, messages);
+    if (isStreaming && comparison && coalesceStreamingChange(comparison, messages)) {
       pendingMessages = messages;
       if (pendingMessagesRAF === null) {
         pendingMessagesRAF = requestAnimationFrame(() => {
