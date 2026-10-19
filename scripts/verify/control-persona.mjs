@@ -672,6 +672,13 @@ const commands = {
         const sha = must("git", ["hash-object", "-w", source]).trim();
         must("git", ["update-index", "--add", "--cacheinfo", `100644,${sha},${prefix}/${name}`], { env });
       }
+      // Vercel deploys every pushed branch, and each project builds from its own
+      // root directory, which an evidence-only tree lacks: every push failed every
+      // project. A stub config at each root makes Vercel skip the commit instead.
+      const skipDeploy = must("git", ["hash-object", "-w", "--stdin"], { input: `${JSON.stringify({ git: { deploymentEnabled: false } })}\n` }).trim();
+      for (const config of must("git", ["ls-files", "--", ":(glob)**/vercel.json"]).split("\n").filter(Boolean)) {
+        must("git", ["update-index", "--add", "--cacheinfo", `100644,${skipDeploy},${config}`], { env });
+      }
       const tree = must("git", ["write-tree"], { env }).trim();
       fs.rmSync(index, { force: true });
       const created = must("git", ["commit-tree", tree, ...(parent ? ["-p", parent] : []), "-m", `evidence: PR #${pr} run ${state.runId}`]).trim();
