@@ -4452,7 +4452,13 @@ export class AgentWidgetSession {
 
   #appendMessage(message: AgentWidgetMessage) {
     const withSequence = this.#ensureSequence(message);
-    this.messages = this.#sortMessages([...this.messages, withSequence]);
+    const last = this.messages[this.messages.length - 1];
+    // Streamed messages almost always arrive in order. Re-sorting the whole
+    // transcript on every append makes a long tool run O(N²) in date parses.
+    this.messages =
+      !last || this.#compareMessages(last, withSequence) <= 0
+        ? [...this.messages, withSequence]
+        : this.#sortMessages([...this.messages, withSequence]);
     this.callbacks.onMessagesChanged([...this.messages]);
   }
 
@@ -4604,7 +4610,17 @@ export class AgentWidgetSession {
       }
       return merged;
     });
-    this.messages = this.#sortMessages(this.messages);
+    // The transcript is kept sorted, so only the merged entry can be out of
+    // place; skip the full re-sort when it still sits between its neighbors.
+    const updated = this.messages[index];
+    const before = this.messages[index - 1];
+    const after = this.messages[index + 1];
+    if (
+      (before && this.#compareMessages(before, updated) > 0) ||
+      (after && this.#compareMessages(updated, after) > 0)
+    ) {
+      this.messages = this.#sortMessages(this.messages);
+    }
     this.callbacks.onMessagesChanged([...this.messages]);
   }
 
@@ -4622,22 +4638,24 @@ export class AgentWidgetSession {
     return this.#sequenceCounter++;
   }
 
+  #compareMessages(a: AgentWidgetMessage, b: AgentWidgetMessage) {
+    // Sort by createdAt timestamp first (chronological order)
+    const timeA = new Date(a.createdAt).getTime();
+    const timeB = new Date(b.createdAt).getTime();
+    if (!Number.isNaN(timeA) && !Number.isNaN(timeB) && timeA !== timeB) {
+      return timeA - timeB;
+    }
+
+    // Fall back to sequence if timestamps are equal or invalid
+    const seqA = a.sequence ?? 0;
+    const seqB = b.sequence ?? 0;
+    if (seqA !== seqB) return seqA - seqB;
+
+    // Final fallback to ID
+    return a.id.localeCompare(b.id);
+  }
+
   #sortMessages(messages: AgentWidgetMessage[]) {
-    return [...messages].sort((a, b) => {
-      // Sort by createdAt timestamp first (chronological order)
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      if (!Number.isNaN(timeA) && !Number.isNaN(timeB) && timeA !== timeB) {
-        return timeA - timeB;
-      }
-
-      // Fall back to sequence if timestamps are equal or invalid
-      const seqA = a.sequence ?? 0;
-      const seqB = b.sequence ?? 0;
-      if (seqA !== seqB) return seqA - seqB;
-
-      // Final fallback to ID
-      return a.id.localeCompare(b.id);
-    });
+    return [...messages].sort((a, b) => this.#compareMessages(a, b));
   }
 }

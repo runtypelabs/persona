@@ -4935,6 +4935,13 @@ export const createAgentExperience = (
 
   let isStreaming = false;
   const messageCache = createMessageCache();
+  // Assistant message ids seen streaming in a coalesced (never-applied)
+  // transcript snapshot; see `coalesceStreamingChange`.
+  const coalescedStreamingIds = new Set<string>();
+  // Fingerprint each live transcript row was last morphed to, by message id.
+  // A row whose message still has that fingerprint is left in place by the
+  // next render pass instead of being cloned from the cache and re-morphed.
+  let liveRowFingerprints = new Map<string, string>();
   // Tracks the last fingerprint we rendered a plugin-rendered ask_user_question
   // bubble for, per message id. Lets us skip unnecessary rebuilds across
   // re-renders so user state inside the plugin (typed text, focus) survives.
@@ -6029,7 +6036,7 @@ export const createAgentExperience = (
 
       if (
         message.role === "assistant" &&
-        previous?.streaming &&
+        (previous?.streaming || coalescedStreamingIds.has(message.id)) &&
         message.streaming === false
       ) {
         eventBus.emit("assistant:complete", message);
@@ -6049,6 +6056,7 @@ export const createAgentExperience = (
     nextState.forEach((value, key) => {
       messageState.set(key, value);
     });
+    coalescedStreamingIds.clear();
   };
 
 
@@ -6114,6 +6122,21 @@ export const createAgentExperience = (
     }
     // Build new content in a temporary container for morphing
     const tempContainer = document.createElement("div");
+
+    // Unchanged messages keep their live row: the pass appends an empty
+    // `data-persona-reuse` stub that `morphMessages` matches by id and skips,
+    // so a render costs O(changed rows) rather than a deep clone, serialize,
+    // and morph of the whole transcript. Tool grouping restyles and re-parents
+    // rows after this loop, so grouped transcripts always rebuild.
+    const reuseLiveRows = !config.features?.toolCallDisplay?.grouped;
+    const liveRows = new Set<string>();
+    if (reuseLiveRows) {
+      for (const child of Array.from(container.children)) {
+        const id = child.getAttribute("data-wrapper-id");
+        if (id) liveRows.add(id);
+      }
+    }
+    const nextLiveRowFingerprints = new Map<string, string>();
 
     // Create inline loading indicator renderer using priority chain: plugin -> config -> default
     const getInlineLoadingIndicatorRenderer = (): LoadingIndicatorRenderer | undefined => {
@@ -6328,7 +6351,19 @@ export const createAgentExperience = (
         ? null
         : getCachedWrapper(messageCache, message.id, fingerprint);
       if (cachedWrapper) {
-        tempContainer.appendChild(cachedWrapper.cloneNode(true));
+        if (
+          liveRows.has(message.id) &&
+          liveRowFingerprints.get(message.id) === fingerprint
+        ) {
+          const stub = document.createElement("div");
+          stub.id = `wrapper-${message.id}`;
+          stub.setAttribute("data-wrapper-id", message.id);
+          stub.setAttribute("data-persona-reuse", "true");
+          tempContainer.appendChild(stub);
+        } else {
+          tempContainer.appendChild(cachedWrapper.cloneNode(true));
+        }
+        if (reuseLiveRows) nextLiveRowFingerprints.set(message.id, fingerprint);
         // Keep the overlay sheet alive only while the server is actively
         // waiting on the user (awaitingLocalTool === true). Before await
         // fires, or after the answer resumes the flow, omit from
@@ -6784,6 +6819,7 @@ export const createAgentExperience = (
       wrapper.appendChild(bubble);
       setCachedWrapper(messageCache, message.id, fingerprint, wrapper);
       tempContainer.appendChild(wrapper);
+      if (reuseLiveRows) nextLiveRowFingerprints.set(message.id, fingerprint);
     });
 
     // Prune any ask_user_question sheets whose source message is no longer in
@@ -7120,6 +7156,16 @@ export const createAgentExperience = (
 
     // Use idiomorph to morph the container contents
     morphMessages(container, tempContainer);
+    liveRowFingerprints = nextLiveRowFingerprints;
+    // A stub idiomorph inserted instead of matching to its live row would
+    // leave an empty row; restore it from the cache.
+    for (const stub of Array.from(
+      container.querySelectorAll<HTMLElement>(":scope > [data-persona-reuse]")
+    )) {
+      const cached = messageCache.get(stub.getAttribute("data-wrapper-id") ?? "");
+      if (cached) stub.replaceWith(cached.wrapper.cloneNode(true));
+      else stub.remove();
+    }
 
     // Set initial edge-fade state on the live table wrappers and attach the
     // delegated scroll listener (once) that keeps the fades in sync.
@@ -8596,74 +8642,48 @@ export const createAgentExperience = (
     }, 100);
   };
 
-  const isDeepEqual = (left: unknown, right: unknown): boolean => {
-    if (Object.is(left, right)) return true;
-    if (left === null || right === null) return false;
-    if (typeof left !== "object" || typeof right !== "object") return false;
-    if (Array.isArray(left) || Array.isArray(right)) {
-      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-        return false;
-      }
-      return left.every((value, index) => isDeepEqual(value, right[index]));
-    }
-    const leftRecord = left as Record<string, unknown>;
-    const rightRecord = right as Record<string, unknown>;
-    const leftKeys = Object.keys(leftRecord);
-    const rightKeys = Object.keys(rightRecord);
-    return (
-      leftKeys.length === rightKeys.length &&
-      leftKeys.every(
-        (key) =>
-          Object.prototype.hasOwnProperty.call(rightRecord, key) &&
-          isDeepEqual(leftRecord[key], rightRecord[key])
-      )
-    );
-  };
+  /**
+   * Changes that must reach the DOM (and storage) in the same task rather than
+   * on the next animation frame: a new or edited user message drives send
+   * anchoring and `user:message`, and an approval or a pending local tool
+   * (ask_user_question, WebMCP) is waiting on the user and must be durable
+   * before the page can unload. Everything else in a streaming burst is
+   * coalesced.
+   */
+  const needsImmediateApply = (message: AgentWidgetMessage) =>
+    message.role === "user" ||
+    message.variant === "approval" ||
+    message.agentMetadata?.awaitingLocalTool === true ||
+    isAskUserQuestionMessage(message);
 
-  const withoutStreamingText = (message: AgentWidgetMessage) => {
-    const { content: _content, rawContent: _rawContent, llmContent: _llmContent, ...rest } = message;
-    return rest;
-  };
-
-  const isPlainStreamingAssistant = (message: AgentWidgetMessage) =>
-    message.role === "assistant" &&
-    message.streaming === true &&
-    !message.variant &&
-    !message.toolCall &&
-    !message.tools &&
-    !message.approval &&
-    !message.reasoning &&
-    !message.contentParts &&
-    !message.stopReason &&
-    !hasComponentDirective(message);
-
-  const isPureStreamingTextProgression = (
+  /**
+   * One pass over a streaming update: returns false when a changed entry needs
+   * an immediate apply, and otherwise remembers assistant messages that
+   * streamed inside the coalesced burst, so `trackMessages` still emits
+   * `assistant:complete` when a message starts and finishes between two
+   * applied snapshots. The session copies only the messages it changes, so
+   * identity marks the changed entries; this pointer scan costs no more than
+   * the array copy the session makes for every update.
+   */
+  const coalesceStreamingChange = (
     previous: AgentWidgetMessage[],
-    next: AgentWidgetMessage[],
-    candidate: { index: number; id: string }
+    next: AgentWidgetMessage[]
   ) => {
-    if (previous.length !== next.length) return false;
-    const before = previous[candidate.index];
-    const after = next[candidate.index];
-    if (!before || !after || before.id !== candidate.id || after.id !== candidate.id) {
-      return false;
+    if (next.length < previous.length) return false;
+    for (let index = 0; index < next.length; index += 1) {
+      const message = next[index];
+      if (message === previous[index]) continue;
+      if (needsImmediateApply(message)) return false;
+      if (message.role === "assistant" && message.streaming) {
+        coalescedStreamingIds.add(message.id);
+      }
     }
-    const textChanged =
-      !Object.is(before.content, after.content) ||
-      !Object.is(before.rawContent, after.rawContent) ||
-      !Object.is(before.llmContent, after.llmContent);
-    return (
-      textChanged &&
-      isPlainStreamingAssistant(before) &&
-      isPlainStreamingAssistant(after) &&
-      isDeepEqual(withoutStreamingText(before), withoutStreamingText(after))
-    );
+    return true;
   };
 
   let lastAppliedMessages: AgentWidgetMessage[] | null = null;
-  let activeStreamingTextCandidate: { index: number; id: string } | null = null;
-  let pendingStreamingTextMessages: AgentWidgetMessage[] | null = null;
-  let streamingTextRAF: number | null = null;
+  let pendingMessages: AgentWidgetMessage[] | null = null;
+  let pendingMessagesRAF: number | null = null;
   let pendingDurablePersistenceMessages: AgentWidgetMessage[] | null = null;
 
   const persistMessages = (messages: AgentWidgetMessage[]) => {
@@ -8672,7 +8692,9 @@ export const createAgentExperience = (
     queueMicrotask(() => {
       if (pendingDurablePersistenceMessages === messages) {
         pendingDurablePersistenceMessages = null;
-        persistState(messages);
+        // The resume cursor is read now, so save the newest snapshot: updates
+        // coalesced after this one (still waiting on a frame) already advanced it.
+        persistState(pendingMessages ?? messages);
       }
     });
   };
@@ -8681,17 +8703,13 @@ export const createAgentExperience = (
     lastAppliedMessages = messages;
     let lastUserMessage: AgentWidgetMessage | undefined;
     let lastAssistantMessage: AgentWidgetMessage | undefined;
-    activeStreamingTextCandidate = null;
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
       if (!lastUserMessage && message.role === "user") lastUserMessage = message;
       if (!lastAssistantMessage && message.role === "assistant") {
         lastAssistantMessage = message;
       }
-      if (!activeStreamingTextCandidate && isPlainStreamingAssistant(message)) {
-        activeStreamingTextCandidate = { index, id: message.id };
-      }
-      if (lastUserMessage && lastAssistantMessage && activeStreamingTextCandidate) break;
+      if (lastUserMessage && lastAssistantMessage) break;
     }
     renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
     // Freshly (re)built inline artifact blocks render from their persisted
@@ -8740,52 +8758,48 @@ export const createAgentExperience = (
     syncComposerBarPeek();
   };
 
-  const flushPendingStreamingText = () => {
-    if (streamingTextRAF !== null) {
-      cancelAnimationFrame(streamingTextRAF);
-      streamingTextRAF = null;
+  const flushPendingMessages = () => {
+    if (pendingMessagesRAF !== null) {
+      cancelAnimationFrame(pendingMessagesRAF);
+      pendingMessagesRAF = null;
     }
-    const pending = pendingStreamingTextMessages;
-    pendingStreamingTextMessages = null;
+    const pending = pendingMessages;
+    pendingMessages = null;
     if (pending) applyMessagesChanged(pending);
   };
 
-  const discardPendingStreamingText = () => {
-    if (streamingTextRAF !== null) cancelAnimationFrame(streamingTextRAF);
-    streamingTextRAF = null;
-    pendingStreamingTextMessages = null;
+  const discardPendingMessages = () => {
+    if (pendingMessagesRAF !== null) cancelAnimationFrame(pendingMessagesRAF);
+    pendingMessagesRAF = null;
+    pendingMessages = null;
   };
 
+  // While a turn streams, every SSE frame changes the transcript, and a render
+  // pass costs O(messages). Applying each frame synchronously makes a burst of
+  // N frames (a long tool run, or a finished transcript replayed through
+  // `connectStream`) cost O(N²) and block the main thread. Coalesce streaming
+  // updates to one render per animation frame; the stream ending, a clear, or
+  // a change in `needsImmediateApply` flushes synchronously.
   const handleMessagesChanged = (messages: AgentWidgetMessage[]) => {
-    const comparison = pendingStreamingTextMessages ?? lastAppliedMessages;
-    if (
-      isStreaming &&
-      comparison &&
-      activeStreamingTextCandidate &&
-      isPureStreamingTextProgression(
-        comparison,
-        messages,
-        activeStreamingTextCandidate
-      )
-    ) {
-      pendingStreamingTextMessages = messages;
-      if (streamingTextRAF === null) {
-        streamingTextRAF = requestAnimationFrame(() => {
-          streamingTextRAF = null;
-          const pending = pendingStreamingTextMessages;
-          pendingStreamingTextMessages = null;
+    if (messages.length === 0) {
+      discardPendingMessages();
+      applyMessagesChanged(messages);
+      return;
+    }
+    const comparison = pendingMessages ?? lastAppliedMessages;
+    if (isStreaming && comparison && coalesceStreamingChange(comparison, messages)) {
+      pendingMessages = messages;
+      if (pendingMessagesRAF === null) {
+        pendingMessagesRAF = requestAnimationFrame(() => {
+          pendingMessagesRAF = null;
+          const pending = pendingMessages;
+          pendingMessages = null;
           if (pending) applyMessagesChanged(pending);
         });
       }
       return;
     }
-
-    if (messages.length === 0) {
-      discardPendingStreamingText();
-      applyMessagesChanged(messages);
-      return;
-    }
-    flushPendingStreamingText();
+    flushPendingMessages();
     applyMessagesChanged(messages);
   };
 
@@ -8811,9 +8825,9 @@ export const createAgentExperience = (
     onStreamingChanged(streaming) {
       if (!streaming) {
         if (session?.getMessages().length === 0) {
-          discardPendingStreamingText();
+          discardPendingMessages();
         } else {
-          flushPendingStreamingText();
+          flushPendingMessages();
         }
       }
       isStreaming = streaming;
@@ -13435,7 +13449,7 @@ export const createAgentExperience = (
       // Commit the latest coalesced transcript while the live DOM and storage
       // pipeline still exist, then let the normal teardown cancel any work
       // scheduled by that final apply.
-      flushPendingStreamingText();
+      flushPendingMessages();
       if (toolElapsedTimerId != null) {
         clearInterval(toolElapsedTimerId);
         toolElapsedTimerId = null;
