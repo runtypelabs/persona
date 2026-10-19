@@ -37,6 +37,31 @@ function deferredAdapter() {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("AttachmentManager.updateConfig", () => {
+  it.each([false, true])("contains cleanup errors from the original adapter (async: %s)", async asynchronous => {
+    const failure = new Error("cleanup failed");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const adapter: AgentWidgetAttachmentAdapter = {
+      add: async () => part("uploaded"),
+      remove() {
+        expect(this).toBe(adapter);
+        if (asynchronous) return Promise.reject(failure);
+        throw failure;
+      },
+    };
+    const manager = new AttachmentManager({ adapter });
+    try {
+      await manager.handleFiles([textFile()]);
+      manager.updateConfig({ adapter: undefined });
+      manager.removeAttachment(manager.getAttachments()[0].id);
+      await flush();
+      expect(manager.count()).toBe(0);
+      expect(log).toHaveBeenCalledExactlyOnceWith("[AttachmentManager] adapter.remove failed:", failure);
+    } finally {
+      manager.destroy();
+      log.mockRestore();
+    }
+  });
+
   it("preserves omitted upload settings and resets explicitly undefined settings", async () => {
     const add = vi.fn(async () => part("uploaded"));
     const rejected = vi.fn();
@@ -52,6 +77,99 @@ describe("AttachmentManager.updateConfig", () => {
     expect(add).not.toHaveBeenCalled();
     expect(rejected).toHaveBeenCalledTimes(1);
     manager.destroy();
+  });
+
+  it.each(["remove", "discard"] as const)("releases ready parts through their creating adapters on %s after configuration changes", async (action) => {
+    const originalRemove = vi.fn();
+    const currentRemove = vi.fn();
+    const addWithoutRemove = vi.fn(async () => part("retained"));
+    const manager = new AttachmentManager({
+      adapter: { add: async () => part("original"), remove: originalRemove },
+    });
+    await manager.handleFiles([textFile("original.txt")]);
+
+    manager.updateConfig({ adapter: { add: addWithoutRemove } });
+    await manager.handleFiles([textFile("retained.txt")]);
+    manager.updateConfig({ adapter: undefined });
+    await manager.handleFiles([textFile("base64.txt")]);
+    manager.updateConfig({ adapter: { add: async () => part("current"), remove: currentRemove } });
+
+    if (action === "remove") {
+      for (const attachment of manager.getAttachments()) manager.removeAttachment(attachment.id);
+      manager.destroy({ release: true });
+    } else {
+      manager.destroy({ release: true });
+    }
+
+    expect(originalRemove.mock.calls.map(([value]) => value)).toEqual([part("original")]);
+    expect(addWithoutRemove).toHaveBeenCalledTimes(1);
+    expect(currentRemove).not.toHaveBeenCalled();
+  });
+
+  it("keeps in-flight uploads with their creating adapters and applies a replacement to new uploads", async () => {
+    const original = deferredAdapter();
+    const replacement = deferredAdapter();
+    const originalRemove = vi.fn();
+    const replacementRemove = vi.fn();
+    const manager = new AttachmentManager({ adapter: { ...original.adapter, remove: originalRemove } });
+    const originalUpload = manager.handleFiles([textFile("original.txt")]);
+    manager.updateConfig({ adapter: { ...replacement.adapter, remove: replacementRemove } });
+    const replacementUpload = manager.handleFiles([textFile("replacement.txt")]);
+    expect(original.calls[0].signal.aborted).toBe(false);
+    original.calls[0].resolve(part("original"));
+    replacement.calls[0].resolve(part("replacement"));
+    await Promise.all([originalUpload, replacementUpload]);
+
+    for (const attachment of manager.getAttachments()) manager.removeAttachment(attachment.id);
+    expect(originalRemove.mock.calls.map(([value]) => value)).toEqual([part("original")]);
+    expect(replacementRemove.mock.calls.map(([value]) => value)).toEqual([part("replacement")]);
+    manager.destroy();
+  });
+
+  it("uses a replacement adapter for retries and releases the successful retry through it", async () => {
+    const original = deferredAdapter();
+    const replacement = deferredAdapter();
+    const originalRemove = vi.fn();
+    const replacementRemove = vi.fn();
+    const manager = new AttachmentManager({ adapter: { ...original.adapter, remove: originalRemove } });
+    const originalUpload = manager.handleFiles([textFile()]);
+    original.calls[0].reject(new Error("upload failed"));
+    await originalUpload;
+
+    manager.updateConfig({ adapter: { ...replacement.adapter, remove: replacementRemove } });
+    const { id } = manager.getAttachments()[0];
+    manager.retryAttachment(id);
+    replacement.calls[0].resolve(part("retry"));
+    await flush();
+    manager.updateConfig({ adapter: undefined });
+    manager.removeAttachment(id);
+
+    expect(original.calls).toHaveLength(1);
+    expect(originalRemove).not.toHaveBeenCalled();
+    expect(replacementRemove.mock.calls.map(([value]) => value)).toEqual([part("retry")]);
+    manager.destroy();
+  });
+
+  it("releases each in-flight part through its creating adapter when a changed draft is discarded", async () => {
+    const original = deferredAdapter();
+    const replacement = deferredAdapter();
+    const originalRemove = vi.fn();
+    const replacementRemove = vi.fn();
+    const manager = new AttachmentManager({ adapter: { ...original.adapter, remove: originalRemove } });
+    const originalUpload = manager.handleFiles([textFile("original.txt")]);
+    manager.updateConfig({ adapter: { ...replacement.adapter, remove: replacementRemove } });
+    const replacementUpload = manager.handleFiles([textFile("replacement.txt")]);
+    manager.destroy({ release: true });
+    expect(original.calls[0].signal.aborted).toBe(true);
+    expect(replacement.calls[0].signal.aborted).toBe(true);
+
+    original.calls[0].resolve(part("original"));
+    replacement.calls[0].resolve(part("replacement"));
+    await Promise.all([originalUpload, replacementUpload]);
+
+    expect(originalRemove.mock.calls.map(([value]) => value)).toEqual([part("original")]);
+    expect(replacementRemove.mock.calls.map(([value]) => value)).toEqual([part("replacement")]);
+    expect(manager.count()).toBe(0);
   });
 });
 

@@ -22,7 +22,7 @@
 // `src/`.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
-import { brotliCompressSync, constants } from "node:zlib";
+import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 import { minify } from "terser";
 
 const files = process.argv.slice(2);
@@ -81,6 +81,18 @@ for (const file of files) {
       format: { comments: /@license|@preserve|^!/, preamble: [...notices].join("\n") },
       sourceMap: result.map ? { content: result.map, url: basename(mapFile) } : false,
     });
+  }
+  if (file.endsWith("activity-ui.js")) {
+    // Keep the activity chunk within its gzip budget without changing exports
+    // or enabling unsafe transforms. Only retain a smaller result.
+    const optimized = await minify(result.code, {
+      ecma: 2020, module: true,
+      compress: { passes: 3, keep_fargs: false, hoist_vars: true, evaluate: false },
+      mangle: true,
+      format: { comments: /@license|@preserve|^!/ },
+      sourceMap: result.map ? { content: result.map, url: basename(mapFile) } : false,
+    });
+    if (gzipSync(optimized.code).length < gzipSync(result.code).length) result = optimized;
   }
   const code = result.code.replace(
     /(?:^[\w@.-]+\/[\w./-]+\.m?js:\n)+/gm,

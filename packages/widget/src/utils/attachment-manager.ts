@@ -110,6 +110,8 @@ export class AttachmentManager {
   #previewsContainer: HTMLElement | null = null;
   /** In-flight `adapter.add` per attachment id; aborted on remove/clear/destroy. */
   #pendingAdds = new Map<string, AbortController>();
+  /** The adapter that produced each ready part owns its eventual removal. */
+  #partAdapters = new WeakMap<PendingAttachment, AgentWidgetAttachmentAdapter>();
   #destroyed = false;
   #releaseOnDestroy = false;
 
@@ -319,6 +321,7 @@ export class AttachmentManager {
         if (this.#destroyed && this.#releaseOnDestroy) this.#releasePart(part, adapter);
         return;
       }
+      this.#partAdapters.set(attachment, adapter);
       attachment.contentPart = part;
       attachment.status = "ready";
       attachment.progress = undefined;
@@ -389,26 +392,19 @@ export class AttachmentManager {
     }
 
     if (attachment.status === "ready" && attachment.contentPart) {
-      this.#releasePart(attachment.contentPart);
+      this.#releasePart(attachment.contentPart, this.#partAdapters.get(attachment));
     }
 
     this.#updatePreviewsVisibility();
     this.#notify();
   }
 
-  #releasePart(
+  async #releasePart(
     part: ContentPart,
-    adapter = this.#config.adapter
-  ): void {
-    const remove = adapter?.remove;
-    if (!remove) return;
+    adapter: AgentWidgetAttachmentAdapter | undefined
+  ): Promise<void> {
     try {
-      const result = remove(part, { signal: new AbortController().signal });
-      if (result && typeof (result as Promise<void>).catch === "function") {
-        void (result as Promise<void>).catch((error: unknown) => {
-          console.error("[AttachmentManager] adapter.remove failed:", error);
-        });
-      }
+      await adapter?.remove?.(part, { signal: new AbortController().signal });
     } catch (error) {
       console.error("[AttachmentManager] adapter.remove failed:", error);
     }
@@ -456,7 +452,7 @@ export class AttachmentManager {
     for (const attachment of this.#attachments) {
       if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
       if (this.#releaseOnDestroy && attachment.status === "ready" && attachment.contentPart) {
-        this.#releasePart(attachment.contentPart);
+        this.#releasePart(attachment.contentPart, this.#partAdapters.get(attachment));
       }
     }
     this.#attachments = [];

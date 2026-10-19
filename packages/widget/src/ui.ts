@@ -11865,7 +11865,7 @@ export const createAgentExperience = (
       const messagesConfigChanged = (config.future?.v5Defaults === true) !== previousDefaultsVersion
         || "toolCall" in nextConfig || messageActionsChanged || layoutMessagesChanged
         || "loadingIndicator" in nextConfig || iterationDisplayChanged || featuresChanged
-        || "turnActivity" in nextConfig || "loadingLabel" in nextConfig
+        || "turnActivity" in nextConfig || "loadingLabel" in nextConfig || "expansion" in nextConfig
         || "errorDisplay" in nextConfig || "theme" in nextConfig || "darkTheme" in nextConfig
         || "approval" in nextConfig || config.colorScheme !== previousColorScheme
         || "askUserQuestion" in (nextConfig.features ?? {})

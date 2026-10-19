@@ -6,6 +6,10 @@ import { applyThemeVariables } from "../../../packages/widget/src/utils/theme";
 import { createCloseButton, createClearChatButton } from "../../../packages/widget/src/components/header-parts";
 import { createSendButton, createMicButton, applyMicButtonStyle, type MicControlState } from "../../../packages/widget/src/components/composer-parts";
 import { createToolBubble } from "../../../packages/widget/src/components/tool-bubble";
+import { initActivityUi } from "../../../packages/widget/src/components/activity-deps";
+import { activityDependencies } from "../../../packages/widget/src/activity-dependencies";
+import { renderLucideIcon } from "../../../packages/widget/src/utils/icons";
+import * as loadingLabels from "../../../packages/widget/src/loading-label-runtime";
 import { createApprovalBubble } from "../../../packages/widget/src/components/approval-bubble";
 import { buildWelcomeHost, applyWelcomeConfig } from "../../../packages/widget/src/components/welcome";
 import { resolveWelcomeConfig } from "../../../packages/widget/src/welcome";
@@ -13,6 +17,8 @@ import { renderExamplesShell } from "./examples-nav";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { legacyOverrides, themeOverrides, migrateOverrides, resetStyleOverrides, welcome, suggestions, type SampleScheme } from "./style-migration-config";
 
+// Static comparisons render before the live widget prepares its lazy modules.
+initActivityUi(renderLucideIcon, loadingLabels, activityDependencies);
 renderExamplesShell("style-migration");
 const select = (id: string) => document.querySelector<HTMLSelectElement>(`#${id}`)!;
 const scheme = () => select("scheme").value as SampleScheme;
