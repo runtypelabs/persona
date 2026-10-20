@@ -1,5 +1,117 @@
 # @runtypelabs/persona
 
+## 4.30.0
+
+### Minor Changes
+
+- 276be5a: Expand composer customization while preserving existing V4 layouts and explicitly configured controls.
+
+  - Adapt single-row and stacked composers to crowded toolbars, mentions, models, and custom slots while keeping Send visible and custom controls focusable. Add independent spacing, mode/model geometry and typography, trailing label icons, and starters below the composer.
+  - Add space-aware action overflow and themeable menus with configurable width, placement, trigger icons, descriptions, group dividers, and menu-only labels. Managed plugin menus receive safe action invocation, live updates, and cleanup on close.
+  - Add image/document attachment previews, filename chips, file icon overrides, row layouts, per-kind remove styling, and a managed preview hook. Align mixed previews without stretching remove-button anchors and retain readable remove/retry icons in dark themes.
+  - Add opt-in dictation transcript/waveform surfaces with cancel, finish, send, and review controls; lifecycle events; and a managed `renderDictation` hook. Preserve drafts, mentions, and attachments, reject stale callbacks, and keep short transcripts and recording controls on one row when space permits. Optional voice bars respond to live input levels and reduced-motion preferences.
+  - Add accessible tooltips for icon-only actions, with custom text and opt-out. Use a 400ms hover delay while retaining immediate keyboard-focus feedback, suppress overflow tooltips while the menu is open, and restore configured microphone labels on return to idle.
+  - Reuse shared icon, tooltip, theme, and popover services across optional UI chunks. Load composer controls, activity rendering, dictation, diagnostics, and CDN request handling separately, and ship artifact/menu styles with their renderers to preserve existing bundle limits.
+  - Prepare configured renderers, icon data, and styles before revealing the widget. Expose controller readiness, retain the launcher during preparation, and preserve the current UI while a newly enabled renderer loads. Retry failed downloads without showing incomplete controls.
+  - Show installer loading feedback only after 300ms for embedded surfaces and launcher opens; remove it on completion or failure without shifting the layout.
+  - Allow custom installer loading UI through a managed `renderLoading` hook with automatic container removal and optional cleanup, retaining the built-in ring as the default.
+  - Keep fit-based overflow stable while idle, reconnect dictation to rebuilt composers, and distinguish deferred bundle failures from initialization failures.
+
+- 276be5a: Improve configuration authoring, component theming, and renderer compatibility.
+
+  - Describe tool-call and output-token limits without incorrectly claiming the entire run stopped or requiring a follow-up when a final answer can still arrive.
+
+  - Add authored configuration exports to the headless theme editor and opt-in code generation that preserves supplied serializable values without filling defaults. Preserve imported values, callbacks in memory, undo/redo, welcome and approval settings, boolean copy values, and escaped text across snippet formats; identify functions that require host JavaScript.
+  - Document whole-object replacement and reset behavior, modern configuration paths, and existing sparse-patch compatibility. Simplify editor labels while keeping technical update guidance in documentation and exports.
+  - Add independent header close/clear, send, and idle-microphone theme controls plus scoped approval, question, tool-card, and artifact-pane styling. Preserve explicit legacy precedence and restore theme values when overrides are cleared. Resolve semantic muted/inverse text colors and refresh artifact styles during updates.
+  - Apply themed control padding while retaining explicit legacy horizontal and vertical overrides.
+  - Add resolved approval presentations and keyboard controls, with compact V5 decision/execution rows. Managed approval renderers receive linked execution state and an abort signal; configured renderers also handle built-in fallbacks. Retain full cards and legacy traces as options.
+  - Preserve host intent for legacy styling through defaults and live updates, and keep newly wired voice/approval color consumers opt-in for explicitly supplied theme values. Add debug-only migration hints scoped to each widget lifetime. Protect selection contrast from host-page styling.
+  - Refresh the generated Runtype public API contract for execution outcomes, tool annotations, steering submission modes, spoken-voice metadata, and prior tool results in voice requests.
+  - Add opt-in shared height transitions for tool, tool-group, and reasoning disclosures, with coordinated inner-content motion, a default duration of 160ms, instant defaults, reduced-motion support, reversible transitions, streaming-safe rendering, and cleanup across live updates. Prevent grouped child entry effects from flashing during disclosure. Add configurable disclosure chevrons, defaulting to right/down under V5 while retaining V4 directions. Lighten disclosure chevrons and rotate them using the expansion timing, respecting reduced motion.
+
+  - Hide automatic tool-row and V5 card timing by default. Add optional compact per-tool or group header timing, preserving authored timers and exact timing metadata for custom renderers. Hide raw names above tool details by default with a `features.toolCallDisplay.showToolName` opt-in, and remove the automatic duration footer from expanded details in both versions. Retain V4 card timed default summaries. Measure groups by known wall-clock timestamps rather than summing overlapping tools.
+
+  - Render single-tool groups directly in stack/collapsible modes while preserving iteration boundaries. Preserve open details when a standalone tool gains siblings.
+
+  - Apply the existing safe ESM minification pass to the activity runtime to keep disclosure and grouping improvements within its size budget.
+
+  - Add an opt-in whole-turn activity disclosure with explicitly classified progress and final messages, a synchronous host adapter and custom header hook. Keep final answers outside, preserve manual disclosure and live DOM, support measured timing and historical replay, and settle local run success, cancellation and failure. Load its renderer separately before reveal; retain existing bundle ceilings. Keep its divider square when host pages apply rounded button styles.
+
+  - Preserve optional native assistant message phases and provider history metadata. Group explicitly classified commentary with execution activity while keeping partial answers, final answers and unclassified text in transcript order, without late relocation.
+
+  - Give whole-turn activity 16px spacing between prose/tool batches and below its divider, with compact nested rows and 2px child spacing, plus progress content without ordinary message action toolbars, while retaining final-answer controls and custom renderers. Add readable default tool labels and counted homogeneous batch headers, natural mixed summaries, and singular child labels for known tool names, with generic fallbacks and preserved custom templates, summaries, and execution status.
+
+  - Give completed classified turn tools muted category icons and homogeneous groups matching icons, with a neutral mixed/unknown fallback. Add per-tool registered icon overrides through `toolCall.iconName`, preserving status and visibility controls, ordinary row defaults, and live callback updates.
+
+  - Anchor grouped progress to its visible turn header so automatic collapse keeps “Worked for…” readable above the final answer, preserving manual scroll intent.
+
+  - Add per-tool descriptive action titles and a synchronous host title resolver independent of turn classification. Use titles on active rows, expose them to card summary renderers without changing card layout, and add current-action or aggregate group summaries across collapsible, summary-only and stack groups. Keep parallel/completed batches aggregate and preserve authored templates, custom renderers, attention states, and disclosure behavior.
+
+  - Add canonical tool and reasoning `layout` controls while preserving shipped `variant` aliases, authored precedence, and live resets. Add plain, inset, and panel reasoning details on the existing disclosure body, with collapsed row/inset defaults in V5 and classified turn progress, preserved V4 presentation, theme/editor preferences, and shared expansion motion.
+
+  - Align row reasoning panels with tool Request/Response details using shared subtle, borderless surfaces, 8px corners, 10px/12px internal padding, and consistent disclosure spacing. Preserve reasoning prose, structured tool typography, card framing, and authored theme overrides.
+
+  - Add shared `activity.panel` background, border color/width, radius, and padding tokens with per-property tool/reasoning panel overrides. Restyle existing details live, retain body-surface and explicit code-block/legacy precedence, and preserve independent plain/inset reasoning, approval details, and outer card frames.
+
+  - Make V5 expanded reasoning easier to read with 14px text, a 1.55 line height, and a configurable 240px inner scroll cap across layouts and appearances. Add `features.reasoningDisplay.maxHeight` for custom or unlimited height, keyboard scrolling, and live resets while preserving disclosure motion and V4 uncapped defaults.
+
+  - Share expanded activity overflow controls through `activity.overflow` with per-property reasoning/tool overrides, 240px caps and 12px edge-aware fades in V5. Keep labels, copy controls, panel chrome and keyboard focus outside the mask; refresh on streaming, resize and live updates, and preserve V4 defaults and explicit reasoning cap compatibility.
+
+- 219cf7b: Use action phrasing such as “Read files” for homogeneous tool groups, keep completed mixed groups descriptive, and add `features.toolCallDisplay.groupSummaryMaxItems` (default 3) to cap distinct summary categories. Set zero for a count-only aggregate while retaining approval, failure and interruption labels.
+- 276be5a: Add APIs and layout options for embedded assistants and conversation continuity in both V4 and V5.
+
+  - Add instance-aware host events, transcript/run notifications, composer-mode control, managed layout slots and component lifecycles, and cancellable link routing. Isolate renderers between widgets while retaining existing event payloads and element-only renderers.
+  - Add frameless inline embeds with shrinkable full-height layouts and scoped transcript, fade, and composer-footer surfaces. Keep inline width independent of full height, fill the host by default, and preserve explicit widths and theme boundaries during updates.
+  - Add `moveTo()` for relocating a live direct-layout widget between connected containers in the same document while preserving its conversation, composer, renderers, and streaming session.
+  - Preserve per-conversation drafts, attachments, and reading positions. Add a stop policy for switching during a run and isolate late upload, dictation, and submission callbacks from other conversations.
+  - Apply updated upload settings to retained drafts and preserve the newly activated session ID when starting a conversation.
+  - Add opt-in durable background conversations through an explicit backend adapter, scoped execution status, and read-only catch-up from matching checkpoints. Preserve existing switch and reconnect defaults.
+  - Use a delayed centered spinner when opening conversations, with transcript fade-in and `loadingIndicator.conversationOpenVariant` to choose skeleton placeholders. Match skeletons to transcript spacing and bubble styles.
+
+- 9bdccc9: Add an inset line beside grouped tool children, independent of stack or collapsible layout. V5 groups use inset by default, with plain indentation available as an override; V4 retains its existing tree unless an appearance is selected.
+- 276be5a: Extend the opt-in V5 defaults and branding controls while preserving V4 defaults and explicit configuration overrides.
+
+  - Add six-field brand configuration for coordinated colors, typography, corners, spacing, and elevation. Preserve explicit theme precedence and support header icon padding for glyphs and images. V5 branding uses accented actions, softly tinted user bubbles, and transparent header icons by default.
+  - Add expandable error blocks with retry while retaining partial responses. Refine V5 message action visibility and enable artifacts by default through the separate artifact UI bundle; V4 remains opt-in. Preserve explicit artifact settings.
+  - Add configurable loading text and V5 scrolling follow-ups, with reduced-motion support and suggestion cleanup during new work. Align default V5 waiting labels with activity row height and text position, preserving explicit loading bubbles and custom renderers. Honor suggestion font-weight overrides, allow free horizontal chip scrolling in both defaults modes, and expose clipped/faded edge treatment for V5 composer suggestion strips.
+  - Add scroll-to-bottom activity glyphs, visibility transitions, unread-count styling, and smooth jumps that track streaming content, cancel on manual input, and honor reduced motion. V5 uses dots, fades, and smooth jumps by default; V4 retains instant jumps. Managed custom glyph renderers receive live state and cleanup.
+  - Add iteration boundaries and live session/run context for grouped tool summaries, separate collapsible group icon visibility, and stable activity state through tool batch gaps and resumptions. Preserve terminal attention states, first-emission grouping metadata, and manual disclosure choices; support collapsible groups and boundaries in preferences.
+  - Unify waiting, tool, grouped-tool, and reasoning label animations with shared mode, timing, and color overrides. Add a managed loading-label effect hook with live updates, reduced-motion handling, and cleanup while preserving custom renderer ownership and existing stream animation plugins. Load these effects from a small shared module so animated waiting text does not require the tool/reasoning renderer; prepare configured effects before reveal and retain the current UI through renderer updates and retryable download failures.
+  - Show a shared activity spinner beside V5 waiting labels. Add registry-backed icon selection, visibility overrides, and independent icon rotation while preserving V4 labels/dots, custom renderer ownership, and reduced-motion preferences.
+
+### Patch Changes
+
+- 6e41519: Keep uploaded attachments associated with their creating adapter so removal and discarded conversation drafts use the correct cleanup handler after adapter configuration changes.
+- 8b3fbd8: Position the scroll-to-bottom button 16px above the entire footer in block composer placement, including its padding and divider.
+- b629390: Reduce the core CDN bundle size by consolidating duplicate license notices, refining safe minification, and removing duplicated JSON stream parser work. Preserve source maps, streaming behavior, and the existing size budget.
+- b629390: Use 16px nominal header action icons by default while preserving button sizes, touch targets, close-icon optical scaling, and explicit icon-size overrides.
+- 9bdccc9: Indent grouped activity children with compact spacing in V5 and opted-in turn activity, and shorten completed mixed tool-group summaries to an activity count while retaining active and attention details.
+- 7dd22c5: Keep persistent composer suggestions clear of the anchored transcript as content grows, and position the jump-to-latest button relative to the visible transcript instead of counting the external composer twice. Prevent the composer's invisible preview area from intercepting clicks on the transcript and jump button.
+- 2e3d004: Keep the composer-bar preview visible when the pointer crosses the gap from the composer, while preserving click-through behavior when the preview is hidden.
+- 633da25: Remove default shadows from tool and reasoning rows in V4 and V5, including grouped and turn activity rows, while preserving card styling and explicit shadow overrides.
+- 975dd74: Hide and disable composer-bar follow-up suggestions while conversation history covers the chat, preserving the draft and restoring current suggestions when history closes.
+
+  Keep composer-bar conversation history inside the chat panel so its navigation controls remain visible and clickable, and hide the external composer until the conversation is visible again.
+
+- 90237ce: Keep the scroll-to-bottom button centered over the conversation when history is docked in a rail, including after resizing, closing, or reopening the rail.
+- b5f4902: Keep the composer at the bottom for assistant-only conversation activity, including restored tool calls and reasoning, so expanded details remain readable. Disabled welcomes no longer implicitly center an empty composer; configured welcome greetings and explicit empty-state anchors retain their intended placement.
+- 23c1261: Move the ellipsis-vertical icon into the extra icon chunk to reduce the initial widget and launcher bundles while preserving its public name and prepared rendering.
+- 9f323b7: Keep loading-label lifecycle regression tests independent of the layout stylesheet to avoid timeouts under CI load, and align expansion regression expectations with the V5 animation defaults.
+- 9bdccc9: Use mapped completion icons for visible tool rows and collapsible group headers in ordinary transcripts as well as turn activity. Keep custom overrides, icon visibility settings, and active or attention status icons.
+- b629390: Use a square text icon for mixed tool activity groups and unfamiliar tools, preserving semantic tool icons and status indicators.
+- 7dd22c5: Show persistent-composer follow-up suggestions in a fixed row inside the expanded panel, keeping them readable over busy host pages and keeping the jump-to-latest button above the row. Reuse the composer's configured overlay band above the row while transcript content remains below.
+- 6e41519: Apply live expansion configuration updates to existing tool and reasoning disclosures, preserving their open or closed state. Compact the activity module with safe minification while preserving exports and the existing bundle-size limits.
+- 23c1261: Use distinct completed activity icons for reasoning, whole-turn headers, mixed tool groups (toolbox), and unfamiliar tools while preserving mapped tool icons and explicit overrides.
+- 9d5286e: Make the V5 jump-to-latest control smaller and less prominent with a 32px neutral surface, semantic text color, and subtle border. Preserve V4 defaults and authored theme overrides in both transcript and event-stream views.
+
+  Hide the transcript jump control when the latest content is already readable, excluding anchor spacers and composer padding. Refresh visibility as content and composer layouts settle while preserving the reader's scroll intent.
+
+  Position the transcript jump control 16px above visible composer content, adapting to growing input, attachments, and suggestions instead of adding the footer’s transparent top inset to the gap.
+
+- e4c685c: Soften the turn-activity divider with a theme-derived color at 8% opacity. Add `theme.components.turnActivity.dividerColor` and `dividerWidth` overrides, including `0px` to hide the divider.
+- 9bdccc9: Enable height expansion at 160ms with ease-out by default for V5 tool, group, and reasoning disclosures. Preserve instant V4 disclosure, explicit animation overrides, and reduced-motion behavior.
+
 ## 4.29.2
 
 ### Patch Changes
