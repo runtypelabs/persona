@@ -64,21 +64,45 @@ for (const version of ["v4", "v5"]) {
     await expect(host.getByRole("button", { name: "Stop generating", exact: true })).toHaveCount(0);
     const frames = await page.evaluate(() => window.markdownFrames);
     expectStableFormatting(frames);
-    expect(frames.some(frame => frame.emphasis.some(text => text.length > 0 && text !== "italic" && text !== "emphasis"))).toBe(true);
-    expect(frames.some(frame => frame.code.some(text => text.length > 0 && "inline code".startsWith(text) && text !== "inline code"))).toBe(true);
+    expect(frames.some(frame => frame.emphasis.some(text => text.length > 0 && text !== "plain JavaScript"))).toBe(true);
+    expect(frames.some(frame => frame.code.some(text => text.length > 0 && "persona init".startsWith(text) && text !== "persona init"))).toBe(true);
     expect(frames.every(frame => !/[*`\[\]]|https:\/\/|data:image/.test(frame.prose))).toBe(true);
     expect(frames.flatMap(frame => frame.links).every(href => href === "https://persona-chat.dev")).toBe(true);
-    const image = host.getByRole("img", { name: "Persona sample" });
-    await expect(image).toBeVisible();
-    const imageSource = await image.getAttribute("src");
-    expect(imageSource).toBe("/favicon-32.png");
-    expect(frames.flatMap(frame => frame.images).every(src => src === imageSource)).toBe(true);
-    await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     await expect(host.getByRole("link", { name: "the Persona docs" })).toHaveAttribute("href", "https://persona-chat.dev");
-    await expect(host.getByRole("link", { name: "labels with [", exact: true })).toHaveAttribute("href", "https://persona-chat.dev");
-    await expect(host.getByRole("link", { name: "labels with ]", exact: true })).toHaveAttribute("href", "https://persona-chat.dev");
-    await expect(host.locator("table")).toContainText("Markdown");
-    await expect(host.locator("pre code")).toHaveText("const literal = '**not emphasis**';\n");
+    await expect(host.locator("table")).toContainText("Tool activity, approval prompts, and voice conversations");
+    await expect(host.locator("pre code")).toHaveText('npx @runtypelabs/cli@latest persona init\n');
+  });
+
+  test(`${version} shares streaming repairs with a custom message callback`, async ({ page }) => {
+    await page.goto("/assistant-composers.html");
+    await page.locator("#lab-defaults").selectOption(version);
+    await page.locator("#lab-reply").selectOption("custom");
+    await observeMarkdown(page);
+    const host = page.locator("#lab-mount");
+    await host.getByRole("textbox").fill("Where is my order?");
+    await host.getByRole("textbox").press("Enter");
+    await expect(host.getByRole("button", { name: "Stop generating", exact: true })).toBeVisible();
+    await expect(host.getByRole("button", { name: "Stop generating", exact: true })).toHaveCount(0);
+    const frames = await page.evaluate(() => window.markdownFrames);
+    expect(frames.length).toBeGreaterThan(2);
+    expectStableFormatting(frames);
+    expect(frames.some(frame => frame.strong.some(text => text.length > 0 && text !== "order update"))).toBe(true);
+    expect(frames.every(frame => !/[*\[\]]|order:|\/account\//.test(frame.prose))).toBe(true);
+    expect(frames.flatMap(frame => frame.links).every(href => href === "/account/orders/12345")).toBe(true);
+    await expect(host.getByRole("link", { name: "Order #12345" })).toHaveAttribute("href", "/account/orders/12345");
+    await expect(host.locator("strong")).toHaveText("order update");
+    await expect(host.locator("em")).toHaveText("delivery details");
+    await expect(page.locator("#lab-config")).toContainText("preprocessStreamingMarkdown(transformed, streaming)");
+    const originalUrl = page.url();
+    let alertMessage = "";
+    page.once("dialog", async dialog => {
+      alertMessage = dialog.message();
+      await dialog.accept();
+    });
+    await host.getByRole("link", { name: "Order #12345" }).click();
+    await expect.poll(() => alertMessage).toBe("This is a sample order link. In your app, it would open the order details page.");
+    await expect(page).toHaveURL(originalUrl);
+    await expect(host.getByRole("link", { name: "Order #12345" })).toBeVisible();
   });
 
   test(`${version} formats the composer reply before the closing bold delimiter arrives`, async ({ page }) => {

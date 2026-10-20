@@ -28,6 +28,7 @@ import {
   initAgentWidget,
   createAgentExperience,
   markdownPostprocessor,
+  preprocessStreamingMarkdown,
   DEFAULT_WIDGET_CONFIG
 } from '@runtypelabs/persona';
 
@@ -43,7 +44,8 @@ createAgentExperience(inlineHost, {
     semantic: { colors: { accent: '#2563eb' } }
   },
   suggestions: { starters: { items: ['What can you do?', 'Show API docs'] } },
-  postprocessMessage: ({ text }) => markdownPostprocessor(text)
+  postprocessMessage: ({ text, streaming }) =>
+    markdownPostprocessor(preprocessStreamingMarkdown(text, streaming))
 });
 
 // Floating launcher with runtime updates
@@ -274,3 +276,22 @@ for an actionable error message: v6 replaces thrown callback errors with a
 generic error and rejects `undefined` and other non-serializable results. v5's
 existing result conversion remains unchanged. Registration cleanup uses an
 AbortSignal in both versions.
+
+### Custom Markdown rendering during streaming
+
+`postprocessMessage` receives the original display text, including incomplete Markdown.
+After applying your own text transforms, call `preprocessStreamingMarkdown(text, streaming)`
+before your Markdown parser to use the same display repairs as the built-in renderer:
+
+```ts
+postprocessMessage: ({ text, streaming }) => {
+  const transformed = text.replace(/<answer>|<\/answer>/g, '');
+  return markdownPostprocessor(preprocessStreamingMarkdown(transformed, streaming));
+}
+```
+
+The helper returns completed text unchanged and does not change stored message content
+or the callback's `raw` payload. It does not parse HTML or sanitize output; Persona's
+configured sanitizer still runs after the callback. On the CDN build it is available as
+`AgentWidget.preprocessStreamingMarkdown`. It uses the existing lazy Markdown parser
+chunk when ready, with lightweight table repairs available before that chunk loads.

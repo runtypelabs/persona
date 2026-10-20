@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildPostprocessor } from "./ui";
-import { escapeHtml } from "./postprocessors";
+import { escapeHtml, markdownPostprocessor, preprocessStreamingMarkdown } from "./postprocessors";
 import * as parsersLoader from "./markdown-parsers-loader";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "./types";
 
@@ -93,6 +93,25 @@ describe("buildPostprocessor degraded path (parsers not loaded)", () => {
 });
 
 describe("buildPostprocessor loaded path (parsers available)", () => {
+  it("lets custom callbacks transform text before opting into the shared streaming repairs", () => {
+    const text = "<answer>Read **unfinished";
+    const raw = JSON.stringify({ answer: text });
+    const message: AgentWidgetMessage = {
+      id: "custom-stream", role: "assistant", content: text, rawContent: raw, createdAt: "2026-10-20T00:00:00.000Z",
+    };
+    const custom = vi.fn(({ text, streaming }: { text: string; streaming: boolean }) =>
+      markdownPostprocessor(preprocessStreamingMarkdown(text.replace("<answer>", ""), streaming)));
+    const transform = buildPostprocessor({ postprocessMessage: custom, sanitize: true }, undefined, undefined);
+    const displayText = text.replace("<answer>", "");
+    const builtIn = buildPostprocessor({ markdown: {} }, undefined, undefined);
+    expect(transform({ text, raw, message, streaming: true })).toBe(
+      builtIn({ text: displayText, message, streaming: true }));
+    expect(transform({ text, raw, message, streaming: false })).toBe("<p>Read **unfinished</p>\n");
+    expect(message.content).toBe(text);
+    expect(message.rawContent).toBe(raw);
+    expect(custom.mock.calls[0][0]).toMatchObject({ text, raw, streaming: true });
+  });
+
   it("repairs streaming display without mutating the stored or final Markdown", () => {
     const text = "Read **unfinished";
     const message: AgentWidgetMessage = {
@@ -187,5 +206,28 @@ describe("buildPostprocessor failure containment", () => {
     );
 
     expect(out).toBe(escapeHtml(SAMPLE));
+  });
+});
+
+describe("preprocessStreamingMarkdown parser readiness", () => {
+  it("leaves final text unchanged even when a parser repair would modify it", () => {
+    const repair = vi.fn(() => "repaired");
+    const parsers = parsersLoader.getMarkdownParsersSync()!;
+    vi.spyOn(parsersLoader, "getMarkdownParsersSync").mockReturnValue({ ...parsers, stabilizeStreamingMarkdown: repair });
+    expect(preprocessStreamingMarkdown("**unfinished", false)).toBe("**unfinished");
+    expect(repair).not.toHaveBeenCalled();
+    expect(preprocessStreamingMarkdown("**unfinished", true)).toBe("repaired");
+  });
+
+  it("uses the same lightweight table fallback before parsers load and with legacy loaders", () => {
+    const parsers = parsersLoader.getMarkdownParsersSync()!;
+    const text = "| A | B |\n| ---";
+    vi.spyOn(parsersLoader, "getMarkdownParsersSync").mockReturnValue(null);
+    const beforeLoad = preprocessStreamingMarkdown(text, true);
+    expect(beforeLoad).not.toBe(text);
+    expect(preprocessStreamingMarkdown("**unfinished", true)).toBe("**unfinished");
+    vi.mocked(parsersLoader.getMarkdownParsersSync).mockReturnValue({ Marked: parsers.Marked, DOMPurify: parsers.DOMPurify });
+    expect(preprocessStreamingMarkdown(text, true)).toBe(beforeLoad);
+    expect(preprocessStreamingMarkdown(text, false)).toBe(text);
   });
 });

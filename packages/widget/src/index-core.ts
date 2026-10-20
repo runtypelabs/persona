@@ -395,6 +395,7 @@ export {
 } from "./utils/actions";
 export {
   markdownPostprocessor,
+  preprocessStreamingMarkdown,
   escapeHtml,
   directivePostprocessor,
   createMarkdownProcessor,

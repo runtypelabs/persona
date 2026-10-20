@@ -11,9 +11,8 @@ import { isBrowserLocalApproval } from "./utils/restored-browser-state";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
 import type { DictationSession } from "./dictation-session";
 import { usesSessionVoice, usesSessionVoiceForConfig } from "./utils/voice-support";
-import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
+import { escapeHtml, createMarkdownProcessorFromConfig, preprocessStreamingMarkdown } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
-import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
 import { getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { loadClientStream } from "./client-stream-loader";
@@ -832,9 +831,7 @@ export const buildPostprocessor = (
     } else if (markdownProcessor) {
       // Stabilize incomplete Markdown only for display during streaming. The
       // final render and the stored response always use the original text.
-      const source = context.streaming
-        ? (parsers?.stabilizeStreamingMarkdown ?? stabilizeStreamingTables)(nextText)
-        : nextText;
+      const source = preprocessStreamingMarkdown(nextText, context.streaming);
       // Already escapeHtml(text) (single, safe) while parsers are not loaded.
       const out = markdownProcessor(source);
       html = sanitize && parsersReady ? sanitize(out) : out;
