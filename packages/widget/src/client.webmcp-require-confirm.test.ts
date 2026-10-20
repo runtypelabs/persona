@@ -32,7 +32,7 @@ const makeClient = (webmcp?: AgentWidgetConfig["webmcp"]) =>
 
 afterEach(() => {
   vi.restoreAllMocks();
-  delete (document as Document & { modelContext?: unknown }).modelContext;
+  delete (document as unknown as { modelContext?: unknown }).modelContext;
 });
 
 describe("client-token init: config.webmcp.requireConfirmFor", () => {
@@ -56,7 +56,7 @@ describe("client-token init: config.webmcp.requireConfirmFor", () => {
 describe("client-token init feeds the WebMCP confirm gate", () => {
   it("flags a matched page tool for the host's onConfirm after init", async () => {
     const execute = vi.fn(async () => JSON.stringify("ran"));
-    (document as Document & { modelContext?: unknown }).modelContext = {
+    (document as unknown as { modelContext?: unknown }).modelContext = {
       getTools: async () => [
         { name: "checkout_submit", description: "Place the order", title: "", window, origin: location.origin },
         { name: "search", description: "Search", title: "", window, origin: location.origin },
@@ -83,7 +83,7 @@ describe("client-token init feeds the WebMCP confirm gate", () => {
 
 describe("voice before any client-token init", () => {
   const installReadOnlyTools = () => {
-    (document as Document & { modelContext?: unknown }).modelContext = {
+    (document as unknown as { modelContext?: unknown }).modelContext = {
       getTools: async () =>
         ["checkout_preview", "next_slide"].map((name) => ({
           name,
@@ -137,7 +137,7 @@ describe("voice before any client-token init", () => {
 
 describe("surface policy lifetime", () => {
   const installTools = () => {
-    (document as Document & { modelContext?: unknown }).modelContext = {
+    (document as unknown as { modelContext?: unknown }).modelContext = {
       getTools: async () =>
         ["checkout_submit", "search"].map((name) => ({
           name,

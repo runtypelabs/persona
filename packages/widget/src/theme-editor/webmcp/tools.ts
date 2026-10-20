@@ -207,19 +207,10 @@ export function createThemeEditorTools(
           description: p.description,
           tags: p.tags ?? [],
         })),
-        tools: [
-          { tool: 'set_brand_colors', hint: 'Recolor primary/secondary/accent and generate shade scales.' },
-          { tool: 'assign_color_role', hint: 'Recolor a widget region with family + intensity.' },
-          { tool: 'set_typography', hint: 'Set font family, size, weight, line height.' },
-          { tool: 'set_roundness', hint: 'Set corner roundness or granular radii.' },
-          { tool: 'set_color_scheme', hint: 'Set light/dark/auto and edit target.' },
-          { tool: 'apply_preset', hint: 'Apply a built-in preset.' },
-          { tool: 'configure_widget', hint: 'Toggle launcher position, features, and layout.' },
-          { tool: 'set_copy_and_suggestions', hint: 'Set welcome copy, placeholder, and suggestion chips.' },
-          { tool: 'set_theme_fields', hint: 'Set any field by id or dot-path.' },
-          { tool: 'check_contrast', hint: 'Audit WCAG contrast.' },
-          { tool: 'manage_session', hint: 'Undo, redo, reset, or export the theme.' },
-        ],
+        tools: tools.filter((tool) => tool !== getThemeOverview).map((tool) => ({
+          tool: tool.name,
+          hint: tool.description,
+        })),
       };
       if (verbosity === 'full') {
         fieldIndex ??= buildFieldIndex();

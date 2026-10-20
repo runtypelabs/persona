@@ -278,6 +278,9 @@ generic error and rejects `undefined` and other non-serializable results. v5's
 existing result conversion remains unchanged. Registration cleanup uses an
 AbortSignal in both versions.
 
+`initializeWebMCPPolyfill` is still exported from the CDN polyfill chunk as a
+deprecated alias of `installWebMCP`; the v6 runtime has no uninstall API.
+
 ### Custom Markdown rendering during streaming
 
 `postprocessMessage` receives the original display text, including incomplete Markdown.
@@ -296,6 +299,3 @@ or the callback's `raw` payload. It does not parse HTML or sanitize output; Pers
 configured sanitizer still runs after the callback. On the CDN build it is available as
 `AgentWidget.preprocessStreamingMarkdown`. It uses the existing lazy Markdown parser
 chunk when ready, with lightweight table repairs available before that chunk loads.
-
-`initializeWebMCPPolyfill` is still exported from the CDN polyfill chunk as a
-deprecated alias of `installWebMCP`; the v6 runtime has no uninstall API.
