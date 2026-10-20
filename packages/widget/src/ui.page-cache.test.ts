@@ -198,3 +198,71 @@ it("retains the live-call metadata used to redial on a genuine document navigati
   expect(provider.disconnect).toHaveBeenCalledOnce();
   expect(controller.getPersistentMetadata().voiceState).toMatchObject({ active: true });
 });
+
+it.each(["queued", "late", "injected"])("discards %s action resubmits across Back and accepts fresh actions", async mode => {
+  vi.useFakeTimers();
+  try {
+    let trigger = () => {};
+    const customFetch = vi.fn(async () => new Response("", { headers: { "content-type": "text/event-stream" } }));
+    const { controller } = mount({ customFetch, actionHandlers: [(_action, context) => {
+      trigger = context.triggerResubmit;
+      return { handled: true, displayText: "Action handled", resubmit: mode === "injected" };
+    }] });
+    controller.injectAssistantMessage({ content: '{"action":"search"}' });
+    await vi.advanceTimersByTimeAsync(0);
+    if (mode === "queued") trigger();
+    transition("pagehide");
+    transition("pageshow");
+    if (mode === "late") trigger();
+    if (mode === "injected") controller.injectAssistantMessage({ content: "Late result" });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(customFetch).not.toHaveBeenCalled();
+    controller.injectAssistantMessage({ content: '{"action":"search"}' });
+    await vi.advanceTimersByTimeAsync(0);
+    if (mode !== "injected") trigger();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(customFetch).toHaveBeenCalledOnce();
+  } finally { vi.useRealTimers(); }
+});
+
+it.each(["back", "destroy", "navigation"])("guards queued metadata voice restoration on %s", async lifecycle => {
+  vi.useFakeTimers();
+  try {
+    const { provider } = voice();
+    const { controller } = mount({
+      persistState: true, storageAdapter: { load: () => ({ messages: [], metadata: { voiceState: { active: true, timestamp: Date.now() } } }), save: () => {} },
+      voiceRecognition: { enabled: true, provider: { type: "custom", custom: () => provider } },
+    });
+    if (lifecycle === "back") { transition("pagehide"); transition("pageshow"); }
+    if (lifecycle === "destroy") controller.destroy();
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(provider.startListening).toHaveBeenCalledTimes(lifecycle === "navigation" ? 1 : 0);
+    if (lifecycle === "back") {
+      controller.startVoiceRecognition();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(provider.startListening).toHaveBeenCalledOnce();
+    }
+  } finally { vi.useRealTimers(); }
+});
+
+it("discards the delayed browser voice restore before Back while allowing a fresh mic tap", async () => {
+  vi.useFakeTimers();
+  try {
+    const start = vi.fn();
+    class Recognition { start = start; stop = vi.fn(); }
+    vi.stubGlobal("SpeechRecognition", Recognition);
+    const { controller } = mount({
+      persistState: true,
+      storageAdapter: { load: () => ({ messages: [], metadata: { voiceState: { active: true, timestamp: Date.now() } } }), save: () => {} },
+      voiceRecognition: { enabled: true },
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(start).not.toHaveBeenCalled();
+    transition("pagehide");
+    transition("pageshow");
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(start).not.toHaveBeenCalled();
+    expect(controller.startVoiceRecognition()).toBe(true);
+    expect(start).toHaveBeenCalledOnce();
+  } finally { vi.useRealTimers(); }
+});

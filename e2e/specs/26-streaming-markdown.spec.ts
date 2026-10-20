@@ -75,6 +75,8 @@ for (const version of ["v4", "v5"]) {
     expect(frames.flatMap(frame => frame.images).every(src => src === imageSource)).toBe(true);
     await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     await expect(host.getByRole("link", { name: "the Persona docs" })).toHaveAttribute("href", "https://persona-chat.dev");
+    await expect(host.getByRole("link", { name: "labels with [", exact: true })).toHaveAttribute("href", "https://persona-chat.dev");
+    await expect(host.getByRole("link", { name: "labels with ]", exact: true })).toHaveAttribute("href", "https://persona-chat.dev");
     await expect(host.locator("table")).toContainText("Markdown");
     await expect(host.locator("pre code")).toHaveText("const literal = '**not emphasis**';\n");
   });

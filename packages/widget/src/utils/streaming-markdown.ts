@@ -3,6 +3,17 @@ import { stabilizeStreamingTables } from "./streaming-table";
 const whitespace = (char: string): boolean => !char || /\s/.test(char);
 const punctuation = (char: string): boolean => !!char && /[\p{P}\p{S}]/u.test(char);
 
+// Code delimiters close only on a backtick run of exactly the same length.
+const codeSpanEnd = (source: string, start: number, end: number): number => {
+  const marker = source.slice(start, end);
+  let closing = end;
+  while ((closing = source.indexOf(marker, closing)) !== -1) {
+    if (source[closing - 1] !== "`" && source[closing + marker.length] !== "`") return closing + marker.length;
+    closing += marker.length;
+  }
+  return -1;
+};
+
 /** Display-only completion for the ordinary inline syntax arriving at the stream tail.
  * This is deliberately not a Markdown parser: ambiguous literals and block syntax
  * remain Marked's responsibility. Never persist this result or use it at completion.
@@ -22,14 +33,10 @@ const stabilizeInline = (source: string, links = true): string => {
       let end = i + 1;
       while (source[end] === "`") end++;
       const marker = source.slice(i, end);
-      let closing = end;
-      while ((closing = source.indexOf(marker, closing)) !== -1) {
-        if (source[closing - 1] !== "`" && source[closing + marker.length] !== "`") break;
-        closing += marker.length;
-      }
+      const closing = codeSpanEnd(source, i, end);
       if (closing !== -1) {
-        output += source.slice(i, closing + marker.length);
-        i = closing + marker.length;
+        output += source.slice(i, closing);
+        i = closing;
       } else {
         const body = source.slice(end);
         // An empty run could still become a fence or literal. Hold it briefly.
@@ -51,6 +58,14 @@ const stabilizeInline = (source: string, links = true): string => {
       let end = start;
       for (; end < source.length; end++) {
         if (source[end] === "\\") { end++; continue; }
+        if (source[end] === "`") {
+          let runEnd = end + 1;
+          while (source[runEnd] === "`") runEnd++;
+          const closing = codeSpanEnd(source, end, runEnd);
+          // Unmatched runs are literal Markdown, so their brackets still count.
+          end = (closing < 0 ? runEnd : closing) - 1;
+          continue;
+        }
         if (source[end] === "[") depth++;
         if (source[end] === "]" && --depth === 0) break;
       }

@@ -41,6 +41,36 @@ describe("streaming Markdown display", () => {
     expect(markdown(stabilize(source))).toContain('<a href="https://example.com/a_(b)">read more</a>');
   });
 
+  it.each([
+    "Use `[` here", "Use `]` here", "Use ``[`]`` here", "Use ``]`[`` here",
+    "Use `]``[` here", "Use \\[ and \\] here",
+  ])("keeps code brackets inert while streaming link label %s", (label) => {
+    const source = `[${label}](https://example.com)`;
+    for (let length = 1; length < source.length; length++) {
+      const html = markdown(stabilize(source.slice(0, length)));
+      expect(html).not.toContain("<a ");
+      expect(html).not.toContain("https:");
+    }
+    expect(stabilize(source)).toBe(source);
+    expect(markdown(stabilize(source))).toBe(markdown(source));
+    expect(markdown(stabilize(source))).toContain('<a href="https://example.com">');
+    const image = `![${label}](image.png)`;
+    for (let length = 2; length < image.length; length++) {
+      const display = stabilize(image.slice(0, length));
+      expect(markdown(display)).not.toContain("<img ");
+      if (length >= label.length + 2) expect(display).toBe("");
+    }
+    expect(stabilize(image)).toBe(image);
+  });
+
+  it.each(["Use ` here", "Use `` here", "Use `` unmatched ` here", "Use ``[nested] ` here", "Use ` [nested] `` here"])("treats unmatched code runs as literal link label text: %s", (label) => {
+    const source = `[${label}](https://example.com)`;
+    expect(stabilize(source)).toBe(source);
+    expect(markdown(stabilize(source))).toBe(markdown(source));
+    expect(markdown(stabilize(source))).toContain('<a href="https://example.com">');
+    expect(stabilize(`[${label}](https://example`)).not.toContain("https:");
+  });
+
   it("holds incomplete images, including escaped brackets and nested URL parentheses", () => {
     const source = "![an \\] image](https://example.com/a_(b).png)";
     for (let length = 2; length < source.length; length++) {

@@ -1228,6 +1228,10 @@ export const createAgentExperience = (
     getSessionMetadata,
     updateSessionMetadata,
     emit: eventBus.emit,
+    captureResubmitGuard: () => {
+      const generation = restartGeneration;
+      return () => canRestart(generation);
+    },
     documentRef: typeof document !== "undefined" ? document : null
   });
   actionManager.syncFromMetadata();
@@ -1252,10 +1256,31 @@ export const createAgentExperience = (
   // Track pending resubmit state for injection-triggered resubmit
   // When a handler returns resubmit: true, we wait for injectAssistantMessage()
   // to be called before triggering the actual resubmit (to avoid race conditions)
+  // Cached restoration reuses this controller, so work queued by the old page
+  // lifecycle must remain stale even after pageshow makes the page active again.
+  let restartGeneration = 0;
+  let destroyed = false;
+  const canRestart = (generation: number) =>
+    !destroyed && !pageHiding && generation === restartGeneration;
+  const invalidatePendingRestarts = () => {
+    restartGeneration++;
+    pendingResubmit = false;
+    if (pendingResubmitTimeout !== null) clearTimeout(pendingResubmitTimeout);
+    pendingResubmitTimeout = null;
+  };
+  const scheduleResubmit = () => {
+    const generation = restartGeneration;
+    if (!canRestart(generation)) return;
+    setTimeout(() => {
+      if (canRestart(generation) && !session.isStreaming()) session.continueConversation();
+    }, 100);
+  };
+
   let pendingResubmit = false;
   let pendingResubmitTimeout: ReturnType<typeof setTimeout> | null = null;
 
   const handleResubmitRequested = () => {
+    if (!canRestart(restartGeneration)) return;
     pendingResubmit = true;
     // Clear any existing timeout
     if (pendingResubmitTimeout) {
@@ -5168,12 +5193,14 @@ export const createAgentExperience = (
     const timestamp = Number(rawVoiceState.timestamp ?? 0);
     voiceState.manuallyDeactivated = Boolean(rawVoiceState.manuallyDeactivated);
     if (wasActive && Date.now() - timestamp < VOICE_STATE_RESTORE_WINDOW) {
+      const generation = restartGeneration;
       setTimeout(() => {
-        if (pageHiding) return;
+        if (!canRestart(generation)) return;
         if (!voiceState.active) {
           voiceState.manuallyDeactivated = false;
           if (usesSessionVoice(config.voiceRecognition?.provider)) {
             session.toggleVoice().then(() => {
+              if (!canRestart(generation)) return;
               voiceState.active = isSessionVoiceLive();
               emitVoiceState("restore");
               if (voiceState.active) {
@@ -10704,9 +10731,10 @@ export const createAgentExperience = (
   const pendingSubmissionUnsub = eventBus.on("assistant:complete", () => {
     const pending = composerStore.getState().pendingSubmission;
     const generation = composerConversationGeneration;
+    const restart = restartGeneration;
     if (!pending) return;
     setTimeout(() => {
-      if (session.isStreaming() || generation !== composerConversationGeneration || composerStore.getState().pendingSubmission !== pending) return;
+      if (!canRestart(restart) || session.isStreaming() || generation !== composerConversationGeneration || composerStore.getState().pendingSubmission !== pending) return;
       sendPendingSubmission();
     }, 0);
   });
@@ -10719,11 +10747,13 @@ export const createAgentExperience = (
       return;
     }
     const generation = composerConversationGeneration;
+    const restart = restartGeneration;
     setTimeout(() => {
-      if (pageHiding || generation !== composerConversationGeneration) return;
+      if (!canRestart(restart) || generation !== composerConversationGeneration) return;
       if (!voiceState.active && !voiceState.manuallyDeactivated) {
         if (usesSessionVoice(config.voiceRecognition?.provider)) {
           session.toggleVoice().then(() => {
+            if (!canRestart(restart) || generation !== composerConversationGeneration) return;
             voiceState.active = session.isVoiceActive();
             emitVoiceState("auto");
             if (session.isVoiceActive()) applyRuntypeMicRecordingStyles();
@@ -10744,6 +10774,7 @@ export const createAgentExperience = (
     if (!event.persisted || cachedPage) return;
     cachedPage = true;
     pageHiding = true;
+    invalidatePendingRestarts();
     composerConversationGeneration++;
     submitEpoch++;
     submitInFlight = false;
@@ -10778,12 +10809,7 @@ export const createAgentExperience = (
   const resubmitUnsub = eventBus.on("action:resubmit", () => {
     // Short delay to allow UI to update with any injected messages
     // Handlers should call context.triggerResubmit() AFTER their async work completes
-    setTimeout(() => {
-      if (session && !session.isStreaming()) {
-        // Continue conversation without adding a visible user message
-        session.continueConversation();
-      }
-    }, 100);
+    scheduleResubmit();
   });
   destroyCallbacks.push(resubmitUnsub);
 
@@ -12277,6 +12303,10 @@ export const createAgentExperience = (
         getSessionMetadata,
         updateSessionMetadata,
         emit: eventBus.emit,
+        captureResubmitGuard: () => {
+          const generation = restartGeneration;
+          return () => canRestart(generation);
+        },
         documentRef: typeof document !== "undefined" ? document : null
       });
 
@@ -12926,11 +12956,7 @@ export const createAgentExperience = (
           pendingResubmitTimeout = null;
         }
         // Short delay to ensure message is in context
-        setTimeout(() => {
-          if (session && !session.isStreaming()) {
-            session.continueConversation();
-          }
-        }, 100);
+        scheduleResubmit();
       }
 
       return result;
@@ -13267,6 +13293,8 @@ export const createAgentExperience = (
       return session.submitNPSFeedback(rating, comment);
     },
     destroy() {
+      destroyed = true;
+      invalidatePendingRestarts();
       renderReadiness.destroy();
       slots.destroy();
       mount.removeEventListener("click", routeLinkClick);
