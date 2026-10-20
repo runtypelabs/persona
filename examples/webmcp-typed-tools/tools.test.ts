@@ -28,6 +28,27 @@ async function fixture() {
   return { tools, host, call, cleanup, visible: () => visible, setDirty: () => { dirty = true; } };
 }
 
+async function personaFixture(shape: "object" | "string", confirm = false) {
+  const f = await fixture();
+  const pageWindow = {};
+  vi.stubGlobal("window", pageWindow);
+  vi.stubGlobal("location", { origin: "https://example.test" });
+  vi.stubGlobal("document", { modelContext: {
+    getTools: async () => [...f.tools.values()].map((tool) => ({
+      ...tool, title: tool.title ?? "", window: pageWindow, origin: "https://example.test",
+      inputSchema: shape === "string" ? JSON.stringify(tool.inputSchema) : tool.inputSchema,
+    })),
+    executeTool: async (tool: { name: string }, input: Record<string, unknown>) =>
+      JSON.stringify(await f.call(tool.name, input)),
+  } });
+  const bridge = new WebMcpBridge({ enabled: true, onConfirm: async () => confirm }, {
+    recordToolDisplayTitles: () => {},
+    getToolDisplayTitle: () => undefined,
+    loadPolyfill: async () => ({ initializeWebMCPPolyfill: () => {} }),
+  });
+  return { ...f, bridge };
+}
+
 describe("typed checkout page tools", () => {
   it("opens a review screen before reporting success without exposing a purchase tool", async () => {
     const f = await fixture();
@@ -98,29 +119,22 @@ describe("typed checkout page tools", () => {
     expect(f.tools.size).toBe(0);
   });
 
-  it.each(["object", "string"])("a declined Persona confirmation cannot navigate with a %s schema", async (shape) => {
-    const f = await fixture();
-    const pageWindow = {};
-    vi.stubGlobal("window", pageWindow);
-    vi.stubGlobal("location", { origin: "https://example.test" });
-    vi.stubGlobal("document", { modelContext: {
-      getTools: async () => [...f.tools.values()].map((tool) => ({
-        ...tool, title: tool.title ?? "", window: pageWindow, origin: "https://example.test",
-        inputSchema: shape === "string" ? JSON.stringify(tool.inputSchema) : tool.inputSchema,
-      })),
-      executeTool: async (tool: { name: string }, input: Record<string, unknown>) =>
-        JSON.stringify(await f.call(tool.name, input)),
-    } });
-    const bridge = new WebMcpBridge({ enabled: true, onConfirm: async () => false }, {
-      recordToolDisplayTitles: () => {},
-      getToolDisplayTitle: () => undefined,
-      loadPolyfill: async () => ({ initializeWebMCPPolyfill: () => {} }),
-    });
-    const snapshot = await bridge.snapshotForDispatch();
+  it.each(["object", "string"] as const)("a declined Persona confirmation cannot navigate with a %s schema", async (shape) => {
+    const f = await personaFixture(shape);
+    const snapshot = await f.bridge.snapshotForDispatch();
     expect(snapshot.find((tool) => tool.name === "get_cart")?.untrustedContentHint).toBe(true);
-    expect(await bridge.executeToolCall("webmcp:open_checkout", { cartId: "cart-1" })).toMatchObject({ isError: true });
+    expect(await f.bridge.executeToolCall("webmcp:open_checkout", { cartId: "cart-1" })).toMatchObject({ isError: true });
     expect(f.visible()).toBe("cart");
     f.cleanup();
-    expect(await bridge.snapshotForDispatch()).toEqual([]);
+    expect(await f.bridge.snapshotForDispatch()).toEqual([]);
+  });
+
+  it("preserves an actionable callback error through Persona's result normalization", async () => {
+    const f = await personaFixture("object", true);
+    f.setDirty();
+    const result = await f.bridge.executeToolCall("webmcp:open_checkout", { cartId: "cart-1" });
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: "text", text: "UNSAVED_CHANGES: Ask the user to save or discard their draft first." }]);
+    expect(f.visible()).toBe("cart");
   });
 });

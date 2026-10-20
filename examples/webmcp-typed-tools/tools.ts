@@ -40,7 +40,10 @@ export async function registerCheckoutTools(
 }
 
 function failure(code: string, error: string) {
-  return { code, error, retryable: false };
+  return {
+    code, error, retryable: false, isError: true,
+    content: [{ type: "text", text: `${code}: ${error}` }],
+  };
 }
 
 export const cartDescriptor = {

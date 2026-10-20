@@ -28,7 +28,7 @@
     "messages": [
       { "role": "user", "type": "message", "content": "Open checkout for cart-1. If a draft is unsaved, ask me what to do and stop." },
       { "role": "model", "type": "functioncall", "name": "open_checkout", "arguments": { "cartId": "cart-1" } },
-      { "role": "user", "type": "functionresponse", "name": "open_checkout", "response": { "result": { "code": "UNSAVED_CHANGES", "error": "Ask the user to save or discard their draft first.", "retryable": false } } }
+      { "role": "user", "type": "functionresponse", "name": "open_checkout", "response": { "result": { "code": "UNSAVED_CHANGES", "error": "Ask the user to save or discard their draft first.", "retryable": false, "isError": true, "content": [{ "type": "text", "text": "UNSAVED_CHANGES: Ask the user to save or discard their draft first." }] } } }
     ],
     "expectedCall": null
   }

@@ -18,7 +18,9 @@ restrict allowed origins. For other backends, follow
    to remove owned registrations when the page or component unmounts.
 5. Validate arguments at runtime, recheck resource access, honor cancellation,
    and await visible state updates before returning. Return actionable errors
-   for stale selections and unsaved changes.
+   for stale selections and unsaved changes. For Persona, return `isError: true`
+   with a `content` text block so its result normalization preserves failures;
+   a plain `{ error, code }` object remains ordinary tool-result data.
 
 The [typed checkout example](../examples/webmcp-typed-tools) registers `get_cart`
 and `open_checkout`. It cannot purchase anything. The host owns the final

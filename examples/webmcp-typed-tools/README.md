@@ -29,7 +29,9 @@ against a controlled registry boundary. They cover malformed input, stale
 carts, unsaved work, cancellation, unmount, untrusted-output propagation, and
 declined confirmation with string and object schemas. They do not claim to
 test a native browser or a model. `types.typecheck.ts` verifies schema-inferred
-arguments, including rejection of a nonexistent consent property.
+arguments, including rejection of a nonexistent consent property. Callback
+failures include `isError: true` and a `content` text block so Persona preserves
+the error classification, alongside the native structured `code` and `error`.
 
 ## Connect it to a page
 
