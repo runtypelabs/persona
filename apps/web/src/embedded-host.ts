@@ -4,11 +4,13 @@ import "./embedded-host.css";
 import { initAgentWidget, createStaticMentionSource, registerIcons, type AgentWidgetConfig } from "@runtypelabs/persona";
 import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-history-provider";
 import { renderExamplesShell } from "./examples-nav";
+import { bindControlsToggle } from "./controls-toggle";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { createDemoDurableChat } from "./demo-durable-chat";
 
 registerIcons({ "host-concise": [["path", { d: "M4 9h16M4 15h10" }]] });
 renderExamplesShell();
+bindControlsToggle(document.querySelector<HTMLButtonElement>("#host-controls-toggle")!);
 type Handle = ReturnType<typeof initAgentWidget>;
 type Name = "research" | "support";
 const names: Name[] = ["research", "support"];
@@ -262,7 +264,7 @@ function mount() {
       history.saveRun(widget);
       record(context.instanceId, `run finished: ${run.outcome}`);
     });
-    widget.injectAssistantMessage({ content: `This is the ${name} assistant. [Open workspace](/workspace/${name}) or try the host controls above.` });
+    widget.injectAssistantMessage({ content: `This is the ${name} assistant. [Open workspace](/workspace/${name}) or try the host controls.` });
     widget.injectComponentDirective({ id: "host-card", component: "HostCard", props: { count: 1 } });
     record(widget.instanceId, "ready");
   }
