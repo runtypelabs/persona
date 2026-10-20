@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
@@ -791,6 +794,55 @@ describe("createAgentExperience composer-bar mode", () => {
 
   const getPeekText = (mount: HTMLElement) =>
     mount.querySelector<HTMLElement>(".persona-pill-peek__text");
+
+  it.each(["anchored", "modal", "fullscreen"] as const)(
+    "makes the shared hover area interactive only while the peek is visible (%s)",
+    (expandedSize) => {
+      const style = document.createElement("style");
+      style.textContent = readFileSync(resolve(__dirname, "styles/widget.css"), "utf8");
+      document.body.appendChild(style);
+      const mount = document.createElement("div");
+      document.body.appendChild(mount);
+      const controller = createAgentExperience(mount, {
+        apiUrl: "https://api.example.com/chat",
+        launcher: { mountMode: "composer-bar", composerBar: { expandedSize } },
+      });
+      const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root")!;
+      const footer = pillRoot.querySelector<HTMLElement>(".persona-widget-footer")!;
+      const peek = getPeekBanner(mount)!;
+      const pointerEvents = (element: HTMLElement) => getComputedStyle(element).pointerEvents;
+
+      expect(pointerEvents(pillRoot)).toBe("none");
+      expect(pointerEvents(peek)).toBe("none");
+      expect(pointerEvents(footer)).toBe("auto");
+
+      controller.injectAssistantMessage({ content: "Earlier reply" });
+      controller.close();
+      expect(pointerEvents(pillRoot)).toBe("none");
+
+      pillRoot.dispatchEvent(new PointerEvent("pointerenter"));
+      expect(pointerEvents(peek)).toBe("auto");
+      // The root owns the flex gap: it must receive pointer events there
+      // so crossing from the footer to the peek stays inside its hover zone.
+      expect(pointerEvents(pillRoot)).toBe("auto");
+      expect(pointerEvents(footer)).toBe("auto");
+
+      pillRoot.dispatchEvent(new PointerEvent("pointerleave"));
+      expect(pointerEvents(peek)).toBe("none");
+      expect(pointerEvents(pillRoot)).toBe("none");
+
+      pillRoot.dispatchEvent(new PointerEvent("pointerenter"));
+      peek.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+      expect(pillRoot.dataset.state).toBe("expanded");
+      // The hidden peek and gap must let transcript controls behind them
+      // receive clicks again as soon as the panel opens.
+      expect(pointerEvents(peek)).toBe("none");
+      expect(pointerEvents(pillRoot)).toBe("none");
+      expect(pointerEvents(footer)).toBe("auto");
+
+      controller.destroy();
+    },
+  );
 
   it("renders a hidden peek banner above the pill inside pillRoot when collapsed with no messages", () => {
     const mount = document.createElement("div");

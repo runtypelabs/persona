@@ -6048,6 +6048,11 @@
    * region pass clicks through to the transcript and jump button behind it. */
   pointer-events: none;
 }
+.persona-widget-pill-root:has(> .persona-pill-peek--visible) {
+  /* Keep the gap in the shared hover area while the peek is visible, so
+   * moving from the composer to the peek doesn't dismiss it mid-crossing. */
+  pointer-events: auto;
+}
 .persona-widget-pill-root > .persona-widget-footer {
   pointer-events: auto;
 }
