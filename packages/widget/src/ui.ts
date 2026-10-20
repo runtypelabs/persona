@@ -1635,9 +1635,9 @@ export const createAgentExperience = (
       return;
     }
     let footerHeight = footerHidden ? 0 : footer.offsetHeight;
-    if (footerHeight > 0) {
+    if (footerHeight > 0 && resolveComposerPlacement(config, isComposerBar()) === "overlay") {
       let contentTop = Infinity;
-      // Clear the visible surface, not the footer's transparent top padding.
+      // Overlay padding is transparent; block placement clears the full footer.
       // Header children also cover the pill's display:contents attachment row.
       for (const child of footer.querySelectorAll<HTMLElement>(":scope > *, [data-persona-composer-header] > *")) {
         if (child.hidden || !child.offsetHeight || getComputedStyle(child).visibility === "hidden") continue;

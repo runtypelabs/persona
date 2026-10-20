@@ -766,11 +766,45 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
-  it.each([false, true])("positions the jump 16px above composer content as it grows (custom: %s)", custom => {
+  it.each([undefined, "block"] as const)("positions the jump 16px above the full block footer as it grows (placement: %s)", placement => {
     const resize = installResizeObserverMock();
     const mount = createMount();
     const controller = createAgentExperience(mount, {
       apiUrl: "/test", persistState: false, launcher: { enabled: false },
+      composer: { placement }
+    });
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const form = footer.querySelector<HTMLElement>("[data-persona-composer-form]")!;
+    const button = getScrollToBottomButton(mount)!;
+    let height = 120;
+    // Includes a divider and top padding before the visible composer form.
+    footer.style.borderTop = "1px solid black";
+    footer.style.paddingTop = "27px";
+    Object.defineProperty(footer, "offsetHeight", { configurable: true, get: () => height });
+    Object.defineProperties(form, {
+      offsetHeight: { configurable: true, get: () => height - 44 },
+      offsetTop: { configurable: true, value: 28 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    resize.trigger();
+    expect(button.style.bottom).toBe("136px");
+
+    height = 200; // Multiline text, attachments, or suggestions grow the footer.
+    resize.trigger();
+    expect(button.style.bottom).toBe("216px");
+
+    mount.style.setProperty("--persona-composer-lift", "80px");
+    controller.update({ layout: { showFooter: false } });
+    expect(button.style.bottom).toBe("16px");
+    controller.destroy();
+  });
+
+  it.each([false, true])("positions the jump 16px above overlay composer content as it grows (custom: %s)", custom => {
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", persistState: false, launcher: { enabled: false },
+      composer: { placement: "overlay" },
       plugins: custom ? [{ id: "custom-composer", renderComposer: createCustomComposer }] : []
     });
     const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
@@ -819,7 +853,8 @@ describe("createAgentExperience streaming scroll", () => {
     const resize = installResizeObserverMock();
     const mount = createMount();
     const controller = createAgentExperience(mount, {
-      apiUrl: "/test", persistState: false, launcher: { enabled: false }
+      apiUrl: "/test", persistState: false, launcher: { enabled: false },
+      composer: { placement: "overlay" }
     });
     const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
     const form = footer.querySelector<HTMLElement>("[data-persona-composer-form]")!;
