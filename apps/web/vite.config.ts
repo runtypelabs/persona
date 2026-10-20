@@ -473,6 +473,7 @@ function llmsTxt(): Plugin {
     "THEME-CONFIG.md",
   ].map((p) => path.resolve(widgetDir, p));
   const integrationDocPaths = [
+    "docs/webmcp-authoring.md",
     "docs/webmcp-without-runtype.md",
     "docs/durable-reconnect.md",
   ].map((p) => path.resolve(repoDir, p));
