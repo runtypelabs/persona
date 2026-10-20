@@ -9,6 +9,8 @@ export function previewResponse(
   releaseId: unknown,
   requestSignal?: AbortSignal
 ) {
+  // Keep snapshots stable within this request without colliding with earlier turns.
+  const requestId = `preview-${crypto.randomUUID()}`;
   const release = getRelease(releaseId);
   const blockers = release.checks.filter(
     (check) => check.status === "attention"
@@ -66,13 +68,13 @@ export function previewResponse(
   return createPersonaSSEStream(
     async ({ emit, signal }) => {
       signal.throwIfAborted();
-      const projector = createConversationProjector(emit, "preview");
+      const projector = createConversationProjector(emit, requestId);
       const message: FlueConversationMessage = {
-        id: "preview-reply",
+        id: `${requestId}-reply`,
         role: "assistant",
         purpose: "assistant",
         display: "visible",
-        submissionId: "preview",
+        submissionId: requestId,
         timestamp: new Date().toISOString(),
         parts: [
           {
@@ -83,7 +85,7 @@ export function previewResponse(
           {
             type: "dynamic-tool",
             toolName: "inspect_release",
-            toolCallId: "release",
+            toolCallId: `${requestId}-release`,
             state: "output-available",
             input: { release: release.id },
             output: { version: release.version, checks: release.checks },
@@ -91,7 +93,7 @@ export function previewResponse(
           {
             type: "dynamic-tool",
             toolName: "read_changes",
-            toolCallId: "changes",
+            toolCallId: `${requestId}-changes`,
             state: "output-available",
             input: { release: release.id },
             output: release.changes,

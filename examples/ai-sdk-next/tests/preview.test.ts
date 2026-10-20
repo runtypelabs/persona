@@ -3,6 +3,34 @@ import { createPreviewHandler, createResponsesPreviewHandler } from "../app/lib/
 import { collectSSE, dispatchRequest, summarizeWire } from "./wire-testing";
 
 describe("keyless preview through real SDK adapters", () => {
+  it.each([
+    ["AI SDK", createPreviewHandler, 1],
+    ["OpenAI Responses", createResponsesPreviewHandler, 0],
+  ] as const)("keeps %s activity IDs distinct across requests and stable within each run", async (_name, createHandler, reasoningCount) => {
+    const handle = createHandler({ delay: 0 });
+    const seen = new Set<string>();
+    for (let turn = 0; turn < 2; turn++) {
+      const frames = await collectSSE(await handle(dispatchRequest("Build a launch checklist")));
+      expect(summarizeWire(frames).success).toBe(true);
+      for (const [start, delta, complete, key, count] of [
+        ["reasoning_start", "reasoning_delta", "reasoning_complete", "id", reasoningCount],
+        ["tool_start", null, "tool_complete", "toolCallId", 3],
+      ] as const) {
+        const ids = frames.filter(frame => frame.event === start).map(frame => String(frame.data[key]));
+        expect(ids).toHaveLength(count);
+        expect(new Set(ids).size).toBe(count);
+        expect(frames.filter(frame => frame.event === complete).map(frame => String(frame.data[key]))).toEqual(ids);
+        if (delta) {
+          for (const frame of frames.filter(frame => frame.event === delta)) expect(ids).toContain(frame.data[key]);
+        }
+        for (const id of ids) {
+          expect(seen.has(id)).toBe(false);
+          seen.add(id);
+        }
+      }
+    }
+  });
+
   it("runs three AI SDK tools before streaming the final answer", async () => {
     const frames = await collectSSE(await createPreviewHandler({ delay: 0 })(dispatchRequest("Research a thoughtful product launch")));
     const summary = summarizeWire(frames);

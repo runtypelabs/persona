@@ -25,6 +25,8 @@ function latestPrompt(body: PersonaDispatchBody) {
 
 const usage = { inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 0, text: 0, reasoning: 0 } };
 function previewModel(answer: string, delay: number): LanguageModelV4 {
+  // One namespace per request, shared by every continuation and lifecycle event.
+  const requestId = `preview-${crypto.randomUUID()}`;
   let step = 0;
   return {
     specificationVersion: "v4", provider: "persona-preview", modelId: "sample-launch-research", supportedUrls: {},
@@ -32,14 +34,14 @@ function previewModel(answer: string, delay: number): LanguageModelV4 {
     async doStream({ abortSignal }) {
       const index = step++;
       const chunks: LanguageModelV4StreamPart[] = [{ type: "stream-start", warnings: [] }];
-      if (index === 0) chunks.push({ type: "reasoning-start", id: "preview-reasoning" }, { type: "reasoning-delta", id: "preview-reasoning", delta: "I’ll review the sample audience notes, read the launch brief, and organize a practical recommendation." }, { type: "reasoning-end", id: "preview-reasoning" });
+      if (index === 0) chunks.push({ type: "reasoning-start", id: `${requestId}-reasoning` }, { type: "reasoning-delta", id: `${requestId}-reasoning`, delta: "I’ll review the sample audience notes, read the launch brief, and organize a practical recommendation." }, { type: "reasoning-end", id: `${requestId}-reasoning` });
       const names = ["search_docs", "read_document", "check_readiness"];
       if (index < names.length) {
-        chunks.push({ type: "tool-call", toolCallId: `preview-tool-${index}`, toolName: names[index], input: JSON.stringify({ topic: ["Audience research", "Launch brief", "Launch readiness"][index] }) });
+        chunks.push({ type: "tool-call", toolCallId: `${requestId}-tool-${index}`, toolName: names[index], input: JSON.stringify({ topic: ["Audience research", "Launch brief", "Launch readiness"][index] }) });
       } else {
-        chunks.push({ type: "text-start", id: "preview-answer" });
-        for (const delta of answer.match(/.{1,38}(?:\s|$)|.{1,38}/gs) ?? [answer]) chunks.push({ type: "text-delta", id: "preview-answer", delta });
-        chunks.push({ type: "text-end", id: "preview-answer" });
+        chunks.push({ type: "text-start", id: `${requestId}-answer` });
+        for (const delta of answer.match(/.{1,38}(?:\s|$)|.{1,38}/gs) ?? [answer]) chunks.push({ type: "text-delta", id: `${requestId}-answer`, delta });
+        chunks.push({ type: "text-end", id: `${requestId}-answer` });
       }
       chunks.push({ type: "finish", finishReason: { unified: index < names.length ? "tool-calls" : "stop", raw: index < names.length ? "tool_calls" : "stop" }, usage });
       let offset = 0;
@@ -75,22 +77,23 @@ export function createPreviewHandler({ delay = 55 }: { delay?: number } = {}) {
 /** The official OpenAI SDK parses an in-memory Responses event stream, with no network. */
 export function createResponsesPreviewHandler({ delay = 55 }: { delay?: number } = {}) {
   return async (request: Request) => {
+    const requestId = `preview-${crypto.randomUUID()}`;
     const body = await request.clone().json() as PersonaDispatchBody;
     const answer = previewAnswer(latestPrompt(body));
     const events: Record<string, unknown>[] = [];
     const add = (type: string, value: Record<string, unknown>) => events.push({ type, sequence_number: events.length, ...value });
-    add("response.output_item.added", { output_index: 0, item: { id: "preview-progress", type: "message", role: "assistant", phase: "commentary", content: [], status: "in_progress" } });
-    add("response.output_text.delta", { item_id: "preview-progress", output_index: 0, content_index: 0, delta: "I’ll review the sample research and launch brief before making a recommendation." });
-    add("response.output_item.done", { output_index: 0, item: { id: "preview-progress", type: "message", role: "assistant", phase: "commentary", content: [], status: "completed" } });
+    add("response.output_item.added", { output_index: 0, item: { id: `${requestId}-progress`, type: "message", role: "assistant", phase: "commentary", content: [], status: "in_progress" } });
+    add("response.output_text.delta", { item_id: `${requestId}-progress`, output_index: 0, content_index: 0, delta: "I’ll review the sample research and launch brief before making a recommendation." });
+    add("response.output_item.done", { output_index: 0, item: { id: `${requestId}-progress`, type: "message", role: "assistant", phase: "commentary", content: [], status: "completed" } });
     for (let index = 0; index < 3; index++) {
-      const item = { id: `preview-search-${index}`, type: "web_search_call", action: { type: "search", query: ["Sample audience notes", "Sample launch brief", "Sample readiness checklist"][index] } };
+      const item = { id: `${requestId}-search-${index}`, type: "web_search_call", action: { type: "search", query: ["Sample audience notes", "Sample launch brief", "Sample readiness checklist"][index] } };
       add("response.output_item.added", { output_index: index + 1, item: { ...item, status: "in_progress" } });
       add("response.output_item.done", { output_index: index + 1, item: { ...item, status: "completed" } });
     }
-    add("response.output_item.added", { output_index: 4, item: { id: "preview-final", type: "message", role: "assistant", phase: "final_answer", content: [], status: "in_progress" } });
-    for (const delta of answer.match(/.{1,38}(?:\s|$)|.{1,38}/gs) ?? [answer]) add("response.output_text.delta", { item_id: "preview-final", output_index: 4, content_index: 0, delta });
-    add("response.output_item.done", { output_index: 4, item: { id: "preview-final", type: "message", role: "assistant", phase: "final_answer", content: [], status: "completed" } });
-    add("response.completed", { response: { id: "preview-response", status: "completed" } });
+    add("response.output_item.added", { output_index: 4, item: { id: `${requestId}-final`, type: "message", role: "assistant", phase: "final_answer", content: [], status: "in_progress" } });
+    for (const delta of answer.match(/.{1,38}(?:\s|$)|.{1,38}/gs) ?? [answer]) add("response.output_text.delta", { item_id: `${requestId}-final`, output_index: 4, content_index: 0, delta });
+    add("response.output_item.done", { output_index: 4, item: { id: `${requestId}-final`, type: "message", role: "assistant", phase: "final_answer", content: [], status: "completed" } });
+    add("response.completed", { response: { id: `${requestId}-response`, status: "completed" } });
     const client = new OpenAI({ apiKey: "local-preview-no-credentials", maxRetries: 0, fetch: async () => {
       const encoder = new TextEncoder();
       let offset = 0;
