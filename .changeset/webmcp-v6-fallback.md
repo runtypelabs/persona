@@ -12,3 +12,5 @@ Under the new fallback:
 - `navigator.modelContext` is no longer installed; use `document.modelContext`.
 
 The CDN `webmcp-polyfill.js` chunk exports `installWebMCP`, with `initializeWebMCPPolyfill` kept as a deprecated alias. The theme-editor WebMCP tools now return `isError` results instead of throwing, and `withToolErrorResult` is exported from `@runtypelabs/persona/theme-editor` to give other tools the same treatment.
+
+The theme overview reuses the registered tools' descriptions for its catalog hints, keeping the guide consistent with the available tools while reducing bundle size.
