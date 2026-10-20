@@ -587,8 +587,27 @@ export const DEFAULT_SEMANTIC = DEFAULT_SEMANTIC_V4;
 export const DEFAULT_COMPONENTS_V4 = DEFAULT_COMPONENTS_BASE;
 export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
   ...DEFAULT_COMPONENTS_BASE,
+  scrollToBottom: {
+    ...DEFAULT_COMPONENTS_BASE.scrollToBottom,
+    background: 'semantic.colors.surface',
+    foreground: 'semantic.colors.text',
+    border: 'semantic.colors.border',
+    size: '32px',
+  },
+  messageActions: {
+    background: 'transparent',
+    border: 'none',
+    hoverBackground: 'components.button.ghost.hoverBackground',
+    hoverForeground: 'semantic.colors.text',
+    borderRadius: 'palette.radius.md',
+  },
   launcher: CIRCLE_LAUNCHER_TOKENS,
-  activity: { rowHeight: "32px", labelSize: "13px", iconSize: "16px", indent: "0px", groupIndent: "0px", groupGap: "0px", groupPadding: "0px", transcriptGap: "0px", responseGap: "12px", bodyPadding: "4px 0", bodySize: "13px", bodyLineHeight: "1.5", bodyFontWeight: "400", sectionGap: "8px", bodySurface: "transparent" },
+  activity: {
+    rowHeight: "32px", labelSize: "13px", iconSize: "16px", indent: "0px",
+    transcriptGap: "0px", responseGap: "12px",
+    groupIndent: "16px", groupGap: "2px", groupPadding: "2px 0",
+    bodyPadding: "4px 0", bodyFontWeight: "400", sectionGap: "8px", bodySurface: "transparent",
+  },
   toolBubble: { shadow: "none" },
   reasoningBubble: { shadow: "none" },
   input: { ...DEFAULT_COMPONENTS_BASE.input, borderRadius: 'palette.radius.full' },
@@ -609,8 +628,8 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
     background: 'semantic.colors.container', foreground: 'semantic.colors.text',
     padding: '8px 8px 8px 16px', minimalPadding: '8px 8px 8px 16px',
     minHeight: '48px', borderBottom: 'none',
-    iconBackground: 'transparent', iconForeground: 'semantic.colors.text', iconScale: '1',
-    controlSize: '28px', controlIconSize: '18px', controlStrokeWidth: '1.5',
+    iconBackground: 'transparent', iconForeground: 'semantic.colors.text', iconScale: '1', iconPadding: 'auto',
+    controlSize: '28px', controlIconSize: '16px', controlStrokeWidth: '1.5',
     actionIconForeground: 'semantic.colors.textMuted',
     controlBorderRadius: '8px',
     controlHoverBackground: 'color-mix(in srgb, var(--persona-text) 8%, transparent)',
@@ -634,10 +653,31 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
       fontSize: '14px', lineHeight: '1.55',
     },
   },
+  artifact: {
+    ...DEFAULT_COMPONENTS_BASE.artifact,
+    card: {
+      background: 'semantic.colors.surface',
+      border: '1px solid var(--persona-border)',
+      borderRadius: 'palette.radius.lg',
+      hoverBackground: 'components.button.ghost.hoverBackground',
+      hoverBorderColor: 'semantic.colors.border',
+    },
+    inline: {
+      background: 'semantic.colors.surface',
+      border: '1px solid var(--persona-border)',
+      borderRadius: 'palette.radius.lg',
+      chromeBackground: 'semantic.colors.surface',
+      chromeBorder: 'semantic.colors.border',
+      titleColor: 'semantic.colors.text',
+      mutedColor: 'semantic.colors.textMuted',
+    },
+  },
   composer: {
     ...DEFAULT_COMPONENTS_BASE.composer,
     padding: '8px', fontSize: '15px', lineHeight: '1.5', controlSize: '32px', controlIconSize: '20px',
+    expandedPadding: '12px 16px', expandedBorderRadius: '24px',
     sendIconSize: '18px', sendButtonRadius: '9999px', footerBorder: 'none',
+    overflowMenu: { borderRadius: '12px' },
     overlayBand: 'linear-gradient(to bottom, transparent, var(--persona-container) 24px)',
     focusBorderColor: 'color-mix(in srgb, var(--persona-text) 28%, var(--persona-border))',
     focusRing: '1px solid color-mix(in srgb, var(--persona-text) 12%, transparent)',
@@ -783,27 +823,12 @@ function mergeRecords(
   return result;
 }
 
-function deepMergeComponents(
-  base: ComponentTokens,
-  override?: Partial<ComponentTokens>
-): ComponentTokens {
-  if (!override) return base;
-  return mergeRecords(
-    base as unknown as Record<string, unknown>,
-    override as unknown as Record<string, unknown>
-  ) as unknown as ComponentTokens;
-}
-
 export function createTheme(
   userConfig?: DeepPartial<PersonaTheme>,
   options: CreateThemeOptions = {}
 ): PersonaTheme {
-  const defaults = resolveThemeDefaults(options.future);
-  const baseTheme: PersonaTheme = {
-    palette: defaults.palette as PersonaTheme['palette'],
-    semantic: defaults.semantic as PersonaTheme['semantic'],
-    components: defaults.components as PersonaTheme['components'],
-  };
+  const baseTheme = resolveThemeDefaults(options.future) as PersonaTheme;
+  const components = userConfig?.components;
 
   let theme: PersonaTheme = {
     palette: {
@@ -858,32 +883,46 @@ export function createTheme(
         ...userConfig?.semantic?.typography,
       },
     },
-    components: deepMergeComponents(
-      baseTheme.components,
-      userConfig?.components as Partial<ComponentTokens> | undefined
-    ),
+    components: components ? mergeRecords(
+      baseTheme.components as unknown as Record<string, unknown>,
+      components as Record<string, unknown>
+    ) as unknown as ComponentTokens : baseTheme.components,
   } as PersonaTheme;
 
-  // A shared header padding is also the minimal-layout override unless the
-  // host supplies the more specific token. Both keys remain emitted CSS vars,
-  // so live updates and scheme changes restyle existing header DOM in place.
-  const activity = userConfig?.components?.activity;
+  // Project shared activity aliases without mutating the versioned defaults.
+  const activity = components?.activity;
   for (const kind of ['toolBubble', 'reasoningBubble'] as const) {
+    const tokens = theme.components[kind] = { ...theme.components[kind] };
     for (const field of ['rowHeight', 'labelSize', 'iconSize', 'indent', 'bodySurface'] as const) {
-      if (activity?.[field] !== undefined) theme.components[kind][field] = activity[field];
+      if (activity?.[field] !== undefined && (field !== 'bodySurface' || components?.[kind]?.bodySurface === undefined)) tokens[field] = activity[field];
     }
   }
-  const legacySurface = userConfig?.components?.collapsibleWidget?.surface;
-  if (legacySurface !== undefined && activity?.bodySurface === undefined) {
+  const legacySurface = components?.collapsibleWidget?.surface;
+  // V4 keeps the historical shared surface. V5 separates activity from code
+  // widgets; callers use activity.bodySurface (or the per-kind override).
+  if (resolveDefaultsVersion(options) === 'v4' && legacySurface !== undefined && activity?.bodySurface === undefined) {
     theme.components.activity = { ...theme.components.activity, bodySurface: legacySurface };
   }
 
-  const suppliedHeader = userConfig?.components?.header;
+  // Shared header padding also supplies minimal padding unless authored separately.
+  const suppliedHeader = components?.header;
   if (suppliedHeader?.padding !== undefined && suppliedHeader.minimalPadding === undefined) {
     theme.components.header.minimalPadding = theme.components.header.padding;
   }
 
-  const suppliedMessage = userConfig?.components?.message;
+  const suppliedComposer = components?.composer;
+  // An input-only override leaves the composer's defaults shared after merging.
+  // Derive expanded values on a fresh object so a brand cannot mutate defaults
+  // for a sibling instance or survive removal from the current configuration.
+  theme.components.composer = { ...theme.components.composer };
+  if (suppliedComposer?.padding !== undefined && suppliedComposer.expandedPadding === undefined) {
+    theme.components.composer.expandedPadding = suppliedComposer.padding;
+  }
+  if (components?.input?.borderRadius !== undefined && suppliedComposer?.expandedBorderRadius === undefined) {
+    theme.components.composer.expandedBorderRadius = components.input.borderRadius;
+  }
+
+  const suppliedMessage = components?.message;
   if (suppliedMessage?.gap !== undefined && suppliedMessage.fullscreenGap === undefined) {
     theme.components.message.fullscreenGap = theme.components.message.gap;
   }
@@ -971,16 +1010,7 @@ const emitAliases = (cssVars: Record<string, string>, rows: AliasRow[]): void =>
   }
 };
 
-export function themeToCssVariables(theme: PersonaTheme): Record<string, string> {
-  const resolved = resolveTokens(theme);
-  const cssVars: Record<string, string> = {};
-
-  for (const [path, token] of Object.entries(resolved)) {
-    const varName = path.replace(/\./g, '-');
-    cssVars[`--persona-${varName}`] = token.value;
-  }
-
-  emitAliases(cssVars, [
+const COMMON_ALIASES: AliasRow[] = [
     ['primary', 'semantic-colors-primary', 'palette-colors-primary-500'],
     ['secondary', 'semantic-colors-secondary', 'palette-colors-secondary-500'],
     ['accent', 'semantic-colors-accent', 'palette-colors-accent-500'],
@@ -988,23 +1018,11 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['background', 'semantic-colors-background', 'palette-colors-gray-50'],
     ['container', 'semantic-colors-container', 'palette-colors-gray-100'],
     ['text', 'semantic-colors-text', 'palette-colors-gray-900'],
-    ['text-muted', 'semantic-colors-text-muted', 'palette-colors-gray-500'],
-    ['text-inverse', 'semantic-colors-text-inverse', 'palette-colors-gray-50'],
+    ['text-muted', 'semantic-colors-textMuted', 'palette-colors-gray-500'],
+    ['text-inverse', 'semantic-colors-textInverse', 'palette-colors-gray-50'],
     ['border', 'semantic-colors-border', 'palette-colors-gray-200'],
     ['divider', 'semantic-colors-divider', 'palette-colors-gray-200'],
     ['muted', 'text-muted'],
-    ['voice-recording-indicator', 'components-voice-recording-indicator', 'palette-colors-error-500'],
-    ['voice-recording-bg', 'components-voice-recording-background', 'palette-colors-error-50'],
-    ['voice-processing-icon', 'components-voice-processing-icon', 'palette-colors-primary-500'],
-    ['voice-speaking-icon', 'components-voice-speaking-icon', 'palette-colors-success-500'],
-    ['approval-bg', 'components-approval-requested-background', 'surface'],
-    ['approval-border', 'components-approval-requested-border', 'border'],
-    ['approval-text', 'components-approval-requested-text', 'palette-colors-gray-900'],
-    ['approval-shadow', 'components-approval-requested-shadow', '=0 1px 2px 0 rgba(11, 11, 11, 0.06), 0 2px 8px 0 rgba(11, 11, 11, 0.04)'],
-    ['approval-approve-bg', 'components-approval-approve-background', 'button-primary-bg'],
-    ['approval-deny-bg', 'components-approval-deny-background', 'container'],
-    ['attachment-image-bg', 'components-attachment-image-background', 'palette-colors-gray-100'],
-    ['attachment-image-border', 'components-attachment-image-border', 'palette-colors-gray-200'],
     ['font-family', 'semantic-typography-fontFamily', 'palette-typography-fontFamily-sans'],
     ['font-size', 'semantic-typography-fontSize', 'palette-typography-fontSize-base'],
     ['font-weight', 'semantic-typography-fontWeight', 'palette-typography-fontWeight-normal'],
@@ -1019,7 +1037,23 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['launcher-radius', 'components-launcher-borderRadius', 'palette-radius-full', '=9999px'],
     ['launcher-bg', 'components-launcher-background', 'surface'],
     ['launcher-fg', 'components-launcher-foreground', 'primary'],
-  ]);
+];
+
+// The collapsed launcher needs canonical tokens and shared text/launcher aliases,
+// but none of the panel, artifact, or message compatibility aliases.
+const canonicalThemeVariables = (theme: PersonaTheme): Record<string, string> => {
+  const resolved = resolveTokens(theme);
+  const cssVars: Record<string, string> = {};
+
+  for (const [path, token] of Object.entries(resolved)) {
+    const varName = path.replace(/\./g, '-');
+    cssVars[`--persona-${varName}`] = token.value;
+  }
+
+  return cssVars;
+};
+
+const emitLauncherMuted = (cssVars: Record<string, string>): void => {
   // Subtitle keeps the shared muted tone while the foreground is stock (it
   // resolves to primary); a custom foreground washes to 70% so both pill
   // text lines recolor together. Compared by resolved value, not key
@@ -1030,6 +1064,64 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     launcherFg && launcherFg !== cssVars['--persona-primary']
       ? `color-mix(in srgb, ${launcherFg} 70%, transparent)`
       : cssVars['--persona-muted'];
+
+};
+
+const resolveHeaderIconPadding = (cssVars: Record<string, string>): void => {
+  // Resolve after aliases so palette references and dark/brand overrides count.
+  // CSS variables with runtime-dependent colors can use explicit iconPadding.
+  const iconPadding = cssVars['--persona-components-header-iconPadding'];
+  if (iconPadding === 'auto') {
+    const background = (cssVars['--persona-components-header-iconBackground'] ?? cssVars['--persona-primary']).trim().toLowerCase();
+    const channels = background.match(/^(?:rgba?|hsla?)\(([^)]+)\)$/)?.[1].split(/[,\s/]+/).filter(Boolean);
+    const transparent = background === 'transparent' ||
+      /^#(?:[\da-f]{3}0|[\da-f]{6}00)$/.test(background) ||
+      (channels?.length === 4 && parseFloat(channels[3]) === 0);
+    cssVars['--persona-components-header-iconPadding'] = transparent ? '0px' : '6px';
+  }
+
+};
+
+export function launcherThemeToCssVariables(theme: PersonaTheme): Record<string, string> {
+  const cssVars = canonicalThemeVariables(theme);
+  emitAliases(cssVars, COMMON_ALIASES);
+  emitLauncherMuted(cssVars);
+  emitAliases(cssVars, [
+    ['launcher-border', 'components-launcher-border', 'border'],
+    ['launcher-shadow', 'components-launcher-shadow', '=0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)'],
+  ]);
+  resolveHeaderIconPadding(cssVars);
+  return cssVars;
+}
+
+export function themeToCssVariables(theme: PersonaTheme): Record<string, string> {
+  const cssVars = canonicalThemeVariables(theme);
+
+  emitAliases(cssVars, COMMON_ALIASES);
+  emitAliases(cssVars, [
+    ['ask-sheet-bg', 'components-askUserQuestion-sheet-background'],
+    ['ask-sheet-border', 'components-askUserQuestion-sheet-border'],
+    ['ask-sheet-shadow', 'components-askUserQuestion-sheet-shadow'],
+    ['ask-pill-bg', 'components-askUserQuestion-pill-background'],
+    ['ask-pill-fg', 'components-askUserQuestion-pill-foreground'],
+    ['ask-pill-radius', 'components-askUserQuestion-pill-borderRadius'],
+    ['ask-pill-bg-selected', 'components-askUserQuestion-pill-selectedBackground'],
+    ['ask-pill-fg-selected', 'components-askUserQuestion-pill-selectedForeground'],
+    ['ask-input-bg', 'components-askUserQuestion-customInput-background'],
+    ['voice-recording-indicator', 'components-voice-recording-indicator', 'palette-colors-error-500'],
+    ['voice-recording-bg', 'components-voice-recording-background', 'palette-colors-error-50'],
+    ['voice-processing-icon', 'components-voice-processing-icon', 'palette-colors-primary-500'],
+    ['voice-speaking-icon', 'components-voice-speaking-icon', 'palette-colors-success-500'],
+    ['approval-bg', 'components-approval-requested-background', 'surface'],
+    ['approval-border', 'components-approval-requested-border', 'border'],
+    ['approval-text', 'components-approval-requested-text', 'palette-colors-gray-900'],
+    ['approval-shadow', 'components-approval-requested-shadow', '=0 1px 2px 0 rgba(11, 11, 11, 0.06), 0 2px 8px 0 rgba(11, 11, 11, 0.04)'],
+    ['approval-approve-bg', 'components-approval-approve-background', 'button-primary-bg'],
+    ['approval-deny-bg', 'components-approval-deny-background', 'container'],
+    ['attachment-image-bg', 'components-attachment-image-background', 'palette-colors-gray-100'],
+    ['attachment-image-border', 'components-attachment-image-border', 'palette-colors-gray-200'],
+  ]);
+  emitLauncherMuted(cssVars);
 
   emitAliases(cssVars, [
     ['launcher-border', 'components-launcher-border', 'border'],
@@ -1071,6 +1163,16 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['message-assistant-radius', 'components-message-assistant-borderRadius', 'radius-lg', '=0.5rem'],
   ]);
 
+  // Preserve the existing truthy guards and raw values (including references).
+  // Nullish aliases and zero-length normalization stay on their own paths.
+  const emitTruthy = (source: object | undefined, prefix: string, rows: readonly (readonly [string, string, boolean?])[], sourcePrefix = ''): void => {
+    if (!source) return;
+    for (const [key, alias, resolve] of rows) {
+      const value = (source as Record<string, string | undefined>)[sourcePrefix + key];
+      if (value) cssVars[`--persona-${prefix}${alias}`] = resolve ? resolveTokenValue(theme, value) ?? value : value;
+    }
+  };
+
   // Component-level color overrides: these map component tokens to
   // dedicated CSS variables that the widget CSS reads for individual elements.
   emitAliases(cssVars, [
@@ -1091,6 +1193,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['header-icon-bg', 'components-header-iconBackground', 'primary'],
     ['header-icon-fg', 'components-header-iconForeground', 'text-inverse'],
   ]);
+
+  resolveHeaderIconPadding(cssVars);
 
   // `title.color` / `subtitle.color` supersede the legacy *Foreground tokens.
   cssVars['--persona-header-title-fg'] =
@@ -1115,47 +1219,36 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // directly and carries the 1.5 default in the var() fallback.
   emitAliases(cssVars, [
     ['header-control-size', 'components-header-controlSize', '=32px'],
-    ['header-control-icon-size', 'components-header-controlIconSize', '=20px'],
+    ['header-control-icon-size', 'components-header-controlIconSize', '=16px'],
   ]);
 
-  const headerTokens = theme.components?.header;
-  if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;
-  if (headerTokens?.borderBottom) cssVars['--persona-header-border-bottom'] = headerTokens.borderBottom;
-  // Conditional: the stylesheet carries `auto` / the rail's own fallback chain,
-  // so an unset token must leave the variable undefined.
-  if (headerTokens?.minHeight) cssVars['--persona-header-min-height'] = headerTokens.minHeight;
-
-  // Messages rail header strip. Same conditional rule: the chunk's CSS carries
-  // the surface/border/height fallback chain when a theme says nothing.
-  const railHeaderBg = cssVars['--persona-components-history-railHeader-background'];
-  if (railHeaderBg) cssVars['--persona-history-rail-header-bg'] = railHeaderBg;
-  const railHeaderBorder = cssVars['--persona-components-history-railHeader-border'];
-  if (railHeaderBorder) cssVars['--persona-history-rail-header-border'] = railHeaderBorder;
-  const railHeaderMinHeight = cssVars['--persona-components-history-railHeader-minHeight'];
-  if (railHeaderMinHeight)
-    cssVars['--persona-history-rail-header-min-height'] = railHeaderMinHeight;
+  // Conditional aliases retain the consuming stylesheet's fallback when unset.
+  emitTruthy(theme.components?.header, 'header-', [
+    ['shadow', 'shadow'],
+    ['borderBottom', 'border-bottom'],
+    ['minHeight', 'min-height'],
+  ]);
+  emitTruthy(cssVars, 'history-rail-header-', [
+    ['background', 'bg'],
+    ['border', 'border'],
+    ['minHeight', 'min-height'],
+  ], '--persona-components-history-railHeader-');
 
   // Floating (overlay-collapsed) rail. Same conditional rule: the host's
   // inline styles carry every default in their var() fallback.
-  for (const [token, alias] of [
+  emitTruthy(cssVars, 'history-overlay-', [
     ['margin', 'margin'],
     ['borderRadius', 'radius'],
     ['shadow', 'shadow'],
     ['background', 'bg'],
-  ] as const) {
-    const value = cssVars[`--persona-components-history-overlay-${token}`];
-    if (value) cssVars[`--persona-history-overlay-${alias}`] = value;
-  }
+  ], '--persona-components-history-overlay-');
 
   // Row overflow menu. Same conditional rule: the chunk's CSS carries the
   // elevated color-mix default in its var() fallback.
-  for (const [token, alias] of [
+  emitTruthy(cssVars, 'history-menu-', [
     ['background', 'bg'],
     ['borderRadius', 'radius'],
-  ] as const) {
-    const value = cssVars[`--persona-components-history-menu-${token}`];
-    if (value) cssVars[`--persona-history-menu-${alias}`] = value;
-  }
+  ], '--persona-components-history-menu-');
   // Messages enter/exit motion. Read straight off the theme: durations are
   // authored as bare millisecond NUMBERS, and resolveTokens collects only
   // string leaves, so these never reach the flattened vars. A unitless value
@@ -1196,7 +1289,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
 
   // Portaled control tooltip. Same conditional rule: widget.css carries the
   // built-in look in every var() fallback, so an unset token stays undefined.
-  for (const [token, alias] of [
+  emitTruthy(cssVars, 'tooltip-', [
     ['background', 'background'],
     ['foreground', 'foreground'],
     ['hintForeground', 'hint-fg'],
@@ -1205,27 +1298,33 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['padding', 'padding'],
     ['maxWidth', 'max-width'],
     ['shadow', 'shadow'],
-  ]) {
-    const value = cssVars[`--persona-components-tooltip-${token}`];
-    if (value) cssVars[`--persona-tooltip-${alias}`] = value;
-  }
+  ], '--persona-components-tooltip-');
   // Booleans never resolve into a token, so the arrow reads off the theme.
   if (theme.components?.tooltip?.arrow === false)
     cssVars['--persona-tooltip-arrow-display'] = 'none';
 
-  // Per-message action row (copy, vote, read aloud). Same conditional rule:
-  // widget.css falls back to the scheme-aware ghost wash and semantic text, so
-  // an unset token must leave the variable undefined.
-  for (const [token, alias] of [
+  // Keep badge defaults in CSS so an omitted badge border follows the pill,
+  // and its colors follow semantic overrides without freezing resolved values.
+  emitTruthy(cssVars, 'scroll-to-bottom-count-', [
+    ['background', 'bg'],
+    ['foreground', 'fg'],
+    ['border', 'border'],
+    ['borderRadius', 'radius'],
+    ['size', 'size'],
+    ['padding', 'padding'],
+    ['fontSize', 'font-size'],
+    ['fontWeight', 'font-weight'],
+  ], '--persona-components-scrollToBottom-countBadge-');
+
+  // V5 materializes message-action defaults in the theme; V4 retains the CSS
+  // fallbacks. References follow ghost/semantic overrides in either scheme.
+  emitTruthy(cssVars, 'message-action-', [
     ['background', 'bg'],
     ['border', 'border'],
     ['hoverBackground', 'hover-bg'],
     ['hoverForeground', 'hover-fg'],
     ['borderRadius', 'radius'],
-  ] as const) {
-    const value = cssVars[`--persona-components-messageActions-${token}`];
-    if (value) cssVars[`--persona-message-action-${alias}`] = value;
-  }
+  ], '--persona-components-messageActions-');
 
   // Intro card aliases: short names the panel inline-styles read directly.
   // The full-path `--persona-components-introCard-*` variables auto-emit above.
@@ -1302,6 +1401,11 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // Composer spacing/type. Fallbacks reproduce the utility classes the form
   // used to carry (`px-4 py-3`, `gap-2`, `text-sm`) exactly.
   emitAliases(cssVars, [
+    ['panel-background', 'components-panel-background', 'surface'],
+    ['transcript-background', 'components-message-background', 'container'],
+    ['transcript-top-fade-background', 'components-message-topFadeBackground', 'transcript-background'],
+    ['composer-footer-background', 'components-composer-footerBackground', 'surface'],
+    ['composer-footer-padding', 'components-composer-footerPadding', '=1rem 1.5rem'],
     ['composer-padding', 'components-composer-padding', '=0.75rem 1rem'],
     ['composer-gap', 'components-composer-gap', '=0.5rem'],
     ['composer-font-size', 'components-composer-fontSize', '=0.875rem'],
@@ -1328,14 +1432,12 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['md-link-color', 'components-markdown-link-foreground', 'accent', '=#0f0f0f'],
   ]);
 
-  const mdH1Size = cssVars['--persona-components-markdown-heading-h1-fontSize'];
-  if (mdH1Size) cssVars['--persona-md-h1-size'] = mdH1Size;
-  const mdH1Weight = cssVars['--persona-components-markdown-heading-h1-fontWeight'];
-  if (mdH1Weight) cssVars['--persona-md-h1-weight'] = mdH1Weight;
-  const mdH2Size = cssVars['--persona-components-markdown-heading-h2-fontSize'];
-  if (mdH2Size) cssVars['--persona-md-h2-size'] = mdH2Size;
-  const mdH2Weight = cssVars['--persona-components-markdown-heading-h2-fontWeight'];
-  if (mdH2Weight) cssVars['--persona-md-h2-weight'] = mdH2Weight;
+  emitTruthy(cssVars, 'md-', [
+    ['h1-fontSize', 'h1-size'],
+    ['h1-fontWeight', 'h1-weight'],
+    ['h2-fontSize', 'h2-size'],
+    ['h2-fontWeight', 'h2-weight'],
+  ], '--persona-components-markdown-heading-');
 
   const mdProseFont = cssVars['--persona-components-markdown-prose-fontFamily'];
   if (mdProseFont && mdProseFont !== 'inherit') {
@@ -1414,59 +1516,62 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
 
   // Icon button tokens
   const components = theme.components;
-  const iconBtn = components?.iconButton;
-  if (iconBtn) {
-    if (iconBtn.background) cssVars['--persona-icon-btn-bg'] = iconBtn.background;
-    if (iconBtn.border) cssVars['--persona-icon-btn-border'] = iconBtn.border;
-    if (iconBtn.color) cssVars['--persona-icon-btn-color'] = iconBtn.color;
-    if (iconBtn.padding) cssVars['--persona-icon-btn-padding'] = iconBtn.padding;
-    if (iconBtn.borderRadius) cssVars['--persona-icon-btn-radius'] = iconBtn.borderRadius;
-    if (iconBtn.hoverBackground) cssVars['--persona-icon-btn-hover-bg'] = iconBtn.hoverBackground;
-    if (iconBtn.hoverColor) cssVars['--persona-icon-btn-hover-color'] = iconBtn.hoverColor;
-    if (iconBtn.activeBackground) cssVars['--persona-icon-btn-active-bg'] = iconBtn.activeBackground;
-    if (iconBtn.activeBorder) cssVars['--persona-icon-btn-active-border'] = iconBtn.activeBorder;
-  }
+  emitTruthy(components?.iconButton, 'icon-btn-', [
+    ['background', 'bg'],
+    ['border', 'border'],
+    ['color', 'color'],
+    ['padding', 'padding'],
+    ['borderRadius', 'radius'],
+    ['hoverBackground', 'hover-bg'],
+    ['hoverColor', 'hover-color'],
+    ['activeBackground', 'active-bg'],
+    ['activeBorder', 'active-border'],
+  ]);
 
   // Label button tokens
-  const labelBtn = components?.labelButton;
-  if (labelBtn) {
-    if (labelBtn.background) cssVars['--persona-label-btn-bg'] = labelBtn.background;
-    if (labelBtn.border) cssVars['--persona-label-btn-border'] = labelBtn.border;
-    if (labelBtn.color) cssVars['--persona-label-btn-color'] = labelBtn.color;
-    if (labelBtn.padding) cssVars['--persona-label-btn-padding'] = labelBtn.padding;
-    if (labelBtn.borderRadius) cssVars['--persona-label-btn-radius'] = labelBtn.borderRadius;
-    if (labelBtn.hoverBackground) cssVars['--persona-label-btn-hover-bg'] = labelBtn.hoverBackground;
-    if (labelBtn.fontSize) cssVars['--persona-label-btn-font-size'] = labelBtn.fontSize;
-    if (labelBtn.gap) cssVars['--persona-label-btn-gap'] = labelBtn.gap;
-  }
+  emitTruthy(components?.labelButton, 'label-btn-', [
+    ['background', 'bg'],
+    ['border', 'border'],
+    ['color', 'color'],
+    ['padding', 'padding'],
+    ['borderRadius', 'radius'],
+    ['hoverBackground', 'hover-bg'],
+    ['fontSize', 'font-size'],
+    ['gap', 'gap'],
+  ]);
 
   // Toggle group tokens
-  const toggleGrp = components?.toggleGroup;
-  if (toggleGrp) {
-    if (toggleGrp.gap) cssVars['--persona-toggle-group-gap'] = toggleGrp.gap;
-    if (toggleGrp.borderRadius) cssVars['--persona-toggle-group-radius'] = toggleGrp.borderRadius;
-  }
+  emitTruthy(components?.toggleGroup, 'toggle-group-', [
+    ['gap', 'gap'],
+    ['borderRadius', 'radius'],
+  ]);
 
   // Artifact tokens
   const artifact = components?.artifact;
   if (artifact?.toolbar) {
     const t = artifact.toolbar;
-    if (t.iconHoverColor) cssVars['--persona-artifact-toolbar-icon-hover-color'] = t.iconHoverColor;
-    if (t.iconHoverBackground) cssVars['--persona-artifact-toolbar-icon-hover-bg'] = t.iconHoverBackground;
-    if (t.iconPadding) cssVars['--persona-artifact-toolbar-icon-padding'] = t.iconPadding;
-    if (t.iconBorderRadius) cssVars['--persona-artifact-toolbar-icon-radius'] = t.iconBorderRadius;
-    if (t.iconBorder) cssVars['--persona-artifact-toolbar-icon-border'] = t.iconBorder;
+    emitTruthy(t, 'artifact-toolbar-icon-', [
+      ['iconHoverColor', 'hover-color'],
+      ['iconHoverBackground', 'hover-bg'],
+      ['iconPadding', 'padding'],
+      ['iconBorderRadius', 'radius'],
+      ['iconBorder', 'border'],
+    ]);
     // A bare "0" is a <number> in calc(), not a <length>; gap/padding feed the
     // toggle thumb's width calc, so a unitless zero would zero out the thumb.
     if (t.toggleGroupGap) cssVars['--persona-artifact-toolbar-toggle-group-gap'] = zeroLength(t.toggleGroupGap);
     if (t.toggleBorderRadius) cssVars['--persona-artifact-toolbar-toggle-radius'] = t.toggleBorderRadius;
     if (t.toggleGroupPadding) cssVars['--persona-artifact-toolbar-toggle-group-padding'] = zeroLength(t.toggleGroupPadding);
-    if (t.toggleGroupBorder) cssVars['--persona-artifact-toolbar-toggle-group-border'] = t.toggleGroupBorder;
-    if (t.toggleGroupBorderRadius) cssVars['--persona-artifact-toolbar-toggle-group-radius'] = t.toggleGroupBorderRadius;
+    emitTruthy(t, 'artifact-toolbar-toggle-group-', [
+      ['toggleGroupBorder', 'border'],
+      ['toggleGroupBorderRadius', 'radius'],
+    ]);
     if (t.toggleGroupBackground) cssVars['--persona-artifact-toolbar-toggle-group-bg'] = resolveTokenValue(theme, t.toggleGroupBackground) ?? t.toggleGroupBackground;
-    if (t.copyBackground) cssVars['--persona-artifact-toolbar-copy-bg'] = t.copyBackground;
-    if (t.copyBorder) cssVars['--persona-artifact-toolbar-copy-border'] = t.copyBorder;
-    if (t.copyColor) cssVars['--persona-artifact-toolbar-copy-color'] = t.copyColor;
+    emitTruthy(t, 'artifact-toolbar-copy-', [
+      ['copyBackground', 'bg'],
+      ['copyBorder', 'border'],
+      ['copyColor', 'color'],
+    ]);
     // Feeds the split-button halves' inner-radius calc; must stay a <length>.
     if (t.copyBorderRadius) cssVars['--persona-artifact-toolbar-copy-radius'] = zeroLength(t.copyBorderRadius);
     if (t.copyPadding) cssVars['--persona-artifact-toolbar-copy-padding'] = t.copyPadding;
@@ -1490,20 +1595,24 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
       cssVars['--persona-artifact-toolbar-copy-menu-item-hover-bg'] = t.copyMenuItemHoverBackground;
       cssVars['--persona-dropdown-item-hover-bg'] = cssVars['--persona-dropdown-item-hover-bg'] ?? t.copyMenuItemHoverBackground;
     }
-    if (t.iconBackground) cssVars['--persona-artifact-toolbar-icon-bg'] = t.iconBackground;
-    if (t.toolbarBorder) cssVars['--persona-artifact-toolbar-border'] = t.toolbarBorder;
+    emitTruthy(t, 'artifact-toolbar-', [
+      ['iconBackground', 'icon-bg'],
+      ['toolbarBorder', 'border'],
+    ]);
   }
   if (artifact?.tab) {
     const t = artifact.tab;
-    if (t.background) cssVars['--persona-artifact-tab-bg'] = t.background;
-    if (t.activeBackground) cssVars['--persona-artifact-tab-active-bg'] = t.activeBackground;
-    if (t.activeBorder) cssVars['--persona-artifact-tab-active-border'] = t.activeBorder;
-    if (t.borderRadius) cssVars['--persona-artifact-tab-radius'] = t.borderRadius;
-    if (t.textColor) cssVars['--persona-artifact-tab-color'] = t.textColor;
-    if (t.hoverBackground) cssVars['--persona-artifact-tab-hover-bg'] = t.hoverBackground;
-    if (t.listBackground) cssVars['--persona-artifact-tab-list-bg'] = t.listBackground;
-    if (t.listBorderColor) cssVars['--persona-artifact-tab-list-border-color'] = t.listBorderColor;
-    if (t.listPadding) cssVars['--persona-artifact-tab-list-padding'] = t.listPadding;
+    emitTruthy(t, 'artifact-tab-', [
+      ['background', 'bg'],
+      ['activeBackground', 'active-bg'],
+      ['activeBorder', 'active-border'],
+      ['borderRadius', 'radius'],
+      ['textColor', 'color'],
+      ['hoverBackground', 'hover-bg'],
+      ['listBackground', 'list-bg'],
+      ['listBorderColor', 'list-border-color'],
+      ['listPadding', 'list-padding'],
+    ]);
   }
   if (artifact?.pane) {
     const t = artifact.pane;
@@ -1513,53 +1622,39 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
       cssVars['--persona-artifact-toolbar-bg'] = toolbarBg;
     }
   }
-  if (artifact?.card) {
-    const t = artifact.card;
-    if (t.background) cssVars['--persona-artifact-card-bg'] = t.background;
-    if (t.border) cssVars['--persona-artifact-card-border'] = t.border;
-    if (t.borderRadius) cssVars['--persona-artifact-card-radius'] = t.borderRadius;
-    if (t.hoverBackground) cssVars['--persona-artifact-card-hover-bg'] = t.hoverBackground;
-    if (t.hoverBorderColor) cssVars['--persona-artifact-card-hover-border'] = t.hoverBorderColor;
-  }
-  if (artifact?.inline) {
-    const t = artifact.inline;
-    if (t.background) {
-      cssVars['--persona-artifact-inline-bg'] =
-        resolveTokenValue(theme, t.background) ?? t.background;
-    }
-    if (t.border) cssVars['--persona-artifact-inline-border'] = t.border;
-    if (t.borderRadius) cssVars['--persona-artifact-inline-radius'] = t.borderRadius;
-    if (t.chromeBackground) {
-      cssVars['--persona-artifact-inline-chrome-bg'] =
-        resolveTokenValue(theme, t.chromeBackground) ?? t.chromeBackground;
-    }
-    if (t.chromeBorder) {
-      cssVars['--persona-artifact-inline-chrome-border'] =
-        resolveTokenValue(theme, t.chromeBorder) ?? t.chromeBorder;
-    }
-    if (t.titleColor) {
-      cssVars['--persona-artifact-inline-title-color'] =
-        resolveTokenValue(theme, t.titleColor) ?? t.titleColor;
-    }
-    if (t.mutedColor) {
-      cssVars['--persona-artifact-inline-muted-color'] =
-        resolveTokenValue(theme, t.mutedColor) ?? t.mutedColor;
-    }
-    if (t.frameHeight) cssVars['--persona-artifact-inline-frame-height'] = t.frameHeight;
-  }
+  // The third column opts into reference resolution; raw border/height stay raw.
+  emitTruthy(artifact?.card, 'artifact-card-', [
+    ['background', 'bg', true],
+    ['border', 'border'],
+    ['borderRadius', 'radius', true],
+    ['hoverBackground', 'hover-bg', true],
+    ['hoverBorderColor', 'hover-border', true],
+  ]);
+  emitTruthy(artifact?.inline, 'artifact-inline-', [
+    ['background', 'bg', true],
+    ['border', 'border'],
+    ['borderRadius', 'radius', true],
+    ['chromeBackground', 'chrome-bg', true],
+    ['chromeBorder', 'chrome-border', true],
+    ['titleColor', 'title-color', true],
+    ['mutedColor', 'muted-color', true],
+    ['frameHeight', 'frame-height'],
+  ]);
 
   // Code (syntax-highlighted artifact source view) tokens.
   const code = components?.code;
   if (code) {
-    if (code.keywordColor) cssVars['--persona-code-keyword-color'] = code.keywordColor;
-    if (code.stringColor) cssVars['--persona-code-string-color'] = code.stringColor;
-    if (code.commentColor) cssVars['--persona-code-comment-color'] = code.commentColor;
-    if (code.numberColor) cssVars['--persona-code-number-color'] = code.numberColor;
-    if (code.tagColor) cssVars['--persona-code-tag-color'] = code.tagColor;
-    if (code.attrColor) cssVars['--persona-code-attr-color'] = code.attrColor;
-    if (code.propertyColor) cssVars['--persona-code-property-color'] = code.propertyColor;
-    if (code.lineNumberColor) cssVars['--persona-code-line-number-color'] = code.lineNumberColor;
-    if (code.gutterBorderColor) cssVars['--persona-code-gutter-border-color'] = code.gutterBorderColor;
+    emitTruthy(code, 'code-', [
+      ['keywordColor', 'keyword-color'],
+      ['stringColor', 'string-color'],
+      ['commentColor', 'comment-color'],
+      ['numberColor', 'number-color'],
+      ['tagColor', 'tag-color'],
+      ['attrColor', 'attr-color'],
+      ['propertyColor', 'property-color'],
+      ['lineNumberColor', 'line-number-color'],
+      ['gutterBorderColor', 'gutter-border-color'],
+    ]);
     if (code.background)
       cssVars['--persona-code-bg'] = resolveTokenValue(theme, code.background) ?? code.background;
   }

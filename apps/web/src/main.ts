@@ -137,10 +137,13 @@ const homeDemoInputPlaceholder = "Ask away...";
 
 /** Shared welcome copy for the inline embed. */
 const homeDemoSharedAssistant = {
+  welcome: {
+    title: homeDemoWelcomeTitle,
+    subtitle: homeDemoWelcomeSubtitle,
+    variant: "card" as const,
+  },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle: homeDemoWelcomeTitle,
-    welcomeSubtitle: homeDemoWelcomeSubtitle,
     inputPlaceholder: homeDemoInputPlaceholder,
   },
 };
@@ -199,7 +202,15 @@ const sharedWidgetConfig: NonNullable<
     keyPrefix: homeDemoPersistKeyPrefix
   },
   storageAdapter: sharedWidgetStorage,
-  suggestionChips: [...homeDemoSuggestionChips],
+  suggestions: {
+    starters: {
+      items: [...homeDemoSuggestionChips],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
   // DeepWiki lookups render as a branded card; any other tool keeps the
   // default bubble.
   plugins: [createDeepWikiToolPlugin({ defaultRepo: "runtypelabs/persona" })],

@@ -10,6 +10,7 @@
  * a host object (`SessionActionsHost`) that exposes the internals they need.
  */
 import type { AgentWidgetClient } from "./client";
+import { generateAssistantMessageId } from "./utils/message-id";
 import {
   SUGGEST_REPLIES_TOOL_NAME,
   suggestRepliesToolResult,
@@ -40,7 +41,7 @@ export type SessionActionsInternals = {
   ): void;
   connectStream(
     stream: ReadableStream<Uint8Array>,
-    options?: { allowReentry?: boolean }
+    options?: { allowReentry?: boolean; assistantMessageId?: string }
   ): Promise<void>;
 };
 
@@ -83,6 +84,8 @@ export async function resolveApproval(
   // 1. Update approval message status immediately for responsive UI
   const approvalMessageId = `approval-${approval.id}`;
   const errorMessageId = `approval-error-${approval.id}`;
+  // The client-token server stores the continuation under this id (core#9961).
+  const resumedAssistantId = generateAssistantMessageId();
   const requestToken = {};
   h.s.approvalTokens.set(approvalMessageId, requestToken);
   const updatedApproval: AgentWidgetApproval = {
@@ -141,7 +144,8 @@ export async function resolveApproval(
           executionId: approval.executionId,
           approvalId: approval.id,
         },
-        decision
+        decision,
+        { assistantMessageId: resumedAssistantId }
       );
     }
 
@@ -181,6 +185,7 @@ export async function resolveApproval(
               id: errorMessageId,
               role: "assistant",
               content: errorText,
+              localOnly: true,
               createdAt: new Date().toISOString(),
               streaming: false,
               sequence: h.nextSequence(),
@@ -205,7 +210,10 @@ export async function resolveApproval(
       }
 
       if (stream) {
-        await h.s.connectStream(stream, { allowReentry: true });
+        await h.s.connectStream(stream, {
+          allowReentry: true,
+          assistantMessageId: resumedAssistantId,
+        });
       } else {
         if (decision === 'denied') {
           // No stream body for denied: inject a denial message, and settle
@@ -369,12 +377,14 @@ export async function resolveAskUserQuestion(
   }
 
   try {
+    const assistantMessageId = generateAssistantMessageId();
     const response = await h.s.client.resumeFlow(
       executionId,
       { [toolName]: answer },
       {
         after:
           h.resumeAfter(executionId),
+        assistantMessageId,
       },
     );
 
@@ -386,7 +396,7 @@ export async function resolveAskUserQuestion(
     }
 
     if (response.body) {
-      await h.s.connectStream(response.body, { allowReentry: true });
+      await h.s.connectStream(response.body, { allowReentry: true, assistantMessageId });
     } else {
       // No body to pipe: drop the pre-set streaming flag so the indicator
       // doesn't linger forever.
@@ -601,6 +611,7 @@ export async function resolveWebMcpToolCallBatch(
       wireToolName,
       toolMessage.toolCall?.args,
       batchController.signal,
+      toolMessage.toolCall?.id,
     );
 
     let output: unknown;
@@ -685,10 +696,12 @@ export async function resolveWebMcpToolCallBatch(
       toolOutputs[r.resumeKey] = r.output;
     }
 
+    const assistantMessageId = generateAssistantMessageId();
     const response = await h.s.client.resumeFlow(executionId, toolOutputs, {
       signal: batchController.signal,
       after:
         h.resumeAfter(executionId),
+      assistantMessageId,
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
@@ -729,7 +742,7 @@ export async function resolveWebMcpToolCallBatch(
       );
     }
     if (response.body) {
-      await h.s.connectStream(response.body, { allowReentry: true });
+      await h.s.connectStream(response.body, { allowReentry: true, assistantMessageId });
     }
   } catch (error) {
     const isAbortError =
@@ -881,6 +894,7 @@ async function resumeWithToolOutput(
   output: unknown,
   options?: { onHttpOk?: () => void; signal?: AbortSignal },
 ): Promise<void> {
+  const assistantMessageId = generateAssistantMessageId();
   const response = await h.s.client.resumeFlow(
     executionId,
     { [resumeKey]: output },
@@ -888,6 +902,7 @@ async function resumeWithToolOutput(
       signal: options?.signal,
       after:
         h.resumeAfter(executionId),
+      assistantMessageId,
     },
   );
   if (!response.ok) {
@@ -896,7 +911,7 @@ async function resumeWithToolOutput(
   }
   options?.onHttpOk?.();
   if (response.body) {
-    await h.s.connectStream(response.body, { allowReentry: true });
+    await h.s.connectStream(response.body, { allowReentry: true, assistantMessageId });
   } else if (h.s.webMcpResolveControllers.size === 0) {
     // No stream to pipe. Clear streaming only when no WebMCP resolve is in
     // flight: for a WebMCP caller the current resolve's controller is still

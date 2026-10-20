@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { disclosureSettings } from "../components/disclosure-animation";
 import { mergeConfigUpdate } from "./config-merge";
 import { DEFAULT_FLOATING_LAUNCHER_WIDTH, mergeWithDefaults } from "../defaults";
 import { getPanelAliasProvenance } from "./panel-config";
-import type { AgentWidgetConfig, StreamAnimationPlugin } from "../types";
+import type { AgentConfig, AgentWidgetConfig, StreamAnimationPlugin, VoiceProvider } from "../types";
 
 describe.each([false, true])("mergeConfigUpdate (v5=%s)", (v5Defaults) => {
   // Stored controller config is post-mergeWithDefaults.
@@ -217,7 +218,7 @@ describe.each([false, true])("mergeConfigUpdate (v5=%s)", (v5Defaults) => {
   });
 
   it("replaces artifact display scope maps so reset preferences do not strand stale keys", () => {
-    const previous = mergeWithDefaults({
+    const previous = base({
       features: {
         artifacts: {
           enabled: true,
@@ -284,6 +285,102 @@ describe.each([false, true])("mergeConfigUpdate (v5=%s)", (v5Defaults) => {
     const next = mergeConfigUpdate(prev, { storageAdapter: { load: newLoad } });
     expect(next.storageAdapter?.load).toBe(newLoad);
     expect(next.storageAdapter?.save).toBeUndefined();
+  });
+
+  it("replaces the full agent definition and clears it without changing agent options", () => {
+    const first: AgentConfig = {
+      name: "First", model: "model-a", systemPrompt: "First prompt",
+      temperature: 0.5, loopConfig: { maxTurns: 5 },
+    };
+    const replacement: AgentConfig = { name: "Next", model: "model-b", systemPrompt: "Next prompt" };
+    const prev = base({ agent: first, agentOptions: { debugMode: true } });
+    const next = mergeConfigUpdate(prev, { agent: replacement });
+    expect(next.agent).toEqual(replacement);
+    expect(next.agent?.loopConfig).toBeUndefined();
+    expect(next.agentOptions?.debugMode).toBe(true);
+    expect(mergeConfigUpdate(next, { agent: undefined }).agent).toBeUndefined();
+    expect(prev.agent).toEqual(first);
+  });
+
+  it("replaces custom voice implementations without inheriting optional methods", () => {
+    const replacement: VoiceProvider = {
+      type: "custom",
+      connect: vi.fn(async () => {}), disconnect: vi.fn(async () => {}),
+      startListening: vi.fn(async () => {}), stopListening: vi.fn(async () => {}),
+      onResult: vi.fn(), onError: vi.fn(), onStatusChange: vi.fn(),
+    };
+    const first: VoiceProvider = { ...replacement, onLevel: vi.fn() };
+    const prev = base({ voiceRecognition: {
+      enabled: true, provider: { type: "custom", custom: first, browser: { language: "fr-FR" } },
+    } });
+    const next = mergeConfigUpdate(prev, { voiceRecognition: { provider: { custom: replacement } } });
+    expect(next.voiceRecognition?.provider?.custom).toBe(replacement);
+    expect(next.voiceRecognition?.provider?.custom).not.toHaveProperty("onLevel");
+    expect(next.voiceRecognition?.enabled).toBe(true);
+    expect(next.voiceRecognition?.provider?.browser?.language).toBe("fr-FR");
+    const factory = () => replacement;
+    const fromFactory = mergeConfigUpdate(next, { voiceRecognition: { provider: { custom: factory } } });
+    expect(fromFactory.voiceRecognition?.provider?.custom).toBe(factory);
+    expect(mergeConfigUpdate(fromFactory, { voiceRecognition: { provider: { custom: replacement } } })
+      .voiceRecognition?.provider?.custom).toBe(replacement);
+    const cleared = mergeConfigUpdate(next, { voiceRecognition: { provider: undefined } });
+    expect(cleared.voiceRecognition?.provider).toEqual(base().voiceRecognition?.provider);
+    expect(cleared.voiceRecognition?.enabled).toBe(true);
+    expect(prev.voiceRecognition?.provider?.custom).toBe(first);
+  });
+
+  it("replaces renderer and target resolver maps, including explicit empty maps", () => {
+    const oldRenderer = vi.fn(() => document.createElement("div"));
+    const newRenderer = vi.fn(() => document.createElement("div"));
+    const oldResolver = vi.fn(() => ({ payload: { assistant: "old" } }));
+    const newResolver = vi.fn(() => ({ payload: { assistant: "new" } }));
+    const prev = base({ components: { old: oldRenderer }, targetProviders: { old: oldResolver } });
+    const next = mergeConfigUpdate(prev, {
+      components: { next: newRenderer }, targetProviders: { next: newResolver },
+    });
+    expect(next.components).toEqual({ next: newRenderer });
+    expect(next.targetProviders).toEqual({ next: newResolver });
+    const emptied = mergeConfigUpdate(next, { components: {}, targetProviders: {} });
+    expect(emptied.components).toEqual({});
+    expect(emptied.targetProviders).toEqual({});
+    const cleared = mergeConfigUpdate(next, { components: undefined, targetProviders: undefined });
+    expect(cleared.components).toEqual(base().components);
+    expect(cleared.targetProviders).toEqual(base().targetProviders);
+    expect(prev.components).toEqual({ old: oldRenderer });
+  });
+
+  it("replaces icon variants and renderers while retaining welcome siblings", () => {
+    const prev = base({ welcome: {
+      title: "Keep", icon: { type: "image", url: "/logo.png", alt: "Logo", placement: "inline" },
+    } });
+    const next = mergeConfigUpdate(prev, { welcome: { icon: { type: "text", text: "Hello" } } });
+    expect(next.welcome).toEqual({ title: "Keep", icon: { type: "text", text: "Hello" } });
+    const renderIcon = vi.fn(() => document.createElement("span"));
+    const rendered = mergeConfigUpdate(next, { welcome: { icon: renderIcon } });
+    expect(rendered.welcome?.icon).toBe(renderIcon);
+    const lucide = mergeConfigUpdate(rendered, { welcome: { icon: { type: "lucide", name: "sparkles" } } });
+    expect(lucide.welcome?.icon).toEqual({ type: "lucide", name: "sparkles" });
+    expect(mergeConfigUpdate(lucide, { welcome: { icon: undefined } }).welcome).toEqual({ title: "Keep" });
+    expect(mergeConfigUpdate(lucide, { welcome: undefined }).welcome).toBeUndefined();
+  });
+
+  it("merges theme component tokens and resets a feature parent without dropping siblings", () => {
+    const prev = base({
+      theme: { components: {
+        composer: { send: { background: "#123456", foreground: "#ffffff" } },
+        button: { stop: { foreground: "#ff0000" } },
+      } },
+      features: { artifacts: { enabled: true, display: { default: "inline" }, layout: { paneWidth: "30rem" } },
+        history: { enabled: true } },
+    });
+    const next = mergeConfigUpdate(prev, { theme: { components: { composer: { send: { foreground: "#eeeeee" } } } },
+      features: { artifacts: undefined } });
+    expect(next.theme?.components?.composer?.send).toMatchObject({ background: "#123456", foreground: "#eeeeee" });
+    expect(next.theme?.components?.button?.stop?.foreground).toBe("#ff0000");
+    expect(next.features?.artifacts).toEqual(base().features?.artifacts);
+    expect(next.features?.history?.enabled).toBe(true);
+    expect(mergeConfigUpdate(next, { theme: { components: undefined } }).theme?.components)
+      .toEqual(base().theme?.components);
   });
 
   it("resets a cleared key to its default value (launcher.title)", () => {
@@ -359,6 +456,25 @@ describe("live defaults version changes", () => {
     const v5Again = mergeConfigUpdate(v4, { future: { v5Defaults: true } });
     expect(v5Again.layout?.messages?.assistant?.width).toBe("full");
     expect(v5Again.composer?.layout).toBe("single-row");
+  });
+
+  it("moves inherited disclosure motion between versions while preserving overrides and resets", () => {
+    const v5 = mergeConfigUpdate(base(), { future: { v5Defaults: true } });
+    expect(disclosureSettings(v5).animation).toBe("height");
+    const instant = mergeConfigUpdate(v5, { expansion: { animation: "instant", duration: 300, chevron: { collapsed: "left" } } });
+    const v4 = mergeConfigUpdate(instant, { future: undefined });
+    expect(disclosureSettings(v4).animation).toBe("instant");
+    const v5Again = mergeConfigUpdate(v4, { future: { v5Defaults: true } });
+    expect(disclosureSettings(v5Again).animation).toBe("instant");
+    const reset = mergeConfigUpdate(v5Again, { expansion: { animation: undefined } });
+    expect(disclosureSettings(reset)).toEqual({ animation: "height", duration: 300, easing: "ease-out" });
+    expect(reset.expansion?.chevron).toEqual({ collapsed: "left" });
+    expect(disclosureSettings(mergeConfigUpdate(reset, { future: undefined })))
+      .toEqual({ animation: "instant", duration: 300, easing: "ease-out" });
+    expect(disclosureSettings(mergeConfigUpdate(instant, { expansion: undefined })))
+      .toEqual({ animation: "height", duration: 160, easing: "ease-out" });
+    expect(disclosureSettings(mergeConfigUpdate(v5, { future: undefined })).animation).toBe("instant");
+    expect(disclosureSettings(instant).animation).toBe("instant");
   });
 
   it("retains host choices even when they equal a previous version default", () => {

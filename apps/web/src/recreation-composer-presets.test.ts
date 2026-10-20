@@ -41,8 +41,8 @@ describe("current product composer presets", () => {
     expect(composer?.modelPicker?.background).toBe("#303030");
     expect(composer?.modelPicker?.hoverBackground).toBe("#3b3b3b");
     expect(composer?.modelPicker?.borderRadius).toBe("9999px");
-    expect(composer?.overflowMenu?.background).toBe("#353535");
-    expect(composer?.overflowMenu?.borderColor).toBe("rgba(255, 255, 255, 0.08)");
+    expect(composer?.overflowMenu?.background).toBe("#303030");
+    expect(composer?.overflowMenu?.borderColor).toBe("#454545");
   });
 
   it("authors the current Claude and Perplexity resting modes", () => {
@@ -64,7 +64,7 @@ describe("current product composer presets", () => {
     expect(perplexity.composer?.modeGroups?.[0]?.chipVisibility).toBe("hidden");
   });
 
-  it("uses the standalone Gemini and Copilot model-picker treatments", () => {
+  it("retains the Gemini Pro variant and uses the measured personal Copilot composer", () => {
     const gemini = applyCurrentProductComposer("gemini", {});
     const copilot = applyCurrentProductComposer("copilot", {});
 
@@ -74,10 +74,10 @@ describe("current product composer presets", () => {
     expect(gemini.theme?.components?.composer?.modelPicker?.labelColor).toBe(
       "#c4c7c5"
     );
-    expect(copilot.composer?.selectedModelId).toBe("smart");
-    expect(copilot.composer?.models?.[0]?.description).toBe(
-      "Picks the right response style"
-    );
+    expect(copilot.composer?.layout).toBe("single-row");
+    expect(copilot.composer?.models).toBeUndefined();
+    expect(copilot.voiceRecognition?.showButton).toBe(false);
+    expect(copilot.sendButton?.visibility).toBe("when-text");
   });
 
   it("opens a slash menu on the two products that have one", () => {

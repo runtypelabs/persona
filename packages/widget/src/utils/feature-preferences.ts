@@ -34,19 +34,19 @@ export type WidgetPreferenceParseResult = {
   issues: WidgetPreferenceParseIssue[];
 };
 
-const BLOCKED_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+const BLOCKED_KEYS = ["__proto__", "prototype", "constructor"];
 // Accepted input values; "card" is the deprecated alias of "collapsed" and
 // parsing canonicalizes it.
-const DISPLAY_MODES = new Set<PersonaArtifactDisplayModeInput>([
+const DISPLAY_MODES: readonly PersonaArtifactDisplayModeInput[] = [
   "collapsed",
   "card",
   "panel",
   "inline",
-]);
-const ARTIFACT_KINDS = new Set<PersonaArtifactKind>([
+];
+const ARTIFACT_KINDS: readonly PersonaArtifactKind[] = [
   "markdown",
   "component",
-]);
+];
 // Exact "type/subtype" or major-type wildcard "type/*"; "*/*" is rejected
 // because it duplicates files.default.
 const MEDIA_TYPE_SELECTOR_PATTERN =
@@ -54,13 +54,12 @@ const MEDIA_TYPE_SELECTOR_PATTERN =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isSafeKey = (key: string): boolean => !BLOCKED_KEYS.has(key);
+const isSafeKey = (key: string): boolean => !BLOCKED_KEYS.includes(key);
 
 const isDisplayMode = (
   value: unknown
 ): value is PersonaArtifactDisplayModeInput =>
-  typeof value === "string" &&
-  DISPLAY_MODES.has(value as PersonaArtifactDisplayModeInput);
+  DISPLAY_MODES.includes(value as PersonaArtifactDisplayModeInput);
 
 const hasKeys = (value: object): boolean => Object.keys(value).length > 0;
 
@@ -89,11 +88,11 @@ type PreferenceNode = {
 } & (
   | { kind: "boolean" }
   | { kind: "string"; message: string }
-  | { kind: "enum"; values: ReadonlySet<string>; message: string }
+  | { kind: "value"; accepts: (value: unknown) => boolean }
   /** Display mode; canonicalizes the deprecated "card" alias to "collapsed". */
-  | { kind: "mode"; message: string }
+  | { kind: "mode" }
   /** Mode values keyed by a closed selector set, or by MIME selector. */
-  | { kind: "modeMap"; keys: ReadonlySet<string> | "mediaType" }
+  | { kind: "modeMap"; keys: readonly string[] | "mediaType" }
   | {
       kind: "object";
       children: Record<string, PreferenceNode>;
@@ -103,15 +102,15 @@ type PreferenceNode = {
     }
 );
 
-const DEFAULT_MODE: PreferenceNode = {
-  kind: "mode",
-  message: UNSUPPORTED_VALUE_MESSAGE,
-};
+const DEFAULT_MODE: PreferenceNode = { kind: "mode" };
 const CSS_LENGTH: PreferenceNode = {
   kind: "string",
   message: "Expected a CSS length string.",
 };
 const BOOLEAN: PreferenceNode = { kind: "boolean" };
+const enumPreference = (...values: string[]): PreferenceNode => ({
+  kind: "value", accepts: value => values.includes(value as string),
+});
 
 // Keyed by the preference type so the table stays exhaustive; string keys are
 // declared before boolean keys because issue order follows declaration order.
@@ -138,34 +137,21 @@ const ROOT_NODE: PreferenceNode = {
     toolCallDisplay: {
       kind: "object",
       children: {
-        collapsedMode: {
-          kind: "enum",
-          values: new Set(["tool-call", "tool-name", "tool-preview"]),
-          message: UNSUPPORTED_VALUE_MESSAGE,
-        },
-        groupedMode: {
-          kind: "enum",
-          values: new Set(["stack", "summary"]),
-          message: UNSUPPORTED_VALUE_MESSAGE,
-        },
-        loadingAnimation: {
-          kind: "enum",
-          values: new Set([
-            "none",
-            "pulse",
-            "shimmer",
-            "shimmer-color",
-            "rainbow",
-          ]),
-          message: UNSUPPORTED_VALUE_MESSAGE,
-        },
+        layout: enumPreference("row", "card"),
+        collapsedMode: enumPreference("tool-call", "tool-name", "tool-preview"),
+        groupedMode: enumPreference("stack", "summary", "collapsible"),
+        groupAppearance: enumPreference("plain", "inset"),
+        groupSummary: enumPreference("current-action", "aggregate"),
+        groupBoundary: enumPreference("adjacent", "iteration"),
+        groupSummaryMaxItems: { kind: "value", accepts: value => Number.isInteger(value) && (value as number) >= 0 },
+        loadingAnimation: enumPreference("none", "pulse", "shimmer", "shimmer-color", "rainbow"),
         expandable: BOOLEAN,
         grouped: BOOLEAN,
       },
     },
     reasoningDisplay: {
       kind: "object",
-      children: { expandable: BOOLEAN, activePreview: BOOLEAN },
+      children: { layout: enumPreference("row", "card"), appearance: enumPreference("plain", "inset", "panel"), expandable: BOOLEAN, activePreview: BOOLEAN },
     },
     artifacts: {
       kind: "object",
@@ -224,14 +210,14 @@ function parseNode(
       return typeof value === "string"
         ? value
         : issue(issues, path, "invalid_type", node.message);
-    case "enum":
-      return typeof value === "string" && node.values.has(value)
+    case "value":
+      return node.accepts(value)
         ? value
-        : issue(issues, path, "invalid_value", node.message);
+        : issue(issues, path, "invalid_value", UNSUPPORTED_VALUE_MESSAGE);
     case "mode":
       return isDisplayMode(value)
         ? canonicalArtifactDisplayMode(value)
-        : issue(issues, path, "invalid_value", node.message);
+        : issue(issues, path, "invalid_value", UNSUPPORTED_VALUE_MESSAGE);
     case "modeMap": {
       if (!isRecord(value)) {
         return issue(issues, path, "invalid_type", "Expected an object.");
@@ -242,7 +228,7 @@ function parseNode(
         const selector = keys ? key : normalizeMediaType(key);
         const known =
           isSafeKey(key) &&
-          (keys ? keys.has(key) : MEDIA_TYPE_SELECTOR_PATTERN.test(selector));
+          (keys ? keys.includes(key) : MEDIA_TYPE_SELECTOR_PATTERN.test(selector));
         if (!known) {
           issue(
             issues,
@@ -386,7 +372,7 @@ function mergeFilesValue(
   upper: ArtifactFilesValue
 ): ArtifactFilesValue {
   if (upper === undefined) {
-    return lower === undefined ? undefined : cloneValue(lower);
+    return cloneValue(lower);
   }
   if (typeof upper === "string") return upper;
   const low: PersonaArtifactFilesDisplayRules =
@@ -405,7 +391,7 @@ function mergeDisplayValue(
   upper: AgentWidgetArtifactsFeature["display"]
 ): ArtifactDisplayValue | undefined {
   if (upper === undefined) {
-    return lower === undefined ? undefined : cloneValue(lower);
+    return cloneValue(lower);
   }
   if (typeof upper === "string") return upper;
   const low: PersonaArtifactDisplayRules =
@@ -436,23 +422,11 @@ export function applyFeaturePreferences(
 ): AgentWidgetFeatureFlags {
   const preferences = mergeFeaturePreferences(layers);
   const result: AgentWidgetFeatureFlags = { ...baseFeatures };
-  if (preferences.showToolCalls !== undefined) {
-    result.showToolCalls = preferences.showToolCalls;
+  for (const key of ["showToolCalls", "showReasoning"] as const) {
+    if (preferences[key] !== undefined) result[key] = preferences[key];
   }
-  if (preferences.showReasoning !== undefined) {
-    result.showReasoning = preferences.showReasoning;
-  }
-  if (preferences.toolCallDisplay) {
-    result.toolCallDisplay = {
-      ...baseFeatures.toolCallDisplay,
-      ...preferences.toolCallDisplay,
-    };
-  }
-  if (preferences.reasoningDisplay) {
-    result.reasoningDisplay = {
-      ...baseFeatures.reasoningDisplay,
-      ...preferences.reasoningDisplay,
-    };
+  for (const key of ["toolCallDisplay", "reasoningDisplay"] as const) {
+    if (preferences[key]) Object.assign(result, { [key]: { ...baseFeatures[key], ...preferences[key] } });
   }
   if (preferences.artifacts) {
     const baseArtifacts = baseFeatures.artifacts ?? {};
@@ -464,17 +438,8 @@ export function applyFeaturePreferences(
       );
       if (display !== undefined) artifacts.display = display;
     }
-    if (preferences.artifacts.filePreview) {
-      artifacts.filePreview = {
-        ...baseArtifacts.filePreview,
-        enabled: preferences.artifacts.filePreview.enabled,
-      };
-    }
-    if (preferences.artifacts.layout) {
-      artifacts.layout = {
-        ...baseArtifacts.layout,
-        ...preferences.artifacts.layout,
-      };
+    for (const key of ["filePreview", "layout"] as const) {
+      if (preferences.artifacts[key]) artifacts[key] = { ...baseArtifacts[key], ...preferences.artifacts[key] };
     }
     result.artifacts = artifacts;
   }

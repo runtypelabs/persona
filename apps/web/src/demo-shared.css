@@ -899,6 +899,24 @@ body.demo-code-active [data-persona-root] { display: none; }
   box-shadow: 0 0 0 3px var(--signal-soft);
 }
 
+/* Shared native-select spacing for example controls. The transparent end
+   border insets the browser's own arrow; the shadow draws the visible edge.
+   Keep this outside widget roots, including widgets rendered without Shadow DOM. */
+:is(.stage-controls, .field, .config-field, .host-controls, .v5-controls, .migration-settings, .migration-actions, .lab-controls) select:not([data-persona-root] *):not([multiple]):not([size]) {
+  border-color: transparent;
+  border-inline-end-width: var(--demo-select-arrow-inset, 12px);
+  box-shadow: 0 0 0 1px var(--demo-select-border, var(--border));
+}
+:is(.stage-controls, .field, .config-field, .host-controls, .v5-controls, .migration-settings, .migration-actions, .lab-controls) select:not([data-persona-root] *):focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+@media (forced-colors: active) {
+  :is(.stage-controls, .field, .config-field, .host-controls, .v5-controls, .migration-settings, .migration-actions, .lab-controls) select:not([data-persona-root] *):not([multiple]):not([size]) {
+    border: 1px solid ButtonText;
+  }
+}
+
 .field,
 .config-field {
   display: flex;

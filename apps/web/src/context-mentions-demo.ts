@@ -207,8 +207,8 @@ function renderCodeRefToken(
 // --- Per-display copy --------------------------------------------------------
 const COPY = {
   chips: {
-    welcomeTitle: "Context Mentions Demo",
-    welcomeSubtitle: "Type @ or click the @ button to attach context.",
+    title: "Context Mentions Demo",
+    subtitle: "Type @ or click the @ button to attach context.",
     inputPlaceholder: "Ask about a file or page section… (try @)",
     reply: (userText: string) =>
       "Here's what reached the model (mentions are merged into the LLM content):\n\n" +
@@ -219,8 +219,8 @@ const COPY = {
       "\n````",
   },
   inline: {
-    welcomeTitle: "Inline Context Mentions",
-    welcomeSubtitle: "Type @ to drop a file token right into your sentence.",
+    title: "Inline Context Mentions",
+    subtitle: "Type @ to drop a file token right into your sentence.",
     inputPlaceholder: "Ask about a file… (try @App)",
     reply: (userText: string) =>
       "Here's what reached the model (mention bodies are merged into the LLM " +
@@ -279,15 +279,26 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       enabled: isLauncher,
       width: isLauncher ? "min(420px, 95vw)" : "100%",
     },
+    welcome: {
+      title: copy.title,
+      subtitle: copy.subtitle,
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: copy.welcomeTitle,
-      welcomeSubtitle: copy.welcomeSubtitle,
       inputPlaceholder: copy.inputPlaceholder,
     },
     // Empty, not omitted: omitting falls through to DEFAULT_WIDGET_CONFIG's
     // chips. Chips send text verbatim and can't attach a mention.
-    suggestionChips: [],
+    suggestions: {
+      starters: {
+        items: [],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     contextMentions,
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   };

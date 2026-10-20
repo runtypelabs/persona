@@ -70,3 +70,13 @@ describe('catalog search (drill-down fields indexed up front)', () => {
     expect(matches).toHaveLength(1);
   });
 });
+
+test('searches an exact config path and returns it for display', () => {
+  resetSearchIndex();
+  registerCatalogSections('style', [{ id: 'comp-composer-send-colors', fields: [{
+    id: 'send-foreground', label: 'Submit Foreground', type: 'token-ref', path: 'theme.components.composer.send.foreground',
+  }] }]);
+  const results = search('theme.components.composer.send.foreground');
+  expect(results).toHaveLength(1);
+  expect(results[0].entry.path).toBe('theme.components.composer.send.foreground');
+});

@@ -23,6 +23,19 @@ Preconditions: `ctl open verify --scenario tool --delay-ms 250` (slower, so the 
 - **Details:** `ctl ab find role button click --name "Used tool for"`. Observe: the parameters and result JSON are visible. `ctl shot tool-calls "details expanded"`.
 - **Proof:** `ctl record stop`, `ctl capture tool-calls "side effects"`. Expect one chat request and two `assistant:complete` events (the tool message, then the answer).
 
+For whole-turn activity, use `ctl open verify --scenario turn-activity --delay-ms 220`.
+Send a message through the composer and wait for “The example works.” The Working
+header should become Worked and collapse after completion, with the final answer
+still visible. Open the Worked button to see progress text interleaved with a
+two-file reading group and one direct command disclosure. Expand the reading
+group: its plural “Read files” summary should differ from its two compact individual rows,
+with more space between the outer progress blocks than between the child rows.
+Capture `run:started` and `run:finished`: one of each with the same run id, plus
+six `assistant:complete` events (three text blocks and three tools).
+Send again to verify the previous turn stays completed. The fixture
+classifies authored block IDs through `turnActivity.resolveMessage`; it does not
+infer progress/final classification from prose.
+
 ## Gotchas
 
 - `features.showToolCalls: true` is set by the fixture. A config override that sets it to false hides the bubble entirely, which is expected, not a bug.

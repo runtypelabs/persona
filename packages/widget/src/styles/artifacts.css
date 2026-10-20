@@ -1,0 +1,606 @@
+/* Loaded with the artifact renderer. Keep selectors scoped to artifact surfaces. */
+
+[data-persona-root] .persona-artifact-split-root {
+  gap: var(--persona-artifact-split-gap, 0.5rem);
+}
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--persona-artifact-toolbar-icon-padding, 0.25rem);
+  border-radius: var(--persona-artifact-toolbar-icon-radius, var(--persona-radius-md, 0.375rem));
+  border: var(--persona-artifact-toolbar-icon-border, 1px solid var(--persona-border, #e5e7eb));
+  background: var(--persona-artifact-toolbar-icon-bg, var(--persona-surface, #ffffff));
+  color: var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827));
+  cursor: pointer;
+  line-height: 1;
+}
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn:hover {
+  color: var(--persona-artifact-toolbar-icon-hover-color, inherit);
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
+}
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"],
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn[aria-pressed="true"] {
+  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
+  border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-icon-btn-active-border, var(--persona-border, #e5e7eb)));
+  color: var(--persona-artifact-doc-toggle-active-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
+}
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: var(--persona-artifact-toolbar-copy-padding, 0.25rem 0.5rem);
+  border-radius: var(--persona-artifact-toolbar-copy-radius, var(--persona-radius-md, 0.375rem));
+  border: var(--persona-artifact-toolbar-copy-border, 1px solid var(--persona-border, #e5e7eb));
+  background: var(--persona-artifact-toolbar-copy-bg, var(--persona-surface, #ffffff));
+  color: var(--persona-artifact-toolbar-copy-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-copy-btn:hover {
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
+}
+[data-persona-root] .persona-artifact-toolbar-document .persona-split-btn,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-split-btn {
+  --persona-split-radius: var(--persona-artifact-toolbar-copy-radius, var(--persona-radius-md, 0.375rem));
+  border: var(--persona-artifact-toolbar-copy-border, 1px solid var(--persona-border, #e5e7eb));
+  background: var(--persona-artifact-toolbar-copy-bg, var(--persona-surface, #ffffff));
+}
+[data-persona-root] .persona-artifact-tab {
+  background: var(--persona-artifact-tab-bg, transparent);
+  border-radius: var(--persona-artifact-tab-radius, 0.5rem);
+  color: var(--persona-artifact-tab-color, inherit);
+  /* Keep each tab on one line and cap its width so the strip scrolls
+     horizontally instead of wrapping/overflowing the pane. */
+  white-space: nowrap;
+  max-width: var(--persona-artifact-tab-max-width, 12rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-persona-root] .persona-artifact-tab.persona-bg-persona-container {
+  background: var(--persona-artifact-tab-active-bg, var(--persona-container, #f3f4f6));
+  border-color: var(--persona-artifact-tab-active-border, var(--persona-border, #e5e7eb));
+}
+[data-persona-root] .persona-artifact-toolbar {
+  background: var(--persona-artifact-toolbar-bg, var(--persona-surface, #fff));
+}
+[data-persona-root] .persona-artifact-tab:hover {
+  background: var(--persona-artifact-tab-hover-bg, var(--persona-container, #f3f4f6));
+}
+[data-persona-root] .persona-artifact-tab:focus-visible {
+  outline: 2px solid var(--persona-accent, #171717);
+  outline-offset: 2px;
+}
+[data-persona-root] .persona-artifact-list {
+  background: var(--persona-artifact-tab-list-bg, transparent);
+  border-bottom-color: var(--persona-artifact-tab-list-border-color, var(--persona-border, #e5e7eb));
+  padding: var(--persona-artifact-tab-list-padding, 0.5rem);
+  /* Thin, unobtrusive horizontal scrollbar for the tab strip. */
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+}
+[data-persona-root] .persona-artifact-list::-webkit-scrollbar {
+  height: 6px;
+}
+[data-persona-root] .persona-artifact-list::-webkit-scrollbar-thumb {
+  background: var(
+    --persona-artifact-tab-list-scrollbar,
+    var(--persona-scrollbar-thumb, var(--persona-border, #e5e7eb))
+  );
+  border-radius: 9999px;
+}
+[data-persona-root] .persona-artifact-toolbar-document {
+  border-bottom: var(--persona-artifact-toolbar-border, 1px solid var(--persona-border, #e5e7eb));
+}
+[data-persona-root] .persona-artifact-card {
+  background: var(--persona-artifact-card-bg, var(--persona-surface, #ffffff));
+  border: var(--persona-artifact-card-border, 1px solid var(--persona-border, #e5e7eb));
+  border-radius: var(--persona-artifact-card-radius, var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem)));
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+[data-persona-root] .persona-artifact-card:hover {
+  background: var(--persona-artifact-card-hover-bg, #f3f4f6);
+  border-color: var(--persona-artifact-card-hover-border, var(--persona-border, #e5e7eb));
+}
+[data-persona-root] .persona-artifact-card:focus-visible {
+  outline: 2px solid var(--persona-accent, #171717);
+  outline-offset: 2px;
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group {
+  gap: var(--persona-artifact-toolbar-toggle-group-gap, 2px);
+  padding: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+  border: var(--persona-artifact-toolbar-toggle-group-border, 1px solid var(--persona-border, #e5e7eb));
+  /* Default to the toolbar button radius (document preset var, then the plain
+     icon-button var) so the pill matches the neighboring copy/close buttons
+     instead of standing out as a capsule. */
+  border-radius: var(--persona-artifact-toolbar-toggle-group-radius, var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))));
+  background: var(--persona-artifact-toolbar-toggle-group-bg, var(--persona-surface, #ffffff));
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
+  border: none;
+  background: transparent;
+  /* Segment padding = standalone icon-button padding minus the container's
+     padding, so the pill's outer height matches the neighboring icon buttons
+     (the container's 1px border stands in for the border the segments lost).
+     calc() clamps to 0 if a theme sets group padding larger than icon padding. */
+  padding: calc(var(--persona-artifact-toolbar-icon-padding, var(--persona-icon-btn-padding, 0.25rem)) - var(--persona-artifact-toolbar-toggle-group-padding, 2px));
+  /* Container radius minus the 2px padding so the segment nests concentrically. */
+  border-radius: var(--persona-artifact-toolbar-toggle-radius, calc(var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))) - 2px));
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn:hover {
+  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
+}
+[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn[aria-pressed="true"] {
+  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
+  /* Inset ring instead of a border so documentToolbarToggleActiveBorderColor
+     still applies inside the borderless segment (transparent by default). */
+  box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
+  /* Survives the @supports thumb override below, which resets only the
+     background and ring; the active glyph keeps this color either way. */
+  color: var(--persona-artifact-doc-toggle-active-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
+}
+@supports selector(:has(*)) {
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group {
+    position: relative;
+  }
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group::before {
+    content: "";
+    position: absolute;
+    top: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+    bottom: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+    left: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
+    width: calc(
+      50% - var(--persona-artifact-toolbar-toggle-group-padding, 2px) -
+        (var(--persona-artifact-toolbar-toggle-group-gap, 2px) / 2)
+    );
+    border-radius: var(--persona-artifact-toolbar-toggle-radius, calc(var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))) - 2px));
+    background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
+    box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
+    transition: transform 0.18s ease;
+    pointer-events: none;
+  }
+  [data-persona-root]
+    .persona-toggle-group.persona-artifact-toggle-group:has(
+      > .persona-icon-btn:last-child[aria-pressed="true"]
+    )::before {
+    transform: translateX(calc(100% + var(--persona-artifact-toolbar-toggle-group-gap, 2px)));
+  }
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
+    position: relative;
+  }
+  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn[aria-pressed="true"] {
+    background: transparent;
+    box-shadow: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group::before {
+      transition: none;
+    }
+  }
+}
+[data-persona-root].persona-artifact-narrow-host .persona-artifact-split-handle {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
+  [data-persona-root] .persona-artifact-split-handle {
+    display: none !important;
+  }
+}
+
+@media (min-width: 641px) {
+  [data-persona-root] .persona-artifact-pane {
+    width: var(--persona-artifact-pane-width, 40%);
+    max-width: var(--persona-artifact-pane-max-width, 28rem);
+    min-width: var(--persona-artifact-pane-min-width, 0);
+    flex-shrink: 0;
+    /* No default elevation on the pane; welded reads as one card, detached and
+       the drawer set their own shadow. Explicit paneShadow still wins. */
+    box-shadow: var(--persona-artifact-pane-shadow, none);
+  }
+}
+@media (min-width: 641px) {
+  [data-persona-root].persona-artifact-expanded .persona-artifact-split-root > :first-child {
+    display: none;
+  }
+  [data-persona-root].persona-artifact-expanded .persona-artifact-pane {
+    width: 100%;
+    max-width: none;
+  }
+  [data-persona-root].persona-artifact-expanded .persona-artifact-split-handle {
+    display: none !important;
+  }
+}
+@media (max-width: 640px) {
+  [data-persona-root] .persona-artifact-expand-btn {
+    display: none !important;
+  }
+}
+[data-persona-root].persona-artifact-narrow-host .persona-artifact-expand-btn {
+  display: none !important;
+}
+[data-persona-root] .persona-artifact-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--persona-artifact-frame-bg, #ffffff);
+}
+[data-persona-root] .persona-artifact-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  color-scheme: light;
+  background: var(--persona-artifact-frame-bg, #ffffff);
+}
+[data-persona-root] .persona-artifact-frame-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--persona-artifact-frame-bg, #ffffff);
+  opacity: 1;
+  transition: opacity var(--persona-artifact-frame-loading-fade, 200ms) ease;
+}
+[data-persona-root] .persona-artifact-frame-loading--out {
+  opacity: 0;
+}
+[data-persona-root] .persona-artifact-frame-loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+}
+[data-persona-root] .persona-artifact-frame-loading-text {
+  color: var(
+    --persona-artifact-frame-loading-color,
+    var(--persona-text-muted, #6b7280)
+  );
+  font-size: 0.8125rem;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+[data-persona-root] .persona-artifact-frame-loading-text--visible {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-persona-root] .persona-artifact-frame-loading-text {
+    transition: none;
+  }
+}
+[data-persona-root] .persona-artifact-content {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+[data-persona-root]
+  .persona-artifact-content
+  > .persona-artifact-preview-body
+  > * {
+  min-width: 0;
+  max-width: 100%;
+}
+[data-persona-root] .persona-artifact-preview-body {
+  display: contents;
+}
+[data-persona-root] .persona-artifact-content-flush {
+  padding: 0;
+}
+[data-persona-root] .persona-artifact-content-flush .persona-code-pre {
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-radius: 0;
+  min-height: 100%;
+}
+[data-persona-root] .persona-artifact-inline {
+  border: var(--persona-artifact-inline-border, 1px solid var(--persona-border, #e5e7eb));
+  border-radius: var(
+    --persona-artifact-inline-radius,
+    var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem))
+  );
+  background: var(--persona-artifact-inline-bg, var(--persona-surface, #ffffff));
+  overflow: hidden;
+}
+[data-persona-root] .persona-artifact-inline.persona-artifact-inline--card {
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+[data-persona-root] .persona-artifact-inline-chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--persona-artifact-inline-chrome-bg, var(--persona-surface, #ffffff));
+  border-bottom: 1px solid var(--persona-artifact-inline-chrome-border, var(--persona-border, #e5e7eb));
+}
+[data-persona-root] .persona-artifact-inline-chrome-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  color: var(--persona-artifact-inline-title-color, var(--persona-text, #111827));
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-type,
+[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-status {
+  color: var(--persona-artifact-inline-muted-color, var(--persona-text-muted, #6b7280));
+  font-weight: 400;
+}
+[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-status {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+[data-persona-root] .persona-artifact-status-detail {
+  color: var(--persona-artifact-inline-muted-color, var(--persona-text-muted, #6b7280));
+  margin-left: 0.375rem;
+  font-variant-numeric: tabular-nums;
+}
+[data-persona-root] .persona-artifact-inline-chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+}
+[data-persona-root] .persona-artifact-inline-body {
+  padding: 0.75rem;
+}
+[data-persona-root] .persona-artifact-inline .persona-artifact-frame {
+  height: var(
+    --persona-artifact-inline-body-height,
+    var(--persona-artifact-inline-frame-height, 320px)
+  );
+}
+[data-persona-root] .persona-artifact-inline-body.persona-artifact-content-flush {
+  padding: 0;
+}
+[data-persona-root] .persona-artifact-inline-body--sized {
+  height: var(--persona-artifact-inline-body-height, auto);
+}
+[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-source-window--fixed,
+[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-frame {
+  height: 100%;
+}
+[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-status-view {
+  min-height: 100%;
+}
+[data-persona-root] .persona-artifact-source-window {
+  min-width: 0;
+}
+[data-persona-root] .persona-artifact-source-window--fixed {
+  overflow-y: auto;
+}
+[data-persona-root] .persona-artifact-source-window--clip {
+  overflow: hidden;
+}
+[data-persona-root]
+  .persona-artifact-fade-top:not(.persona-artifact-fade-bottom) {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-fade-bottom:not(.persona-artifact-fade-top) {
+  -webkit-mask-image: linear-gradient(
+    to top,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px)
+  );
+  mask-image: linear-gradient(
+    to top,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-fade-top.persona-artifact-fade-bottom {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px),
+    #000 calc(100% - var(--persona-artifact-fade-size, 40px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--persona-artifact-fade-size, 40px),
+    #000 calc(100% - var(--persona-artifact-fade-size, 40px)),
+    transparent 100%
+  );
+}
+[data-persona-root]
+  .persona-artifact-tab-fade-start:not(.persona-artifact-tab-fade-end) {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-tab-fade-end:not(.persona-artifact-tab-fade-start) {
+  -webkit-mask-image: linear-gradient(
+    to left,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+  mask-image: linear-gradient(
+    to left,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px)
+  );
+}
+[data-persona-root]
+  .persona-artifact-tab-fade-start.persona-artifact-tab-fade-end {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px),
+    #000 calc(100% - var(--persona-artifact-tab-fade-size, 24px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-artifact-tab-fade-size, 24px),
+    #000 calc(100% - var(--persona-artifact-tab-fade-size, 24px)),
+    transparent 100%
+  );
+}
+[data-persona-root] .persona-artifact-status-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--persona-artifact-inline-body-height, 160px);
+}
+[data-persona-root] .persona-artifact-inline-body--cap {
+  max-height: var(--persona-artifact-inline-body-height, none);
+  overflow-y: auto;
+}
+[data-persona-root] .persona-artifact-pane {
+  border-radius: var(--persona-artifact-pane-radius, 0);
+  overflow: hidden;
+  /* Layout paneBackground → theme components.artifact.pane.background → semantic surface */
+  background-color: var(
+    --persona-artifact-pane-bg,
+    var(--persona-components-artifact-pane-background, var(--persona-surface, #ffffff))
+  );
+}
+[data-persona-root].persona-artifact-appearance-seamless .persona-artifact-split-root {
+  position: relative;
+  gap: 0 !important;
+}
+[data-persona-root].persona-artifact-appearance-seamless .persona-artifact-pane {
+  border-left-width: 0 !important;
+  border-left-color: transparent !important;
+  box-shadow: none !important;
+  /* Same token chain; final fallback stays container for flush split chrome */
+  background-color: var(
+    --persona-artifact-pane-bg,
+    var(--persona-components-artifact-pane-background, var(--persona-container, #f8fafc))
+  );
+}
+[data-persona-root].persona-artifact-border-full .persona-artifact-pane {
+  border: var(--persona-artifact-pane-border) !important;
+}
+[data-persona-root].persona-artifact-border-left .persona-artifact-pane {
+  border-top: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  border-left: var(--persona-artifact-pane-border-left) !important;
+}
+[data-persona-root].persona-artifact-appearance-seamless.persona-artifact-border-left .persona-artifact-pane {
+  border-left: var(--persona-artifact-pane-border-left) !important;
+}
+[data-persona-root].persona-artifact-appearance-seamless.persona-artifact-border-full .persona-artifact-pane {
+  border: var(--persona-artifact-pane-border) !important;
+}
+[data-persona-root].persona-artifact-appearance-detached .persona-artifact-split-root {
+  background: var(--persona-panel-canvas-bg);
+}
+@media (min-width: 641px) {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-appearance-detached .persona-artifact-pane {
+    border-radius: var(
+      --persona-artifact-pane-radius,
+      var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))
+    );
+    border: var(--persona-panel-border, 1px solid var(--persona-border, #e5e7eb));
+    box-shadow: var(
+      --persona-artifact-pane-shadow,
+      var(--persona-panel-shadow, var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25)))
+    );
+  }
+}
+@media (min-width: 641px) {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-chat-flush .persona-artifact-pane {
+    margin-top: var(--persona-panel-inset);
+    margin-right: var(--persona-panel-inset);
+    margin-bottom: var(--persona-panel-inset);
+  }
+}
+@media (min-width: 641px) {
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-artifact-split-root {
+    position: relative;
+  }
+
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-widget-container {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    overflow: hidden;
+  }
+
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-artifact-pane {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-top-right-radius: var(--persona-artifact-welded-outer-radius, var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))) !important;
+    border-bottom-right-radius: var(--persona-artifact-welded-outer-radius, var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))) !important;
+    overflow: hidden;
+  }
+  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split.persona-artifact-appearance-panel .persona-artifact-pane {
+    border-left: 1px solid var(--persona-border, #e5e7eb);
+  }
+}
+[data-persona-root].persona-artifact-narrow-host .persona-artifact-backdrop {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 55 !important;
+}
+
+@media (min-width: 641px) {
+  [data-persona-root].persona-artifact-narrow-host .persona-artifact-pane {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(100%, var(--persona-artifact-drawer-width, min(calc(100% - 1rem), 22rem))) !important;
+    max-width: var(--persona-artifact-drawer-width, 22rem) !important;
+    z-index: 60;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  }
+  [data-persona-root].persona-artifact-narrow-host .persona-artifact-pane.persona-artifact-drawer-open {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 640px) {
+  [data-persona-root] .persona-artifact-pane {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(100vw, var(--persona-artifact-drawer-width, min(100vw - 1.5rem, 22rem)));
+    z-index: 60;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  }
+  [data-persona-root] .persona-artifact-pane.persona-artifact-drawer-open {
+    transform: translateX(0);
+  }
+}

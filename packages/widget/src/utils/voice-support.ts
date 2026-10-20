@@ -7,6 +7,7 @@ export function voiceConnectionChanged(previous: AgentWidgetConfig, next: AgentW
   return (before?.enabled === true) !== (after?.enabled === true) ||
     before?.provider?.type !== after?.provider?.type ||
     before?.provider?.custom !== after?.provider?.custom ||
+    usesSessionVoiceForConfig(previous) !== usesSessionVoiceForConfig(next) ||
     before?.provider?.runtype?.createPlaybackEngine !== after?.provider?.runtype?.createPlaybackEngine ||
     JSON.stringify(before?.provider?.runtype) !== JSON.stringify(after?.provider?.runtype) ||
     previous.agentId !== next.agentId || previous.clientToken !== next.clientToken || previous.apiUrl !== next.apiUrl;
@@ -47,4 +48,11 @@ export function isVoiceSupportedProbe(config?: Partial<VoiceConfig>): boolean {
   } catch {
     return false;
   }
+}
+
+/** Custom STT review is owned by the composer; a separate dictation provider can coexist with voice. */
+export function usesSessionVoiceForConfig(config: AgentWidgetConfig): boolean {
+  const voice = config.voiceRecognition;
+  return usesSessionVoice(voice?.provider) && !(voice?.provider?.type === "custom" &&
+    !voice.dictation?.provider && (voice.dictation || voice.completionBehavior === "review"));
 }

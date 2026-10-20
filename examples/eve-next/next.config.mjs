@@ -1,10 +1,12 @@
-import { withEve } from "eve/next";
-
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = { serverExternalPackages: ["eve"] };
 
-// `withEve()` launches the in-repo eve agent (./agent) on `next dev` and proxies
-// same-origin `/eve/v1/...` requests to it, so there's no separate `eve dev`
-// terminal and no EVE_HOST to set. In production it runs eve as a private
-// service (on Vercel) or behind EVE_NEXT_PRODUCTION_ORIGIN. Requires Node >= 24.
-export default withEve(nextConfig);
+// No agent server or credentials are needed to build and run Preview. Opt into
+// withEve's integrated runtime only when using this project's live agent.
+export default async function config(phase, context) {
+  if (process.env.EVE_MODE === "live" && !process.env.EVE_BASE_URL) {
+    const { withEve } = await import("eve/next");
+    return withEve(nextConfig)(phase, context);
+  }
+  return nextConfig;
+}

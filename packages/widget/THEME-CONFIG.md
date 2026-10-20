@@ -1,6 +1,8 @@
 # Widget Theme & Configuration Reference
 
-This document provides definitions of all themable configuration options for Persona Widget v2.0.
+This document is the exhaustive theme and configuration reference for Persona Widget. Start with the [configuration authoring guide](../../docs/configuration.md) for minimal fresh brand, semantic and send/stop recipes, ownership, mounted update policy, and authored versus resolved editor exports.
+
+For property-by-property legacy mappings, precedence/reset behavior, and retained configuration capabilities, see the [scoped style migration guide](../../docs/style-migrations.md). Compare unconfigured, legacy, and theme samples in the [style migration demo](../../apps/web/style-migration.html). No removal is scheduled in 4.x.
 
 ## Theme Architecture
 
@@ -30,6 +32,79 @@ semantic.colors.primary → palette.colors.primary.500 → #171717
 ```
 
 ## Quick Start
+
+### Brand configuration (fresh V5 opt-in)
+
+Use `config.brand` to derive a coordinated theme from a few design choices. Each
+field is optional; omitted fields retain Persona's defaults. It works with both
+current defaults and `future: { v5Defaults: true }`.
+
+```typescript
+initAgentWidget({
+  target: '#chat',
+  config: {
+    apiUrl: '/api/chat',
+    future: { v5Defaults: true },
+    brand: {
+      accent: '#b9a68a',
+      neutral: '#171715',
+      font: 'Georgia, "Times New Roman", serif',
+      radius: 'md',
+      density: 'comfortable',
+      elevation: 'flat'
+    }
+  }
+});
+```
+
+| Field | Accepted values | Effect |
+| --- | --- | --- |
+| `accent` | Opaque `#rgb`, `#rrggbb`, `rgb()`, or `rgba()` with alpha 1 | Accent colors, buttons, links, and focus treatment |
+| `neutral` | Same color formats as `accent` | Coordinated background, surface, text, and border colors |
+| `font` | CSS font-family string | Widget typography; load custom fonts in the host application |
+| `radius` | `'none'`, `'sm'`, `'md'`, `'lg'` | Component corners: 0, 4, 8, or 16px; circular controls remain circular |
+| `density` | `'compact'`, `'comfortable'`, `'spacious'` | Coordinated type and spacing; base type 13, 14, or 15px and header height 44, 48, or 52px |
+| `elevation` | `'flat'`, `'subtle'`, `'raised'` | Coordinated shadows and borders |
+
+In V5, the accent supplies the send button's strong fill, while user bubbles
+blend 12% accent into the neutral container color and use the normal text color.
+The header identity icon stays transparent by default. Set
+`theme.components.header.iconBackground` to opt into a filled badge; its automatic
+padding still applies. V4 retains matching accent fills for these elements.
+
+When `colorScheme` is omitted, a valid `neutral` with relative luminance below
+0.18 selects dark mode; a lighter neutral selects light mode. Explicit
+`colorScheme: 'light'`, `'dark'`, or `'auto'` takes precedence. With `'auto'`, the
+system preference chooses the mode. Colors are generated for both modes, so a
+brand can be used with either preference.
+
+Brand values are applied above built-in defaults and below explicit `theme` and
+`darkTheme` overrides. Continue using component tokens for exact layout,
+individual controls, or intentional exceptions:
+
+```typescript
+config: {
+  brand: { accent: '#7c3aed', radius: 'lg', elevation: 'subtle' },
+  theme: {
+    components: {
+      panel: { borderRadius: '12px' }
+    }
+  },
+  darkTheme: {
+    components: {
+      panel: { borderRadius: '20px' }
+    }
+  }
+}
+```
+
+The explicit panel radius wins over the brand's corners. In dark mode,
+`darkTheme` wins over the inherited light `theme` overrides. A brand is a compact
+starting point for coordinated styling; detailed component tokens remain useful
+for a bespoke fullscreen layout, artifact toolbar, or prose-only font.
+
+Try the Editorial, Studio, and Terminal brands in the [V5 preview](https://persona-chat.dev/v5-preview.html),
+including the V4 comparison and existing scene-specific theme overrides.
 
 ### Simple Color Override
 
@@ -511,14 +586,13 @@ at `1rem` / `1.5rem` / weight `600`, the subtitle at `0.75rem` / `1rem`.
 
 #### Header controls
 
-Every header icon button (close, clear chat, `layout.header.trailingActions`,
-and the Messages toggle) is sized by one set of tokens, so they can never
-drift apart:
+Header icon buttons (close, clear chat, `layout.header.trailingActions`,
+and the Messages toggle) share these fallback tokens:
 
 | Token | CSS variable | Default |
 |-------|--------------|---------|
 | `controlSize` | `--persona-header-control-size` | `"32px"` |
-| `controlIconSize` | `--persona-header-control-icon-size` | `"20px"` |
+| `controlIconSize` | `--persona-header-control-icon-size` | `"16px"` |
 | `controlStrokeWidth` | `--persona-components-header-controlStrokeWidth` | `"1.5"` |
 
 `controlStrokeWidth` is unitless, like the SVG `stroke-width` attribute it
@@ -540,6 +614,16 @@ Per-control config keys still win: `launcher.closeButtonSize` and
 Leave them unset to follow the token. On coarse pointers the box never
 shrinks below 40px, even with a smaller `controlSize`; an explicit per-control
 size opts out of that floor.
+
+`components.header.close` and `.clear` independently accept optional `size`,
+`iconSize`, `iconStrokeWidth`, `background`, `foreground`, `borderColor`,
+`borderWidth`, `borderRadius`, and `padding`. They leave Messages and trailing
+actions unchanged. Size and padding use CSS lengths/shorthands; stroke width is
+unitless. Border color alone does not add width. Unset values fall through the
+shared header controls. Explicit legacy styles win on their individual property;
+legacy padding axes override only that axis. Composer-bar mode retains its
+smaller deliberate control/glyph sizes. The editor exposes independent shape
+and light/dark color controls.
 
 ### Messages rail (`components.history.railHeader.*`)
 
@@ -733,6 +817,26 @@ through this group.
 | `processing.background` | `palette.colors.primary.50` |
 | `speaking.icon` | `palette.colors.success.500` |
 
+The table above describes public token defaults. `recording.indicator` and
+`recording.background` retain their existing consumers. Previously unused
+`recording.border`, `processing.icon/background`, and `speaking.icon` now affect
+rendering only when explicitly supplied by the host; inherited defaults do not
+recolor ordinary widgets. Optional `processing.border` and
+`speaking.background/border` extend those states. Border color does not imply
+width. Recording, processing, speaking, and barge-in preserve historical
+absent-value behavior on browser and hosted/custom providers; theme updates keep
+the active state and idle restoration uses current configuration.
+
+`voice.control` independently styles the idle mic with `size`, `iconSize`,
+`iconStrokeWidth`, `background`, `foreground`, `borderColor`, `borderWidth`,
+`borderRadius`, and `padding`. To migrate `voiceRecognition.iconSize`, set both
+`control.size` and `control.iconSize` to the old nominal size. Inherited padding
+can make a glyph shrink inside its box; changing padding intentionally changes
+that geometry. Explicit old send colors still supply an idle mic fallback;
+set matching mic theme colors when preserving that side effect. Built-in SVGs
+inherit `currentColor`; provider policy, icons, labels, and animation eligibility
+remain configuration.
+
 ### Approval (`components.approval.*`)
 
 The default approval renderer is a neutral surface card whose primary action
@@ -750,12 +854,25 @@ tracks your theme), not the old warning/success/error palette:
 | `deny.background` | `semantic.colors.container` |
 | `deny.foreground` | `semantic.colors.text` |
 
+Optional `requested.titleColor`, `.descriptionColor`, `.reasonColor`, and
+`.parameters.background/foreground` style each text/code surface independently.
+Specific text colors fall through an explicit `requested.text` to the existing
+element fallback. Previously ineffective requested text and approve/deny
+foreground tokens now work for explicit host input; their materialized defaults
+do not recolor ordinary cards. Both the built-in plugin and public
+`createApprovalBubble` use the mapping while keeping their separate callbacks,
+behavior, and stock deny colors.
+
 **Per-widget overrides (`config.approval.*`)** take precedence over the tokens above:
 
 | Property | Description |
 |----------|-------------|
-| `enableAlwaysAllow` | `false` by default. `true` adds the split "Always allow / Allow once" control + keyboard shortcuts; forwards `{ remember: true }` to `onDecision` (needs a backend to persist the policy) |
-| `detailsDisplay` | `"collapsed"` (default) / `"expanded"` / `"hidden"` — initial state of the tool-arguments disclosure. In client-token mode the raw tool name and arguments are always shown, even with `"hidden"` |
+| `enableAlwaysAllow` | `false` by default. Enables the remembered-permission action, forwarding `{ remember: true }` to `onDecision`; the host must implement its policy. V5 keeps one-time approval primary and puts remembered permission in the menu. |
+| `resolvedDisplay` | `"row"` (V5) shows a compact tool-and-status row with inspectable decision details; `"status-line"` retains the full card with decision/execution status; `"trace"` (V4) hides approved cards and retains denied/timed-out traces. |
+| `primaryAction` | `"always-allow"` (V4) / `"allow-once"` (V5). Applies when `enableAlwaysAllow` is enabled. |
+| `keyboardShortcuts` | `"legacy"` (V4, active only with `enableAlwaysAllow`) / `"focused"` (V5) / `false`. Focused shortcuts handle Enter for one-time approval and Escape for denial only within the approval card; modified Enter never grants remembered permission. |
+| `alwaysAllowLabel` | Label for the remembered-permission menu item in allow-once mode. Use an accurate scope such as `"Allow for this session"` only if your integration implements that scope. |
+| `detailsDisplay` | `"collapsed"` (default) / `"expanded"` / `"hidden"` — initial state of the tool-arguments disclosure |
 | `showDetailsLabel` / `hideDetailsLabel` | Disclosure toggle labels |
 | `backgroundColor` / `borderColor` | Card container styling |
 | `shadow` | Box-shadow for the card; pass `"none"` to remove it. Overrides the `requested.shadow` token / `--persona-approval-shadow` |
@@ -766,12 +883,85 @@ tracks your theme), not the old warning/success/error palette:
 
 > The legacy yellow look: set `config.approval.backgroundColor`/`borderColor` (or the `components.approval.requested.*` tokens) back to the warning palette to restore it. The `--persona-approval-*` aliases are still honored fallback-first.
 
+Resolved rows show “Allowed” when execution is unknown, “Allowed · running”,
+“Completed”, “Failed”, “Denied”, or “Timed out”. Their disclosure retains the
+description, parameters, and attributed agent reason; pending approvals keep
+the full decision card. Linked tool results remain separate and inspectable.
+Set `approval.resolvedDisplay: "status-line"` to retain the resolved card.
+
+These options work independently of `future.v5Defaults`; the flag selects their
+defaults. In focused mode, approval arrival moves focus to Allow only when the
+widget already owns focus. It does not take focus from the host page.
+
+Resolved status lines show **Allowed** when execution is unknown, **Allowed ·
+running** while the linked tool runs, and **Completed** or **Failed** when its
+outcome is known. Denied and timed-out requests retain their decision. Approval
+alone never implies successful execution.
+
+#### Custom approval renderers
+
+The `renderApproval` plugin hook can replace the entire approval UI or wrap
+`defaultRenderer()`. Returning `null` uses the same configured built-in renderer.
+Custom renderers own their focus and keyboard behavior; built-in behavior runs
+only when the built-in renderer is used.
+
+```typescript
+import type { AgentWidgetPlugin } from "@runtypelabs/persona";
+
+const approvalPlugin: AgentWidgetPlugin = {
+  id: "custom-approval",
+  renderApproval: ({ message, approve, defaultRenderer, signal }) => {
+    if (message.approval?.status !== "pending") return defaultRenderer();
+    const button = document.createElement("button");
+    button.textContent = "Allow once";
+    button.addEventListener("click", () => approve(), { signal });
+    return button;
+  },
+};
+```
+
+The optional `execution` context has `{ toolCallId, status }`, where status is
+`"running"`, `"completed"`, or `"failed"`. It is supplied only when the approval's
+`toolCallId` reliably identifies a tool in that widget's session. Server
+`approval_start` events can supply this field; native WebMCP approvals carry the
+local call ID. A run-wide `executionId` or a matching tool name is not sufficient.
+The renderer is called again when approval or linked execution state changes.
+
+The optional `signal` is an `AbortSignal` for that rendered instance. It aborts
+before replacement and when the approval is removed, the conversation clears,
+or the widget is destroyed. Use it for listener cleanup, or register an abort
+handler to unmount a framework component. Unchanged renders keep their element
+and signal. Each widget owns its own lifecycle, even when IDs overlap across
+widgets. Existing hooks that only accept `message`, `approve`, and `deny` keep
+working.
+
 ### Attachment (`components.attachment.*`)
 
 | Token | Default Reference |
 |-------|-------------------|
 | `image.background` | `palette.colors.gray.100` |
 | `image.border` | `palette.colors.gray.200` |
+
+Composer attachment previews have their own optional `components.attachment.composer`
+tokens. They do not change attachment rendering in sent messages. Omitted colors
+follow the active theme; explicit colors can be overridden under `darkTheme`.
+
+| Composer token group | Fields |
+| --- | --- |
+| `gap` | Space between previews |
+| `image` | `width`, `height`, `borderRadius`, `background`, `borderColor` |
+| `image.chip` | `width`, `minHeight`, `padding`, `gap`, `borderRadius`, `background`, `borderColor`, `foreground`, `fontSize` |
+| `file` | `width`, `minHeight`, `padding`, `gap`, `borderRadius`, `background`, `borderColor`, `foreground`, `mutedForeground`, `iconSize`, `iconForeground`, `iconBackground`, `fontSize` |
+| `remove`, `image.remove`, `file.remove` | `size`, `iconSize`, `background`, `foreground`, `hoverBackground`, `hoverForeground`, `borderRadius`, `borderColor`, `borderWidth`, `inset` |
+
+Image dimensions always size the thumbnail, including inside a chip. Per-kind
+remove tokens inherit shared `remove` tokens field by field. File icon colors
+style the glyph and its surrounding tile.
+
+Dimensions accept CSS lengths; colors accept CSS colors or token references.
+Use `attachments.preview` to choose card layout, metadata, image fitting, and
+remove visibility/placement. Use the `renderAttachmentPreview` plugin hook for
+a custom presentation. See [attachment preview configuration](../../docs/configuration.md#composer-attachment-previews).
 
 ### Intro Card (`components.introCard.*`)
 
@@ -806,6 +996,42 @@ built-in welcome type.
 | `subtitle.fontSize` | `"0.875rem"` |
 | `subtitle.lineHeight` | `"1.25rem"` |
 | `subtitle.color` | `--persona-muted` |
+
+### Question sheets (`components.askUserQuestion.*`)
+
+All nine appearance leaves are optional: `sheet.background/border/shadow`,
+`pill.background/foreground/borderRadius/selectedBackground/selectedForeground`,
+and `customInput.background`. They feed the existing `--persona-ask-*`
+consumers. Local `features.askUserQuestion.styles` overrides remain highest
+priority. Layout, grouped navigation, labels, enabled/expose flags, and slide
+timing remain feature config.
+
+### Tool chrome (`components.toolBubble.*`)
+
+Card and activity-row variants consume `background`, `borderColor`,
+`borderWidth`, `borderRadius`, `header.background/foreground/padding`,
+`content.background/foreground/padding`,
+`codeBlock.background/foreground/borderColor`, `toggleForeground`,
+`labelForeground`, and `loading.primary/secondary/duration`, alongside existing
+`shadow` and activity tokens. Optional leaves retain each variant's current
+appearance. `content.padding` falls through existing activity/tool body padding;
+legacy one-axis padding overrides only its own axis. Loading duration is CSS
+with units (`'1600ms'`), while the legacy numeric duration is milliseconds.
+Expansion, grouping, animation choice, text templates, and render hooks stay
+configuration. Global Markdown/collapsible colors do not substitute for these
+scoped tool values.
+
+### Artifact chrome (`components.artifact.*`)
+
+Alongside existing pane background/toolbar background and toolbar/tab tokens,
+optional leaves cover `pane.padding/borderRadius/shadow/border/borderLeft`,
+`chat.shadow`, `split.outerRadius`, `toolbar.iconColor`,
+`toolbar.toggleActiveBackground/toggleActiveBorderColor/toggleActiveColor`, and
+`tab.fadeSize`. Full border and left border are CSS shorthands; full border wins.
+Theme values participate in detached/welded/drawer chrome and reset cleanly
+without deleting a valid theme-owned variable. Geometry, resizing, appearance,
+`chatSurface`, toolbar presets, and fade enablement stay layout config.
+`unifiedSplitChrome` remains a no-op.
 
 ### Suggestion (`components.suggestion.*`)
 
@@ -898,8 +1124,11 @@ This paints an opaque band; it does not change the scroll viewport. The 6px offs
 footer content, input heights, or padding may require adjusting the stop.
 
 
-`overlayBand` only paints under `composer.placement: "overlay"`, where the
-composer footer is absolutely overlaid on the transcript. It takes any CSS
+`overlayBand` paints under `composer.placement: "overlay"`, where the
+composer footer is absolutely overlaid on the transcript. In composer-bar mode,
+it also paints the 24px edge above the fixed follow-up row while transcript
+content is hidden below. That edge disappears at the bottom; use
+`overlayBand: "transparent"` to disable its paint. It takes any CSS
 `background` value, gradients included, so a scrim that fades the transcript
 into the composer is one token:
 
@@ -928,7 +1157,7 @@ Two matching attributes are stamped on the same element:
 | Attribute | Values |
 |-----------|--------|
 | `data-persona-composer-placement` | `"block"` \| `"overlay"` (resolved, so composer-bar mount mode always reads `"block"`) |
-| `data-persona-conversation-state` | `"empty"` \| `"active"` — `"active"` from the first user message in the transcript |
+| `data-persona-conversation-state` | `"empty"` \| `"active"` — `"active"` from a user message or substantive assistant transcript activity (including tools and reasoning) |
 | `data-persona-welcome-anchor` | `"bottom"` \| `"center"` — root-level mirror of the resolved `welcome.anchor` |
 
 The config knobs themselves are `composer.placement` and `welcome.anchor` /
@@ -957,14 +1186,26 @@ Every one of them carries `.persona-composer-control`, and the glyph-token
 consumers also carry `.persona-composer-control--glyph`, so a host stylesheet
 can target the whole set at once.
 
+`composer.send` accepts optional `size`, `iconSize`, `iconStrokeWidth`,
+`background`, `foreground`, `borderColor`, `borderWidth`, `borderRadius`, and
+`padding`. It styles submit independently. Shared `composer.sendIconSize` and
+`sendButtonRadius` remain fallbacks. Size applies to icon mode; theme padding and
+background may intentionally style either mode. Legacy send padding remains
+ignored in icon mode, and legacy send background remains ignored in text mode.
+Stop still uses `button.stop.*` beneath explicit legacy send colors. A theme-only
+send color no longer implies a mic color: set `voice.control` too when migrating
+that historical legacy fallback.
+
 Precedence, narrowest first:
 
 1. **Per-control config** wins. `sendButton.size` sizes the send button;
    `voiceRecognition.iconSize` sizes the mic (box and glyph). Either one writes
    an inline style, which outranks the token. Both are unset by default.
-2. **The token** (`controlSize`, i.e. `--persona-composer-control-size`) sizes
+2. **Independent theme controls** (`composer.send` and `voice.control`) style only
+   their own box/glyph, with shared controls as fallback.
+3. **The token** (`controlSize`, i.e. `--persona-composer-control-size`) sizes
    every control that has no per-control override.
-3. **The stylesheet fallback**, `40px` box and `24px` glyph, applies when no
+4. **The stylesheet fallback**, `40px` box and `24px` glyph, applies when no
    theme variables are on the element at all.
 
 Two related config keys are not sizes and keep working on top of whichever box
@@ -990,7 +1231,8 @@ has no extra content: the draft is empty or a single line, and there are no atta
 mention chips, no active mode chips, no quote, and no pending submission. Audio capture does not change this state;
 dictated text expands the composer only when it becomes multiline or wraps.
 
-Core CSS attaches no layout to it. It is a hook for your own theme:
+The single-row layout uses this state together with available width. It is also
+available as a hook for your own theme:
 
 ```css
 [data-persona-composer-compact] .persona-widget-composer {
@@ -1006,8 +1248,11 @@ even if the text shrinks back.
 
 `composer.layout: "single-row"` lays the idle composer out as one pill: the
 start cluster leads the editor, the end cluster trails it, and the editor
-absorbs the remaining width. The default `"stacked"` keeps the card (editor on
-its own row, actions below).
+absorbs the remaining width. If the action controls leave too little room for
+the editor, the composer puts the editor above the toolbar. This responds to
+the widget's own width, including host resizes and changes to custom slot content.
+V4 defaults to `"stacked"` (editor on its own row, actions below); V5 defaults to
+`"single-row"`.
 
 ```js
 composer: { layout: "single-row" }
@@ -1015,23 +1260,74 @@ composer: { layout: "single-row" }
 
 Configuring it stamps `data-persona-composer-layout="single-row"` on the footer;
 leaving it unset stamps nothing, so host CSS keeps owning the form. The core
-rules are gated on `data-persona-composer-compact`, so a wrapped draft, chips,
+rules require compact content and enough horizontal space, so a wrapped draft, chips,
 attachment previews, a quote, or a pending card fall back to the
-stacked card. Ignored in `launcher.mountMode: "composer-bar"`, whose pill is
-already one row.
+stacked card. Set `composer.attachmentLayout: "single-row"` to keep the editor
+and controls together below the attachment row when there is enough room. The
+default `"stacked"` retains the existing attachment expansion. Ignored in
+`launcher.mountMode: "composer-bar"`, whose pill is already one row.
+
+V5 uses `components.composer.expandedBorderRadius: "24px"` and
+`expandedPadding: "12px 16px"` for the expanded form, including a narrow host
+that cannot fit a single row. V4 retains its existing geometry. Explicit
+`components.input.borderRadius` and `components.composer.padding` also apply
+when expanded unless the corresponding expanded token is supplied separately.
+The separate composer-bar pill keeps its own geometry.
 
 | Class / attribute | What it is |
 |-------------------|------------|
-| `[data-persona-composer-layout="single-row"]` | Footer marker; combine with `[data-persona-composer-compact]` to extend the row |
+| `[data-persona-composer-layout="single-row"]` | Footer marker for the requested layout |
+| `[data-persona-composer-fit]` | Controls leave enough room for the editor; combine with the compact and layout markers for the single-row state |
+| `[data-persona-composer-expanded]` | Expanded geometry, whether required by content, available width, or stacked layout |
 | `.persona-widget-composer__actions` | Action row; `display: contents` in the one-row state |
 | `.persona-widget-composer__left-actions` / `__right-actions` | The two clusters; `flex: 0 0 auto` so the model picker keeps its intrinsic width |
 
 #### Overflow menu (`composer.actionOverflow`)
 
 With `composer.actionOverflow.enabled`, composer controls whose `presentation`
-is `"overflow"` (always) or `"auto"` (below `collapseAutoActionsBelow`) render
-in a `+` menu instead of the action row. Built-in controls fold in only when
-`includeBuiltIns` names them.
+is `"overflow"` (always) or `"auto"` (according to the configured collapse policy)
+render in a `+` menu instead of the action row. Built-in controls fold in only
+when `includeBuiltIns` names them.
+
+Use `collapseAutoActions: "fit"` to move secondary `"auto"` actions into the menu
+as available space runs out. Later actions in display order fold first. Explicit
+`"bar"` controls stay visible, and the layout reserves room for the menu trigger
+and primary controls. Compact composers also reserve writing space; stacked
+composers can use the full toolbar width. Actions return when enough room is
+available, with a small buffer to avoid flickering at the boundary.
+
+Without this option, `collapseAutoActionsBelow` retains its existing fixed-width
+behavior. Neither policy hides arbitrary host slots or explicitly pinned controls.
+Keep large custom controls in a separate host surface when they cannot fit beside
+the primary actions.
+
+For a composer with several capabilities, a dedicated writing row and a small
+toolbar provide a stable starting point:
+
+```ts
+composer: {
+  layout: "stacked",
+  actionOverflow: {
+    enabled: true,
+    order: 0,
+    includeBuiltIns: ["attachments", "mentions"],
+    collapseAutoActions: "fit",
+  },
+  modes: [{
+    id: "concise", label: "Concise", shortLabel: "Concise",
+    iconName: "sparkles", presentation: "bar",
+  }],
+  actions: [{
+    id: "summarize", label: "Summarize this conversation", shortLabel: "Summarize",
+    iconName: "file-text", presentation: "auto",
+    onSelect: ({ setValue }) => setValue("Summarize the key points."),
+  }],
+}
+```
+
+Attachment and context entries appear only when their features are enabled. Use
+`layout: "single-row"` for the compact alternative. Both layouts share the same
+action registry, mode state, context chips, and keyboard behavior.
 
 | Class / attribute | What it is |
 |-------------------|------------|
@@ -1068,6 +1364,23 @@ theme: {
   },
 }
 ```
+
+Additional optional menu tokens use the same `--persona-components-composer-overflowMenu-` prefix:
+
+| Fields | Purpose |
+| --- | --- |
+| `padding`, `rowGap`, `minWidth`, `maxHeight` | Panel spacing and bounds |
+| `rowPadding`, `rowBorderRadius`, `fontSize`, `lineHeight` | Row shape and text |
+| `iconSize`, `iconGap` | Row icons and spacing |
+| `hoverBackground`, `focusBackground` | Pointer and keyboard row highlights |
+| `descriptionColor`, `descriptionFontSize` | Secondary action descriptions |
+| `dividerColor`, `dividerSpacing` | Group separators |
+
+These apply to built-in controls and ordinary action rows. Custom content may
+reuse the menu classes or style its own nodes. Colors can also be supplied under
+`darkTheme.components.composer.overflowMenu`. Set width, preferred placement and
+trigger icons under `composer.actionOverflow.menu`, and descriptions/groups on
+actions. See [menu configuration and managed renderer lifecycle](../../docs/configuration.md#composer-more-menus).
 
 The trigger sorts in the start cluster at order 900 by default.
 `composer.actionOverflow.order` moves it on the same scale as
@@ -1112,8 +1425,22 @@ restyle instead of hide:
 
 #### Mode chips (`composer.modes`)
 
-Active modes render as removable chips in the composer header, reusing the
-mention chip geometry with their own color tokens:
+V4 active modes render as removable chips in the composer header. V5 shows an
+active mode's `shortLabel` (or `label`) on its pressed toolbar control instead,
+without a duplicate header chip. Click the control again to deselect a toggle
+mode. Single-selection groups retain their existing selection rules.
+
+Set a mode group's `chipVisibility: "auto"` to keep header chips in V5, or
+`chipVisibility: "hidden"` to use the labeled active control in V4. Context
+mention chips are independent: they remain visible and removable regardless of
+the mode group's chip setting. Segmented groups already display their selection
+and do not add header chips.
+
+Modes deliberately placed in overflow keep a header chip under the default V5
+policy. If a group explicitly hides its chips, its active controls stay visible
+in the toolbar so the selected state is still discoverable.
+
+When shown, mode chips reuse mention chip geometry with their own color tokens:
 
 | CSS Variable | Falls back to |
 |--------------|---------------|
@@ -1306,7 +1633,7 @@ The edit-and-resend editor replaces a user bubble and carries
 
 ### Motion (`components.motion.*`)
 
-Shared timing for every composer animation.
+Shared timing for composer animations and scroll-to-bottom visibility fades.
 
 | Token | Default | CSS Variable |
 |-------|---------|--------------|
@@ -1411,16 +1738,115 @@ present rather than dead:
 
 | Token | Default Reference |
 |-------|-------------------|
-| `background` | `components.button.primary.background` |
-| `foreground` | `components.button.primary.foreground` |
-| `border` | `semantic.colors.primary` |
-| `size` | `"40px"` |
+| `background` | V4: `components.button.primary.background`; V5: `semantic.colors.surface` |
+| `foreground` | V4: `components.button.primary.foreground`; V5: `semantic.colors.text` |
+| `border` | V4: `semantic.colors.primary`; V5: `semantic.colors.border` |
+| `size` | V4: `"40px"`; V5: `"32px"` |
 | `borderRadius` | `palette.radius.full` |
 | `shadow` | `palette.shadows.sm` |
 | `padding` | `"0.5rem 0.875rem"` |
 | `gap` | `"0.5rem"` |
 | `fontSize` | `"0.875rem"` |
 | `iconSize` | `"14px"` |
+
+The optional unread count uses `components.scrollToBottom.countBadge`.
+Its controls are `background`, `foreground`, `border`, `borderRadius`,
+`size`, `padding`, `fontSize`, and `fontWeight`. When omitted, the badge
+retains its 18px minimum size, 11px/600 type, pill radius, and semantic
+surface/primary colors. These controls apply to the jump-to-latest unread
+count, not other badge families.
+
+The button appears only when latest content is out of view. The optional
+`features.scrollToBottom.streamingIndicator` selects `"dots"` or `"arrow"` during
+live activity below; completed, failed, cancelled, user-input waits, and paused
+or resuming reconnects use the idle `iconName`. Historical event records and
+message `streaming` flags do not imply live activity. `showActivityWhilePinned:
+false` keeps activity silent in anchor-top mode.
+
+`features.scrollToBottom.transition` selects `"fade"` or `"none"`. V4 defaults to
+`"arrow"` / `"none"`; `future.v5Defaults: true` defaults to `"dots"` / `"fade"`.
+Either can be explicitly configured in both versions. Fades reuse
+`components.motion.durationFast` and `easing`; hidden buttons immediately leave
+keyboard navigation, accessibility, and pointer interaction. Reduced motion
+shows static dots and changes visibility instantly.
+
+`features.scrollToBottom.scrollBehavior` selects `"smooth"` or `"instant"`
+for a button-triggered jump in the transcript and event log. V4 defaults to
+`"instant"`; V5 defaults to `"smooth"`. Smooth jumps default to 220ms even across
+long histories, keep tracking the latest content during streaming, and cancel
+on wheel, touch, navigation keys, or a pointer press in the scroll viewport.
+Reduced motion always jumps instantly. This setting is separate from
+`features.scrollBehavior.mode` (automatic following) and `transition` (button
+visibility). A jump in `mode: "none"` does not enable automatic following.
+
+Set `scrollDurationMs` to customize the smooth jump duration in milliseconds.
+`0` jumps instantly; negative or non-finite values fall back to 220ms.
+The duration is ignored for instant jumps and reduced motion. This is a
+JavaScript scroll animation, so CSS transition durations do not control it.
+
+```typescript
+features: {
+  scrollToBottom: {
+    streamingIndicator: "dots",
+    transition: "fade",
+    scrollBehavior: "smooth",
+    scrollDurationMs: 350, // optional; defaults to 220ms
+    iconName: "arrow-down",
+    label: "", // optional text beside the glyph
+  },
+},
+```
+
+For a custom animation, `features.scrollToBottom.renderIcon(context)` mounts
+only a decorative inner glyph. Return an `HTMLElement`, a managed
+`{ element, update, destroy }` handle, or `null` for the built-in glyph.
+Persona retains the node through text deltas. Managed `update(context)` calls
+occur when glyph state or scroll-control configuration changes; count updates
+are owned by Persona. `context.state` provides `activity` (`"idle"` or
+`"generating-below"`), `visible`, `hovered`, `focused`, and `reducedMotion`.
+`context.view` distinguishes `"transcript"` and `"event-stream"`;
+`context.config` contains the widget configuration. Keep the glyph
+noninteractive; Persona owns the surrounding button, label, count, position,
+click action, and fade.
+
+The following host renderer uses the Web Animations API. The same lifecycle can
+mount an animation library in your application without adding it to Persona.
+Pause animations while hidden or reduced motion is requested. On renderer
+replacement, feature disable, or view/widget destruction, Persona aborts
+`context.signal` before calling `destroy`. Mount or update errors fall back to
+the built-in glyph. A temporary hidden state keeps the renderer mounted.
+
+```typescript
+import type { AgentWidgetScrollToBottomIconContext } from "@runtypelabs/persona";
+
+function renderScrollIcon(context: AgentWidgetScrollToBottomIconContext) {
+  const element = document.createElement("span");
+  let animation: Animation | undefined;
+  let running = false;
+  const stop = () => { animation?.cancel(); animation = undefined; };
+  const update = ({ state }: AgentWidgetScrollToBottomIconContext) => {
+    const active = state.activity === "generating-below";
+    element.textContent = active ? "✦" : "↓";
+    const next = active && state.visible && !state.reducedMotion;
+    if (running === next) return;
+    running = next;
+    stop();
+    if (running) animation = element.animate(
+      [{ opacity: 0.4 }, { opacity: 1 }],
+      { duration: 650, iterations: Infinity, direction: "alternate" }
+    );
+  };
+  update(context);
+  context.signal.addEventListener("abort", stop, { once: true });
+  return { element, update, destroy: stop };
+}
+
+// features: { scrollToBottom: { renderIcon: renderScrollIcon } }
+```
+
+See the [live scroll-control preview](https://persona-chat.dev/v5-preview.html)
+and [application renderer source](../../apps/web/src/scroll-to-bottom-icon.ts)
+for a local SSE example with built-in and custom glyph controls.
 
 ### Event Stream Badges (`components.eventStream.badge.*`)
 
@@ -1545,6 +1971,9 @@ Partial V5 palette overrides preserve the remaining dark shades.
 | Turn gap | 12px | 20px; 28px in full-height/fullscreen views |
 | `layout.contentMaxWidth` | Unset | 768px where supported |
 | `statusIndicator.mode` | `"always"` | `"transient"` |
+| `approval.resolvedDisplay` | `"trace"` | `"row"` |
+| `approval.primaryAction` | `"always-allow"` when enabled | `"allow-once"` |
+| `approval.keyboardShortcuts` | `"legacy"`, requires `enableAlwaysAllow` | `"focused"` |
 
 Floating widths still shrink to fit narrow viewports. Dock/sidebar defaults are
 400px under v5 and remain 420px under v4. Compact composer fallbacks
@@ -1552,7 +1981,27 @@ Floating widths still shrink to fit narrow viewports. Dock/sidebar defaults are
 controls. `components.message.fullscreenGap` sets full-height/fullscreen spacing;
 an explicit `components.message.gap` supplies both gaps unless `fullscreenGap`
 is also provided. `components.header.iconScale` controls glyph size relative to
-the header icon box (v4: 0.6, v5: 1), and
+the header icon box (v4: 0.6, v5: 1). `components.header.iconPadding` adds
+CSS padding outside `launcher.headerIconSize`, for both glyphs and custom images.
+V5 uses `"auto"`: transparent icon backgrounds get 0px; filled backgrounds get
+6px. A 20px V5 icon therefore occupies 32px with a filled background. V4 keeps
+0px extra padding. Explicit values such as `"0"`, `"4px"`, or `"2px 8px"` win
+in both versions. For backgrounds using runtime CSS variables, set padding
+explicitly when their transparency can change. For example:
+
+```js
+theme: {
+  components: {
+    header: { iconBackground: "#b9a68a", iconForeground: "#171715", iconPadding: "6px" }
+  }
+}
+```
+
+For a custom image, set `launcher.iconUrl` and `launcher.headerIconName: ""`
+to replace the default glyph. `iconScale` applies to Lucide glyphs; images fill
+the content box, with `iconPadding` surrounding it.
+
+Also,
 `components.message.assistant.borderWidth` can remove the assistant border
 (v5: `"0px"`). These tokens work in either state.
 
@@ -2073,6 +2522,8 @@ callbacks to the public controller methods.
 | `dock.animate` | `true` | When `false`, open/close snaps with no CSS transition (`resize`: width; `overlay`: transform on the panel; `push`: margin on the track) |
 | `dock.reveal` | `"resize"` | `"resize"`: flex column `0` ↔ `width` (panel fills the slot, so it stretches during the animation). `"emerge"`: same column animation and **content reflow**, but the chat UI stays **`dock.width`** wide and is **clipped** by the slot (full-width floating-style entrance). `"overlay"`: overlay + `transform`. `"push"`: sliding track (Shopify-style) |
 
+Inline embeds (`launcher.enabled: false`) fill their host width by default. Explicit `launcher.width`, legacy `launcherWidth`, or `theme.components.panel.width` overrides are preserved during updates and resizing. Docked width is controlled separately by `launcher.dock.width`.
+
 When `mountMode` is `"docked"`, `initAgentWidget({ target })` wraps the target container and renders Persona in a sibling dock slot. `body` and `html` are not valid targets. `position`, `fullHeight`, and `sidebarMode` are ignored in docked mode. With `dock.reveal: "resize"`, a closed dock uses a **`0px`** column; `"overlay"` and `"push"` slide instead of shrinking the main column during the animation (`overlay`: transform on the panel; `push`: margin on the track: never a transform, which would hijack the containing block of `position: fixed`/`sticky` content inside the wrapped target). The floating launcher stays hidden in docked mode: use `controller.open()` or your own trigger.
 
 **Scoping push/overlay:** Only the subtree under `target` is wrapped. Put **headers, sidebars, or settings chrome** *outside* that element (siblings in your layout) when you want them fixed; point `target` at the inner column or canvas that should move with the dock (see `apps/web` docked demo: `#workspace-dock-target`). For **`dock.side: "left"`**, keep the rail **in normal flow beside the dock stage** (e.g. flex row `[nav | stage]`) so the panel does not paint **under** a floating rail. For a **right** dock, an optional **full-width stage** with an **absolutely positioned** left rail can let push translate the canvas **behind** a persistent sidebar (Shopify-style). The embedded dock demo toggles between those two chrome layouts using `data-dock-side` on `#workspace-main`. `position: fixed`/`sticky` content inside the wrapped target stays viewport-anchored (it is **not** pushed with the canvas), so a `right: 0` fixed element will sit under an open right-side panel: offset it while the dock is open via the shell attribute, e.g. `[data-persona-dock-open="true"] .my-fixed-bar { right: 420px; }`, or move it outside the target.
@@ -2235,14 +2686,24 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 
 **Example:** `"Calling {toolName}... ~{duration}~"` renders the duration in a muted/dim style.
 
+Automatic group timing spans the earliest known tool start through the latest known completion, so overlapping calls are never summed. Gaps between batches are included once the next tool arrives. While no child is running, a still-working group holds the latest measured span. Missing or invalid timestamp metadata omits group timing. This measures tool activity rather than the whole response. `durationDisplay` can be updated live and controls automatic header timing on tool rows, V5 cards, and collapsible group headers. V4 cards retain their legacy timed default summaries. Whole-turn timing remains independent. Expanded details have no automatic duration footer in either version; custom renderers retain the original `duration`, `durationMs`, `startedAt`, and `completedAt` metadata, along with elapsed helpers and grouped `toolCalls`.
+
 ### Display Features (`config.features.toolCallDisplay.*`)
 | Property | Default | Description |
 |----------|---------|-------------|
 | `collapsedMode` | `"tool-call"` | What collapsed rows show: `"tool-call"` \| `"tool-name"` \| `"tool-preview"` |
+| `showToolName` | `false` | Show the raw tool name above expanded details in rows/cards, including V4. Header labels and authored templates remain independent. |
 | `activePreview` | `false` | Show a lightweight preview block on active collapsed tool calls |
 | `activeMinHeight` |: | CSS min-height for active collapsed rows (e.g. `"100px"`) |
 | `previewMaxLines` | `3` | Maximum preview lines for collapsed active tool calls |
 | `grouped` | `false` | Visually group consecutive tool call rows |
+| `groupedMode` | `"stack"` | `"stack"`, `"summary"`, or `"collapsible"` (V5 default) |
+| `groupAppearance` | `"inset"` in V5; legacy tree in V4 | `"plain"` uses indentation alone; `"inset"` adds one subtle vertical line beside children. Independent of stack/collapsible layout; summary-only groups have no line. |
+| `groupSummary` | current action in classified progress (except stacks); aggregate elsewhere | `"current-action"` shows the single active action; parallel work and attention retain the aggregate. |
+| `groupSummaryMaxItems` | `3` | Nonnegative integer cap on distinct categories in aggregate row summaries, including completed groups. Extra categories become `and N more`; homogeneous groups use action phrasing such as `Read files` or `Reading files`. `0` shows total activities, including singleton counts. Attention suffixes and current-action labels retain precedence. Invalid configuration falls back to `3`; invalid stored preferences are rejected. |
+| `groupBoundary` | `"adjacent"` | `"iteration"` splits visible neighbors when both have different known iterations or execution IDs; unknown metadata retains adjacency |
+| `groupIconVisibility` | inherits `iconVisibility` | `"always"`, `"active"`, or `"never"` for the built-in collapsible group header only |
+| `durationDisplay` | `"none"` | Automatic timing: `"tools"`, `"group"`, or `"all"`. Tool rows, V5 cards, and collapsible group headers show compact elapsed times (`2s`, `12s`, `1m 5s`), omitting sub-second or unknown times. Authored `{duration}` placeholders, custom timer elements, and exact timing metadata remain available. |
 | `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
 | `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
 | `completedVisibility` | `"kept"` | `"removed"` renders no row once the tool call completes, so the transcript gap closes with it. The tool call stays on the message and in `getMessages()` |
@@ -2405,8 +2866,8 @@ suggestions: {
 | `variant` | `"chip"` | `"chip" \| "card" \| "list"` |
 | `placement` | `"auto"` | `"auto" \| "after-message" \| "composer"`; `auto` uses `"after-message"` in regular panels and `"composer"` in composer-bar mode |
 | `behavior` | `"send"` | `"send" \| "fill"` |
-| `overflow` | `"scroll"` | `"scroll" \| "wrap"` |
-| `maxItems` | `4` | Maximum number shown |
+| `overflow` | V4: `"wrap"`; V5: `"scroll"` | `"scroll" \| "wrap"` |
+| `maxItems` | V4: `4`; V5: `3` regular / `5` fullscreen | Maximum number rendered; explicit values override the defaults |
 
 Each rich item supports `id`, `label`, `prompt`, `description`, `icon`,
 `iconColor`, `behavior`, and `emphasis`. Per-item `behavior` overrides the
@@ -2495,7 +2956,11 @@ theme: {
 
 The deprecated `suggestionChips: string[]` and `suggestionChipsConfig` fields
 remain backwards compatible. They continue to render starter chips above the
-composer until a `suggestions.starters` configuration is supplied.
+composer until a `suggestions.starters` configuration is supplied. Chip
+`fontWeight` and `padding` theme values now override inherited legacy defaults;
+explicit old weight/axes still win. Resetting an axis exposes the theme for that
+axis. `suggestionChipsConfig.fontFamily` remains an accepted no-op, with no
+claimed parity mapping.
 
 ### Complete customization with plugins
 
@@ -2577,16 +3042,20 @@ layout: {
 remaining after the avatar and gap.
 
 ### Slots (`layout.slots.*`)
-Available: `header-left`, `header-center`, `header-right`, `body-top`, `body-bottom`, `footer-top`, `footer-bottom`
+Available: `header-left`, `header-center`, `header-right`, `body-top`, `body-bottom`, `footer-top`, `footer-bottom`, `transcript-top`, `composer-start`, `composer-end`, `composer-before-send`.
+
+Managed renderers can return `{ element, update?, destroy? }` and receive an
+abort signal. See [Embedded host integration](./docs/EMBEDDED-HOST.md#own-a-layout-slot)
+for placement, width, update, and cleanup behavior.
 
 `messages` and `composer` are deprecated and unsupported. They are still
-accepted by the types but the renderer never runs (a warning is logged when
+accepted by the types but renderer output is ignored (a warning is logged when
 `debug: true`). Use `layout.messages.renderUserMessage` /
 `layout.messages.renderAssistantMessage` for the transcript and the
 `renderComposer` plugin hook for the composer. The names stay in the union
 until the next major release.
 
-Each renderer receives `{ config, defaultContent }`. Returning an element
+Each renderer receives `{ config, defaultContent, slot, signal }`. Returning an element
 replaces the slot's default content; returning `null` leaves it alone.
 `body-top` is the welcome surface: its `defaultContent()` is the intro card
 (title, subtitle, and any starters placed there), so a custom welcome can either
@@ -2625,7 +3094,7 @@ which owns its own geometry.
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `welcome.anchor` | `"bottom"` | `"center"` floats the greeting and composer together in the empty conversation; they drop to the bottom on the first user message |
+| `welcome.anchor` | `"bottom"` | `"center"` floats the greeting and composer together in the empty conversation; they drop to the bottom on a user message or substantive assistant transcript activity |
 | `welcome.anchorComposerTop` | `"44%"` | Under `anchor: "center"`, the composer's top edge as a percentage of the panel column height |
 | `welcome.composerGap` | `"24px"` | Under `anchor: "center"`, the gap between the bottom of the welcome surface and the top of the composer |
 
@@ -2859,7 +3328,7 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
 |----------|-------------|
 | `showReasoning` | Show AI reasoning/thinking steps |
 | `showToolCalls` | Show tool call invocations |
-| `scrollToBottom` | Shared transcript + event-stream affordance config: `enabled`, `iconName`, `label` (empty string renders icon-only). Defaults: `enabled: true`, `iconName: "arrow-down"`, `label: ""`. |
+| `scrollToBottom` | Shared transcript + event-stream affordance: `enabled`, `iconName`, `label`, `streamingIndicator`, `transition`, `scrollBehavior`, `scrollDurationMs`, and `renderIcon`. V4 uses arrow/none/instant; V5 uses dots/fade/smooth. See the scroll-control example above. |
 | `artifacts` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (split/drawer sizing, launcher widen, resize handle, `paneAppearance`, `toolbarPreset` `default` \| `document`, `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor`, `documentToolbarToggleActiveColor`, borders, `unifiedSplitChrome`, etc.). See README **Features** table for defaults. |
 
 ---
@@ -2929,9 +3398,14 @@ defaults to `centered`: greeting, optional subtitle, and starters form a centere
 transcript group in floating and docked panels. In fullscreen, the empty greeting
 and composer are centered as one measured group. Explicit `welcome.anchor` or
 `welcome.anchorComposerTop` retain the existing percentage-based geometry.
-The composer moves to the footer on the first user message in 320ms; reduced motion
-makes this immediate. Clearing the chat restores the empty layout. Assistant-only
-history does not dismiss the greeting.
+The composer moves to the footer on a user message or substantive assistant
+transcript activity (including tool calls and reasoning) in 320ms; reduced motion
+makes this immediate. Injected and restored assistant-only activity also dismisses
+an `on-first-message` welcome. Blank assistant placeholders and hidden system
+context keep the empty layout. Clearing the chat restores it. Use `welcome.message`
+for an intentional greeting that preserves the empty layout and centered composer.
+A disabled welcome (`variant: "none"`, including `copy.showWelcomeCard: false`)
+keeps the empty composer at the bottom unless `welcome.anchor: "center"` is explicit.
 
 V5 defaults to title `What can I help with?`, no subtitle, and
 `dismiss: "on-first-message"` for every variant. Explicit welcome fields, legacy
@@ -2945,7 +3419,8 @@ can override placement, variant, overflow, and `maxItems`. Legacy `suggestionChi
 also use these defaults in V5. V4 starter behavior is unchanged.
 
 V5 uses a 22px/500 welcome title, 14px/500 header title, regular (400)
-suggestion labels, and pill-shaped composer input corners. Override welcome and
+suggestion labels, pill-shaped compact composer corners, and 24px expanded
+composer corners. Override welcome and
 header typography through `components.introCard.title` and `components.header.title`.
 Each `components.suggestion.{chip,card,list}.fontWeight` controls that variant's
 label weight. `components.input.borderRadius` controls standard composer corners,
@@ -2954,20 +3429,42 @@ These options work in both defaults modes. V4 typography and corner defaults are
 
 ### Tool and reasoning activity rows
 
-`features.toolCallDisplay.variant` and `features.reasoningDisplay.variant` accept
+`features.toolCallDisplay.layout` and `features.reasoningDisplay.layout` accept
 `"card"` or `"row"` in either defaults mode. V4 keeps the existing card DOM; V5
 selects compact rows with status icons, a label, a disclosure chevron immediately
-after the label, and indented details. Tool labels include their name (`Using Search`,
+after the label, and indented details. Tool labels use readable activity phrases for exact known names (`Read a file`,
+`Searched the web`) and humanized generic names otherwise (`Using Search`,
 `Used Search`); completed reasoning shows `Thought for a moment` or a duration such
 as `Thought for 1m 5s`. Existing text templates and custom summary/body render hooks
 remain available. `expandable: false` disables disclosure.
+
+The shipped `variant` keys remain deprecated aliases. An authored `layout` wins;
+clearing it with `undefined` restores an authored `variant`, or the version default.
+This precedence also applies to live updates and classified turn activity.
+
+`features.reasoningDisplay.appearance` controls the expanded trace independently:
+`"plain"` leaves text unframed, `"inset"` gives it an indented leading rule, and
+`"panel"` gives row details the same subtle, borderless surface as tool details. Card layout already supplies its
+frame and never nests another panel. V5 defaults to collapsed rows with inset
+details; V4 retains its card panel, and V4 rows retain plain details. Classified
+turn progress defaults to row/inset in either version. Explicit layout and
+appearance choices, theme body-surface/spacing tokens, and custom renderers win.
+These settings use the shared `expansion` and chevron controls. V5 defaults to
+height motion at 160ms with `ease-out`; V4 remains instant. Set
+`expansion.animation: "instant"` to disable it. Initial/restored state and reduced
+motion remain instant. Changing these settings live preserves disclosure state. `layout` on either display and
+reasoning `appearance` are supported in persisted preferences and the theme editor.
 
 Both display configs accept `iconVisibility: "always" | "active" | "never"`.
 V5 defaults to `"active"`: pending/running, error, denied, and approval-waiting
 indicators remain visible; successful completion icons disappear without leaving
 an empty icon slot. V4 rows default to `"always"`. `"never"` hides all leading
 status icons. Disclosure chevrons remain available in all modes. This option
-also applies to grouped row summaries; custom summary content controls its own icons.
+also applies to grouped row summaries. Set `toolCallDisplay.groupIconVisibility` to
+`"always"`, `"active"`, or `"never"` to override only the built-in collapsible header;
+child rows still use `iconVisibility`, and custom summary content controls its own icons.
+Like `iconVisibility`, the group icon override is developer-owned styling and is
+excluded from persisted preferences.
 
 V5 tool and reasoning rows stay collapsed while streaming (`autoExpand: false`).
 Set `autoExpand: true` on either display config to open on the first content chunk;
@@ -2981,20 +3478,78 @@ stagger animations.
 
 V5 tool display defaults to `grouped: true`, `groupedMode: "collapsible"` and
 `loadingAnimation: "shimmer"`; V5 reasoning also defaults to shimmer. Consecutive
-calls become an expandable `Used N tools` row (or `Using N tools` while active),
-with a 40ms stagger between children. `grouped: false` keeps individual rows.
+calls become an expandable action summary (`Searched the web`) or a mixed
+activity summary (`Read files, ran commands`), with a 40ms stagger between children.
+Attention labels remain visible for failures, interruptions and approvals. `grouped: false` keeps individual rows.
 The existing `"stack"` and `"summary"` grouping modes keep their behavior.
 
+`groupBoundary: "adjacent"` preserves the default visible adjacency grouping.
+`groupBoundary: "iteration"` refines those groups at neighboring tools with different
+known `agentMetadata.iteration` or `agentMetadata.executionId` values, in every
+mode. Unknown metadata preserves adjacency pairwise: iterations `[1, undefined, 2]`
+stay together. Hidden reasoning and removed completed tools do not create visible
+boundaries. Single-tool groups render the tool directly in stack/collapsible modes,
+so one disclosure reaches its details. Summary mode always keeps its summary. If
+an open standalone tool gains a sibling, the new group starts open; subsequent
+updates respect manual group toggles. `groupBoundary` and all three `groupedMode`
+values are supported in persisted preferences.
+
+`toolCall.renderGroupedSummary` receives `streaming`, `isLatestGroup`, and
+`isCurrentRunGroup` alongside `messages`, `toolCalls`, `defaultSummary`, and `config`.
+`streaming` reflects the session stream, including completed-tool batch gaps.
+`isLatestGroup` identifies the final logical tool group even when assistant prose
+follows it. Unwrapped singleton groups count, so an earlier header does not become
+latest just because the final tool has no wrapper. Summary callbacks run only for
+rendered group headers. `isCurrentRunGroup` means the group contains at least one tool observed
+in the current session run; starting a new send or continuation resets that ownership
+before rendering. A continuation can append tools to an existing adjacent group,
+which then becomes current. Restored tools count only when their known execution
+matches the resumed execution. These flags update on streaming changes even without
+new messages.
+
+The built-in adjacent collapsible header remains active during a completed-tool
+batch gap only for the latest current-run group while the session streams.
+Completed iteration groups finish immediately. Errors, interruption, denied calls,
+and pending approvals retain their attention state. Resumed activity cancels a
+pending automatic collapse; final completion can schedule it again without reopening
+the group or overriding a manual toggle.
+
 `theme.components.activity` accepts `rowHeight` (32px), `labelSize` (13px),
-`iconSize` (16px), `indent` (0px for details), `groupIndent` (0px for grouped children),
+`iconSize` (16px), `indent` (0px for details), `groupIndent` (16px for grouped children),
 `transcriptGap` (0px between consecutive activity entries), `responseGap` (12px
-before an assistant response), `groupGap` (0px extra between child rows), `groupPadding` (0px around children), `bodyPadding` (4px 0), `bodySize` (13px), `bodyLineHeight` (1.5), and `bodyFontWeight` (400) for
+before an assistant response), `groupGap` (2px extra between child rows), `groupPadding` (2px 0 around children), `bodyPadding` (4px 0), `bodySize` (14px), `bodyLineHeight` (1.55), and `bodyFontWeight` (400) for
 expanded reasoning text, `sectionGap` (8px between detail sections), and `bodySurface` (transparent). These are V5
-emitted defaults. V4 retains its existing row spacing fallbacks. Per-kind aliases with the same names
+rendered defaults; reasoning typography falls back in the stylesheet until explicitly themed. V4 retains its existing row spacing fallbacks. Per-kind aliases with the same names
 under `toolBubble` and `reasoningBubble` remain available. Explicit shared activity
-tokens take precedence over those aliases; explicit legacy `collapsibleWidget.surface`
+`rowHeight`, `labelSize`, `iconSize`, and `indent` take precedence over their legacy aliases; explicit legacy `collapsibleWidget.surface`
 still supplies the activity body surface when no activity body surface is specified.
 Legacy tool/reasoning shadow tokens remain supported (V5 defaults to none).
+
+V5 grouped children default to `features.toolCallDisplay.groupAppearance: "inset"`: a single 2px line using the same border color as inset reasoning, with no branches or dots. Set `"plain"` for indentation alone. This applies to both collapsible and always-expanded stack groups, preserves group spacing tokens, and leaves custom summaries intact. Summary-only groups have no empty rail. An explicit `"plain"` also selects indentation alone in V4; leaving the option unset preserves the V4 stack tree.
+
+The “Worked …” turn header has its own divider controls under
+`theme.components.turnActivity`, independent of message and tool borders:
+
+```ts
+theme: {
+  components: {
+    turnActivity: {
+      dividerColor: "color-mix(in srgb, var(--persona-primary) 8%, transparent)",
+      dividerWidth: "1px", // Use "0px" to hide it.
+    },
+  },
+}
+```
+
+Both fields are optional. These defaults apply in light and dark mode, deriving
+the color from the active theme and blending with the actual background. An
+explicit CSS color or color-token reference overrides the derived color.
+
+V5 completed tool groups keep descriptive action summaries such as “Read files” or “Read files, ran commands,” capped at three distinct categories by default. Set `features.toolCallDisplay.groupSummaryMaxItems: 0` for a total count such as “3 activities.” Active groups and groups needing attention keep their activity state and status suffixes. Custom `renderGroupedSummary` results still take precedence. Collapsible and stack children share the group spacing controls above. For group geometry, `toolBubble.groupIndent`, `toolBubble.groupGap`, and `toolBubble.groupPadding` override the matching shared activity values independently, including scoped turn defaults.
+
+V5 expanded reasoning uses the body typography in both row and card layouts, across plain, inset, and panel appearances. `theme.components.activity.overflow` shares `{ maxHeight, fadeHeight }` between reasoning and every tool detail section (V5 rendered defaults: `"240px"` and `"12px"`). Set `maxHeight: "none"` for unlimited height or `fadeHeight: "0px"` for no fades. Each property in `toolBubble.overflow` or `reasoningBubble.overflow` overrides only the matching shared property. For example, shared `{ maxHeight: "360px", fadeHeight: "16px" }` plus `toolBubble.overflow: { maxHeight: "160px" }` gives tools a 160px cap with the shared 16px fade. Request and Response scroll independently. Top and bottom fades appear only when content is hidden beyond that edge; panel chrome, labels, copy controls, and focus outlines remain outside the mask. Streaming, resizing, and live theme updates refresh the edge state; reset an authored property to `undefined` to inherit again. V4 retains uncapped reasoning and the legacy tool cap with no fades until configured.
+
+The compatibility option `features.reasoningDisplay.maxHeight` is the highest-priority explicit reasoning cap. Leave it unset to inherit per-kind, shared, then version defaults. Its `"none"` value disables the cap, and an `undefined` reset restores theme inheritance. The inner text supports keyboard scrolling while the outer disclosure retains its existing animation boundary.
 
 The row status uses pending/running/complete and tool `success: false` for errors.
 An attached approval or optional `toolCall.approvalStatus` supplies pending approval
@@ -3011,7 +3566,7 @@ with `true` in either defaults state. Customize its height through
 `theme.components.message.topFadeHeight` (for example, `"12px"`).
 
 
-With `future.v5Defaults`, header controls use muted 18px icons in 28px buttons,
+With `future.v5Defaults`, header controls use muted 16px icons in 28px buttons,
 8px corners, a subtle hover/focus fill, and a visible keyboard focus outline.
 Customize these with `components.header.actionIconForeground`,
 `controlBorderRadius`, `controlHoverBackground`, `controlHoverForeground`,
@@ -3027,6 +3582,62 @@ Response shows streamed chunks until a completed tool supplies a result, which
 replaces the chunks. Errors remain visible. Text uses the UI font; objects and
 arrays use monospace. Long output scrolls inside the block.
 
+These blocks share their subtle fill, borderless 8px corners, and 10px/12px
+internal padding with row reasoning details using `appearance: "panel"`.
+Disclosure spacing still follows the activity body padding; reasoning keeps its
+muted prose typography. Card reasoning retains its existing outer frame.
+
+Customize both surfaces with `theme.components.activity.panel`:
+
+```js
+theme: {
+  components: {
+    activity: {
+      panel: {
+        background: '#f3f7fc',
+        borderColor: '#cbd5e1',
+        borderWidth: '1px',
+        borderRadius: '12px',
+        padding: '14px 16px',
+      },
+    },
+    toolBubble: { panel: { background: '#f0f8f2' } },
+    reasoningBubble: { panel: { borderWidth: '0px' } },
+  },
+}
+```
+
+`panel` accepts `background` and `borderColor` (raw colors or color token
+references), plus CSS `borderWidth`, `borderRadius`, and `padding`. Every
+property resolves independently: the specified `toolBubble.panel` or
+`reasoningBubble.panel` property wins over `activity.panel`, then the existing
+default applies. In this example tools keep the shared border, corners, and
+padding; reasoning keeps the shared fill, corners, and padding but removes its
+border. Defaults remain a subtle muted fill, transparent border with `0`
+width, `8px` corners, and `10px 12px` padding. Setting `borderColor` alone does
+not enable a border; specify `borderWidth` too.
+
+These tokens affect tool Request/Response blocks and row reasoning with
+`appearance: 'panel'`. They leave plain/inset reasoning, the outer card frame,
+and approval details independent. `activity.bodyPadding` controls the spacing
+outside the panel; `panel.padding` controls its inside spacing. Existing
+`bodySurface` values remain a background fallback below explicit panel
+backgrounds. Keep using `bodySurface` for plain/inset details.
+
+For compatibility, explicit `toolCall.codeBlockBackgroundColor` and
+`codeBlockBorderColor` retain historical precedence over all panel tokens.
+Authored `toolBubble.codeBlock.background` and `.borderColor` also win over
+panel colors, below explicit legacy values. Either existing code-block border
+color override still implies a `1px` border, including when a new panel width is
+`0px`. `codeBlock.foreground`/`codeBlockTextColor` and label colors continue to
+control text independently. To use the new panel border width, clear the old
+code-block border color override.
+
+Theme updates restyle existing details without new requests. Clear a component
+`panel` (or one of its properties) with `undefined` to restore shared
+inheritance; clear the shared panel to restore the defaults.
+
+
 The copy icon appears on hover or keyboard focus, and stays visible on touch
 screens. It copies the complete block and changes to a check for 1.8 seconds.
 Clipboard access requires browser permission and a secure context (or localhost).
@@ -3039,3 +3650,303 @@ For optional descriptive group labels without additional configuration APIs,
 see the [frontend mapping recipe](../../examples/ai-sdk-next/README.md#optional-descriptive-group-labels).
 It uses `toolCall.renderGroupedSummary` with explicit tool categories, deduplicated
 labels, and a built-in-summary fallback for unknown tools or attention states.
+
+### Frameless inline embeds
+
+`layout.embedded: true` opts an inline widget into a transparent, frameless
+presentation that fills a bounded host. It requires `launcher.enabled: false`;
+other mount modes ignore it. This works with either V4 or V5 defaults and does
+not require `launcher.fullHeight`. The header is hidden by default; set
+`layout.showHeader: true` to show it. Explicit panel chrome and surface tokens
+still win. Use `composer.placement: "block"` when the composer should occupy a
+fixed row below the scrolling transcript (V5 otherwise keeps its overlay default).
+
+```html
+<style>
+  .chat-host {
+    height: 600px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: linear-gradient(135deg, #edf5fa, #f6f0fa);
+    --app-composer: #ffffffdd;
+  }
+</style>
+<div class="chat-host" id="embedded-chat"></div>
+<script type="module">
+  import { initAgentWidget } from "@runtypelabs/persona";
+  initAgentWidget({
+    target: document.querySelector("#embedded-chat"),
+    config: {
+      apiUrl: "/api/chat",
+      launcher: { enabled: false },
+      layout: { embedded: true, topFade: true },
+      composer: { placement: "block" },
+      theme: { components: {
+        input: { background: "var(--app-composer)" },
+        composer: { footerPadding: "12px 20px" },
+      } },
+    },
+  });
+</script>
+```
+
+The host must provide a definite height. In a larger flex layout, each ancestor
+that must shrink also needs `min-height: 0`. Persona owns the shrinkable chain
+inside its mount: the transcript scrolls and the footer does not shrink. No
+selectors targeting Persona internals are needed. The V5 preview's **Embedded ·
+transparent flex host** scenario demonstrates a 600px patterned host in both
+schemes, with a long transcript and a separately colored code block.
+
+The embedded default makes the shell, transcript, footer, and optional header
+transparent. Bubbles, the input, activity details, menus, and code remain
+independent surfaces. A top fade masks the transcript; its exposed shell fill
+follows the transcript background, so scrolling does not introduce an opaque
+strip. These narrowly scoped tokens can customize those surfaces:
+
+| Theme token | Public CSS variable | Default |
+| --- | --- | --- |
+| `components.panel.background` | `--persona-panel-background` | `semantic.colors.surface`; embedded: transparent |
+| `components.message.background` | `--persona-transcript-background` | `semantic.colors.container`; embedded: transparent |
+| `components.message.topFadeBackground` | `--persona-transcript-top-fade-background` | Transcript background |
+| `components.message.topFadeHeight` | `--persona-components-message-topFadeHeight` | 18px when fade enabled |
+| `components.composer.footerBackground` | `--persona-composer-footer-background` | `semantic.colors.surface`; embedded: transparent |
+| `components.composer.footerPadding` | `--persona-composer-footer-padding` | `1rem 1.5rem` |
+
+`footerBackground` applies to block placement. Overlay placement uses the
+existing `components.composer.overlayBand` token; embedded defaults it to
+transparent. Existing `components.panel.modes.inline` tokens control border,
+radius, and shadow; `launcher.detachedPanel` deliberately selects floating card
+chrome instead. For composer decoration, use the existing `components.input`
+background/borderRadius/backdrop filter and `components.composer` shadow, border,
+focus, padding, gap, control sizing, segmented, model-picker, and overflow-menu
+tokens. Message spacing already uses `components.message.gap`/`fullscreenGap`;
+scroll-to-bottom controls already have `components.scrollToBottom` tokens.
+Avatar content belongs to `layout.messages.avatar`, and custom content belongs
+to `layout.slots`.
+
+#### Theme and CSS boundaries
+
+Persona continues to write resolved theme variables on each widget root. The
+precedence is component-specific explicit theme tokens over embedded/default
+tokens; in dark mode `darkTheme` overrides `theme`. Generic panel chrome retains
+its existing precedence over mode defaults. Ordinary variables placed on an
+ancestor cannot replace Persona's generated root values. Bind an explicit token
+to a host-owned variable (`background: "var(--app-composer)"` above) to opt into
+host CSS control; those references also cross a Shadow DOM boundary. Give each
+host its own variable values when different widgets need different appearances.
+Direct changes to generated root styles may be overwritten by a theme or layout
+update. A stylesheet `!important` declaration follows normal CSS precedence but
+is not required for the supported host-variable approach.
+
+Each root writes its own shell aliases, so a nested widget receives its own
+scheme and shell defaults instead of inheriting its parent's transparent shell.
+The existing raw CSS extension variables below are intentionally inherited;
+set them on each host when distinct nested appearances are needed. They do not
+have generated root defaults or a competing config option:
+
+- Mode chips: `--persona-mode-chip-bg`, `--persona-mode-chip-border`,
+  `--persona-mode-chip-fg`.
+- Mention chips: `--persona-mention-chip-bg`, `--persona-mention-chip-border`,
+  `--persona-mention-chip-fg`, `--persona-mention-chip-height`,
+  `--persona-mention-chip-radius`, `--persona-mention-chip-font-size`,
+  `--persona-mention-chip-gap`, `--persona-mention-row-gap`.
+
+These are the supported extension points for those controls; other internal
+variables are not automatically a stable public contract. There is no global
+change to root-variable inheritance in embedded mode.
+
+#### Code and activity surfaces
+
+Use `components.markdown.codeBlock.background` for Markdown code blocks and
+`components.collapsibleWidget.surface` for collapsible code-widget surfaces.
+With V5 defaults, changing the latter no longer recolors activity details.
+Use `components.activity.bodySurface` for shared tool/reasoning details;
+explicit `components.toolBubble.bodySurface` or
+`components.reasoningBubble.bodySurface` wins for that kind.
+
+V4 retains the historical fallback from an explicitly supplied
+`collapsibleWidget.surface` to `activity.bodySurface`. An explicit activity
+surface overrides that fallback. This compatibility behavior also applies to a
+V4 embedded widget: opt into V5 or set the activity surface explicitly to
+separate it from collapsible code widgets.
+
+### Waiting for response text
+
+`loadingIndicator.variant` selects `"dots"` or `"label"` independently of
+the defaults version. V4 uses dots; V5 uses a muted 13px “Thinking…” label
+with subtle shimmer and a spinning `loader-circle` icon. Its default waiting row uses the shared activity
+`rowHeight`, `labelSize`, and `iconSize` tokens (32px, 13px, and 16px), with
+a real icon so its text aligns with active tool group labels. Hiding
+tool group icons also hides the waiting icon and removes its spacing. Empty streaming assistant messages
+use the same geometry. Set `loadingIndicator.showBubble: true` to retain
+assistant bubble styling and the label's original 20px minimum height.
+Reduced-motion preferences disable the shimmer and icon rotation. Set `loadingIndicator.label`
+to localize or replace the text. Existing custom rendering hooks remain available.
+
+`loadingIndicator.iconName` selects an icon from the shared registry, including
+icons supplied through `registerIcons()`. `iconVisibility` accepts `"always"`,
+`"active"`, or `"never"`; waiting is always active. An explicit value takes
+precedence over the inherited tool icon setting. When omitted, a collapsible
+group's `groupIconVisibility` takes precedence over `toolCallDisplay.iconVisibility`,
+matching the activity that follows. Other group modes inherit the child icon setting.
+V4's label keeps its original text-only appearance unless `iconName` or
+`iconVisibility` is explicitly supplied. Dots retain their existing appearance.
+
+`loadingIndicator.iconAnimation` accepts `"none"` or `"spin"`, independently
+of text animation. The default `loader-circle` spins; custom icon names remain
+still unless `"spin"` is requested. For example:
+
+```ts
+loadingIndicator: {
+  iconName: "sparkles",
+  iconVisibility: "always",
+  iconAnimation: "none",
+}
+```
+
+The icon shares activity sizing, muted color, and the 8px label gap. A custom
+`loadingIndicator.render` continues to own the entire indicator; these built-in
+options apply only when it delegates to `defaultRenderer()`. Reset an option to
+`undefined` in `update()` to restore its default/inherited behavior.
+
+The waiting text, active tool labels, grouped-tool headers, and active
+reasoning labels use the same loading animation renderer. Configure them together
+with `loadingLabel`:
+
+```ts
+loadingLabel: {
+  animation: "shimmer-color", // none | pulse | shimmer | shimmer-color | rainbow
+  duration: 2400, // milliseconds
+  color: "#64748b",
+  secondaryColor: "#8b5cf6",
+}
+```
+
+Each supplied shared field overrides its corresponding per-feature setting.
+Omitted fields retain `features.toolCallDisplay.loadingAnimation`,
+`features.reasoningDisplay.loadingAnimation`, and their existing duration/color
+settings (including tool loading theme tokens). Waiting labels default to shimmer.
+`none` renders plain text and disables the custom effect too. Artifacts retain
+`features.artifacts` loading settings independently. Animated waiting labels prepare
+only the small shared loading-label module before `ready`; they do not load the
+tool/reasoning renderer when those features are disabled. With tools, reasoning,
+and artifacts disabled, `loadingLabel.animation: "none"` keeps plain waiting text
+without that download. V4 still defaults to dots
+and static tool/reasoning labels; explicitly selecting a waiting label retains
+its shimmer.
+
+For a custom effect, supply `loadingLabel.animate`. It starts once on the
+committed live label element, then its optional `update` receives later text and
+configuration changes on that same element. `destroy` releases resources before
+a replacement effect or builtin is rendered, or when the label completes,
+is removed, or the widget is destroyed. Reduced-motion preferences prevent
+startup, clean up a running effect, and allow it to start again when motion is
+restored. `animation: "none"` also prevents startup; set another mode when opting
+into custom effects on V4 tool/reasoning labels.
+
+```ts
+loadingLabel: {
+  animation: "pulse",
+  duration: 2000,
+  animate: ({ element, config }) => {
+    const effect = element.animate(
+      [{ opacity: 1 }, { opacity: 0.4 }, { opacity: 1 }],
+      { duration: config.loadingLabel?.duration ?? 2000, iterations: Infinity },
+    );
+    return {
+      update: ({ config }) => {
+        effect.effect?.updateTiming({ duration: config.loadingLabel?.duration ?? 2000 });
+      },
+      destroy: () => effect.cancel(),
+    };
+  },
+}
+```
+
+The callback context also includes `text`, `kind` (`waiting`, `tool`, `tool-group`,
+or `reasoning`), and `reducedMotion`. Custom `HTMLElement` summaries and loading
+indicator renderers own their effects; returning `defaultRenderer()` delegates
+to the shared lifecycle. String summaries participate. This hook is separate
+from stream animation plugins; their registration and lifecycle are unchanged.
+Avoid throwing from host callbacks; errors are reported without stopping the
+widget. To switch back to a builtin on a mounted widget:
+
+```ts
+controller.update({ loadingLabel: { animation: "shimmer", animate: undefined } });
+// Restore every per-feature/default setting:
+controller.update({ loadingLabel: undefined });
+```
+
+V5 follow-ups use a single scrolling row with the existing edge fade.
+They clear when the user types, sends, or starts another run, and stay hidden
+while the assistant is running. New suggestions may appear after completion.
+The preview's **Loading & follow-ups** scene demonstrates the waiting state,
+streamed text, and suggestion overflow without a backend.
+
+V5 horizontally scrolling suggestion chips hide the native scrollbar, including while hovered or scrolling. Edge fades, touch scrolling, and keyboard focus navigation remain available. V4 scrolling keeps its existing scrollbar behavior.
+
+Use `suggestions.followUps.edgeStyle` (or `suggestions.starters.edgeStyle`) to choose `"clip"` or `"fade"` for horizontal chips. Both versions default to fades and scroll freely without snapping. V5 composer rows extend to the footer edges and initially align with the composer inset. Native overscroll feedback remains platform-dependent.
+
+### Errors, message actions, and artifacts
+
+`errorDisplay` accepts `"bubble"` (V4 default) or `"block"` (V5 default), independently of the defaults version. The block announces a dispatch failure with `role="alert"`, preserves partial response text above it, and offers expandable detail and Retry when a preceding user message can be retried. `errorMessage` supplies the detail in either presentation. Custom message renderers remain available. Disabling message actions also disables the block's Retry control.
+
+V5's default assistant actions stay visible on the latest answer. Earlier answers reveal actions on hover or keyboard focus; on coarse-pointer devices or viewports below 640px they stay visible. An answer being streamed has no action row. Explicit `messageActions.visibility: "hover"` or `"always"` keeps the requested behavior. V4 retains its existing visibility default. Style these controls through `theme.components.messageActions`.
+
+Artifacts are enabled by default in V5; V4 requires `features.artifacts.enabled: true`. Explicit `false` disables V5 transcript artifact cards, inline previews, and the pane. When enabled, the separate artifact UI module loads at widget initialization; the pane stays hidden until there is an artifact to show. Presentation still defaults to `"panel"`; choose `features.artifacts.display: "collapsed"` for click-to-open cards or `"inline"` for transcript previews. An enabled artifact can still use a custom renderer. Style its transcript card and inline body through `theme.components.artifact.card` and `.inline`; explicit theme values take precedence over the V5 defaults.
+
+The V5 preview includes **Errors & retry**, **Message actions**, and **Artifacts** scenes. Retry uses a local response, and the artifact scene can compare enabled and disabled behavior without a backend.
+
+
+### Independent composer control geometry
+
+`theme.components.composer.gap` controls the editor-to-toolbar row spacing.
+`controlGap` controls horizontal spacing within the action rails (default 8px).
+Compact single-row composers retain `gap` as their horizontal fallback; set
+`controlGap` to tune that distance independently. Segmented tracks use
+`segmented.gap` (default 2px), independently of both values.
+
+Optional control tokens retain the existing appearance when omitted:
+
+| Token path under `components.composer` | Purpose / fallback |
+| --- | --- |
+| `editorMinHeight` | Minimum textarea height; 24px |
+| `editorPadding` | Textarea inset; native 2px |
+| `suggestionsGap` | Space above below-composer starters; 8px |
+| `mode.fontSize`, `mode.fontWeight` | Button mode typography; existing action size / normal |
+| `mode.height`, `mode.paddingInline`, `mode.gap` | Mode height, horizontal padding and icon-label gap; controlSize / 10px / 4px |
+| `mode.borderRadius`, `mode.borderColor`, `mode.activeBorderColor`, `mode.activeBackground` | Mode corner/outline/selected fill; existing ghost appearance |
+| `segmented.fontSize`, `segmented.lineHeight`, `segmented.fontWeight`, `segmented.minHeight` | Segment typography and height floor; composer input scale / normal / 0px |
+| `modelPicker.fontSize`, `modelPicker.fontWeight` | Closed model label; 13px / normal |
+| `modelPicker.height`, `modelPicker.minWidth`, `modelPicker.paddingInline` | Closed model dimensions; controlSize / 0px / `10px 28px` (including chevron gutter) |
+
+`composer.modes[].trailingIconName` and `composer.actions[].trailingIconName`
+add a decorative icon after visible text. A trailing chevron does not change a
+mode's selection behavior or open a menu. Use actions or a custom control for
+specialized menu behavior. Coarse pointers retain minimum touch targets.
+
+Set `suggestions.starters.placement: "below-composer"` to render starters after
+the input form, outside its border. They hide after the first user message;
+follow-ups retain their own placement. `components.introCard.inlineIconSize`
+and `inlineIconGap` tune inline welcome symbols without changing title type.
+
+
+### Optional whole-turn activity
+
+`turnActivity.enabled: true` groups explicitly classified progress prose and tools
+under one Working/Worked disclosure, with the final answer outside. The defaults
+are unchanged. Native SSE phase and execution metadata provide classification;
+unclassified prose stays in the transcript. Other transports can supply
+`message.turnActivity` or the pure synchronous `turnActivity.resolveMessage`
+adapter. Use `turnActivity.renderHeader` for a custom heading.
+See [the complete host contract](../../docs/configuration.md#optional-whole-turn-activity)
+for identity, replay, measured timing, local cancellation/failure and adapter limits.
+Its scoped defaults leave 16px below the divider and between prose/tool batches,
+with 16px of child indentation, 2px around/between nested tool children, and compact 28px rows. Authored
+activity `transcriptGap`, `bodyPadding`, `groupIndent`, `groupGap`, `groupPadding`, and `rowHeight`
+win over these defaults in both V4 and V5. The view reuses activity chrome and
+`expansion` motion; the body is styled with
+`.persona-turn-activity-body`, and automatic timing with
+`.persona-turn-activity-duration`. Whole-turn configuration and callbacks are
+code-owned, not stored in the feature preference slice.

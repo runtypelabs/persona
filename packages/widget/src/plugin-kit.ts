@@ -117,12 +117,18 @@ export type PopoverPlacement =
 export interface PopoverOptions {
   /** Element the popover is positioned against. */
   anchor: HTMLElement;
+  /** Optional positioning bounds; dismissal and mounting still belong to anchor. */
+  getAnchorRect?: () => DOMRect;
   /** The floating element (menu, tooltip, panel). Built detached; mounted on `open`. */
   content: HTMLElement;
   /** Where to place `content` relative to `anchor`. Default `"bottom-start"`. */
   placement?: PopoverPlacement;
   /** Gap in px between anchor and content. Default `6`. */
   offset?: number;
+  /** Live placement override; evaluated on each reposition. */
+  getPlacement?: () => PopoverPlacement;
+  /** Opt-in viewport clamping and vertical flip, in CSS pixels. */
+  viewportPadding?: number;
   /** Set `content`'s `min-width` to the anchor's width. Default `false`. */
   matchAnchorWidth?: boolean;
   /**
@@ -149,7 +155,7 @@ export interface PopoverOptions {
   zIndex?: number | null;
   /**
    * Where to mount `content`. Defaults to the anchor's shadow root (when
-   * shadowed) or `document.body`: keeping it inside the same style + stacking
+   * shadowed), its open dialog, or `document.body`: keeping it inside the same style + stacking
    * scope as the anchor while escaping the transcript's scroll clipping.
    */
   container?: HTMLElement | ShadowRoot;
@@ -172,7 +178,7 @@ export interface PopoverHandle {
 function defaultContainer(anchor: HTMLElement): HTMLElement | ShadowRoot {
   const root = anchor.getRootNode?.();
   if (root instanceof ShadowRoot) return root;
-  return (anchor.ownerDocument ?? document).body;
+  return anchor.closest<HTMLElement>("dialog[open]") ?? (anchor.ownerDocument ?? document).body;
 }
 
 /**
@@ -207,13 +213,20 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     onDismiss,
   } = options;
 
-  const container = options.container ?? defaultContainer(anchor);
+  const currentContainer = () => options.container ?? defaultContainer(anchor);
   let open = false;
   let detach: (() => void) | null = null;
 
   const reposition = (): void => {
     if (!open) return;
-    const rect = anchor.getBoundingClientRect();
+    const container = currentContainer();
+    if (content.parentNode !== container) {
+      const focused = content.contains(content.ownerDocument.activeElement)
+        ? content.ownerDocument.activeElement as HTMLElement : null;
+      container.appendChild(content);
+      focused?.focus({ preventScroll: true });
+    }
+    const rect = options.getAnchorRect?.() ?? anchor.getBoundingClientRect();
     content.style.position = "fixed";
     if (matchAnchorWidth) content.style.minWidth = `${rect.width}px`;
     // Trigger-anchored mode: content is sized to its own contents but never wider
@@ -225,12 +238,13 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
 
     const offY = verticalOffset?.() ?? null;
     const anchorTop = offY != null ? rect.top + offY : rect.top;
-    const top =
-      placement === "top-start" || placement === "top-end"
+    const currentPlacement = options.getPlacement?.() ?? placement;
+    let top =
+      currentPlacement === "top-start" || currentPlacement === "top-end"
         ? anchorTop - offset - contentRect.height
         : rect.bottom + offset;
 
-    const isEnd = placement === "bottom-end" || placement === "top-end";
+    const isEnd = currentPlacement === "bottom-end" || currentPlacement === "top-end";
     // Default: anchor left (or anchor right for `*-end`). Trigger-anchored mode
     // (offset present and non-null) overrides with the clamped trigger position so
     // the menu never overflows the anchor's edges — a near-right trigger shifts it
@@ -242,6 +256,19 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
       left = Math.min(Math.max(rect.left + off, rect.left), maxLeft);
     }
 
+    if (options.viewportPadding !== undefined) {
+      const padding = options.viewportPadding;
+      const view = anchor.ownerDocument.defaultView;
+      const height = view?.innerHeight ?? 0;
+      const width = view?.innerWidth ?? 0;
+      const above = anchorTop - offset - padding;
+      const below = height - rect.bottom - offset - padding;
+      const preferAbove = currentPlacement.startsWith("top");
+      const useAbove = preferAbove ? above >= contentRect.height || above >= below : !(below >= contentRect.height || below >= above);
+      top = useAbove ? anchorTop - offset - contentRect.height : rect.bottom + offset;
+      top = Math.max(padding, Math.min(top, height - padding - contentRect.height));
+      left = Math.max(padding, Math.min(left, width - padding - contentRect.width));
+    }
     content.style.top = `${top}px`;
     content.style.left = `${left}px`;
   };
@@ -260,7 +287,6 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     if (open) return;
     open = true;
     if (zIndex != null) content.style.zIndex = String(zIndex);
-    container.appendChild(content);
     reposition();
 
     const ownerWindow = (anchor.ownerDocument ?? document).defaultView ?? window;
@@ -282,18 +308,27 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
       onDismiss?.("outside");
     };
 
+    const observer = options.viewportPadding !== undefined && ownerWindow.ResizeObserver
+      ? new ownerWindow.ResizeObserver(onReposition) : null;
+    observer?.observe(content);
+    observer?.observe(anchor);
+
     // Defer arming so the click that opened the popover doesn't dismiss it.
     const armId = ownerWindow.setTimeout(() => {
       ownerDocument.addEventListener("pointerdown", onOutside, true);
     }, 0);
     ownerWindow.addEventListener("scroll", onReposition, true);
     ownerWindow.addEventListener("resize", onReposition);
+    const moveRoot = anchor.closest("[data-persona-root]");
+    moveRoot?.addEventListener("persona:internal:host-moved", onReposition);
 
     detach = () => {
+      observer?.disconnect();
       ownerWindow.clearTimeout(armId);
       ownerDocument.removeEventListener("pointerdown", onOutside, true);
       ownerWindow.removeEventListener("scroll", onReposition, true);
       ownerWindow.removeEventListener("resize", onReposition);
+      moveRoot?.removeEventListener("persona:internal:host-moved", onReposition);
     };
 
     onOpen?.();

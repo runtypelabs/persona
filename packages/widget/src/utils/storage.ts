@@ -30,8 +30,19 @@ const sanitizeArtifacts = (artifacts: PersonaArtifactRecord[]) =>
     status: "complete" as const
   }));
 
+const DEFAULT_PERSIST_KEY_PREFIX = "persona-";
+
+/**
+ * The widget's default transcript key, scoped by `persistState.keyPrefix` so
+ * two widgets on one origin with distinct prefixes keep separate transcripts.
+ * The default prefix yields the legacy `"persona-state"` key, so unprefixed
+ * widgets keep their stored conversation; prefixed widgets never adopt it.
+ */
+export const transcriptStorageKey = (keyPrefix?: string): string =>
+  `${keyPrefix ?? DEFAULT_PERSIST_KEY_PREFIX}state`;
+
 export const createLocalStorageAdapter = (
-  key = "persona-state"
+  key = transcriptStorageKey()
 ): AgentWidgetStorageAdapter => {
   const getStorage = () => {
     if (typeof window === "undefined" || !window.localStorage) {

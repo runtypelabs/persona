@@ -5,6 +5,9 @@ import {
   applyArtifactPaneBorderTheme,
   artifactsSidebarEnabled,
 } from "./artifact-gate";
+import { mergeWithDefaults } from "../defaults";
+import { mergeConfigUpdate } from "./config-merge";
+import { getActiveTheme, getCssVariables } from "./theme";
 import type { AgentWidgetConfig } from "../types";
 
 function baseConfig(overrides: Partial<AgentWidgetConfig> = {}): AgentWidgetConfig {
@@ -389,5 +392,97 @@ describe("applyArtifactLayoutCssVars", () => {
     expect(mount.style.getPropertyValue("--persona-artifact-doc-toggle-active-color").trim()).toBe(
       "#e5e5e5"
     );
+  });
+});
+
+// New theme paths must take part in the border/appearance decisions, not only
+// emit variables that the pane never reads.
+describe("artifact theme migration", () => {
+  it("uses scoped theme chrome and clears only owned aliases when disabled", () => {
+    const mount = createFakeMount();
+    const config: AgentWidgetConfig = {
+      features: { artifacts: { enabled: true, layout: { paneAppearance: "detached" } } },
+      theme: { components: { artifact: {
+        pane: { background: "navy", padding: "18px", border: "2px solid red", borderLeft: "4px solid blue", borderRadius: "19px", shadow: "none" },
+        chat: { shadow: "none" }, toolbar: { toggleActiveColor: "yellow" },
+      } } },
+    };
+    applyArtifactLayoutCssVars(mount, config);
+    applyArtifactPaneAppearance(mount, config);
+    expect(mount.classList.contains("persona-artifact-border-full")).toBe(true);
+    expect(mount.classList.contains("persona-artifact-border-left")).toBe(false);
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-border")).toContain("components-artifact-pane-border");
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-radius")).toContain("components-artifact-pane-borderRadius");
+    expect(mount.style.getPropertyValue("--persona-artifact-doc-toggle-active-color")).toContain("components-artifact-toolbar-toggleActiveColor");
+    mount.style.setProperty("--persona-components-artifact-pane-background", "navy");
+    applyArtifactLayoutCssVars(mount, { ...config, features: { artifacts: { enabled: false } } });
+    applyArtifactPaneAppearance(mount, { ...config, features: { artifacts: { enabled: false } } });
+    expect(mount.style.getPropertyValue("--persona-artifact-doc-toggle-active-color")).toBe("");
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-radius")).toBe("");
+    expect(mount.style.getPropertyValue("--persona-components-artifact-pane-background")).toBe("navy");
+  });
+
+  it("retains legacy priority then exposes dark-theme values on reset", () => {
+    const mount = createFakeMount();
+    const config: AgentWidgetConfig = { colorScheme: "dark", features: { artifacts: { enabled: true, layout: { paneBorder: "3px solid green", panePadding: "22px" } } },
+      darkTheme: { components: { artifact: { pane: { border: "1px solid blue", padding: "10px" } } } } };
+    applyArtifactLayoutCssVars(mount, config);
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-padding")).toBe("22px");
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-border")).toBe("3px solid green");
+    applyArtifactLayoutCssVars(mount, { ...config, features: { artifacts: { enabled: true } } });
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-padding")).toContain("components-artifact-pane-padding");
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-border")).toContain("components-artifact-pane-border");
+  });
+});
+
+
+describe.each(["panel", "seamless", "detached"] as const)("artifact theme chrome in %s appearance", (paneAppearance) => {
+  const config: AgentWidgetConfig = {
+    features: { artifacts: { enabled: true, layout: { paneAppearance } } },
+    theme: { components: { artifact: {
+      pane: { background: "red", padding: "20px", borderRadius: "10px", shadow: "none", border: "2px solid red", borderLeft: "4px solid blue" },
+      chat: { shadow: "none" }, toolbar: { iconColor: "blue", toggleActiveBackground: "green", toggleActiveBorderColor: "red", toggleActiveColor: "white" },
+    } } },
+  };
+  it("activates theme border classes with full-border priority and clears owned overrides when disabled", () => {
+    const mount = createFakeMount();
+    const resolved = mergeWithDefaults(config);
+    applyArtifactLayoutCssVars(mount, resolved);
+    applyArtifactPaneAppearance(mount, resolved);
+    expect(mount.classList.contains("persona-artifact-border-full")).toBe(true);
+    expect(mount.classList.contains("persona-artifact-border-left")).toBe(false);
+    for (const variable of ["pane-bg", "pane-padding", "pane-radius", "pane-shadow", "chat-shadow", "doc-toolbar-icon-color", "doc-toggle-active-bg", "doc-toggle-active-border", "doc-toggle-active-color"]) {
+      expect(mount.style.getPropertyValue(`--persona-artifact-${variable}`)).toContain("--persona-components-artifact-");
+    }
+    const disabled = mergeConfigUpdate(resolved, { features: { artifacts: { enabled: false } } });
+    applyArtifactLayoutCssVars(mount, disabled);
+    applyArtifactPaneAppearance(mount, disabled);
+    expect(mount.classList.contains("persona-artifact-border-full")).toBe(false);
+    for (const variable of ["pane-bg", "pane-padding", "pane-radius", "pane-shadow", "chat-shadow", "doc-toolbar-icon-color", "doc-toggle-active-bg", "doc-toggle-active-border", "doc-toggle-active-color"]) {
+      expect(mount.style.getPropertyValue(`--persona-artifact-${variable}`)).toBe("");
+    }
+    expect(getCssVariables(getActiveTheme(disabled))["--persona-components-artifact-pane-background"]).toBe("red");
+  });
+
+  it("retains legacy overrides and restores theme border/style values after clearing", () => {
+    const mount = createFakeMount();
+    let resolved = mergeWithDefaults({ ...config, features: { artifacts: { enabled: true, layout: { paneAppearance, panePadding: "0px", paneBorder: "none", paneShadow: "0 0 4px red", documentToolbarToggleActiveColor: "black" } } } });
+    applyArtifactLayoutCssVars(mount, resolved);
+    applyArtifactPaneAppearance(mount, resolved);
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-padding")).toBe("0px");
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-border")).toBe("none");
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-shadow")).toBe("0 0 4px red");
+    expect(mount.style.getPropertyValue("--persona-artifact-doc-toggle-active-color")).toBe("black");
+    resolved = mergeConfigUpdate(resolved, { features: { artifacts: { layout: { panePadding: undefined, paneBorder: undefined, paneShadow: undefined, documentToolbarToggleActiveColor: undefined } } } });
+    applyArtifactLayoutCssVars(mount, resolved);
+    applyArtifactPaneAppearance(mount, resolved);
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-padding")).toBe("var(--persona-components-artifact-pane-padding)");
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-border")).toBe("var(--persona-components-artifact-pane-border)");
+    expect(mount.style.getPropertyValue("--persona-artifact-pane-shadow")).toBe("var(--persona-components-artifact-pane-shadow)");
+    expect(mount.style.getPropertyValue("--persona-artifact-doc-toggle-active-color")).toBe("var(--persona-components-artifact-toolbar-toggleActiveColor)");
+    resolved = mergeConfigUpdate(resolved, { theme: { components: { artifact: { pane: { border: undefined } } } } });
+    applyArtifactLayoutCssVars(mount, resolved);
+    expect(mount.classList.contains("persona-artifact-border-full")).toBe(false);
+    expect(mount.classList.contains("persona-artifact-border-left")).toBe(true);
   });
 });

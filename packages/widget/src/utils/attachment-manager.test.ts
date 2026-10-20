@@ -36,7 +36,161 @@ function deferredAdapter() {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+describe("AttachmentManager.updateConfig", () => {
+  it.each([false, true])("contains cleanup errors from the original adapter (async: %s)", async asynchronous => {
+    const failure = new Error("cleanup failed");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const adapter: AgentWidgetAttachmentAdapter = {
+      add: async () => part("uploaded"),
+      remove() {
+        expect(this).toBe(adapter);
+        if (asynchronous) return Promise.reject(failure);
+        throw failure;
+      },
+    };
+    const manager = new AttachmentManager({ adapter });
+    try {
+      await manager.handleFiles([textFile()]);
+      manager.updateConfig({ adapter: undefined });
+      manager.removeAttachment(manager.getAttachments()[0].id);
+      await flush();
+      expect(manager.count()).toBe(0);
+      expect(log).toHaveBeenCalledExactlyOnceWith("[AttachmentManager] adapter.remove failed:", failure);
+    } finally {
+      manager.destroy();
+      log.mockRestore();
+    }
+  });
+
+  it("preserves omitted upload settings and resets explicitly undefined settings", async () => {
+    const add = vi.fn(async () => part("uploaded"));
+    const rejected = vi.fn();
+    const manager = new AttachmentManager({ allowedTypes: ["application/json"], maxFileSize: 1, maxFiles: 1, adapter: { add }, onFileRejected: rejected });
+    manager.updateConfig({ preview: { file: { icon: false } } });
+    await manager.handleFiles([textFile()]);
+    expect(rejected).toHaveBeenLastCalledWith(expect.any(File), "type");
+    expect(add).not.toHaveBeenCalled();
+    manager.updateConfig({ allowedTypes: undefined, maxFileSize: undefined, maxFiles: undefined, adapter: undefined, onFileRejected: undefined });
+    await manager.handleFiles([textFile(), textFile("two.txt"), textFile("three.txt"), textFile("four.txt"), textFile("five.txt")]);
+    expect(manager.getAttachments()).toHaveLength(4);
+    expect(manager.getAttachments().every(attachment => attachment.status === "ready")).toBe(true);
+    expect(add).not.toHaveBeenCalled();
+    expect(rejected).toHaveBeenCalledTimes(1);
+    manager.destroy();
+  });
+
+  it.each(["remove", "discard"] as const)("releases ready parts through their creating adapters on %s after configuration changes", async (action) => {
+    const originalRemove = vi.fn();
+    const currentRemove = vi.fn();
+    const addWithoutRemove = vi.fn(async () => part("retained"));
+    const manager = new AttachmentManager({
+      adapter: { add: async () => part("original"), remove: originalRemove },
+    });
+    await manager.handleFiles([textFile("original.txt")]);
+
+    manager.updateConfig({ adapter: { add: addWithoutRemove } });
+    await manager.handleFiles([textFile("retained.txt")]);
+    manager.updateConfig({ adapter: undefined });
+    await manager.handleFiles([textFile("base64.txt")]);
+    manager.updateConfig({ adapter: { add: async () => part("current"), remove: currentRemove } });
+
+    if (action === "remove") {
+      for (const attachment of manager.getAttachments()) manager.removeAttachment(attachment.id);
+      manager.destroy({ release: true });
+    } else {
+      manager.destroy({ release: true });
+    }
+
+    expect(originalRemove.mock.calls.map(([value]) => value)).toEqual([part("original")]);
+    expect(addWithoutRemove).toHaveBeenCalledTimes(1);
+    expect(currentRemove).not.toHaveBeenCalled();
+  });
+
+  it("keeps in-flight uploads with their creating adapters and applies a replacement to new uploads", async () => {
+    const original = deferredAdapter();
+    const replacement = deferredAdapter();
+    const originalRemove = vi.fn();
+    const replacementRemove = vi.fn();
+    const manager = new AttachmentManager({ adapter: { ...original.adapter, remove: originalRemove } });
+    const originalUpload = manager.handleFiles([textFile("original.txt")]);
+    manager.updateConfig({ adapter: { ...replacement.adapter, remove: replacementRemove } });
+    const replacementUpload = manager.handleFiles([textFile("replacement.txt")]);
+    expect(original.calls[0].signal.aborted).toBe(false);
+    original.calls[0].resolve(part("original"));
+    replacement.calls[0].resolve(part("replacement"));
+    await Promise.all([originalUpload, replacementUpload]);
+
+    for (const attachment of manager.getAttachments()) manager.removeAttachment(attachment.id);
+    expect(originalRemove.mock.calls.map(([value]) => value)).toEqual([part("original")]);
+    expect(replacementRemove.mock.calls.map(([value]) => value)).toEqual([part("replacement")]);
+    manager.destroy();
+  });
+
+  it("uses a replacement adapter for retries and releases the successful retry through it", async () => {
+    const original = deferredAdapter();
+    const replacement = deferredAdapter();
+    const originalRemove = vi.fn();
+    const replacementRemove = vi.fn();
+    const manager = new AttachmentManager({ adapter: { ...original.adapter, remove: originalRemove } });
+    const originalUpload = manager.handleFiles([textFile()]);
+    original.calls[0].reject(new Error("upload failed"));
+    await originalUpload;
+
+    manager.updateConfig({ adapter: { ...replacement.adapter, remove: replacementRemove } });
+    const { id } = manager.getAttachments()[0];
+    manager.retryAttachment(id);
+    replacement.calls[0].resolve(part("retry"));
+    await flush();
+    manager.updateConfig({ adapter: undefined });
+    manager.removeAttachment(id);
+
+    expect(original.calls).toHaveLength(1);
+    expect(originalRemove).not.toHaveBeenCalled();
+    expect(replacementRemove.mock.calls.map(([value]) => value)).toEqual([part("retry")]);
+    manager.destroy();
+  });
+
+  it("releases each in-flight part through its creating adapter when a changed draft is discarded", async () => {
+    const original = deferredAdapter();
+    const replacement = deferredAdapter();
+    const originalRemove = vi.fn();
+    const replacementRemove = vi.fn();
+    const manager = new AttachmentManager({ adapter: { ...original.adapter, remove: originalRemove } });
+    const originalUpload = manager.handleFiles([textFile("original.txt")]);
+    manager.updateConfig({ adapter: { ...replacement.adapter, remove: replacementRemove } });
+    const replacementUpload = manager.handleFiles([textFile("replacement.txt")]);
+    manager.destroy({ release: true });
+    expect(original.calls[0].signal.aborted).toBe(true);
+    expect(replacement.calls[0].signal.aborted).toBe(true);
+
+    original.calls[0].resolve(part("original"));
+    replacement.calls[0].resolve(part("replacement"));
+    await Promise.all([originalUpload, replacementUpload]);
+
+    expect(originalRemove.mock.calls.map(([value]) => value)).toEqual([part("original")]);
+    expect(replacementRemove.mock.calls.map(([value]) => value)).toEqual([part("replacement")]);
+    expect(manager.count()).toBe(0);
+  });
+});
+
 describe("AttachmentManager.remountPreviews", () => {
+  it("lets theme CSS control remove contrast and removes the file", async () => {
+    const manager = new AttachmentManager({ allowedTypes: ["text/plain"] });
+    const container = document.createElement("div");
+    container.style.setProperty("--persona-text-inverse", "#111111");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([textFile()]);
+
+    const remove = container.querySelector<HTMLButtonElement>(".persona-attachment-remove")!;
+    expect(remove.style.color).toBe("");
+    expect(container.firstElementChild?.getAttribute("data-kind")).toBe("file");
+    expect(remove.querySelector("svg")?.getAttribute("stroke")).toBe("currentColor");
+    remove.click();
+    expect(manager.count()).toBe(0);
+    expect(container.querySelector(".persona-attachment-preview")).toBeNull();
+    manager.destroy();
+  });
+
   it("repaints pending previews into a new container (composer rebuild)", async () => {
     const manager = new AttachmentManager({ allowedTypes: ["text/plain"] });
     const first = document.createElement("div");
@@ -93,6 +247,26 @@ describe("AttachmentManager.remountPreviews", () => {
     expect(
       second.querySelector<HTMLElement>("[data-attachment-id]")?.dataset.status
     ).toBe("ready");
+  });
+
+  it("keeps a detached conversation's upload alive without painting another composer", async () => {
+    const { adapter, calls } = deferredAdapter();
+    const manager = new AttachmentManager({ allowedTypes: ["text/plain"], adapter });
+    const sharedContainer = document.createElement("div");
+    manager.setPreviewsContainer(sharedContainer);
+    const uploading = manager.handleFiles([textFile()]);
+
+    manager.setPreviewsContainer(null);
+    sharedContainer.innerHTML = "<span>Other conversation</span>";
+    calls[0].onProgress(0.5);
+    calls[0].resolve(part("source upload"));
+    await uploading;
+
+    expect(calls[0].signal.aborted).toBe(false);
+    expect(sharedContainer.textContent).toBe("Other conversation");
+    manager.remountPreviews(sharedContainer);
+    expect(sharedContainer.querySelector<HTMLElement>("[data-attachment-id]")?.dataset.status).toBe("ready");
+    expect(manager.getContentParts()).toEqual([part("source upload")]);
   });
 });
 
@@ -288,6 +462,48 @@ describe("AttachmentManager upload adapter", () => {
     expect(calls[2].signal.aborted).toBe(true);
     expect(manager.count()).toBe(0);
   });
+
+  it("releases abandoned draft uploads, including an adapter completion after disposal", async () => {
+    const { adapter, calls } = deferredAdapter();
+    const remove = vi.fn();
+    const onChange = vi.fn();
+    const manager = new AttachmentManager({
+      allowedTypes: ["text/plain"],
+      adapter: { ...adapter, remove },
+      onAttachmentsChange: onChange,
+    });
+    const uploading = manager.handleFiles([textFile("ready.txt"), textFile("late.txt")]);
+    calls[0].resolve(part("ready"));
+    await flush();
+
+    manager.destroy({ release: true });
+    manager.destroy({ release: true });
+    const changesAtDisposal = onChange.mock.calls.length;
+    expect(calls[1].signal.aborted).toBe(true);
+    expect(remove.mock.calls.map(([value]) => value)).toEqual([part("ready")]);
+
+    calls[1].resolve(part("late"));
+    await uploading;
+    expect(remove.mock.calls.map(([value]) => value)).toEqual([part("ready"), part("late")]);
+    expect(onChange).toHaveBeenCalledTimes(changesAtDisposal);
+    expect(manager.count()).toBe(0);
+  });
+
+  it("retains completed uploaded parts on ordinary teardown", async () => {
+    const { adapter, calls } = deferredAdapter();
+    const remove = vi.fn();
+    const manager = new AttachmentManager({
+      allowedTypes: ["text/plain"],
+      adapter: { ...adapter, remove },
+    });
+    const uploading = manager.handleFiles([textFile("ready.txt"), textFile("late.txt")]);
+    calls[0].resolve(part("ready"));
+    await flush();
+    manager.destroy();
+    calls[1].resolve(part("late"));
+    await uploading;
+    expect(remove).not.toHaveBeenCalled();
+  });
 });
 
 describe("AttachmentManager.fromConfig", () => {
@@ -310,5 +526,107 @@ describe("AttachmentManager.fromConfig", () => {
 
     manager.clearAttachments();
     expect(seen).toEqual([1, 1, 0]);
+  });
+});
+
+describe("configurable composer attachment previews", () => {
+  it("keeps image fit and removal independent of document policies", async () => {
+    const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:preview");
+    const revokeUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const manager = new AttachmentManager({ adapter: { add: async () => part("done") }, preview: {
+      image: { fit: "contain", remove: { placement: "inside", visibility: "always" } },
+      file: { remove: { placement: "inline", visibility: "hover" } },
+    } });
+    const container = document.createElement("div");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([new File(["pixels"], "photo.png", { type: "image/png" }), textFile()]);
+    const image = container.querySelector<HTMLImageElement>("img")!;
+    expect(image.style.objectFit).toBe("contain");
+    expect(image.alt).toBe("photo.png");
+    expect(image.parentElement?.dataset.removePlacement).toBe("inside");
+    expect(image.parentElement?.dataset.removeVisibility).toBe("always");
+    manager.clearAttachments();
+    expect(revokeUrl).toHaveBeenCalledWith("blob:preview");
+    manager.destroy();
+    createUrl.mockRestore();
+    revokeUrl.mockRestore();
+  });
+
+  it("renders filename, size, badge and distinct remove policy without changing outgoing parts", async () => {
+    const manager = AttachmentManager.fromConfig({ preview: { file: { layout: "horizontal", name: "full", metadata: "size", badge: "extension", remove: { placement: "inline", visibility: "hover" } } } });
+    const container = document.createElement("div");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([textFile("report.final.txt")]);
+    expect(container.querySelector(".persona-attachment-file-name")?.textContent).toBe("report.final.txt");
+    expect(container.querySelector(".persona-attachment-file-metadata")?.textContent).toBe("5 B");
+    expect(container.querySelector(".persona-attachment-file-badge")?.textContent).toBe("TXT");
+    expect(container.firstElementChild?.getAttribute("data-remove-visibility")).toBe("hover");
+    expect(container.firstElementChild?.getAttribute("data-remove-placement")).toBe("inline");
+    expect(manager.getContentParts()).toHaveLength(1);
+    manager.updateConfig({ preview: { file: { layout: "vertical", name: "basename", badge: "none", icon: false } } });
+    expect(container.querySelector(".persona-attachment-file-name")?.textContent).toBe("report.final");
+    expect(container.querySelector(".persona-attachment-file-icon")).toBeNull();
+    expect(container.querySelector(".persona-attachment-file-badge")).toBeNull();
+    manager.destroy();
+  });
+
+  it("counts bounded supported text asynchronously and skips binary formats", async () => {
+    const manager = new AttachmentManager({ preview: { file: { metadata: "line-count" } }, allowedTypes: ["text/plain", "application/pdf"], adapter: { add: async () => part("uploaded") } });
+    const container = document.createElement("div");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([new File(["first\r\nsecond\n"], "lines.txt", { type: "text/plain" }), new File(["binary\nbytes"], "document.pdf", { type: "application/pdf" })]);
+    await vi.waitFor(() => expect(container.querySelector(".persona-attachment-file-metadata")?.textContent).toBe("2 lines"));
+    expect(manager.getAttachments()[1].lineCount).toBeUndefined();
+    manager.destroy();
+  });
+
+  it("reads line counts when metadata is enabled on existing files", async () => {
+    const manager = new AttachmentManager({ adapter: { add: async () => part("done") } });
+    await manager.handleFiles([textFile()]);
+    manager.updateConfig({ preview: { file: { metadata: "line-count" } } });
+    await vi.waitFor(() => expect(manager.getAttachments()[0].lineCount).toBe(1));
+    manager.destroy();
+  });
+
+  it("updates managed renderers through upload states and cleans each mount once", async () => {
+    const { adapter, calls } = deferredAdapter();
+    const update = vi.fn();
+    const destroy = vi.fn();
+    const contexts: import("../types").AttachmentPreviewRenderContext[] = [];
+    const manager = new AttachmentManager({ adapter, instanceId: "widget-a", renderAttachmentPreview: context => { contexts.push(context); return { element: document.createElement("section"), update, destroy }; } });
+    const first = document.createElement("div");
+    manager.setPreviewsContainer(first);
+    const pending = manager.handleFiles([textFile()]);
+    calls[0].onProgress(0.4);
+    expect(update.mock.calls[0][0].state.progress).toBe(0.4);
+    expect(contexts[0].instanceId).toBe("widget-a");
+    expect(Object.isFrozen(contexts[0].state)).toBe(true);
+    calls[0].resolve(part("done"));
+    await pending;
+    expect(update.mock.calls.at(-1)?.[0].state.status).toBe("ready");
+    manager.remountPreviews(document.createElement("div"));
+    expect(destroy).toHaveBeenCalledTimes(1);
+    contexts[1].actions.remove();
+    expect(destroy).toHaveBeenCalledTimes(2);
+    manager.clearAttachments();
+    manager.destroy();
+    expect(destroy).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back from null and throwing renderers and isolates failed cleanup", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const manager = new AttachmentManager({ renderAttachmentPreview: () => { throw new Error("broken renderer"); } });
+    const container = document.createElement("div");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([textFile()]);
+    expect(container.querySelector(".persona-attachment-preview")).not.toBeNull();
+    manager.updateConfig({ renderAttachmentPreview: () => ({ element: document.createElement("div"), destroy: () => { throw new Error("broken cleanup"); } }) });
+    expect(() => manager.clearAttachments()).not.toThrow();
+    expect(manager.count()).toBe(0);
+    manager.updateConfig({ renderAttachmentPreview: () => null });
+    await manager.handleFiles([textFile()]);
+    expect(container.querySelector(".persona-attachment-preview")).not.toBeNull();
+    manager.destroy();
+    error.mockRestore();
   });
 });

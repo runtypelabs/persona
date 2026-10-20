@@ -12,17 +12,21 @@
  * never decides what is in the menu.
  */
 
+import type { ComposerOverflowMenuConfig } from "../types";
+import { ensureComposerActionStyles } from "./composer-action-styles";
 import { createPopover, type PopoverHandle } from "../plugin-kit";
 import { createElement, createNode } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import type { renderLucideIcon } from "../utils/icons";
+import type { attachTooltip } from "../utils/tooltip";
 import {
   COMPOSER_CONTROL_CLASS,
   COMPOSER_CONTROL_GLYPH_CLASS,
   COMPOSER_CONTROL_ICON_FALLBACK_PX,
   forwardMenuTokens,
-} from "./composer-parts";
+} from "./composer-tokens";
 
 export interface ComposerOverflowMenuOptions {
+  deps: { renderLucideIcon: typeof renderLucideIcon; attachTooltip: typeof attachTooltip };
   /** Accessible name for the trigger and the menu. */
   label: string;
   /**
@@ -30,6 +34,10 @@ export interface ComposerOverflowMenuOptions {
    * on `--persona-composer-control-size`, matching the sibling controls.
    */
   getButtonSize?: () => string | undefined;
+  getConfig?: () => ComposerOverflowMenuConfig | undefined;
+  getComposer?: () => HTMLElement | undefined;
+  beforeOpen?: () => boolean;
+  onClose?: () => void;
 }
 
 export interface ComposerOverflowMenu {
@@ -49,6 +57,9 @@ export interface ComposerOverflowMenu {
   close: (restoreFocus?: boolean) => void;
   setLabel: (label: string) => void;
   applyButtonSize: () => void;
+  /** Custom content owns internal keyboard handling; default rows retain roving focus. */
+  setContentMode: (role: "menu" | "dialog", defaultKeyboard: boolean) => void;
+  refresh: () => void;
   destroy: () => void;
 }
 
@@ -65,6 +76,7 @@ const MENU_TOKEN_VARS = [
   "--persona-components-composer-overflowMenu-borderRadius",
   "--persona-components-composer-overflowMenu-foreground",
   "--persona-components-composer-overflowMenu-shadow",
+  ...["padding", "rowGap", "rowPadding", "rowBorderRadius", "fontSize", "lineHeight", "iconSize", "iconGap", "hoverBackground", "focusBackground", "descriptionColor", "descriptionFontSize", "dividerColor", "dividerSpacing", "minWidth", "maxHeight"].map((name) => `--persona-components-composer-overflowMenu-${name}`),
 ] as const;
 
 /**
@@ -93,8 +105,13 @@ const isDisabled = (element: HTMLElement): boolean =>
 export function createComposerOverflowMenu(
   options: ComposerOverflowMenuOptions
 ): ComposerOverflowMenu {
+  const { renderLucideIcon, attachTooltip } = options.deps;
   let label = options.label;
   let destroyed = false;
+  let opening = false;
+  let preparing = false;
+  let closing = false;
+  let defaultKeyboard = true;
 
   const trigger = createElement("div", "persona-send-button-wrapper");
   const triggerButton = createNode("button", {
@@ -127,7 +144,7 @@ export function createComposerOverflowMenu(
     triggerButton.style.lineHeight = "1";
     triggerButton.replaceChildren();
     const icon = renderLucideIcon(
-      "plus",
+      (isOpen() ? options.getConfig?.()?.openTriggerIconName : undefined) ?? options.getConfig?.()?.triggerIconName ?? "plus",
       COMPOSER_CONTROL_ICON_FALLBACK_PX,
       "currentColor",
       1.5
@@ -138,11 +155,14 @@ export function createComposerOverflowMenu(
 
   const applyLabel = (): void => {
     triggerButton.setAttribute("aria-label", label);
-    triggerButton.setAttribute("title", label);
     panel.setAttribute("aria-label", label);
   };
   applyLabel();
-  applyButtonSize();
+  const tooltip = attachTooltip({
+    anchor: triggerButton,
+    trigger,
+    text: () => triggerButton.getAttribute("aria-expanded") === "true" ? "" : label,
+  });
 
   let items: HTMLElement[] = [];
   let activeIndex = -1;
@@ -234,12 +254,20 @@ export function createComposerOverflowMenu(
     if (!popover) {
       popover = createPopover({
         anchor: triggerButton,
+        getAnchorRect: () => {
+          if (options.getConfig?.()?.width === "composer") {
+            const rect = options.getComposer?.()?.getBoundingClientRect();
+            if (rect) { panel.style.width = `${rect.width}px`; return rect; }
+          }
+          return triggerButton.getBoundingClientRect();
+        },
         content: panel,
         placement: "top-start",
+        getPlacement: () => options.getConfig?.()?.placement === "below" ? "bottom-start" : "top-start",
+        viewportPadding: 8,
         offset: 6,
         onDismiss: () => {
-          triggerButton.setAttribute("aria-expanded", "false");
-          detachFocusOut();
+          finishClose();
         },
       });
     }
@@ -247,27 +275,67 @@ export function createComposerOverflowMenu(
   };
   const isOpen = (): boolean => popover?.isOpen === true;
 
-  const close = (restoreFocus = false): void => {
-    if (!isOpen()) return;
-    popover?.close();
+  const finishClose = (): void => {
+    closing = true;
+    opening = false;
     triggerButton.setAttribute("aria-expanded", "false");
     detachFocusOut();
     detachPanelFocusIn();
     activeIndex = -1;
     keyboardModality = false;
     for (const item of items) item.removeAttribute(MENU_FOCUS_ATTR);
-    if (restoreFocus) triggerButton.focus();
+    try { options.onClose?.(); } finally { closing = false; }
+    applyButtonSize();
   };
 
-  const open = (focusIndex = 0, viaKeyboard = false): void => {
-    if (destroyed || isOpen()) return;
-    keyboardModality = viaKeyboard;
+  const close = (restoreFocus = false): void => {
+    if (!isOpen() && !opening) return;
+    popover?.close();
+    finishClose();
+    if (restoreFocus && !destroyed) triggerButton.focus();
+  };
+
+  const refresh = (): void => {
     forwardMenuTokens(triggerButton, panel, MENU_TOKEN_VARS);
+    panel.setAttribute("data-persona-menu-description-layout", options.getConfig?.()?.descriptionLayout ?? "stacked");
+    const width = options.getConfig?.()?.width;
+    panel.style.width = width === "composer"
+      ? `${options.getComposer?.()?.getBoundingClientRect().width ?? 0}px`
+      : width && width !== "content" ? width : "";
+    applyButtonSize();
+    popover?.reposition();
+  };
+  applyButtonSize();
+
+  const open = (focusIndex = 0, viaKeyboard = false): void => {
+    if (destroyed || preparing || closing || isOpen()) return;
+    ensureComposerActionStyles(triggerButton);
+    tooltip.hide();
+    opening = true;
+    preparing = true;
+    let prepared: boolean | undefined;
+    try { prepared = options.beforeOpen?.(); } finally { preparing = false; }
+    if (prepared === false || !opening || destroyed) {
+      if (opening) close();
+      return;
+    }
+    keyboardModality = viaKeyboard;
+    refresh();
     ensurePopover().open();
+    opening = false;
     triggerButton.setAttribute("aria-expanded", "true");
-    const targets = focusables();
-    applyRoving(targets, -1);
-    focusAt(focusIndex < 0 ? targets.length - 1 : focusIndex);
+    applyButtonSize();
+    if (defaultKeyboard) {
+      const targets = focusables();
+      applyRoving(targets, -1);
+      focusAt(focusIndex < 0 ? targets.length - 1 : focusIndex);
+      if (!targets.length) panel.focus();
+    } else {
+      (Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector)).find((target) => !isDisabled(target) && !target.closest("[hidden]")) ?? panel).focus();
+    }
+
+    // Focusing custom content may synchronously close or destroy the widget.
+    if (!isOpen() || destroyed) return;
 
     // Focus leaving both the panel and the trigger dismisses without stealing
     // focus back. composedPath crosses the shadow boundary.
@@ -302,19 +370,28 @@ export function createComposerOverflowMenu(
     if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       keyboardModality = true;
-      if (isOpen()) focusAt(0);
+      if (isOpen()) { if (defaultKeyboard) focusAt(0); else panel.focus(); }
       else open(0, true);
       return;
     }
     if (event.key === "ArrowUp") {
       event.preventDefault();
       keyboardModality = true;
-      if (isOpen()) focusAt(-1);
+      if (isOpen()) { if (defaultKeyboard) focusAt(-1); else panel.focus(); }
       else open(-1, true);
     }
   };
 
   const onPanelKeydown = (event: KeyboardEvent): void => {
+    if (!defaultKeyboard) {
+      // A renderer may consume Escape for nested content before it reaches us.
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        event.stopPropagation();
+        close(true);
+      }
+      return;
+    }
     // Any navigation key makes focus visible, exactly as `:focus-visible` does
     // for a contributed row after a pointer-opened menu.
     if (NAVIGATION_KEYS.has(event.key)) keyboardModality = true;
@@ -361,7 +438,7 @@ export function createComposerOverflowMenu(
         if (!next.includes(item)) item.removeAttribute(MENU_FOCUS_ATTR);
       }
       items = [...next];
-      if (!isOpen()) return;
+      if (!isOpen() || !defaultKeyboard) return;
       const targets = focusables();
       applyRoving(targets, Math.min(activeIndex, targets.length - 1));
       syncFocusHighlight();
@@ -373,10 +450,24 @@ export function createComposerOverflowMenu(
       if (next === label) return;
       label = next;
       applyLabel();
+      if (tooltip.isOpen) {
+        tooltip.hide();
+        tooltip.show();
+      }
     },
     applyButtonSize,
+    refresh,
+    setContentMode: (role, keyboard) => {
+      const restoreDefaultFocus = keyboard && !defaultKeyboard && isOpen();
+      defaultKeyboard = keyboard;
+      panel.setAttribute("role", role);
+      triggerButton.setAttribute("aria-haspopup", role);
+      if (restoreDefaultFocus) focusAt(0);
+    },
     destroy: () => {
       destroyed = true;
+      close();
+      tooltip.destroy();
       detachFocusOut();
       detachPanelFocusIn();
       triggerButton.removeEventListener("click", onTriggerClick);

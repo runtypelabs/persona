@@ -154,8 +154,8 @@ describe('createThemeEditorTools', () => {
       title: 'Hi there',
       suggestions: ['a', 'b'],
     });
-    expect(state.get('copy.welcomeTitle')).toBe('Hi there');
-    expect(state.get('suggestionChips')).toEqual(['a', 'b']);
+    expect(state.get('welcome.title')).toBe('Hi there');
+    expect(state.get('suggestions.starters.items')).toEqual(['a', 'b']);
   });
 
   it('set_theme_fields resolves field ids and reports per-update status', async () => {

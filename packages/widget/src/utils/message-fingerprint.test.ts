@@ -35,6 +35,15 @@ describe("computeMessageFingerprint", () => {
     expect(fp1).toBe(fp2);
   });
 
+  it("changes when tool args are replaced with a longer object", () => {
+    const toolMessage = (args: unknown) =>
+      makeMessage({ variant: "tool", toolCall: { status: "running", args } });
+    const fp1 = computeMessageFingerprint(toolMessage({ q: "a" }), 0);
+    const fp2 = computeMessageFingerprint(toolMessage({ q: "a", limit: 10 }), 0);
+    expect(fp1).not.toBe(fp2);
+    expect(computeMessageFingerprint(toolMessage({ q: "a" }), 0)).toBe(fp1);
+  });
+
   it("changes when content changes", () => {
     const fp1 = computeMessageFingerprint(makeMessage({ content: "Hello" }), 0);
     const fp2 = computeMessageFingerprint(makeMessage({ content: "Hello world" }), 0);
@@ -242,4 +251,11 @@ describe("MessageCache", () => {
     pruneCache(cache, new Set(["a"]));
     expect(cache.size).toBe(0);
   });
+});
+
+it("invalidates equal-length tool action title edits without output changes", () => {
+  const message = makeMessage({ toolCall: { status: "running", actionTitle: "Reading source A" } });
+  const before = computeMessageFingerprint(message, 0);
+  message.toolCall!.actionTitle = "Reading source B";
+  expect(computeMessageFingerprint(message, 0)).not.toBe(before);
 });

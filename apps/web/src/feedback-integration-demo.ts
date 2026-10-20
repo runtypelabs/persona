@@ -123,17 +123,28 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     theme: {
       ...DEFAULT_WIDGET_CONFIG.theme,
     },
+    welcome: {
+      title: "Feedback Integration Demo",
+      subtitle: "Test message feedback with client-generated IDs!",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Feedback Integration Demo",
-      welcomeSubtitle: "Test message feedback with client-generated IDs!",
       inputPlaceholder: "Type a message...",
     },
-    suggestionChips: [
-      "Tell me a joke",
-      "Explain quantum computing",
-      "Write a haiku about coding",
-    ],
+    suggestions: {
+      starters: {
+        items: [
+          "Tell me a joke",
+          "Explain quantum computing",
+          "Write a haiku about coding",
+        ],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     messageActions: getMessageActionsConfig(),
     onSessionInit: (session) => {
       addLogEntry("session", `Session ID: ${session.sessionId.substring(0, 20)}...`);

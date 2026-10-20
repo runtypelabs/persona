@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
@@ -16,6 +19,76 @@ describe("createAgentExperience composer-bar mode", () => {
     } catch {
       /* jsdom edge cases */
     }
+  });
+
+  it("tracks composer growth without double-counting it in the jump button offset", () => {
+    const observers: { targets: Set<Element>; notify: () => void }[] = [];
+    vi.stubGlobal("ResizeObserver", class {
+      targets = new Set<Element>();
+      constructor(callback: () => void) {
+        observers.push({ targets: this.targets, notify: callback });
+      }
+      observe(target: Element) { this.targets.add(target); }
+      unobserve(target: Element) { this.targets.delete(target); }
+      disconnect() { this.targets.clear(); }
+    });
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: {
+        mountMode: "composer-bar",
+        composerBar: { expandedSize: "anchored", bottomOffset: "24px" },
+      },
+    });
+    controller.open();
+    const wrapper = mount.querySelector<HTMLElement>(".persona-widget-wrapper")!;
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const container = mount.querySelector<HTMLElement>(".persona-widget-container")!;
+    const jump = mount.querySelector<HTMLElement>("[data-persona-scroll-to-bottom]")!;
+    let footerHeight = 50;
+    let panelBottom = 727;
+    Object.defineProperty(footer, "offsetHeight", { get: () => footerHeight });
+    footer.getBoundingClientRect = () => new DOMRect(100, 785 - footerHeight, 760, footerHeight);
+    container.getBoundingClientRect = () => new DOMRect(70, 97, 820, panelBottom - 97);
+    const notify = observers.find(observer => observer.targets.has(footer))!.notify;
+
+    notify();
+    expect(wrapper.style.getPropertyValue("--persona-measured-pill-area-height")).toBe("58px");
+    expect(wrapper.style.getPropertyValue("--persona-pill-bottom")).toBe("24px");
+    expect(jump.style.bottom).toBe("16px");
+
+    // Suggestions grow the external footer; the anchored transcript clears
+    // them while the jump button stays at its own lower edge.
+    footerHeight = 98;
+    panelBottom = 679;
+    notify();
+    expect(wrapper.style.getPropertyValue("--persona-measured-pill-area-height")).toBe("106px");
+    expect(jump.style.bottom).toBe("16px");
+
+    // Fixed panel suggestions occupy the bottom of the panel, so the jump
+    // button clears that row rather than covering its chips.
+    const panelSuggestions = mount.querySelector<HTMLElement>("[data-persona-panel-suggestions]")!;
+    panelSuggestions.hidden = false;
+    panelSuggestions.getBoundingClientRect = () => new DOMRect(70, panelBottom - 68, 820, 68);
+    notify();
+    expect(jump.style.bottom).toBe("84px");
+    panelSuggestions.hidden = true;
+
+    footerHeight = 50;
+    panelBottom = 727;
+    notify();
+    expect(wrapper.style.getPropertyValue("--persona-measured-pill-area-height")).toBe("58px");
+    expect(jump.style.bottom).toBe("16px");
+
+    // A fullscreen transcript extends behind the fixed composer. Reserve
+    // the actual overlap, including the configured viewport-bottom gap.
+    panelBottom = 809;
+    notify();
+    expect(jump.style.bottom).toBe("90px");
+
+    controller.destroy();
+    expect(observers.every(observer => observer.targets.size === 0)).toBe(true);
   });
 
   it("starts collapsed with pill geometry: bottom-centered, configured width on pillRoot", () => {
@@ -100,7 +173,7 @@ describe("createAgentExperience composer-bar mode", () => {
     // viewport. Bottom edge clears the pill-area (pill + peek live in the
     // pillRoot below) so the wrapper's chrome doesn't overlap them.
     expect(wrapper!.style.bottom).toBe(
-      "calc(16px + var(--persona-pill-area-height, 80px))"
+      "calc(16px + var(--persona-pill-area-height, var(--persona-measured-pill-area-height, 80px)))"
     );
     expect(wrapper!.style.top).toBe("10vh");
     expect(wrapper!.style.left).toBe("50%");
@@ -471,6 +544,79 @@ describe("createAgentExperience composer-bar mode", () => {
     controller.destroy();
   });
 
+  it.each(["anchored", "modal", "fullscreen"] as const)(
+    "keeps %s follow-ups in the panel outside the scrolling transcript",
+    async (expandedSize) => {
+      const mount = document.createElement("div");
+      document.body.appendChild(mount);
+      const controller = createAgentExperience(mount, {
+        persistState: false,
+        launcher: { mountMode: "composer-bar", composerBar: { expandedSize } },
+      });
+      controller.open();
+      controller.setFollowUpSuggestions(["Check readiness", "Review owners"]);
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+      const row = mount.querySelector<HTMLElement>("[data-persona-panel-suggestions]")!;
+      const container = mount.querySelector(".persona-widget-container")!;
+      expect(row.parentElement).toBe(container);
+      expect(row.closest(".persona-widget-body")).toBeNull();
+      expect(row.hidden).toBe(false);
+      expect(row.querySelectorAll("button")).toHaveLength(2);
+      expect(mount.querySelector(".persona-widget-pill-root")!.textContent).not.toContain("Check readiness");
+
+      controller.close();
+      expect((container as HTMLElement).style.display).toBe("none");
+      controller.open();
+      expect(row.hidden).toBe(false);
+      controller.injectUserMessage({ content: "Continue" });
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+      expect(row.hidden).toBe(true);
+      controller.destroy();
+    }
+  );
+
+  it.each([false, true])("uses the configured overlay band above follow-ups (v5: %s)", async (v5Defaults) => {
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      persistState: false,
+      future: { v5Defaults },
+      launcher: { mountMode: "composer-bar" },
+    });
+    controller.open();
+    controller.setFollowUpSuggestions(["Continue"]);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    const body = mount.querySelector<HTMLElement>(".persona-widget-body")!;
+    const fade = mount.querySelector<HTMLElement>(".persona-panel-suggestions-fade")!;
+    let contentHeight = 600;
+    Object.defineProperties(body, {
+      clientHeight: { get: () => 300 },
+      scrollHeight: { get: () => contentHeight },
+    });
+    body.scrollTop = 50;
+    body.dispatchEvent(new Event("scroll"));
+    expect(fade.hidden).toBe(false);
+    expect(body.hasAttribute("data-persona-top-fade")).toBe(v5Defaults);
+    const band = () => mount.style.getPropertyValue("--persona-composer-overlay-band");
+    if (v5Defaults) expect(band()).toContain("linear-gradient");
+    else expect(band()).toBe("transparent");
+
+    controller.update({ theme: { components: { composer: { overlayBand: "transparent" } } } });
+    expect(band()).toBe("transparent");
+    const customBand = "linear-gradient(to bottom, transparent, navy)";
+    controller.update({ theme: { components: { composer: { overlayBand: customBand } } } });
+    expect(band()).toBe(customBand);
+
+    body.scrollTop = 300;
+    body.dispatchEvent(new Event("scroll"));
+    expect(fade.hidden).toBe(true);
+    body.scrollTop = 0;
+    contentHeight = 250;
+    body.dispatchEvent(new Event("scroll"));
+    expect(fade.hidden).toBe(true);
+    controller.destroy();
+  });
+
   it("hides the container when collapsed and shows it (display:flex) when expanded", () => {
     const mount = document.createElement("div");
     document.body.appendChild(mount);
@@ -648,6 +794,55 @@ describe("createAgentExperience composer-bar mode", () => {
 
   const getPeekText = (mount: HTMLElement) =>
     mount.querySelector<HTMLElement>(".persona-pill-peek__text");
+
+  it.each(["anchored", "modal", "fullscreen"] as const)(
+    "makes the shared hover area interactive only while the peek is visible (%s)",
+    (expandedSize) => {
+      const style = document.createElement("style");
+      style.textContent = readFileSync(resolve(__dirname, "styles/widget.css"), "utf8");
+      document.body.appendChild(style);
+      const mount = document.createElement("div");
+      document.body.appendChild(mount);
+      const controller = createAgentExperience(mount, {
+        apiUrl: "https://api.example.com/chat",
+        launcher: { mountMode: "composer-bar", composerBar: { expandedSize } },
+      });
+      const pillRoot = mount.querySelector<HTMLElement>(".persona-widget-pill-root")!;
+      const footer = pillRoot.querySelector<HTMLElement>(".persona-widget-footer")!;
+      const peek = getPeekBanner(mount)!;
+      const pointerEvents = (element: HTMLElement) => getComputedStyle(element).pointerEvents;
+
+      expect(pointerEvents(pillRoot)).toBe("none");
+      expect(pointerEvents(peek)).toBe("none");
+      expect(pointerEvents(footer)).toBe("auto");
+
+      controller.injectAssistantMessage({ content: "Earlier reply" });
+      controller.close();
+      expect(pointerEvents(pillRoot)).toBe("none");
+
+      pillRoot.dispatchEvent(new PointerEvent("pointerenter"));
+      expect(pointerEvents(peek)).toBe("auto");
+      // The root owns the flex gap: it must receive pointer events there
+      // so crossing from the footer to the peek stays inside its hover zone.
+      expect(pointerEvents(pillRoot)).toBe("auto");
+      expect(pointerEvents(footer)).toBe("auto");
+
+      pillRoot.dispatchEvent(new PointerEvent("pointerleave"));
+      expect(pointerEvents(peek)).toBe("none");
+      expect(pointerEvents(pillRoot)).toBe("none");
+
+      pillRoot.dispatchEvent(new PointerEvent("pointerenter"));
+      peek.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+      expect(pillRoot.dataset.state).toBe("expanded");
+      // The hidden peek and gap must let transcript controls behind them
+      // receive clicks again as soon as the panel opens.
+      expect(pointerEvents(peek)).toBe("none");
+      expect(pointerEvents(pillRoot)).toBe("none");
+      expect(pointerEvents(footer)).toBe("auto");
+
+      controller.destroy();
+    },
+  );
 
   it("renders a hidden peek banner above the pill inside pillRoot when collapsed with no messages", () => {
     const mount = document.createElement("div");

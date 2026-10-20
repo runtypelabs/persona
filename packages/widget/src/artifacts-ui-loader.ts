@@ -1,10 +1,12 @@
+import { createIconButton, createLabelButton, createSplitButton, createToggleGroup } from "./utils/buttons";
 import { createChunkLoader } from "./utils/chunk-loader";
 import { componentRegistry } from "./components/registry";
+import { getLoadingLabelRuntimeSync, loadLoadingLabelRuntime } from "./loading-label-runtime-loader";
 import {
   getMarkdownParsersSync,
   onMarkdownParsersReady,
 } from "./markdown-parsers-loader";
-import { loadIconsExtra } from "./icons-extra-loader";
+import { loadIconsExtra, setIconsExtraLoader } from "./icons-extra-loader";
 
 /**
  * Loader indirection + ADOPTION for the lazy artifacts-ui chunk. Stays in the
@@ -40,7 +42,7 @@ const adopt = (mod: ArtifactsUiModule): ArtifactsUiModule => {
   if (adopted) return adopted;
   adopted = mod;
 
-  mod.initArtifactsUi({ componentRegistry });
+  mod.initArtifactsUi({ componentRegistry, loadingLabels: getLoadingLabelRuntimeSync()!, buttons: { createIconButton, createLabelButton, createSplitButton, createToggleGroup } });
 
   // Host-registered components (config.components / registerAll at widget
   // init) must keep overriding the built-ins, exactly as they did against the
@@ -69,7 +71,11 @@ const adopt = (mod: ArtifactsUiModule): ArtifactsUiModule => {
   }
   // Point the chunk's icons-extra copy at core's loader (its own fallback is
   // a bare subpath import no browser can resolve).
-  mod.__setIconsExtraLoader(() => loadIconsExtra());
+  // Source/eager consumers can share this very loader with the artifact entry.
+  // Wiring it back to itself would recurse before an import can be cached.
+  if (mod.__setIconsExtraLoader !== setIconsExtraLoader) {
+    mod.__setIconsExtraLoader(loadIconsExtra);
+  }
 
   const subs = [...readySubscribers];
   readySubscribers.clear();
@@ -88,17 +94,18 @@ export const setArtifactsUiLoader = setLoader;
 
 /** Load AND adopt the artifacts UI. Memoized; retries after rejection. */
 export const loadArtifactsUi = (): Promise<ArtifactsUiModule> =>
-  load().then(adopt);
+  Promise.all([load(), loadLoadingLabelRuntime()]).then(([mod]) => adopt(mod));
 
 /** Eagerly supply + adopt the module (tests that assert synchronous panes). */
 export const provideArtifactsUi = (mod: ArtifactsUiModule): void => {
   provide(mod);
-  adopt(mod);
+  if (getLoadingLabelRuntimeSync()) adopt(mod);
 };
 
 /** Synchronous access once adopted; null before that. */
 export const getArtifactsUiSync = (): ArtifactsUiModule | null => {
   if (adopted) return adopted;
+  if (!getLoadingLabelRuntimeSync()) return null;
   const sync = getSync();
   return sync ? adopt(sync) : null;
 };

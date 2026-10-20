@@ -51,7 +51,7 @@ describe.each([
 
   beforeAll(() => {
     // v5 also runs without the newer browser APIs required by v6. These are
-    // intentionally absent to exercise the compatibility of our fallback.
+    // intentionally absent to exercise compatibility with host-installed v5.
     Object.defineProperty(browser, "isSecureContext", { value: true });
     if (legacy) {
       Object.defineProperty(browser.Promise, "withResolvers", {
@@ -130,7 +130,11 @@ describe.each([
           type: "object",
           properties: { query: { type: "string" } },
         },
-        annotations: { readOnlyHint: true, untrustedContentHint: true },
+        annotations: {
+          readOnlyHint: true,
+          untrustedContentHint: true,
+          ...(legacy ? {} : { consequentialHint: false, debugging: false }),
+        },
         untrustedContentHint: true,
       }),
     ]);

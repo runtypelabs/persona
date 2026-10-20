@@ -106,6 +106,7 @@ describe("live voice level variable", () => {
     clock.tick();
     expect(levelOn(micWrapper(mount))).toBe("");
     expect(levelOn(footerOf(mount))).toBe("");
+    expect(footerOf(mount).getAttribute("data-persona-voice-state")).not.toBe("recording");
   });
 
   it("writes the fallback midpoint on a provider with no audio graph", () => {
@@ -117,6 +118,7 @@ describe("live voice level variable", () => {
     // rather than a fabricated waveform.
     expect(levelOn(micWrapper(mount))).toBe("0.5");
     expect(levelOn(footerOf(mount))).toBe("0.5");
+    expect(footerOf(mount).getAttribute("data-persona-voice-state")).toBe("recording");
   });
 
   it("writes once and skips unchanged frames", () => {
@@ -177,6 +179,7 @@ addListener: () => {},
     expect(levelOn(micWrapper(mount))).toBe("0.5");
 
     controller.stopVoiceRecognition();
+    expect(footerOf(mount).getAttribute("data-persona-voice-state")).toBe("idle");
     expect(levelOn(micWrapper(mount))).toBe("");
     expect(levelOn(footerOf(mount))).toBe("");
     clock.tick();
@@ -193,6 +196,17 @@ addListener: () => {},
     controller.destroy();
     controllers.length = 0;
     expect(clock.outstanding).toBe(0);
+  });
+
+  it("scopes voice animation state to the recording widget", () => {
+    createFrameClock();
+    const first = makeController();
+    const second = makeController();
+    first.controller.startVoiceRecognition();
+    expect(footerOf(first.mount).getAttribute("data-persona-voice-state")).toBe("recording");
+    expect(footerOf(second.mount).getAttribute("data-persona-voice-state")).not.toBe("recording");
+    first.controller.stopVoiceRecognition();
+    expect(footerOf(first.mount).getAttribute("data-persona-voice-state")).toBe("idle");
   });
 
   it("leaves no frame outstanding after a composer rebuild", () => {
@@ -221,5 +235,6 @@ addListener: () => {},
     clock.tick();
     // The new footer is a different element and must carry the property too.
     expect(levelOn(footerOf(mount))).toBe("0.5");
+    expect(footerOf(mount).getAttribute("data-persona-voice-state")).toBe("recording");
   });
 });

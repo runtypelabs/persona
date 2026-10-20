@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "types": ["node", "webmcp-types"],
+    "lib": ["ES2022", "DOM"],
+    "skipLibCheck": false
+  },
+  "include": ["*.ts"]
+}

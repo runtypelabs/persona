@@ -1,6 +1,6 @@
 // Pure helpers for control-persona.mjs (no I/O, so lib.test.mjs covers them).
 
-export const SCENARIOS = ["echo", "markdown", "tool", "reasoning", "approval", "error"];
+export const SCENARIOS = ["echo", "markdown", "tool", "reasoning", "approval", "error", "browser-history", "turn-activity"];
 
 /** Parse `cmd sub --flag value --bool positional` into { _: [...], flag: value, bool: true }. */
 export function parseArgs(argv, booleans = []) {

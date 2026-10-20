@@ -6,7 +6,7 @@ import {
   DEFAULT_WIDGET_CONFIG,
   markdownPostprocessor
 } from "@runtypelabs/persona";
-import type { ClientSession } from "@runtypelabs/persona";
+import type { AgentWidgetConfig, ClientSession } from "@runtypelabs/persona";
 
 // DOM Elements
 const clientTokenInput = document.getElementById('client-token') as HTMLInputElement;
@@ -102,7 +102,7 @@ function initializeWidget() {
   hideSessionDetails();
 
   // Build config - using Play Tailwind inspired colors
-  const config: Record<string, unknown> = {
+  const config: AgentWidgetConfig = {
     ...DEFAULT_WIDGET_CONFIG,
     clientToken,
     storageAdapter: createLocalStorageAdapter("persona-state-client-token-demo"),
@@ -113,24 +113,33 @@ function initializeWidget() {
     },
     theme: {
       ...DEFAULT_WIDGET_CONFIG.theme,
-      primary: '#090E34',
-      accent: '#3056D3',
-      surface: '#ffffff',
-      muted: '#637381',
-      container: '#f3f4f6',
-      border: '#e7e7e7'
+      semantic: {
+        ...DEFAULT_WIDGET_CONFIG.theme?.semantic,
+        colors: {
+          ...DEFAULT_WIDGET_CONFIG.theme?.semantic?.colors,
+          primary: '#090E34',
+          accent: '#3056D3',
+          surface: '#ffffff',
+          textMuted: '#637381',
+          container: '#f3f4f6',
+          border: '#e7e7e7'
+        }
+      }
     },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: 'Welcome! 👋',
-      welcomeSubtitle: 'Connected via client token. Ask me anything!',
       inputPlaceholder: 'Type your message...'
     },
-    suggestionChips: [
-      'Hello!',
-      'What can you help with?',
-      'Tell me a joke'
-    ],
+    welcome: {
+      title: 'Welcome! 👋',
+      subtitle: 'Connected via client token. Ask me anything!'
+    },
+    suggestions: {
+      starters: {
+        items: ['Hello!', 'What can you help with?', 'Tell me a joke'],
+        variant: 'chip', placement: 'composer', overflow: 'wrap', maxItems: 4
+      }
+    },
     postprocessMessage: ({ text }: { text: string }) => markdownPostprocessor(text),
     onSessionInit: (session: ClientSession) => {
       console.log('[ClientTokenDemo] Session initialized:', session);
@@ -171,7 +180,7 @@ function initializeWidget() {
     widgetController = initAgentWidget({
       target: widgetRoot,
       useShadowDom: false,
-      config: config as any
+      config
     });
 
     // The session will be initialized automatically on first message,

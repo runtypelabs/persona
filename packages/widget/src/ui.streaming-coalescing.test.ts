@@ -207,7 +207,7 @@ describe("pure streaming text update coalescing", () => {
       },
     });
     expect(save.mock.calls.length).toBeGreaterThan(beforeTool);
-    expect(mount.textContent).toContain("search");
+    expect(mount.querySelector('.persona-tool-bubble[data-message-id="tool-1"]')).not.toBeNull();
 
     const beforeApproval = save.mock.calls.length;
     controller.injectTestMessage({
@@ -314,5 +314,188 @@ describe("pure streaming text update coalescing", () => {
     expect(saves).toHaveLength(beforeDestroy + 1);
     expect(saves.at(-1)?.messages?.at(-1)?.content).toBe("one two");
     stream.close();
+  });
+});
+
+describe("streaming tool update coalescing", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const sendToolPair = (stream: ReturnType<typeof createStreamHarness>, index: number) => {
+    const toolCallId = `call_${index}`;
+    stream.send("tool_start", {
+      executionId: "exec-1",
+      toolCallId,
+      toolName: "get_item",
+      toolType: "mcp",
+      parameters: { id: `item_${index}` },
+      startedAt: new Date().toISOString(),
+    });
+    stream.send("tool_complete", {
+      executionId: "exec-1",
+      toolCallId,
+      toolName: "get_item",
+      success: true,
+      result: `{"id":"item_${index}"}`,
+      executionTime: 12,
+    });
+  };
+
+  const toolRows = (mount: HTMLElement) => mount.querySelectorAll(".persona-tool-bubble").length;
+
+  it("renders a burst of tool frames once per animation frame", async () => {
+    const raf = installRafMock();
+    const stream = createStreamHarness();
+    global.fetch = stream.fetchMock;
+    const saves: AgentWidgetStoredState[] = [];
+    const { mount, controller } = createWidget((state) => saves.push(state));
+    await startTurn(mount);
+    stream.send("execution_start", { kind: "agent", executionId: "exec-1" });
+    await flushMicrotasks();
+    raf.flush();
+    const beforeBurst = saves.length;
+
+    for (let index = 0; index < 5; index += 1) sendToolPair(stream, index);
+    await flushMicrotasks(60);
+
+    expect(toolRows(mount)).toBe(0);
+    expect(saves).toHaveLength(beforeBurst);
+    raf.step();
+    expect(toolRows(mount)).toBe(5);
+    expect(saves).toHaveLength(beforeBurst + 1);
+
+    controller.destroy();
+    stream.close();
+  });
+
+  it("emits assistant:complete for a message that starts and finishes within one frame", async () => {
+    const raf = installRafMock();
+    const stream = createStreamHarness();
+    global.fetch = stream.fetchMock;
+    const { mount, controller } = createWidget(() => {});
+    const completed = vi.fn();
+    controller.on("assistant:complete", completed);
+    await startTurn(mount);
+
+    startText(stream, ["Hello", " world"]);
+    finishText(stream);
+    await flushMicrotasks(60);
+    raf.flush();
+
+    expect(controller.getState().streaming).toBe(false);
+    expect(completed).toHaveBeenCalledTimes(1);
+    expect(completed.mock.calls[0][0].content).toBe("Hello world");
+    controller.destroy();
+  });
+
+  it("leaves unchanged transcript rows in place across render passes", async () => {
+    const raf = installRafMock();
+    const stream = createStreamHarness();
+    global.fetch = stream.fetchMock;
+    const { mount, controller } = createWidget(() => {});
+    await startTurn(mount);
+    stream.send("execution_start", { kind: "agent", executionId: "exec-1" });
+    sendToolPair(stream, 0);
+    await flushMicrotasks(40);
+    raf.flush();
+
+    const firstRow = mount
+      .querySelector<HTMLElement>(".persona-tool-bubble")!
+      .closest<HTMLElement>("[data-wrapper-id]")!;
+    // A marker no render produces: re-morphing the row from the cache strips it.
+    firstRow.setAttribute("data-test-live", "true");
+
+    sendToolPair(stream, 1);
+    await flushMicrotasks(40);
+    raf.flush();
+
+    expect(toolRows(mount)).toBe(2);
+    const rowAfter = mount.querySelector<HTMLElement>(
+      `[data-wrapper-id="${firstRow.getAttribute("data-wrapper-id")}"]`
+    );
+    expect(rowAfter).toBe(firstRow);
+    expect(rowAfter?.getAttribute("data-test-live")).toBe("true");
+    expect(rowAfter?.querySelector(".persona-tool-bubble")).not.toBeNull();
+    controller.destroy();
+    stream.close();
+  });
+  it("saves the newest coalesced snapshot alongside the durable cursor", async () => {
+    const raf = installRafMock();
+    const saves: AgentWidgetStoredState[] = [];
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      clientToken: "ct_test",
+      launcher: { enabled: false },
+      storageAdapter: { save: (state) => { saves.push(state); } },
+    });
+    const at = (second: number) => `2026-07-11T00:00:0${second}.000Z`;
+    controller.injectTestMessage({ type: "status", status: "connecting" });
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "reply-1",
+        role: "assistant",
+        content: "Working",
+        createdAt: at(0),
+        streaming: true,
+        agentMetadata: { executionId: "exec-1" },
+      },
+    });
+    controller.injectTestMessage({ type: "cursor", id: "1" });
+    raf.flush();
+    await flushMicrotasks();
+
+    // One SSE chunk: an approval (applied now, its save queued) then a tool
+    // update (coalesced to the next frame) that advances the cursor.
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "approval-1",
+        role: "assistant",
+        content: "",
+        createdAt: at(1),
+        streaming: false,
+        variant: "approval",
+        approval: {
+          id: "approval-1",
+          status: "pending",
+          agentId: "agent-1",
+          executionId: "exec-1",
+          toolName: "Approve search",
+          description: "Approval test",
+        },
+      },
+    });
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "tool-1",
+        role: "assistant",
+        content: "",
+        createdAt: at(2),
+        streaming: true,
+        variant: "tool",
+        toolCall: { id: "tool-1", name: "search", status: "running", chunks: [] },
+      },
+    });
+    controller.injectTestMessage({ type: "cursor", id: "2" });
+    await flushMicrotasks();
+
+    const saved = saves.at(-1)!;
+    expect(saved.metadata?.durableResume).toMatchObject({ after: "2" });
+    expect(saved.messages?.map((message) => message.id)).toContain("tool-1");
+    controller.destroy();
   });
 });

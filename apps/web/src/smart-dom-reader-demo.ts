@@ -312,18 +312,29 @@ const config: AgentWidgetConfig = {
       "Use me to test out different config",
     agentIconText: "🛍️",
   },
+  welcome: {
+    title: "Shadow-aware page context + actions",
+    subtitle:
+      "This assistant reads the whole shop grouped by section, including the shadow-DOM \"Featured drop\" the default reader misses, and can add any product to the cart, even the shadow-DOM ones. Ask what's here, or to add something.",
+    variant: "card",
+  },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle: "Shadow-aware page context + actions",
-    welcomeSubtitle:
-      "This assistant reads the whole shop grouped by section, including the shadow-DOM \"Featured drop\" the default reader misses, and can add any product to the cart, even the shadow-DOM ones. Ask what's here, or to add something.",
     inputPlaceholder: "Ask about products, or say \"add the headphones\"…",
   },
-  suggestionChips: [
-    "What's in the featured drop?",
-    "Add the Studio Headphones to my cart",
-    "Add the Canvas Tote to my cart",
-  ],
+  suggestions: {
+    starters: {
+      items: [
+        "What's in the featured drop?",
+        "Add the Studio Headphones to my cart",
+        "Add the Canvas Tote to my cart",
+      ],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
 };
 

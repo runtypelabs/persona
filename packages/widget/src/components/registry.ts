@@ -1,24 +1,14 @@
-import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
+import type { AgentWidgetConfig, AgentWidgetComponentRenderContext, AgentWidgetComponentRenderer } from "../types";
 
 /**
  * Context provided to component renderers
  */
-export interface ComponentContext {
-  message: AgentWidgetMessage;
-  config: AgentWidgetConfig;
-  /**
-   * Update component props during streaming
-   */
-  updateProps: (newProps: Record<string, unknown>) => void;
-}
+export type ComponentContext = AgentWidgetComponentRenderContext;
 
 /**
  * Component renderer function signature
  */
-export type ComponentRenderer = (
-  props: Record<string, unknown>,
-  context: ComponentContext
-) => HTMLElement;
+export type ComponentRenderer = AgentWidgetComponentRenderer;
 
 /**
  * Per-component registration options
@@ -36,7 +26,7 @@ export interface ComponentRegistrationOptions {
  * Component registry for managing custom components
  */
 class ComponentRegistry {
-  private components: Map<string, ComponentRenderer> = new Map();
+  #components: Map<string, ComponentRenderer> = new Map();
   #options: Map<string, ComponentRegistrationOptions> = new Map();
 
   /**
@@ -47,10 +37,10 @@ class ComponentRegistry {
     renderer: ComponentRenderer,
     options?: ComponentRegistrationOptions
   ): void {
-    if (this.components.has(name)) {
+    if (this.#components.has(name)) {
       console.warn(`[ComponentRegistry] Component "${name}" is already registered. Overwriting.`);
     }
-    this.components.set(name, renderer);
+    this.#components.set(name, renderer);
     if (options) {
       this.#options.set(name, options);
     } else {
@@ -62,7 +52,7 @@ class ComponentRegistry {
    * Unregister a component
    */
   unregister(name: string): void {
-    this.components.delete(name);
+    this.#components.delete(name);
     this.#options.delete(name);
   }
 
@@ -70,14 +60,14 @@ class ComponentRegistry {
    * Get a component renderer by name
    */
   get(name: string): ComponentRenderer | undefined {
-    return this.components.get(name);
+    return this.#components.get(name);
   }
 
   /**
    * Check if a component is registered
    */
   has(name: string): boolean {
-    return this.components.has(name);
+    return this.#components.has(name);
   }
 
   /**
@@ -91,14 +81,14 @@ class ComponentRegistry {
    * Get all registered component names
    */
   getAllNames(): string[] {
-    return Array.from(this.components.keys());
+    return Array.from(this.#components.keys());
   }
 
   /**
    * Clear all registered components
    */
   clear(): void {
-    this.components.clear();
+    this.#components.clear();
     this.#options.clear();
   }
 
@@ -124,3 +114,14 @@ class ComponentRegistry {
  * instead.
  */
 export const componentRegistry = new ComponentRegistry();
+
+/** Widget configuration is instance-owned; explicit global registrations are fallback. */
+export function resolveComponentRenderer(config: AgentWidgetConfig, name: string): ComponentRenderer | undefined {
+  return config.components && Object.prototype.hasOwnProperty.call(config.components, name)
+    ? config.components[name] : componentRegistry.get(name);
+}
+
+export function resolveComponentOptions(config: AgentWidgetConfig, name: string): ComponentRegistrationOptions | undefined {
+  return config.components && Object.prototype.hasOwnProperty.call(config.components, name)
+    ? undefined : componentRegistry.getOptions(name);
+}

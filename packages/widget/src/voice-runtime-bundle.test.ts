@@ -42,6 +42,10 @@ describe("voice-runtime bundle split", () => {
     for (const marker of RUNTIME_MARKERS) {
       expect(chunk.includes(marker), `chunk is missing "${marker}"`).toBe(true);
     }
+    // Dictation must reuse core's icon registry and tooltip timing state.
+    for (const marker of ["clipboard-copy", "persona-tooltip"]) {
+      expect(chunk, `voice runtime duplicated core dependency: ${marker}`).not.toContain(marker);
+    }
     expect(existsSync(dist("voice-runtime.cjs"))).toBe(true);
     expect(existsSync(dist("voice-runtime.d.ts"))).toBe(true);
   });

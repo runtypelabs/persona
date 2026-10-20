@@ -1,5 +1,5 @@
 /**
- * Standalone chunk carrying the config-only tail of the icon registry
+ * Standalone chunk carrying activity glyphs and the config-only registry tail
  * (`dist/icons-extra.js`), fetched the first time `renderLucideIcon` is asked
  * for one of these names (see EXTRA_ICON_NAMES in utils/icons.ts). Keys MUST
  * stay in sync with that list (asserted by `icons-partition.test.ts`).
@@ -9,6 +9,9 @@
  */
 import type { IconNode } from "lucide";
 import {
+  Brain,
+  Toolbox,
+  Wrench,
   Ban,
   Bell,
   Bookmark,
@@ -17,11 +20,15 @@ import {
   CalendarDays,
   Camera,
   ChartColumn,
+  Circle,
   CircleCheck,
   CircleX,
   Clock,
   CreditCard,
   DollarSign,
+  Database,
+  Terminal,
+  EllipsisVertical,
   EyeOff,
   Files,
   Film,
@@ -75,6 +82,13 @@ import {
 } from "lucide";
 
 export const EXTRA_LUCIDE_ICONS = {
+  "ellipsis-vertical": EllipsisVertical,
+  "brain": Brain,
+  "toolbox": Toolbox,
+  "wrench": Wrench,
+  "circle": Circle,
+  "database": Database,
+  "terminal": Terminal,
   "user": User,
   "mail": Mail,
   "phone": Phone,

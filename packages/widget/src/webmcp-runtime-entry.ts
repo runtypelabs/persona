@@ -16,6 +16,7 @@
 import type {
   AgentWidgetWebMcpConfig,
   ClientToolDefinition,
+  VoiceClientToolOutcome,
   WebMcpConfirmHandler,
   WebMcpConfirmInfo,
   WebMcpToolResult,
@@ -37,6 +38,22 @@ export interface WebMcpBridgeDeps {
 }
 
 const DEFAULT_TOOL_TIMEOUT_MS = 30_000;
+
+/**
+ * One run of a page tool, before it is shaped for `/resume` (`executeToolCall`)
+ * or for a voice `client_tool_result` (`executeVoiceToolCall`). `message` is
+ * the exact text the `/resume` error result has always carried.
+ */
+type ToolRunFailureReason = "stale" | "denied" | "failed" | "timeout" | "aborted";
+type ToolRunOutcome =
+  | { ok: true; raw: string | null }
+  | { ok: false; reason: ToolRunFailureReason; message: string };
+
+const runFailure = (reason: ToolRunFailureReason, message: string): ToolRunOutcome => ({
+  ok: false,
+  reason,
+  message,
+});
 
 // Local copies of the wire-prefix helpers: pure, and duplicating them keeps
 // this chunk free of any value edge into core webmcp-bridge state.
@@ -176,12 +193,80 @@ export class WebMcpBridge {
     wireToolName: string,
     args: unknown,
     signal?: AbortSignal,
+    toolCallId?: string,
   ): Promise<WebMcpToolResult> {
+    const outcome = await this.#run(wireToolName, args, signal, false, toolCallId);
+    return outcome.ok
+      ? normalizeSerializedResult(outcome.raw)
+      : errorResult(outcome.message);
+  }
+
+  /**
+   * Execute a page tool the voice server picked for a delegation
+   * (`client_tool_call`) and return its `client_tool_result` outcome.
+   *
+   * Same registry lookup, allowlist, abort points and timeout as
+   * `executeToolCall`, with one difference: when `autoConfirmReadOnly` is set,
+   * a tool whose LIVE registry entry declares `annotations.readOnlyHint ===
+   * true` skips the confirm gate. Every other tool still shows it, and a
+   * decline answers `denied`. A tool missing from the registry or excluded by
+   * the allowlist answers `stale` (the server's snapshot is out of date).
+   * `signal` aborting (the caller's deadline, a hang-up) answers `failed`;
+   * the caller decides whether that was its timeout.
+   */
+  public async executeVoiceToolCall(
+    wireToolName: string,
+    args: unknown,
+    options: { signal?: AbortSignal; autoConfirmReadOnly?: boolean } = {},
+  ): Promise<VoiceClientToolOutcome> {
+    const outcome = await this.#run(
+      wireToolName,
+      args,
+      options.signal,
+      options.autoConfirmReadOnly === true,
+    );
+    if (!outcome.ok) {
+      return {
+        status: outcome.reason === "aborted" ? "failed" : outcome.reason,
+        error: { message: outcome.message },
+      };
+    }
+    return voiceOutcomeFromRaw(outcome.raw);
+  }
+
+  /**
+   * Call `listener` whenever the page's tool registry changes (the WebMCP
+   * `toolchange` event on `document.modelContext`). Returns an unsubscribe.
+   * A registry without the event never calls it: callers then keep the
+   * snapshot they took first.
+   */
+  public watchToolChanges(listener: () => void): () => void {
+    let stopped = false;
+    let target: EventTarget | null = null;
+    void this.#ensureReady().then(() => {
+      if (stopped || this.config.enabled !== true) return;
+      const mc = this.#getModelContext() as unknown as Partial<EventTarget> | null;
+      if (!mc || typeof mc.addEventListener !== "function") return;
+      target = mc as EventTarget;
+      target.addEventListener("toolchange", listener);
+    });
+    return () => {
+      stopped = true;
+      target?.removeEventListener("toolchange", listener);
+      target = null;
+    };
+  }
+
+  async #run(
+    wireToolName: string,
+    args: unknown,
+    signal: AbortSignal | undefined,
+    autoConfirmReadOnly: boolean,
+    toolCallId?: string,
+  ): Promise<ToolRunOutcome> {
     await this.#ensureReady();
     if (this.config.enabled !== true) {
-      return errorResult(
-        "WebMCP is not enabled on this widget.",
-      );
+      return runFailure("failed", "WebMCP is not enabled on this widget.");
     }
 
     const mc = this.#getModelContext();
@@ -193,7 +278,8 @@ export class WebMcpBridge {
       const present =
         typeof document !== "undefined" &&
         Boolean((document as Document & { modelContext?: unknown }).modelContext);
-      return errorResult(
+      return runFailure(
+        "failed",
         present
           ? "WebMCP is not operational: document.modelContext is present but does not expose the strict getTools()/executeTool() surface (likely a different or older WebMCP polyfill)."
           : "WebMCP bridge is not operational on this page (document.modelContext not available).",
@@ -207,13 +293,14 @@ export class WebMcpBridge {
       infos = (await mc.getTools()).filter(isLocalTool);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return errorResult(`Failed to read WebMCP registry: ${message}`);
+      return runFailure("failed", `Failed to read WebMCP registry: ${message}`);
     }
     this.#deps.recordToolDisplayTitles(infos);
     const info = infos.find((candidate) => candidate.name === bareName);
 
     if (!info) {
-      return errorResult(
+      return runFailure(
+        "stale",
         `WebMCP tool not registered on this page: ${bareName}`,
       );
     }
@@ -225,7 +312,8 @@ export class WebMcpBridge {
     // tool. The server is the trust boundary; this is a defense-in-depth
     // convenience check to keep us symmetric with the snapshot.
     if (!this.#passesClientAllowlist(bareName)) {
-      return errorResult(
+      return runFailure(
+        "stale",
         `WebMCP tool not allowed by client allowlist: ${bareName}`,
       );
     }
@@ -233,28 +321,34 @@ export class WebMcpBridge {
     // Bail before the confirm renders: a late approval after cancel() would
     // otherwise fire a host-page side effect with no matching /resume.
     if (signal?.aborted) {
-      return errorResult("Aborted by cancel()");
+      return runFailure("aborted", "Aborted by cancel()");
     }
 
-    // Confirm-by-default gate. Every `webmcp:*` call routes through here,
-    // regardless of `annotations.readOnlyHint`.
+    // Confirm-by-default gate. Every chat-path `webmcp:*` call routes through
+    // here regardless of `annotations.readOnlyHint`; only a voice fast-tier
+    // call (`autoConfirmReadOnly`) of a tool the registry marks read-only skips it.
     const displayTitle = this.#deps.getToolDisplayTitle(bareName);
+    const annotations = pickAnnotations(info.annotations);
     const gateInfo: WebMcpConfirmInfo = {
       toolName: bareName,
+      ...(toolCallId ? { toolCallId } : {}),
       args,
       description: info.description,
+      ...(annotations ? { annotations } : {}),
       ...(displayTitle ? { title: displayTitle } : {}),
+      ...(signal ? { signal } : {}),
       reason: "gate",
     };
-    if (!(await this.#requestConfirm(gateInfo))) {
-      return errorResult("User declined the tool call.");
+    const skipGate = autoConfirmReadOnly && annotations?.readOnlyHint === true;
+    if (!skipGate && !(await this.#requestConfirm(gateInfo))) {
+      return runFailure("denied", "User declined the tool call.");
     }
 
     // The await above may have parked us long enough for cancel() to fire.
     // Bail before invoking `execute()` so we don't fire a side effect that
     // the server can no longer accept a `/resume` for.
     if (signal?.aborted) {
-      return errorResult("Aborted by cancel()");
+      return runFailure("aborted", "Aborted by cancel()");
     }
 
     // Drive both the 30s timeout and the caller's `signal` through a single
@@ -278,18 +372,19 @@ export class WebMcpBridge {
       const raw = await mc.executeTool(info, createCompatibleToolInput(args), {
         signal: controller.signal,
       });
-      return normalizeSerializedResult(raw);
+      return { ok: true, raw };
     } catch (err) {
       if (timedOut) {
-        return errorResult(
+        return runFailure(
+          "timeout",
           `WebMCP tool '${bareName}' timed out after ${this.#timeoutMs}ms`,
         );
       }
       if (signal?.aborted) {
-        return errorResult("Aborted by cancel()");
+        return runFailure("aborted", "Aborted by cancel()");
       }
       const message = err instanceof Error ? err.message : String(err);
-      return errorResult(message);
+      return runFailure("failed", message);
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener("abort", onAbort);
@@ -452,7 +547,7 @@ const EMPTY_INPUT_SCHEMA = { type: "object", properties: {} } as const;
  * Copy the WebMCP annotation hints onto the wire, dropping anything else.
  *
  * `getTools()` returns `annotations` since `@mcp-b/webmcp-polyfill` v5 (absent
- * on v4 and when the tool declared none). Only the spec's two boolean hints are
+ * on v4 and when the tool declared none). Only supported boolean hints are
  * forwarded -- annotations are page-authored, so an explicit copy keeps
  * functions/junk off the dispatch payload. Returns `undefined` when nothing
  * usable remains so the member is omitted, matching the spec's own
@@ -462,14 +557,14 @@ const pickAnnotations = (
   raw: ModelContextToolInfo["annotations"],
 ): ClientToolDefinition["annotations"] | undefined => {
   if (!raw || typeof raw !== "object") return undefined;
-  const picked = {
-    ...(typeof raw.readOnlyHint === "boolean"
-      ? { readOnlyHint: raw.readOnlyHint }
-      : {}),
-    ...(typeof raw.untrustedContentHint === "boolean"
-      ? { untrustedContentHint: raw.untrustedContentHint }
-      : {}),
-  };
+  const picked: NonNullable<ClientToolDefinition["annotations"]> = {};
+  for (const key of [
+    "readOnlyHint", "destructiveHint", "consequentialHint", "untrustedContentHint",
+    "idempotentHint", "openWorldHint", "debugging",
+  ] as const) {
+    const value = raw[key];
+    if (typeof value === "boolean") picked[key] = value;
+  }
   return Object.keys(picked).length > 0 ? picked : undefined;
 };
 
@@ -554,6 +649,39 @@ const errorResult = (message: string): WebMcpToolResult => ({
   content: [{ type: "text", text: message }],
 });
 
+const textOfContent = (content: unknown): string =>
+  Array.isArray(content)
+    ? content
+        .map((block: unknown) =>
+          block && typeof block === "object" && typeof (block as { text?: unknown }).text === "string"
+            ? (block as { text: string }).text
+            : "",
+        )
+        .filter(Boolean)
+        .join("\n")
+    : "";
+
+/**
+ * A page tool's serialized return as a voice `client_tool_result`: the tool's
+ * own JSON value (not the MCP content wrapper `/resume` gets), so the server
+ * can template a readout from its fields. A tool that returned an MCP error
+ * (`isError: true`) is `failed`, with its text as the message.
+ */
+const voiceOutcomeFromRaw = (raw: string | null): VoiceClientToolOutcome => {
+  if (raw === null || raw === undefined) return { status: "completed" };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { status: "completed", result: raw };
+  }
+  if (parsed !== null && typeof parsed === "object" && (parsed as { isError?: unknown }).isError === true) {
+    const message = textOfContent((parsed as { content?: unknown }).content);
+    return { status: "failed", error: { message: message || "The page tool reported an error." } };
+  }
+  return parsed === undefined ? { status: "completed" } : { status: "completed", result: parsed };
+};
+
 /**
  * Fallback confirm UI: `window.confirm()`. Production deployments should wire
  * `config.webmcp.onConfirm` to a handler matched to their UX (e.g. an inline
@@ -601,4 +729,3 @@ const safeStringify = (value: unknown): string => {
     return String(value);
   }
 };
-

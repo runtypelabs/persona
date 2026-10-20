@@ -155,7 +155,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
             new CustomEvent("persona:title-menu-builtin", {
               bubbles: true,
               composed: true,
-              detail: { actionId: itemId },
+              detail: { actionId: itemId, instanceId: combo.element.closest<HTMLElement>("[data-persona-instance]")?.dataset.personaInstance },
             })
           );
         };

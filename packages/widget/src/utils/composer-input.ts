@@ -62,6 +62,8 @@ export interface ComposerInputCapability
 
   /** Canonical document (inline mode). */
   getDocument?: () => ComposerDocument;
+  /** Restore an in-memory document without focusing or dispatching input. */
+  setDocument?: (document: ComposerDocument) => void;
   /**
    * INLINE ONLY. Replace the active trigger range (`match`, logical coordinates)
    * with an atomic mention token and place the caret after it. Returns the new

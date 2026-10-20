@@ -344,6 +344,29 @@ describe('theme configurator shell', () => {
     const iframe = document.querySelector('iframe[data-mount-id="preview-current"]');
     expect(iframe).not.toBeNull();
     expect((iframe as HTMLIFrameElement).srcdoc).toContain('preview-current');
+    expect(document.querySelector('.control-path')).toBeNull();
+  });
+
+  test('real light/dark component paths are discoverable before opening their drill-down', async () => {
+    await import('./index');
+    const catalog = await import('./search');
+    const state = await import('./state');
+    const input = document.getElementById('field-search') as HTMLInputElement;
+    for (const path of ['theme.components.composer.send.foreground', 'darkTheme.components.composer.send.foreground', 'theme.components.button.stop.background']) {
+      expect(catalog.search(path).some(result => result.entry.path === path)).toBe(true);
+      input.value = path;
+      input.dispatchEvent(new Event('input'));
+      const result = document.querySelector<HTMLButtonElement>('#search-results .search-result-item')!;
+      expect(result.textContent).toContain(path);
+      result.click();
+      expect(document.getElementById('style-drilldown')?.classList.contains('hidden')).toBe(false);
+      expect(state.getEditingTheme()).toBe(path.startsWith('darkTheme.') ? 'dark' : 'light');
+      const variant = path.startsWith('darkTheme.') ? 'dark' : 'light';
+      const fieldId = catalog.search(path).find(result => result.entry.path === path)!.entry.fieldId;
+      const field = document.getElementById(fieldId);
+      expect(field).not.toBeNull();
+      expect(field?.closest('.editing-target-group')?.getAttribute('data-editing-target')).toBe(variant);
+    }
   });
 
   test('mobile form drawer toggles body class and aria state', async () => {

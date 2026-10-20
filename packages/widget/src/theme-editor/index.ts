@@ -18,6 +18,7 @@ export type {
   RoleAssignmentOptions,
   ThemeEditorPreset,
   ConfiguratorSnapshot,
+  AuthoredConfigExport,
   ConfigChangeListener,
   OnChangeCallback,
 } from './types';

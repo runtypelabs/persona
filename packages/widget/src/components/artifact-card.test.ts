@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PersonaArtifactCard } from "./artifact-card";
+import { PersonaArtifactInline } from "./artifact-inline";
 import { componentRegistry, type ComponentRenderer } from "./registry";
 import type { ComponentContext } from "./registry";
 import type {
@@ -338,5 +339,24 @@ describe("componentRegistry registration options", () => {
     componentRegistry.register("OptTest", noop, { bubbleChrome: false });
     componentRegistry.unregister("OptTest");
     expect(componentRegistry.getOptions("OptTest")).toBeUndefined();
+  });
+});
+
+
+describe.each([PersonaArtifactCard, PersonaArtifactInline])("V5 transcript artifact gate", (renderer) => {
+  it.each([undefined, false, true])("gates before custom rendering when enabled=%s", (enabled) => {
+    const custom = vi.fn(() => document.createElement("article"));
+    const context = makeContext({ enabled, renderCard: custom, renderInline: custom });
+    context.config.future = { v5Defaults: true };
+    const el = renderer(streamingProps, context);
+    expect(el.hidden).toBe(enabled !== true);
+    expect(custom).toHaveBeenCalledTimes(enabled === true ? 1 : 0);
+  });
+
+  it("preserves V4 custom rendering with the pane disabled", () => {
+    const custom = vi.fn(() => document.createElement("article"));
+    const el = renderer(streamingProps, makeContext({ enabled: false, renderCard: custom, renderInline: custom }));
+    expect(el.tagName).toBe("ARTICLE");
+    expect(custom).toHaveBeenCalledOnce();
   });
 });

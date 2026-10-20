@@ -18,8 +18,10 @@ describe('component section theming', () => {
     expect(paths).not.toContain('darkTheme.components.button.primary.borderRadius');
     expect(paths).toContain('theme.components.launcher.size');
     expect(paths).toContain('theme.components.button.primary.borderRadius');
-    expect(paths).not.toContain('theme.components.voice.recording.indicator');
-    expect(paths).not.toContain('theme.components.approval.requested.background');
+    expect(paths).toContain('theme.components.voice.recording.indicator');
+    expect(paths).toContain('darkTheme.components.voice.recording.indicator');
+    expect(paths).toContain('theme.components.approval.requested.background');
+    expect(paths).toContain('darkTheme.components.approval.requested.background');
     expect(paths).not.toContain('theme.components.attachment.image.background');
   });
 
@@ -32,6 +34,8 @@ describe('component section theming', () => {
     expect(paths).toContain('theme.components.launcher.size');
     expect(paths).toContain('theme.components.button.primary.borderRadius');
     expect(paths).not.toContain('theme.components.message.user.background');
+    expect(paths).not.toContain('theme.components.voice.recording.indicator');
+    expect(paths).not.toContain('darkTheme.components.voice.recording.indicator');
   });
 
   test('renderColorSections returns only mode-specific color fields', () => {

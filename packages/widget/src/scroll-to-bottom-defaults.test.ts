@@ -8,6 +8,10 @@ describe("scroll-to-bottom defaults", () => {
       enabled: true,
       iconName: "arrow-down",
       label: "",
+      streamingIndicator: "arrow",
+      transition: "none",
+      scrollBehavior: "instant",
+      scrollDurationMs: 220,
     });
   });
 });

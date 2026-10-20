@@ -41,13 +41,24 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       enabled: isLauncher,
       width: isLauncher ? "min(420px, 95vw)" : "100%",
     },
+    welcome: {
+      title: "Focus Input Demo",
+      subtitle: "Test autoFocusInput, controller.focusInput(), and persona:focusInput.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Focus Input Demo",
-      welcomeSubtitle: "Test autoFocusInput, controller.focusInput(), and persona:focusInput.",
       inputPlaceholder: "Type here…",
     },
-    suggestionChips: ["Hello", "Focus test"],
+    suggestions: {
+      starters: {
+        items: ["Hello", "Focus test"],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   };
 };

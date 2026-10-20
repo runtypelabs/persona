@@ -1,9 +1,8 @@
 /**
  * Compact composer state.
  *
- * Pure predicate plus its hysteresis latch. Core CSS changes no layout: the
- * `data-persona-composer-compact` attribute is the hook and theme CSS decides
- * whether compact actually looks different.
+ * Pure predicate plus its hysteresis latch. Action-width fit is measured
+ * separately, so only text wrapping latches an expanded draft.
  */
 
 export type ComposerCompactInput = {
@@ -80,7 +79,15 @@ export function isEditorWrapped(element: HTMLElement | null): boolean {
   const inset =
     (Number.parseFloat(style.paddingTop) || 0) +
     (Number.parseFloat(style.paddingBottom) || 0);
+  // A textarea's scrollHeight includes its previously auto-sized height. Read
+  // its natural height so widening a host cannot mistake that old height for
+  // a fresh wrap. The temporary style is restored before observers run.
+  const height = element.style.height;
+  const heightPriority = element.style.getPropertyPriority("height");
+  const textarea = element.tagName === "TEXTAREA";
+  if (textarea) element.style.height = "auto";
   const content = element.scrollHeight - inset;
+  if (textarea) element.style.setProperty("height", height, heightPriority);
   // Half a line of slack: rounding and border-box math must not read as a wrap.
   return content > line * 1.5;
 }

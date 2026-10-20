@@ -1,6 +1,6 @@
 import { simulateReadableStream } from "ai";
-import { MockLanguageModelV3 } from "ai/test";
-import type { LanguageModelV3StreamPart } from "@ai-sdk/provider";
+import { MockLanguageModelV4 } from "ai/test";
+import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
 import { createAISDKPersonaHandler } from "../app/lib/ai-sdk-adapter";
 import { personaMessagesToModelMessages, type PersonaDispatchBody } from "../app/lib/persona-wire";
@@ -8,8 +8,8 @@ import { collectSSE, dispatchRequest, summarizeWire } from "./wire-testing";
 
 // Offline: the model is mocked, so these tests need no API key and no network.
 // They pin the frame ordering the widget reads, not the model's wording.
-const START_CHUNK: LanguageModelV3StreamPart = { type: "stream-start", warnings: [] };
-const FINISH_CHUNK: LanguageModelV3StreamPart = {
+const START_CHUNK: LanguageModelV4StreamPart = { type: "stream-start", warnings: [] };
+const FINISH_CHUNK: LanguageModelV4StreamPart = {
   type: "finish",
   finishReason: { unified: "stop", raw: "stop" },
   usage: {
@@ -18,9 +18,9 @@ const FINISH_CHUNK: LanguageModelV3StreamPart = {
   },
 };
 
-function mockModel(chunks: LanguageModelV3StreamPart[]): MockLanguageModelV3 {
-  const stream: LanguageModelV3StreamPart[] = [START_CHUNK, ...chunks, FINISH_CHUNK];
-  return new MockLanguageModelV3({
+function mockModel(chunks: LanguageModelV4StreamPart[]): MockLanguageModelV4 {
+  const stream: LanguageModelV4StreamPart[] = [START_CHUNK, ...chunks, FINISH_CHUNK];
+  return new MockLanguageModelV4({
     doStream: async () => ({
       stream: simulateReadableStream({
         chunks: stream,
@@ -31,7 +31,7 @@ function mockModel(chunks: LanguageModelV3StreamPart[]): MockLanguageModelV3 {
   });
 }
 
-function textChunks(text: string): LanguageModelV3StreamPart[] {
+function textChunks(text: string): LanguageModelV4StreamPart[] {
   return [
     { type: "text-start", id: "t1" },
     { type: "text-delta", id: "t1", delta: text },
@@ -44,7 +44,7 @@ const SUGGESTIONS = [
   { label: "Show me the wire format", prompt: "Show me the raw SSE frames this route emits." },
 ];
 
-function handlerFor(chunks: LanguageModelV3StreamPart[]) {
+function handlerFor(chunks: LanguageModelV4StreamPart[]) {
   return createAISDKPersonaHandler({
     model: mockModel(chunks),
     system: "You are a concise assistant explaining Persona adapter examples.",
@@ -86,7 +86,7 @@ describe("ai-sdk adapter → Persona wire", () => {
 // The model owns the suggestions; the adapter only forwards its tool call to
 // the wire, fire-and-forget, with no `/resume` endpoint in play.
 describe("ai-sdk adapter → follow-up suggestions", () => {
-  const toolCallChunks: LanguageModelV3StreamPart[] = [
+  const toolCallChunks: LanguageModelV4StreamPart[] = [
     ...textChunks("Here is the short version."),
     {
       type: "tool-call",

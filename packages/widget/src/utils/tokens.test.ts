@@ -282,6 +282,21 @@ describe('composer surface tokens', () => {
     expect(css['--persona-components-composer-overflowMenu-shadow']).toBe('none');
   });
 
+  it('emits extended overflow row and panel tokens, resolving palette references', () => {
+    const menu = {
+      padding: '8px', rowGap: '4px', rowPadding: '10px 12px', rowBorderRadius: 'palette.radius.md',
+      fontSize: '14px', lineHeight: '1.5', iconSize: '20px', iconGap: '12px',
+      hoverBackground: 'palette.colors.gray.800', focusBackground: '#ddd',
+      descriptionColor: '#666', descriptionFontSize: '12px', dividerColor: '#ccc',
+      dividerSpacing: '8px 0', minWidth: '220px', maxHeight: '480px',
+    };
+    const css = vars({ components: { composer: { overflowMenu: menu } } });
+    for (const [key, value] of Object.entries(menu)) {
+      const expected = key === 'rowBorderRadius' ? '0.375rem' : key === 'hoverBackground' ? '#1f2937' : value;
+      expect(css[`--persona-components-composer-overflowMenu-${key}`]).toBe(expected);
+    }
+  });
+
   it('leaves every composer surface var unset on the stock theme', () => {
     const css = vars({});
 

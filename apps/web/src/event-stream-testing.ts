@@ -29,11 +29,14 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
   return {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
+    welcome: {
+      title: "Event stream demo",
+      subtitle:
+        "Try the controls in the left panel: toggle the event stream inspector on this widget.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Event stream demo",
-      welcomeSubtitle:
-        "Try the controls in the left panel: toggle the event stream inspector on this widget.",
       inputPlaceholder: "Message is optional for API testing…",
     },
     features: { showEventStreamToggle: true },

@@ -8,9 +8,12 @@
     const handle = createAgentExperience(host, {
       apiUrl: "/api/dispatch",
       launcher: { enabled: false },
+      welcome: {
+        title: "Persona × SvelteKit",
+        subtitle: "Ask anything. The echo agent streams it back over the Persona wire.",
+        variant: "card",
+      },
       copy: {
-        welcomeTitle: "Persona × SvelteKit",
-        welcomeSubtitle: "Ask anything. The echo agent streams it back over the Persona wire.",
         inputPlaceholder: "Ask anything...",
       },
       theme: {
@@ -23,11 +26,19 @@
           },
         },
       },
-      suggestionChips: [
-        "Echo this back to me",
-        "How does the +server.ts route work?",
-        "Explain the Persona wire",
-      ],
+      suggestions: {
+        starters: {
+          items: [
+            "Echo this back to me",
+            "How does the +server.ts route work?",
+            "Explain the Persona wire",
+          ],
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     });
 

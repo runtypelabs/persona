@@ -256,3 +256,7 @@ The counts above are a snapshot of the initial shortlist. Later additions:
 | `pen-line` | Compose / write affordance. Distinct from `pencil`: the baseline stroke reads as "write something", not "edit this" |
 
 `image` was already registered under Media.
+
+`terminal` and `database` are lazy registry additions for command and database tool activity. `circle` represents pending activity; the activity renderer uses the initialized registry for these icons and disclosure chevrons.
+
+`brain`, `toolbox`, and `wrench` are lazy registry icons for completed reasoning, mixed tool groups, and unfamiliar individual tools. They use the installed Lucide exports and license. Known tools and homogeneous groups retain their mapped icons. Completed turn headers use `square-text`, which also remains the fallback for unavailable custom icons. Its custom IconNode uses the same 24px viewbox and rounded strokes as Lucide. Explicit `check` overrides retain their success color; semantic completion icons inherit the row color. Icon visibility and active or attention states retain precedence.

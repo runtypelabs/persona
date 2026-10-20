@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createAgentExperience } from "@runtypelabs/persona";
 
 import {
@@ -52,10 +52,11 @@ describe("help search on a live widget", () => {
     const field = card?.querySelector<HTMLInputElement>(".help-search__input");
     field!.value = "billing";
     field!.dispatchEvent(new Event("input"));
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(
-      welcome?.querySelectorAll(".help-search__result").length,
-    ).toBe(1);
+    await vi.waitFor(() => {
+      expect(
+        welcome?.querySelectorAll(".help-search__result").length,
+      ).toBe(1);
+    });
 
     // Live update re-arbitrates: exactly one card, query preserved.
     controller.update({ welcome: { variant: "hero" } });
@@ -110,13 +111,15 @@ describe("help search on a live widget", () => {
     const field = mount.querySelector<HTMLInputElement>(".help-search__input");
     field!.value = "billing";
     field!.dispatchEvent(new Event("input"));
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(starterLabels()).toEqual(["Update billing details"]);
+    await vi.waitFor(() => {
+      expect(starterLabels()).toEqual(["Update billing details"]);
+    });
 
     field!.value = "";
     field!.dispatchEvent(new Event("input"));
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(starterLabels()).toEqual(["Where is my order?"]);
+    await vi.waitFor(() => {
+      expect(starterLabels()).toEqual(["Where is my order?"]);
+    });
 
     controller.destroy();
   });

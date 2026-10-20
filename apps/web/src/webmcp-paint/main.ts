@@ -64,21 +64,32 @@ function mountWidget(): void {
       suggestionChipsConfig: {
         fontFamily: "sans-serif",
       },
+      welcome: {
+        title: "Ask Paint Pal",
+        subtitle:
+          "I paint in this very real MS Paint with the same tools you'd click, and I can look at the canvas to check my work.",
+        variant: "card",
+      },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: "Ask Paint Pal",
-        welcomeSubtitle:
-          "I paint in this very real MS Paint with the same tools you'd click, and I can look at the canvas to check my work.",
         inputPlaceholder: "Ask for a drawing…",
       },
-      suggestionChips: [
-        "Draw a house with a sun in the sky",
-        "Draw a red heart",
-        "Let's play Pictionary: I'll draw, you guess",
-        "Teach me to draw a cat, step by step",
-        "Speedrun the Mona Lisa in 20 strokes",
-        "Look at the canvas and tell me what you see",
-      ],
+      suggestions: {
+        starters: {
+          items: [
+            "Draw a house with a sun in the sky",
+            "Draw a red heart",
+            "Let's play Pictionary: I'll draw, you guess",
+            "Teach me to draw a cat, step by step",
+            "Speedrun the Mona Lisa in 20 strokes",
+            "Look at the canvas and tell me what you see",
+          ],
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       launcher: {
         ...DEFAULT_WIDGET_CONFIG.launcher,
         mountMode: "docked",

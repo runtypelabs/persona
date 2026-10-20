@@ -34,7 +34,7 @@ const HELP = `control-persona: drive the Persona showcase for verification (see 
   doctor                                  read-only health check of the current run; prints a remedy per failure
   open [page] [opts]                      (re)launch the browser session and load a page
         page: verify (default) | voice-e2e | any apps/web page name | absolute URL
-        --scenario echo|markdown|tool|reasoning|approval|error   --mode inline|launcher
+        --scenario echo|markdown|tool|reasoning|approval|error|browser-history|turn-activity   --mode inline|launcher
         --theme light|dark   --config '<json>'   --viewport 1100x900   --headed
         --voice browser      mock Web Speech recognition + speechSynthesis (verify page)
         --voice runtype      fake mic WAV -> real capture -> scripted voice socket (voice-e2e page)
@@ -671,6 +671,13 @@ const commands = {
       for (const [name, source] of [...files.filter((f) => f !== "README.md").map((f) => [f, path.join(dir, f)]), ["README.md", readmeFile]]) {
         const sha = must("git", ["hash-object", "-w", source]).trim();
         must("git", ["update-index", "--add", "--cacheinfo", `100644,${sha},${prefix}/${name}`], { env });
+      }
+      // Vercel deploys every pushed branch, and each project builds from its own
+      // root directory, which an evidence-only tree lacks: every push failed every
+      // project. A stub config at each root makes Vercel skip the commit instead.
+      const skipDeploy = must("git", ["hash-object", "-w", "--stdin"], { input: `${JSON.stringify({ git: { deploymentEnabled: false } })}\n` }).trim();
+      for (const config of must("git", ["ls-files", "--", ":(glob)**/vercel.json"]).split("\n").filter(Boolean)) {
+        must("git", ["update-index", "--add", "--cacheinfo", `100644,${skipDeploy},${config}`], { env });
       }
       const tree = must("git", ["write-tree"], { env }).trim();
       fs.rmSync(index, { force: true });

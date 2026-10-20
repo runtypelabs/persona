@@ -1,7 +1,8 @@
 import "@runtypelabs/persona/widget.css";
 import "./v5-preview.css";
-import { initAgentWidget, type AgentWidgetConfig, type AgentWidgetMessage } from "@runtypelabs/persona";
+import { initAgentWidget, type AgentWidgetConfig, type AgentWidgetMessage, type AgentWidgetPlugin } from "@runtypelabs/persona";
 import { renderExamplesShell } from "./examples-nav";
+import { renderScrollToBottomIcon } from "./scroll-to-bottom-icon";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 // Reuse the documented application-level hook; this is not a library default.
 import { renderToolActivitySummary } from "../../../examples/ai-sdk-next/app/lib/tool-activity-summary";
@@ -9,6 +10,22 @@ import { renderToolActivitySummary } from "../../../examples/ai-sdk-next/app/lib
 renderExamplesShell();
 const host = document.querySelector<HTMLElement>("#v5-host")!;
 const select = (name: string) => document.querySelector<HTMLSelectElement>(`#v5-${name}`)!;
+// Each preset uses the same six public fields. The theme selector remains an
+// explicit override so every brand can be compared in both light and dark.
+const brandPresets: Record<string, NonNullable<AgentWidgetConfig["brand"]>> = {
+  editorial: {
+    accent: "#b9a68a", neutral: "#171715", font: 'Georgia, "Times New Roman", serif',
+    radius: "md", density: "comfortable", elevation: "flat",
+  },
+  studio: {
+    accent: "#7c3aed", neutral: "#f5f3ff", font: 'Inter, system-ui, sans-serif',
+    radius: "lg", density: "spacious", elevation: "raised",
+  },
+  terminal: {
+    accent: "#22c55e", neutral: "#101916", font: '"SFMono-Regular", Consolas, monospace',
+    radius: "none", density: "compact", elevation: "subtle",
+  },
+};
 const status = document.querySelector<HTMLElement>("#v5-status")!;
 const streamButton = document.querySelector<HTMLButtonElement>("#v5-stream")!;
 let widget: ReturnType<typeof initAgentWidget>;
@@ -17,6 +34,79 @@ let epoch = Date.now();
 let serial = 0;
 const order = new Map<string, number>();
 
+// Application-owned renderer: each invocation owns its listeners until Persona
+// aborts the render signal. Approval and execution are deliberately separate.
+const approvalPlugin: AgentWidgetPlugin = {
+  id: "preview-approval",
+  renderApproval: ({ message, execution, signal, approve, deny }) => {
+    const approval = message.approval;
+    if (!approval) return null;
+    const root = document.createElement("section");
+    root.className = "v5-custom-approval";
+    const title = document.createElement("strong");
+    title.textContent = approval.toolName;
+    const state = document.createElement("p");
+    state.textContent = approval.status === "pending" ? "Permission requested · local sample"
+      : approval.status === "denied" ? "Denied · did not run"
+      : approval.status === "timeout" ? "Expired · execution unknown"
+      : `Approved · ${execution?.status ?? "execution unknown"}`;
+    state.setAttribute("role", "status");
+    root.append(title, state);
+    if (approval.status === "pending") {
+      let decided = false;
+      const buttons: HTMLButtonElement[] = [];
+      const cleanup: (() => void)[] = [];
+      for (const [label, action] of [["Allow once", approve], ["Deny", deny]] as const) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        const click = () => {
+          if (decided || signal?.aborted) return;
+          decided = true;
+          buttons.forEach((item) => { item.disabled = true; });
+          action();
+        };
+        button.addEventListener("click", click);
+        cleanup.push(() => button.removeEventListener("click", click));
+        buttons.push(button);
+        root.append(button);
+      }
+      const dispose = () => {
+        cleanup.forEach((remove) => remove());
+        buttons.forEach((button) => { button.disabled = true; });
+      };
+      if (signal?.aborted) dispose();
+      else signal?.addEventListener("abort", dispose, { once: true });
+    }
+    return root;
+  },
+};
+function approvalSample(id: string, state: "pending" | "approved" | "denied", linked = true) {
+  inject({ id: `approval-${id}`, variant: "approval", approval: {
+    id, status: state, agentId: "preview-agent", executionId: "preview-approval",
+    toolName: "Search sample documentation", description: "Search the in-browser sample documentation.",
+    reason: "I want to find the theme configuration examples.", parameters: { query: "Persona themes" },
+    ...(linked ? { toolCallId: `approval-tool-${id}` } : {}),
+  } });
+}
+function approvalScene() {
+  inject({ id: "user", role: "user", content: "Show me how permission and execution appear in the conversation." });
+  inject({ id: "approval-intro", content: "These are local samples. Approval is permission to try an action; its execution has a separate outcome." });
+  for (const outcome of ["running", "completed", "failed", "denied", "unknown"] as const) {
+    inject({ id: `label-${outcome}`, content: `**${outcome[0].toUpperCase() + outcome.slice(1)} sample**` });
+    approvalSample(outcome, outcome === "denied" ? "denied" : "approved", outcome !== "unknown");
+    if (outcome === "running" || outcome === "completed" || outcome === "failed") {
+      tool(`approval-tool-${outcome}`, "Search sample documentation", {
+        status: outcome === "running" ? "running" : "complete", success: outcome !== "failed",
+        ...(outcome === "running" ? { durationMs: undefined, chunks: ["Searching sample pages…"] }
+          : outcome === "failed" ? { error: "The sample search failed." } : { result: "Found three sample pages." }),
+      });
+    }
+  }
+  inject({ id: "approval-try", content: "**Try it yourself** · Allow once starts a simulated search. Deny leaves it unexecuted. Reset the scene to try again." });
+  approvalSample("interactive", "pending");
+  status.textContent = "Try Allow once or Deny below. Scroll up for running, completed, failed, denied, and unknown samples. Nothing leaves your browser.";
+}
 function cancelStream() {
   timers.forEach(clearTimeout);
   timers = [];
@@ -24,10 +114,21 @@ function cancelStream() {
 }
 function configuration(): AgentWidgetConfig {
   const v5 = select("version").value === "v5";
+  const embedded = select("scene").value === "embedded";
+  const headerIcon = select("header-icon").value;
+  const iconBackground = select("icon-background").value;
+  const iconPadding = select("icon-padding").value;
+  const headerTheme = {
+    ...(iconBackground === "default" ? {} : iconBackground === "transparent"
+      ? { iconBackground: "transparent", iconForeground: "semantic.colors.text" }
+      : { iconBackground: "semantic.colors.primary", iconForeground: "components.button.primary.foreground" }),
+    ...(iconPadding === "default" ? {} : { iconPadding }),
+  };
   const detail = select("details").value;
   const variant = select("variant").value as "default" | "row" | "card";
   const activityStyle = variant === "default" ? {} : { variant };
   const grouping = select("group").value;
+  const resolvedDisplay = select("approval-display").value as "default" | "row" | "status-line" | "trace";
   const icons = select("icons").value as "default" | "always" | "active" | "never";
   const display: NonNullable<NonNullable<AgentWidgetConfig["features"]>["toolCallDisplay"]> = {
     ...activityStyle,
@@ -39,18 +140,76 @@ function configuration(): AgentWidgetConfig {
   };
   return {
     apiUrl: "/v5-local-demo",
-    customFetch: createDemoEchoFetch({ reply: () => "This is a local preview reply. Try opening tool details, switching themes, or comparing V4 and V5. No message is sent to a model." }),
+    customFetch: createDemoEchoFetch(select("scene").value === "scroll-control" ? {
+      chunkSize: 36, delayMs: 150,
+      reply: () => Array.from({ length: 10 }, (_, i) => `### Step ${i + 1}\n\nThis response is arriving below your reading position. The scroll control shows live activity until generation ends. Jump to latest to hide the control, then scroll upward to show it again.\n\n`).join(""),
+    } : { reply: () => "This is a local preview reply. Try opening tool details, switching themes, or comparing V4 and V5. No message is sent to a model." }),
     future: { v5Defaults: v5 },
+    ...(brandPresets[select("brand").value] ? { brand: brandPresets[select("brand").value] } : {}),
+    ...(select("error-display").value === "default" ? {} : { errorDisplay: select("error-display").value as "bubble" | "block" }),
+    ...(select("scene").value.startsWith("approval") ? {
+      approval: {
+        approveLabel: "Allow once",
+        ...(resolvedDisplay === "default" ? {} : { resolvedDisplay }),
+        onDecision: async (data, decision) => {
+          if (decision === "approved") {
+            const id = `approval-tool-${data.approvalId}`;
+            tool(id, data.toolName, { status: "running", durationMs: undefined, chunks: ["Searching sample pages…"] });
+            timers.push(setTimeout(() => {
+              tool(id, data.toolName, { result: "Found three sample pages." });
+              status.textContent = "Local search completed. Reset the scene to try another decision.";
+            }, 1800));
+          } else status.textContent = "Permission denied. The sample search did not run.";
+          // An explicit local response keeps the demo independent of any API.
+          return new Response(null, { status: 204 });
+        },
+      },
+      ...(select("scene").value === "approval-custom" ? { plugins: [approvalPlugin] } : {}),
+    } : {}),
     colorScheme: select("theme").value as "light" | "dark",
     persistState: false,
-    launcher: { enabled: false, fullHeight: true },
-    ...(select("fade").value === "default" ? {} : { layout: { topFade: select("fade").value === "on" } }),
+    launcher: {
+      enabled: false, ...(embedded ? {} : { fullHeight: true }),
+      ...(headerIcon === "default" ? {} : headerIcon === "hidden" ? { headerIconHidden: true }
+        : headerIcon === "image" ? { headerIconName: "", iconUrl: "/images/v5-sample-logo.svg" }
+        : { headerIconName: headerIcon }),
+    },
+    layout: {
+      ...(embedded ? { embedded: true } : {}),
+      ...(select("fade").value === "default" ? {} : { topFade: select("fade").value === "on" }),
+    },
+    ...(embedded ? {
+      composer: { placement: "block" },
+    } : {}),
+    ...(embedded || Object.keys(headerTheme).length ? {
+      theme: { components: {
+        header: headerTheme,
+        ...(embedded ? {
+        input: { background: "var(--demo-composer-surface)" },
+        composer: { footerPadding: "12px 20px" },
+        markdown: { codeBlock: { background: "var(--demo-code-surface)", textColor: "var(--demo-code-text)" } },
+        activity: { bodySurface: "transparent" },
+        } : {}),
+      } },
+    } : {}),
     ...(select("scene").value === "welcome" ? {
       welcome: { title: "What would you like to explore?" },
-      suggestions: { starters: { behavior: "fill", items: ["Explore the new defaults", "Help me get started", "Plan a project"] } },
-    } : { welcome: { variant: "none" }, suggestions: { starters: { items: [] } } }),
+      suggestions: { ...(select("suggestion-edges").value === "default" ? {} : { followUps: { placement: "composer" as const, edgeStyle: select("suggestion-edges").value as "clip" | "fade" } }), starters: { behavior: "fill", items: ["Explore the new defaults", "Help me get started", "Plan a project"] } },
+    } : { welcome: { variant: "none" }, suggestions: { ...(select("suggestion-edges").value === "default" ? {} : { followUps: { placement: "composer" as const, edgeStyle: select("suggestion-edges").value as "clip" | "fade" } }), starters: { items: [] } } }),
     features: {
       showToolCalls: true, showReasoning: true,
+      ...(select("scene").value === "scroll-control" ? { showEventStreamToggle: true, scrollBehavior: { mode: "none" as const } } : {}),
+      scrollToBottom: {
+        ...(select("scroll-behavior").value === "default" ? {} : { scrollBehavior: select("scroll-behavior").value as "smooth" | "instant" }),
+        ...(select("scroll-duration").value === "default" ? {} : { scrollDurationMs: Number(select("scroll-duration").value) }),
+        ...(select("scroll-glyph").value === "default" || select("scroll-glyph").value === "custom" ? {} : { streamingIndicator: select("scroll-glyph").value as "arrow" | "dots" }),
+        ...(select("scroll-glyph").value === "custom" ? { renderIcon: renderScrollToBottomIcon } : {}),
+        ...(select("scroll-transition").value === "default" ? {} : { transition: select("scroll-transition").value as "fade" | "none" }),
+      },
+      ...(select("scene").value === "artifacts" || select("artifacts").value !== "default" ? { artifacts: {
+        ...(select("artifacts").value === "default" ? {} : { enabled: select("artifacts").value === "on" }),
+        display: "collapsed", allowedTypes: ["markdown", "component"],
+      } } : {}),
       toolCallDisplay: display,
       reasoningDisplay: { ...activityStyle, ...(icons === "default" ? {} : { iconVisibility: icons }) },
     },
@@ -62,12 +221,26 @@ function reset() {
   widget?.destroy();
   host.replaceChildren();
   epoch = Date.now(); serial = 0; order.clear();
+  const frame = host.parentElement!;
+  frame.classList.toggle("v5-embedded-frame", select("scene").value === "embedded");
+  frame.dataset.scheme = select("theme").value;
   const config = configuration();
   widget = initAgentWidget({ target: host, config });
+  if (select("scene").value === "scroll-control") widget.on("run:finished", ({ outcome }) => {
+    status.textContent = outcome === "cancel" ? "Stopped. The idle glyph returns; jump to latest or scroll to compare visibility."
+      : outcome === "error" ? "The local response failed. The idle glyph returns; Run stream to try again."
+      : "Response complete. The idle glyph returns. Jump to latest hides the control; scroll up to reveal it.";
+  });
+  const brandSummary = document.querySelector<HTMLElement>("#v5-brand-summary")!;
+  brandSummary.hidden = !config.brand;
+  document.querySelector("#v5-brand-config")!.textContent = JSON.stringify({ brand: config.brand }, null, 2);
   const { customFetch: _fetch, ...shown } = config;
-  document.querySelector("#v5-config")!.textContent = JSON.stringify(shown, (_key, value) => typeof value === "function" ? "renderToolActivitySummary (example hook)" : value, 2);
+  document.querySelector("#v5-config")!.textContent = JSON.stringify(shown, (_key, value) => typeof value === "function" ? `${_key} (local example hook)` : value, 2);
   document.querySelector<HTMLElement>("#v5-hook-note")!.hidden = select("group").value !== "descriptive";
-  document.querySelector("#v5-caption")!.textContent = `${select("version").value.toUpperCase()} ${select("theme").value} · ${select("scene").selectedOptions[0].textContent}`;
+  document.querySelector<HTMLElement>("#v5-approval-hook-note")!.hidden = select("scene").value !== "approval-custom";
+  document.querySelector<HTMLElement>("#v5-scroll-hook-note")!.hidden = select("scroll-glyph").value !== "custom";
+  streamButton.textContent = select("scene").value.startsWith("approval") ? "Replay approvals" : "Run stream";
+  document.querySelector("#v5-caption")!.textContent = `${select("version").value.toUpperCase()} ${select("theme").value} · ${select("scene").selectedOptions[0].textContent} · ${select("brand").selectedOptions[0].textContent}`;
 }
 function inject(message: Partial<AgentWidgetMessage> & Pick<AgentWidgetMessage, "id">) {
   if (!order.has(message.id)) order.set(message.id, serial++);
@@ -90,21 +263,76 @@ function openDetails() {
   host.querySelector<HTMLButtonElement>('[data-persona-tool-group] > button[aria-expanded="false"]')?.click();
   host.querySelector<HTMLButtonElement>('[data-message-id="search"] > button[aria-expanded="false"]')?.click();
 }
+function showFollowUps() {
+  tool("follow-ups", "suggest_replies", { args: { suggestions: [
+    "Explain the theme options in more detail",
+    "Show a complete configuration example",
+    "How does this work on mobile?",
+    "Compare the V4 and V5 defaults",
+    "Help me customize the colors",
+    "Show more integration examples",
+  ] } });
+}
 function loadScene() {
   reset();
   const scene = select("scene").value;
+  if (scene === "scroll-control") {
+    for (let i = 0; i < 8; i++) {
+      inject({ id: `scroll-user-${i}`, role: "user", content: `Explain step ${i + 1}.` });
+      inject({ id: `scroll-answer-${i}`, content: "Keep each step small and reviewable. Start with a clear goal, explore the options, and verify the result.\n\nThis earlier response stays readable while new content arrives below. Use Run stream to compare the scroll glyph and visibility transition." });
+    }
+    status.textContent = "Run stream to start a real local SSE response below. Jump to latest, scroll upward, or press Esc to stop. Open the event log to compare its control.";
+    return;
+  }
+  if (scene.startsWith("approval")) { approvalScene(); return; }
+  if (scene === "errors") {
+    inject({ id: "user", role: "user", content: "Help me compare the theme options." });
+    inject({ id: "partial", content: "You can customize colors, typography, and spacing. Here is what I found before the connection ended…" });
+    inject({ id: "sample-error", dispatchError: true, content: "The sample connection was interrupted before the answer finished. Your partial response is preserved above. Retry will produce a complete local response.\n\nThis is a simulated error with extra detail to demonstrate disclosure. No network request failed and no message is sent to a model." });
+    status.textContent = "Compare the V4 bubble and V5 alert block. Retry runs a local response; reset to restore the error.";
+    return;
+  }
+  if (scene === "actions") {
+    inject({ id: "user", role: "user", content: "What can I customize?" });
+    inject({ id: "earlier-answer", content: "Start with colors, typography, and spacing." });
+    inject({ id: "next-user", role: "user", content: "How can I review the result?" });
+    inject({ id: "latest-answer", content: "Compare light and dark themes, then try a narrow screen. The latest answer keeps its actions available; hover or focus the earlier answer to find its actions." });
+    status.textContent = "Compare earlier and latest answer actions. Run the stream to inspect actions while a response is being written.";
+    return;
+  }
+  if (scene === "artifacts") {
+    inject({ id: "user", role: "user", content: "Create a short theme checklist." });
+    inject({ id: "artifact-intro", content: "Here is a sample artifact. Open its card to read the checklist, or disable artifacts to compare the V4 and V5 behavior." });
+    const markdown = "# Theme checklist\n\n- Check light and dark colors.\n- Read long answers at a narrow width.\n- Verify keyboard focus and reduced motion.\n- Try a custom theme.";
+    widget.upsertArtifact({ id: "theme-checklist", title: "Theme checklist", artifactType: "markdown", content: markdown, transcript: false });
+    // A restored/server-supplied reference exercises the renderer gate even
+    // when the controller's artifact APIs are disabled.
+    inject({ id: "artifact-card", rawContent: JSON.stringify({ component: "PersonaArtifactCard", props: { artifactId: "theme-checklist", title: "Theme checklist", artifactType: "markdown", status: "complete", markdown } }) });
+    status.textContent = "Artifacts are enabled by default in V5; V4 requires Enabled. This sample uses collapsed cards. Choose Disabled to compare transcript behavior.";
+    return;
+  }
+  if (scene === "streaming") {
+    inject({ id: "user", role: "user", content: "Show me the new streaming defaults." });
+    inject({ id: "final", content: "The response is ready. Try the follow-up row below, then run the stream to see the waiting indicator. Typing a new question clears these suggestions." });
+    showFollowUps();
+    status.textContent = "Run the stream to compare V5’s label with V4’s dots. This full-height preview uses the fullscreen suggestion limit.";
+    return;
+  }
   if (scene === "welcome") {
     status.textContent = "Try a suggestion or type a message. Replies are simulated locally.";
     return;
   }
   if (scene !== "long") inject({ id: "user", role: "user", content: "Check the theme documentation and show me what you find." });
-  if (scene === "long") {
+  if (scene === "long" || scene === "embedded") {
     for (let i = 0; i < 8; i++) {
       inject({ id: `user-${i}`, role: "user", content: i ? "What should I consider next?" : "Help me plan a project." });
       inject({ id: `answer-${i}`, content: "Keep each step small and reviewable. Start with a clear goal, explore the options, and verify the result.\n\nScroll back to compare earlier steps. The composer remains available while you read." });
     }
   }
-  if (scene === "activity" || scene === "long") reasoning();
+  if (scene === "embedded") {
+    inject({ id: "embedded-code", content: "The host owns the background. Code keeps its own surface.\n\n```js\nlayout: { embedded: true }\n```" });
+  }
+  if (scene === "activity" || scene === "long" || scene === "embedded") reasoning();
   tool("search", "search_docs", { args: { query: "Persona theme configuration" }, result: "Found the theme guide and three examples covering colors, typography, and tool activity." });
   tool("read", "read_file", { args: { path: "docs/theme-guide.md" }, result: scene === "details" ? Array.from({ length: 18 }, (_, i) => `Section ${i + 1}: Explicit theme overrides are preserved. Compare both light and dark styles.`).join("\n") : "Read the relevant configuration examples." });
   if (scene === "details") {
@@ -120,6 +348,43 @@ function loadScene() {
   status.textContent = scene === "states" ? "Sample running and failed states. Expand a call to inspect its output." : scene === "details" ? "The first tool is open. The service-status tool demonstrates a response without a request." : "Open a group, then a tool. Manual expansion preserves your reading position.";
 }
 function runStream() {
+  if (select("scene").value === "scroll-control") {
+    loadScene();
+    const input = host.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]");
+    if (!input) return;
+    input.value = "Continue the guide while I read the earlier responses.";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    host.querySelector<HTMLButtonElement>("[data-persona-composer-submit]")?.click();
+    status.textContent = "A local SSE response is generating below. Jump to latest hides the control; scroll up to reveal it. Press Esc or Stop to finish early.";
+    return;
+  }
+  if (select("scene").value.startsWith("approval")) { loadScene(); return; }
+  if (select("scene").value === "errors" || select("scene").value === "artifacts") { loadScene(); return; }
+  if (select("scene").value === "actions") {
+    loadScene();
+    streamButton.disabled = true;
+    inject({ id: "latest-answer", content: "Comparing the available theme options…", streaming: true });
+    timers.push(setTimeout(() => {
+      inject({ id: "latest-answer", content: "The comparison is ready. Message actions are available again.", streaming: false });
+      streamButton.disabled = false;
+    }, 4000));
+    return;
+  }
+  if (select("scene").value === "streaming") {
+    reset();
+    streamButton.disabled = true;
+    status.textContent = "Waiting for the first text, then streaming a local response…";
+    inject({ id: "user", role: "user", content: "Show me the new streaming defaults." });
+    inject({ id: "loading-answer", content: "", streaming: true });
+    timers.push(setTimeout(() => inject({ id: "loading-answer", content: "Here is a locally simulated response", streaming: true }), 2400));
+    timers.push(setTimeout(() => {
+      inject({ id: "loading-answer", content: "Here is a locally simulated response. You can explore the suggested next questions, or type your own.", streaming: false });
+      showFollowUps();
+      streamButton.disabled = false;
+      status.textContent = "Complete. Follow-ups are available again. Type to dismiss them, or compare V4.";
+    }, 4200));
+    return;
+  }
   reset();
   streamButton.disabled = true;
   status.textContent = "Streaming sample activity. Open details manually, or try auto-expand.";

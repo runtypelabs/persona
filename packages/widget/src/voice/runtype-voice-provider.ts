@@ -83,8 +83,29 @@
 // completed), and that phase's completion doesn't fold another utterance.
 // Delegated sends carry `voice: { spoken: true }` on the chat request, so the
 // agent answers in speakable sentences.
+//
+// Fast tier (`client_tools`, declared only with client delegation and WebMCP
+// enabled; the session ships in the lazy voice-client-tools chunk): after
+// `session_config` the provider sends `client_tools{fingerprint, tools}`, the
+// same WebMCP snapshot and fingerprint the chat path sends as `clientTools[]`
+// but with each page tool's FULL name (`webmcp:<name>`; sdk tools stay bare),
+// and again whenever the fingerprint changes. The server may then answer a
+// delegation itself, with no `delegation_started`: it sends
+// `client_tool_call{delegationId, toolCallId, name, arguments, fingerprint,
+// timeoutMs}`, which runs through the WebMCP execute path (the confirm gate is
+// skipped only for a tool whose registry entry says `readOnlyHint: true`) and
+// is answered by one `client_tool_result{status}`: `completed`, `denied` (gate
+// declined), `stale` (unknown tool, or a fingerprint other than the last one
+// sent), `failed`, or `timeout` (past `timeoutMs`, which bounds the gate too).
+// Then `delegation_completed{route:'direct', text}` for a delegation that never
+// started here writes the heard user turn and `text` into the chat. When the
+// server falls through, the delegation arrives as today's `delegation_started`;
+// its `input.priorToolResults` (page tools the server already ran; sent only
+// with `prior_tool_results`, declared beside `client_tools`) ride along to the
+// chat turn as completed calls, never run again here.
 
 import type {
+  VoiceClientToolsSession,
   VoiceProvider,
   VoiceResult,
   VoiceStatus,
@@ -327,6 +348,13 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   #foldReadback = false;
   #assistantTurns = new Set<string>();
   #foldedTurns = new Set<string>();
+  // Fast tier (see header): the call's session, from the lazy voice-client-tools chunk.
+  #fastTier: Promise<VoiceClientToolsSession | null> | null = null;
+  // Delegations this call saw start, and the last final user utterance (a direct turn's request).
+  #started = new Set<string>();
+  #heard: { id: string; text: string } | null = null;
+  // Direct turns in flight: the utterance each answers, captured at its first client_tool_call.
+  #direct = new Map<string, { id: string; text: string } | null>();
 
   #resultCallbacks: ((result: VoiceResult) => void)[] = [];
   #errorCallbacks: ((error: Error) => void)[] = [];
@@ -494,15 +522,17 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * the URL, and these params are not secrets.
    */
   #voiceSocketUrl(host: string, agentId: string, attach?: URLSearchParams): string {
-    const capabilities = ["partial_transcript", "context"];
-    if (this.bridge && this.config?.clientDelegation !== false)
-      capabilities.push("client_delegation", "delegation_update", "delegation_read_back", "delegation_stream");
-    if (attach) capabilities.unshift("attach");
+    let capabilities = "partial_transcript,context";
+    if (this.bridge && this.config?.clientDelegation !== false) {
+      capabilities += ",client_delegation,delegation_update,delegation_read_back,delegation_stream";
+      if (this.bridge.clientTools?.()) capabilities += ",client_tools,prior_tool_results";
+    }
+    if (attach) capabilities = `attach,${capabilities}`;
     const params = new URLSearchParams({
       voiceProtocol: VOICE_PROTOCOL,
       clientVersion: `persona/${VERSION}`,
       voiceCapabilities: FULL_DUPLEX_CAPABILITY,
-      clientCapabilities: capabilities.join(","),
+      clientCapabilities: capabilities,
     });
     attach?.forEach((value, key) => params.set(key, value));
     return `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice?${params}`;
@@ -849,7 +879,34 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           this.#contextSent = true;
           this.#pendingContext = this.#buildContextText();
         }
+        if (this.#clientDelegation && this.#capabilities.has("client_tools") && !this.#fastTier) {
+          // INVARIANT: #clientDelegation implies a bridge.
+          this.#fastTier =
+            this.bridge!
+              .clientTools?.()
+              ?.open({
+                send: (frame) => {
+                  const ws = this.#ws;
+                  if (generation !== this.#callGeneration || ws?.readyState !== WebSocket.OPEN) return false;
+                  ws.send(JSON.stringify(frame));
+                  return true;
+                },
+                cancelled: (id) => this.#cancelledDelegations.has(id),
+              })
+              .catch(() => null) ?? null;
+        }
         break;
+
+      case "client_tool_call": {
+        // A direct turn: keep the request it answers (speech may follow) and fold its read-back.
+        const id = String(msg.delegationId);
+        if (this.#fastTier && !this.#direct.has(id)) {
+          this.#direct.set(id, this.#heard);
+          this.#answered.add(id);
+        }
+        void this.#fastTier?.then((session) => session?.call(msg));
+        break;
+      }
 
       case "transcript_update": {
         const role = msg.role === "assistant" ? "assistant" : "user";
@@ -860,7 +917,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         if (role === "user") {
           // Release on a final user transcript, not a partial: a mid-utterance
           // context append makes the voice model answer early (or not delegate).
-          if (msg.final === true) this.#flushCallContext(generation);
+          if (msg.final === true) {
+            this.#flushCallContext(generation);
+            this.#heard = { id: turnId, text: String(msg.text ?? "") };
+          }
           this.#foldReadback = false;
         } else {
           // Read-back of a delegated result the chat already renders. A server
@@ -902,6 +962,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         const delegationId = String(msg.delegationId ?? msg.turnId);
         if (msg.type === "delegation_started") {
           this.#flushCallContext(generation);
+          this.#started.add(delegationId);
+          // A direct attempt that fell through: its answer is the chat turn's now, and its tool must not act late.
+          this.#answered.delete(delegationId);
+          if (this.#direct.delete(delegationId)) void this.#fastTier?.then((session) => session?.abort(delegationId));
           // `input`: run this turn through the chat pipeline (client delegation).
           const input = msg.input;
           if (this.#clientDelegation && input) {
@@ -914,11 +978,26 @@ export class RuntypeVoiceProvider implements VoiceProvider {
                   ? input.userUtteranceIds.filter((id: unknown): id is string => typeof id === "string")
                   : [],
                 messages: Array.isArray(input.messages) ? input.messages : [],
+                priorToolResults: input.priorToolResults,
               },
               generation,
             );
           }
-        } else if (msg.speak !== false && this.#answered.has(delegationId)) {
+        } else if (msg.route === "direct" && this.#fastTier && !this.#started.has(delegationId)) {
+          // The server answered it itself: write the request it answered and its
+          // answer into the chat, as the chat pipeline would have.
+          const heard = this.#direct.get(delegationId) ?? this.#heard;
+          this.#direct.delete(delegationId);
+          this.#started.add(delegationId);
+          this.#answered.add(delegationId);
+          this.bridge?.recordDirectTurn?.({
+            delegationId,
+            userText: heard?.text ?? "",
+            userUtteranceIds: heard ? [heard.id] : [],
+            assistantText: typeof msg.text === "string" ? msg.text : "",
+          });
+        }
+        if (msg.type === "delegation_completed" && msg.speak !== false && this.#answered.has(delegationId)) {
           // Every spoken phase (the approval ask, the late result) of an answer
           // the chat shows is read back. A refusal of one that never started
           // here has no chat answer: it renders. `final` may never come. A
@@ -1086,6 +1165,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     // unrelated utterance: disarm it.
     if (this.#foldArmedBy === delegationId) this.#foldReadback = false;
     this.#progressed.delete(delegationId);
+    // A direct answer that never completed has no chat message to fold onto.
+    if (!this.#started.has(delegationId)) this.#answered.delete(delegationId);
+    void this.#fastTier?.then((session) => session?.abort(delegationId));
     this.bridge?.dropDelegation?.(delegationId, expired);
     this.#followUps.get(delegationId)?.abort();
   }
@@ -1255,6 +1337,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.#foldReadback = false;
     this.#assistantTurns.clear();
     this.#foldedTurns.clear();
+    void this.#fastTier?.then((session) => session?.close());
+    this.#fastTier = null;
+    this.#started.clear();
+    this.#direct.clear();
+    this.#heard = null;
     this.#finishedArmed = false;
     this.#cancelledUntil = 0;
     this.#playbackEndsAt = 0;

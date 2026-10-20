@@ -192,7 +192,15 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     // The rail section only shows in the rail presentation.
     plugins: [customView ? threadRailPlugin : pinnedSectionPlugin],
     // The page is about the Messages surface, so the transcript stays quiet.
-    suggestionChips: [],
+    suggestions: {
+      starters: {
+        items: [],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
       enabled: mode === "launcher",

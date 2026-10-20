@@ -70,8 +70,7 @@ const isSet = <T, K extends keyof T>(source: T | undefined, key: K): boolean =>
   !!source && source[key] !== undefined;
 
 const warnOnce = (config: AgentWidgetConfig | undefined, messages: string[]) => {
-  if (!config || config.debug !== true || !messages.length) return;
-  if (warnedConfigs.has(config)) return;
+  if (!config || config.debug !== true || !messages.length || warnedConfigs.has(config)) return;
   warnedConfigs.add(config);
   messages.forEach((message) => console.warn(`[persona] ${message}`));
 };
@@ -106,20 +105,16 @@ export const resolveWelcomeConfig = (
         : v5 || variant === "hero" ? "on-first-message" : "never";
 
   const conflicts: string[] = [];
-  if (isSet(welcome, "title") && isSet(copy, "welcomeTitle")) {
-    conflicts.push(
-      "welcome.title and copy.welcomeTitle are both set; welcome.title wins. copy.welcomeTitle is deprecated."
-    );
-  }
-  if (isSet(welcome, "subtitle") && isSet(copy, "welcomeSubtitle")) {
-    conflicts.push(
-      "welcome.subtitle and copy.welcomeSubtitle are both set; welcome.subtitle wins. copy.welcomeSubtitle is deprecated."
-    );
-  }
-  if (isSet(welcome, "variant") && isSet(copy, "showWelcomeCard")) {
-    conflicts.push(
-      "welcome.variant and copy.showWelcomeCard are both set; welcome.variant wins. copy.showWelcomeCard is deprecated."
-    );
+  for (const [field, legacy] of [
+    ["title", "welcomeTitle"],
+    ["subtitle", "welcomeSubtitle"],
+    ["variant", "showWelcomeCard"],
+  ] as const) {
+    if (isSet(welcome, field) && isSet(copy, legacy)) {
+      conflicts.push(
+        `welcome.${field} and copy.${legacy} are both set; welcome.${field} wins. copy.${legacy} is deprecated.`
+      );
+    }
   }
   if (variant === "hero" && isSet(welcome, "message")) {
     conflicts.push(
@@ -133,7 +128,7 @@ export const resolveWelcomeConfig = (
   }
 
   const anchor: AgentWidgetWelcomeAnchor =
-    welcome?.anchor ?? (layout === "centered" && fullscreen ? "center" : "bottom");
+    welcome?.anchor ?? (variant !== "none" && layout === "centered" && fullscreen ? "center" : "bottom");
   const anchorTopValid = parseAnchorFraction(welcome?.anchorComposerTop) !== null;
   if (isSet(welcome, "anchorComposerTop") && !anchorTopValid) {
     conflicts.push(
@@ -181,27 +176,34 @@ export const resolveWelcomeConfig = (
 };
 
 /**
- * Conversation state for composer anchoring: `"empty"` until the transcript
- * contains a user message. Independent of welcome visibility (a `dismiss:
- * "never"` card stays up in an active conversation, and `variant: "none"`
- * hides it in an empty one).
+ * Real transcript activity exits the empty layout, including proactive or
+ * restored assistant-only activity. Blank assistant placeholders and hidden
+ * system context do not. Configured `welcome.message` is separate UI chrome,
+ * so an intentional greeting never activates the conversation by itself.
  */
+const hasConversationActivity = (
+  messages: readonly AgentWidgetMessage[] = []
+): boolean =>
+  messages.some((message) =>
+    message.role === "user" ||
+    (message.role === "assistant" && (
+      message.content.trim() ||
+      message.contentParts?.some((part) => part.type !== "text" || part.text.trim()) ||
+      message.toolCall || message.tools?.length || message.reasoning || message.approval
+    ))
+  );
+
 export const resolveConversationState = (
   messages: readonly AgentWidgetMessage[] | undefined
-): "empty" | "active" =>
-  (messages ?? []).some((message) => message.role === "user")
-    ? "active"
-    : "empty";
+): "empty" | "active" => hasConversationActivity(messages) ? "active" : "empty";
 
 /**
- * Derived visibility, never stored. "User activity" is the same predicate the
- * starters use: the session contains at least one `role: "user"` message.
+ * Derived visibility, never stored. A dismissible welcome yields to real
+ * transcript activity; `dismiss: "never"` keeps the authored surface visible.
  */
 export const isWelcomeVisible = (
   resolved: ResolvedWelcomeConfig,
   messages: readonly AgentWidgetMessage[] | undefined
-): boolean => {
-  if (resolved.variant === "none") return false;
-  if (resolved.dismiss === "never") return true;
-  return !(messages ?? []).some((message) => message.role === "user");
-};
+): boolean =>
+  resolved.variant !== "none" &&
+  (resolved.dismiss === "never" || !hasConversationActivity(messages));

@@ -576,7 +576,7 @@ describe("createStandardBubble: stopReason notice", () => {
     expect(bubble.querySelector(".persona-message-stop-reason")).toBeNull();
   });
 
-  it("renders the default notice for max_tool_calls", () => {
+  it("reports the tool limit without claiming the entire run stopped", () => {
     const bubble = renderWithStopReason({
       content: "Used a tool.",
       stopReason: "max_tool_calls",
@@ -584,17 +584,17 @@ describe("createStandardBubble: stopReason notice", () => {
     const notice = bubble.querySelector(".persona-message-stop-reason");
     expect(notice).not.toBeNull();
     expect(notice?.getAttribute("data-stop-reason")).toBe("max_tool_calls");
-    expect(notice?.textContent).toBe(getDefaultStopReasonNoticeCopy("max_tool_calls"));
+    expect(notice?.textContent).toBe("Tool limit reached.");
   });
 
-  it("renders the default notice for length", () => {
+  it("reports an output token limit without requiring a follow-up", () => {
     const bubble = renderWithStopReason({
       content: "Long answer cut off.",
       stopReason: "length",
     });
     const notice = bubble.querySelector(".persona-message-stop-reason");
     expect(notice?.getAttribute("data-stop-reason")).toBe("length");
-    expect(notice?.textContent).toBe(getDefaultStopReasonNoticeCopy("length"));
+    expect(notice?.textContent).toBe("Output token limit reached.");
   });
 
   it("renders the default notice for content_filter", () => {
@@ -928,6 +928,19 @@ describe("createStandardBubble: timestamp position", () => {
 describe("createMessageActions: chromeless action buttons", () => {
   const actionButtons = (row: HTMLElement) =>
     Array.from(row.querySelectorAll<HTMLButtonElement>("button[data-action]"));
+
+  it.each([false, true])("hides built-in and custom actions until streaming ends (V5: %s)", (v5Defaults) => {
+    const render = (streaming: boolean) => createStandardBubble(
+      makeMessage({ content: "Partial answer", streaming }),
+      ({ text }) => text,
+      undefined,
+      { visibility: "always", custom: [{ id: "share", label: "Share", onSelect: () => {} }] },
+      undefined,
+      { widgetConfig: { future: { v5Defaults } } as AgentWidgetConfig, actionEligibility: { isLastAssistant: true } }
+    );
+    expect(render(true).querySelector("[data-actions-for]")).toBeNull();
+    expect(actionButtons(render(false)).map((button) => button.dataset.action)).toEqual(["copy", "custom:share"]);
+  });
 
   it("keeps voting controls hidden unless explicitly enabled", () => {
     const row = createMessageActions(makeMessage({ id: "actions-default-votes" }), {});

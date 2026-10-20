@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
+import { createStandardBubble } from "./components/message-bubble";
+import type { AgentWidgetConfig, AgentWidgetMessage } from "./types";
 
 const createMount = () => {
   const mount = document.createElement("div");
@@ -16,7 +20,7 @@ const createMount = () => {
  */
 const renderTypingBubble = async (
   config: Record<string, unknown>
-): Promise<{ bubble: HTMLElement; destroy: () => void }> => {
+): Promise<{ bubble: HTMLElement; mount: HTMLElement; controller: ReturnType<typeof createAgentExperience>; destroy: () => void }> => {
   global.fetch = vi.fn().mockImplementation(
     () => new Promise(() => {})
   ) as unknown as typeof fetch;
@@ -33,14 +37,161 @@ const renderTypingBubble = async (
   await Promise.resolve();
 
   const bubble = mount.querySelector<HTMLElement>('[data-typing-indicator="true"]')!;
-  return { bubble, destroy: () => controller.destroy() };
+  return { bubble, mount, controller, destroy: () => controller.destroy() };
 };
 
 describe("standalone typing indicator bubble", () => {
+  // Only this suite asserts computed styles. Keeping the full stylesheet out of
+  // the lifecycle suites avoids repeated jsdom style recalculation on updates.
+  const stylesheet = document.createElement("style");
+  beforeAll(() => {
+    stylesheet.textContent = readFileSync(resolve(process.cwd(), "src/styles/widget.css"), "utf8");
+    document.head.appendChild(stylesheet);
+  });
+  afterAll(() => stylesheet.remove());
+
   afterEach(() => {
     document.body.innerHTML = "";
     if (typeof localStorage !== "undefined") localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  it.each([
+    [{}, false],
+    [{ future: { v5Defaults: true } }, true],
+    [{ loadingIndicator: { variant: "label" } }, true],
+    [{ future: { v5Defaults: true }, loadingIndicator: { variant: "dots" } }, false],
+  ])("resolves loading variant for %j", async (config, label) => {
+    const { bubble, destroy } = await renderTypingBubble(config);
+    expect(Boolean(bubble.querySelector(".persona-loading-label"))).toBe(label);
+    expect(bubble.querySelectorAll(".persona-animate-typing")).toHaveLength(label ? 0 : 3);
+    if (label) expect(bubble.textContent).toBe("Thinking…");
+    destroy();
+  });
+
+  it("uses the configured label in custom defaultRenderer and preserves the wrapper option", async () => {
+    const { bubble, destroy } = await renderTypingBubble({
+      loadingIndicator: {
+        variant: "label",
+        label: "Working…",
+        showBubble: false,
+        render: ({ defaultRenderer }: { defaultRenderer: () => HTMLElement }) => defaultRenderer(),
+      },
+    });
+    expect(bubble.querySelector(".persona-loading-label")?.textContent).toBe("Working…");
+    expect(bubble.classList.contains("persona-message-assistant-bubble")).toBe(false);
+    destroy();
+  });
+
+  it("updates a waiting label and clears it when the user stops", async () => {
+    const { mount, controller, destroy } = await renderTypingBubble({ future: { v5Defaults: true } });
+    controller.update({ loadingIndicator: { variant: "label", label: "Searching…" } });
+    expect(mount.querySelector(".persona-loading-label")?.textContent).toBe("Searching…");
+    const input = mount.querySelector("textarea")!;
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+    await Promise.resolve();
+    expect(mount.querySelector(".persona-loading-label")).toBeNull();
+    destroy();
+  });
+
+  it("updates icon choices and resets undefined overrides to the inherited defaults", async () => {
+    const { bubble, mount, controller, destroy } = await renderTypingBubble({
+      future: { v5Defaults: true }, features: { toolCallDisplay: { groupIconVisibility: "never" } },
+      loadingIndicator: { iconName: "star", iconVisibility: "always", iconAnimation: "spin" },
+    });
+    expect(bubble.querySelector<HTMLElement>(".persona-activity-icon")?.dataset.loadingIconAnimation).toBe("spin");
+    controller.update({ loadingIndicator: { iconName: undefined, iconVisibility: undefined, iconAnimation: undefined } });
+    expect(mount.querySelector(".persona-loading-label > .persona-activity-icon")).toBeNull();
+    controller.update({ loadingIndicator: { iconVisibility: "active" } });
+    expect(mount.querySelector<HTMLElement>(".persona-loading-label > .persona-activity-icon")?.dataset.loadingIconAnimation).toBe("spin");
+    controller.update({ loadingIndicator: { iconAnimation: "none" } });
+    expect(mount.querySelector<HTMLElement>(".persona-loading-label > .persona-activity-icon")?.dataset.loadingIconAnimation).toBe("none");
+    destroy();
+  });
+
+  it.each(["bubble", "minimal", "flat"])("aligns default V5 waiting geometry with tool rows in %s layout", async (layout) => {
+    const { bubble, mount, controller, destroy } = await renderTypingBubble({
+      future: { v5Defaults: true }, layout: { messages: { layout } },
+    });
+    const label = bubble.querySelector<HTMLElement>(".persona-loading-label")!;
+    expect(label.querySelector("svg.persona-activity-icon")).not.toBeNull();
+    expect(getComputedStyle(bubble).padding).toBe("0px");
+    expect(getComputedStyle(bubble).borderWidth).toBe("0px");
+    expect(getComputedStyle(bubble).boxShadow).toBe("none");
+    const waiting = getComputedStyle(label);
+    controller.injectTestMessage({ type: "message", message: {
+      id: "tool-geometry", role: "assistant", content: "", streaming: true,
+      createdAt: new Date(Date.now() + 60000).toISOString(), sequence: Date.now() + 60000,
+      variant: "tool", toolCall: { id: "tool-geometry", name: "lookup", status: "running" },
+    } });
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    const header = mount.querySelector<HTMLElement>(".persona-tool-bubble > .persona-activity-header")!;
+    expect(header).not.toBeNull();
+    expect(getComputedStyle(header).minHeight).toBe(waiting.minHeight);
+    expect(getComputedStyle(header).padding).toBe(waiting.padding);
+    expect(waiting.fontSize).toBe("var(--persona-activity-label-size)");
+    destroy();
+  });
+
+  it.each([
+    [{ iconVisibility: "never" }, false],
+    [{ groupIconVisibility: "never" }, false],
+    [{ iconVisibility: "never", groupIconVisibility: "active" }, true],
+    [{ grouped: false, groupIconVisibility: "never" }, true],
+    [{ groupedMode: "stack", groupIconVisibility: "never" }, true],
+  ])("matches the visible activity icon for %j", async (toolCallDisplay, visible) => {
+    const { bubble, destroy } = await renderTypingBubble({
+      future: { v5Defaults: true }, features: { toolCallDisplay },
+    });
+    expect(Boolean(bubble.querySelector(".persona-loading-label > .persona-activity-icon"))).toBe(visible);
+    destroy();
+  });
+
+  it("preserves an explicitly requested V5 loading bubble", async () => {
+    const { bubble, destroy } = await renderTypingBubble({
+      future: { v5Defaults: true }, loadingIndicator: { showBubble: true },
+    });
+    expect(bubble.querySelector(".persona-activity-row")).toBeNull();
+    expect(getComputedStyle(bubble).padding).toBe("0.75rem 1.25rem");
+    destroy();
+  });
+
+  it.each([false, true])("preserves custom loading renderer geometry (plugin=%s)", async (plugin) => {
+    const render = () => {
+      const custom = document.createElement("div");
+      custom.textContent = "Custom waiting UI";
+      return custom;
+    };
+    const { bubble, destroy } = await renderTypingBubble({
+      future: { v5Defaults: true },
+      ...(plugin ? { plugins: [{ name: "custom-loading", renderLoadingIndicator: render }] } : { loadingIndicator: { render } }),
+    });
+    expect(bubble.textContent).toBe("Custom waiting UI");
+    expect(bubble.querySelector(".persona-activity-row")).toBeNull();
+    expect(getComputedStyle(bubble).padding).toBe("0.75rem 1.25rem");
+    destroy();
+  });
+
+  it.each([undefined, true, false])("uses activity geometry for empty inline loading unless a bubble is requested (%s)", (showBubble) => {
+    const config: AgentWidgetConfig = { apiUrl: "/test", future: { v5Defaults: true }, loadingIndicator: { showBubble } };
+    const message: AgentWidgetMessage = { id: "empty-inline", role: "assistant", content: "", streaming: true, createdAt: new Date().toISOString() };
+    const bubble = createStandardBubble(message, ({ text }) => text, undefined, undefined, undefined, { widgetConfig: config });
+    document.body.appendChild(bubble);
+    expect(Boolean(bubble.querySelector(".persona-loading-label.persona-activity-row"))).toBe(showBubble !== true);
+    expect(getComputedStyle(bubble).padding).toBe(showBubble === true ? "var(--persona-message-assistant-padding, 0.75rem 1.25rem)" : "0px");
+  });
+
+  it("keeps inline custom renderer geometry while allowing defaultRenderer delegation", () => {
+    const config: AgentWidgetConfig = { apiUrl: "/test", future: { v5Defaults: true } };
+    const message: AgentWidgetMessage = { id: "custom-inline", role: "assistant", content: "", streaming: true, createdAt: new Date().toISOString() };
+    for (const delegate of [false, true]) {
+      const bubble = createStandardBubble(message, ({ text }) => text, undefined, undefined, undefined, {
+        widgetConfig: config,
+        loadingIndicatorRenderer: ({ defaultRenderer }) => delegate ? defaultRenderer() : document.createElement("aside"),
+      });
+      document.body.appendChild(bubble);
+      expect(getComputedStyle(bubble).padding).toBe(delegate ? "0px" : "var(--persona-message-assistant-padding, 0.75rem 1.25rem)");
+    }
   });
 
   it("uses the assistant bubble classes under the default bubble layout", async () => {
@@ -145,9 +296,27 @@ describe("standalone typing indicator with hidden activity rows", () => {
     document.body.innerHTML = "";
     if (typeof localStorage !== "undefined") localStorage.clear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
+  // Streaming transcript updates render once per animation frame; queue the
+  // frames so each injection can be rendered synchronously.
+  let frames = new Map<number, (time: number) => void>();
+  let nextFrameId = 1;
+  const renderFrame = () => {
+    const pending = [...frames.values()];
+    frames.clear();
+    pending.forEach((callback) => callback(0));
+  };
+
   const mountStreaming = async (config: Record<string, unknown>) => {
+    frames = new Map();
+    vi.stubGlobal("requestAnimationFrame", (callback: (time: number) => void) => {
+      const id = nextFrameId++;
+      frames.set(id, callback);
+      return id;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
     global.fetch = vi.fn().mockImplementation(
       () => new Promise(() => {})
     ) as unknown as typeof fetch;
@@ -190,6 +359,7 @@ describe("standalone typing indicator with hidden activity rows", () => {
         toolCall: { id, name: "lookup", status },
       },
     });
+    renderFrame();
   };
 
   const injectReasoning = (
@@ -211,6 +381,7 @@ describe("standalone typing indicator with hidden activity rows", () => {
         reasoning: { id, status, chunks: ["thinking"] },
       },
     });
+    renderFrame();
   };
 
   const typingIndicator = (mount: HTMLElement) =>
@@ -265,13 +436,14 @@ describe("standalone typing indicator with hidden activity rows", () => {
     controller.destroy();
   });
 
-  it("still hides the dots while a visible tool call renders its own bubble", async () => {
+  it.each([false, true])("hides waiting UI while visible tool activity renders (V5=%s)", async (v5Defaults) => {
     const { mount, controller } = await mountStreaming({
+      future: { v5Defaults },
       features: { showToolCalls: true },
     });
 
     injectTool(controller, "tool-1", "running", seq(1));
-    expect(mount.querySelector(".persona-tool-bubble")).not.toBeNull();
+    expect(mount.querySelector(v5Defaults ? ".persona-activity-row" : ".persona-tool-bubble")).not.toBeNull();
     expect(typingIndicator(mount)).toBeNull();
 
     controller.destroy();
@@ -344,8 +516,72 @@ describe("standalone typing indicator with hidden activity rows", () => {
         streaming: true,
       },
     });
+    renderFrame();
     expect(typingIndicator(mount)).toBeNull();
 
     controller.destroy();
+  });
+});
+
+describe("managed loading-label effects", () => {
+  afterEach(() => { document.body.replaceChildren(); localStorage.clear(); vi.restoreAllMocks(); });
+
+  it("keeps the committed text effect while waiting icons hide, swap, and return", async () => {
+    const destroyEffect = vi.fn();
+    const update = vi.fn();
+    const animate = vi.fn(() => ({ update, destroy: destroyEffect }));
+    const { controller, mount, destroy } = await renderTypingBubble({ future: { v5Defaults: true }, loadingLabel: { animate } });
+    const text = mount.querySelector("[data-persona-loading-label]");
+    for (const loadingIndicator of [{ iconVisibility: "never" }, { iconVisibility: "always", iconName: "star" }, { iconName: undefined }]) {
+      controller.update({ loadingIndicator: loadingIndicator as AgentWidgetConfig["loadingIndicator"] });
+      expect(mount.querySelector("[data-persona-loading-label]")).toBe(text);
+      expect(text?.textContent).toBe("Thinking…");
+      expect(animate).toHaveBeenCalledTimes(1);
+      expect(destroyEffect).not.toHaveBeenCalled();
+    }
+    expect(update).toHaveBeenCalled();
+    destroy();
+    expect(destroyEffect).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates and switches the live waiting label between builtins and a managed effect", async () => {
+    const update = vi.fn();
+    const destroyEffect = vi.fn();
+    const animate = vi.fn(({ element, text, kind }) => {
+      expect(element.isConnected).toBe(true);
+      expect(element.parentElement?.classList.contains("persona-loading-label")).toBe(true);
+      expect(text).toBe("Thinking…"); expect(kind).toBe("waiting");
+      return { update, destroy: destroyEffect };
+    });
+    const { controller, mount, destroy } = await renderTypingBubble({ future: { v5Defaults: true }, loadingLabel: { animate } });
+    expect(animate).toHaveBeenCalledTimes(1);
+    const label = mount.querySelector("[data-persona-loading-label]");
+    controller.update({ loadingLabel: { duration: 4321 } });
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ loadingLabel: expect.objectContaining({ duration: 4321 }) }) }));
+    expect(mount.querySelector("[data-persona-loading-label]")).toBe(label);
+    controller.update({ loadingLabel: { animate: undefined, animation: "rainbow" } });
+    expect(destroyEffect).toHaveBeenCalledTimes(1);
+    expect(mount.querySelector(".persona-loading-label .persona-tool-loading-rainbow .persona-tool-char")).not.toBeNull();
+    controller.update({ loadingLabel: { animate } });
+    expect(animate).toHaveBeenCalledTimes(2);
+    controller.update({ loadingLabel: undefined });
+    expect(destroyEffect).toHaveBeenCalledTimes(2);
+    expect(mount.querySelector(".persona-loading-label .persona-tool-loading-shimmer")).not.toBeNull();
+    controller.update({ loadingLabel: { animate } });
+    expect(animate).toHaveBeenCalledTimes(3);
+    destroy(); expect(destroyEffect).toHaveBeenCalledTimes(3);
+  });
+
+  it("leaves custom indicators alone and runs delegates through the default lifecycle", async () => {
+    const animate = vi.fn(() => ({ destroy: vi.fn() }));
+    const custom = document.createElement("strong"); custom.textContent = "Custom indicator";
+    const { controller, mount, destroy } = await renderTypingBubble({ future: { v5Defaults: true }, loadingLabel: { animate }, loadingIndicator: { render: () => custom } });
+    expect(mount.textContent).toContain("Custom indicator"); expect(animate).not.toHaveBeenCalled();
+    controller.update({ loadingIndicator: { render: ({ defaultRenderer }) => defaultRenderer() } });
+    expect(animate).toHaveBeenCalledTimes(1);
+    controller.clearChat(); expect(mount.querySelector("[data-persona-loading-label]")).toBeNull();
+    expect(animate.mock.results[0]?.value?.destroy).toHaveBeenCalledTimes(1);
+    destroy();
   });
 });

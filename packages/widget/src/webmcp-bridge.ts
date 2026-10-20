@@ -28,8 +28,10 @@
  * themselves; Persona never replaces an existing context. v6's installWebMCP()
  * and v5's initializeWebMCPPolyfill() are both accepted by custom loaders.
  *
- * Every call passes one confirm gate before execution, regardless of
- * annotations.readOnlyHint. v6 callbacks also receive an invocation signal.
+ * Every chat-path call passes one confirm gate before execution, regardless of
+ * annotations.readOnlyHint. The one exception is a voice fast-tier
+ * `client_tool_call`, which skips the gate only for a tool whose registry entry
+ * declares `readOnlyHint: true`. v6 callbacks also receive an invocation signal.
  */
 
 import type { ClientToolDefinition } from "./types";
@@ -77,10 +79,7 @@ export interface ModelContextToolInfo {
    * absent on v4 and whenever the tool declared none -- the spec omits the
    * member rather than emitting an empty object.
    */
-  annotations?: {
-    readOnlyHint?: boolean;
-    untrustedContentHint?: boolean;
-  };
+  annotations?: ClientToolDefinition["annotations"];
 }
 
 export interface ModelContextCoreLike {

@@ -109,7 +109,7 @@ describe('appearance curated controls', () => {
 
     // Theme mode shows current value
     const themeSummary = container.querySelector('[data-section-id="theme-mode-v2"] .accordion-summary');
-    expect(themeSummary?.textContent).toContain('Auto');
+    expect(themeSummary?.textContent).toContain('Light');
 
     // Advanced Tokens has drilldown links
     const advancedActions = container.querySelectorAll(

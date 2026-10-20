@@ -1,0 +1,36 @@
+import { getTurnActivityUiSync, loadTurnActivityUi } from "./turn-activity-ui-loader";
+import { prepareIconRegistry } from "./utils/icons";
+import type { AgentWidgetConfig } from "./types";
+import { getComposerActionsSync, loadComposerActions } from "./composer-actions-loader";
+import { getActivityUiSync, loadActivityUi } from "./activity-ui-loader";
+import { getLoadingLabelRuntimeSync, loadLoadingLabelRuntime } from "./loading-label-runtime-loader";
+import { getDictationRuntimeSync, loadDictationRuntime } from "./dictation-runtime-loader";
+import { getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
+import { getArtifactsUiSync, loadArtifactsUi } from "./artifacts-ui-loader";
+import { getUiExtrasSync, loadUiExtras } from "./ui-extras-loader";
+import { getVoiceRuntimeSync, loadVoiceRuntime } from "./voice-runtime-loader";
+import { usesSessionVoiceForConfig } from "./utils/voice-support";
+
+/** Select modules, without constructing UI or starting microphone/providers.
+ * Each loader owns its cache and retry policy; this only selects requirements. */
+export const prepareRendererModules = (config: AgentWidgetConfig): Promise<unknown>[] => {
+  const pending: Promise<unknown>[] = [];
+  const require = (enabled: boolean, cached: unknown, load: () => Promise<unknown>) => {
+    if (enabled && !cached) pending.push(load());
+  };
+  require(true, getComposerActionsSync(), loadComposerActions);
+  require(true, getMarkdownParsersSync(), loadMarkdownParsers);
+  const turn = config.turnActivity?.enabled === true;
+  require(turn, getTurnActivityUiSync(), loadTurnActivityUi);
+  const activity = turn || config.features?.showToolCalls !== false || config.features?.showReasoning !== false;
+  require(activity, getActivityUiSync(), loadActivityUi);
+  require(activity || config.loadingLabel?.animation !== "none" && (!!config.loadingLabel?.animate ||
+    (config.loadingIndicator?.variant ?? (config.future?.v5Defaults ? "label" : "dots")) === "label"), getLoadingLabelRuntimeSync(), loadLoadingLabelRuntime);
+  require(config.voiceRecognition?.enabled !== false, getDictationRuntimeSync(), loadDictationRuntime);
+  require(config.voiceRecognition?.enabled !== false && usesSessionVoiceForConfig(config), getVoiceRuntimeSync(), loadVoiceRuntime);
+  require(config.features?.artifacts?.enabled === true, getArtifactsUiSync(), loadArtifactsUi);
+  require(config.contextMentions?.enabled === true, getUiExtrasSync(), loadUiExtras);
+  const icons = prepareIconRegistry();
+  if (icons) pending.push(icons);
+  return pending;
+};

@@ -24,6 +24,16 @@ export const morphMessages = (
       beforeNodeMorphed(oldNode: Node, newNode: Node): boolean | void {
         if (!(oldNode instanceof HTMLElement)) return;
 
+        // Render passes stand in an unchanged transcript row with an empty
+        // `data-persona-reuse` stub: keep the live row as is.
+        if (
+          newNode instanceof HTMLElement &&
+          newNode.hasAttribute("data-persona-reuse") &&
+          oldNode.id === newNode.id
+        ) {
+          return false;
+        }
+
         // Preserve typing indicator dots to maintain animation continuity
         // Also preserve elements with data-preserve-animation attribute for custom loading indicators
         if (preserveTypingAnimation) {
@@ -56,18 +66,14 @@ export const morphMessages = (
             return;
           }
           if (oldNode.hasAttribute("data-preserve-animation")) {
-            // Allow morph when the new node drops the attribute (e.g. tool completed)
-            if (newNode instanceof HTMLElement && !newNode.hasAttribute("data-preserve-animation")) {
-              return;
-            }
-            // Allow morph when content has meaningfully changed (e.g. tool name arrived)
-            if (newNode instanceof HTMLElement && newNode.hasAttribute("data-preserve-animation")) {
-              const oldText = oldNode.textContent ?? "";
-              const newText = newNode.textContent ?? "";
-              if (oldText !== newText) {
-                return;
-              }
-            }
+            // Shared labels compare their render signature because custom effects
+            // can mutate live text. Generic custom indicators retain text matching.
+            if (newNode instanceof HTMLElement && (
+              !newNode.hasAttribute("data-preserve-animation") ||
+              (oldNode.dataset.personaLoadingLabel
+                ? oldNode.dataset.personaLoadingAnimation !== newNode.dataset.personaLoadingAnimation
+                : oldNode.textContent !== newNode.textContent)
+            )) return;
             return false;
           }
         }

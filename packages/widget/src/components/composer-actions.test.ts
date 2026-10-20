@@ -1,6 +1,8 @@
+import * as sharedIcons from "../utils/icons";
+import * as sharedTooltips from "../utils/tooltip";
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   COMPOSER_ACTION_ORDER,
@@ -11,10 +13,12 @@ import {
 import { bindComposerSurface } from "./composer-bindings";
 import { buildComposer } from "./composer-builder";
 import { buildPillComposer } from "./pill-composer-builder";
+import { resetTooltipTiming } from "../utils/tooltip";
 import type { AgentWidgetPlugin } from "../plugins/types";
 import type {
   AgentWidgetConfig,
   ComposerAction,
+  ComposerButtonAction,
   ComposerActionContext,
   ComposerState,
 } from "../types";
@@ -307,7 +311,7 @@ const mountRenderer = (options: {
     plugins: options.plugins ?? [],
   };
 
-  const renderer = createComposerActionRenderer({
+  const renderer = createComposerActionRenderer({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip, hideTooltipFor: sharedTooltips.hideTooltipFor },
     getBindings: () => bindings,
     collect: () => ({
       builtIns: [
@@ -461,6 +465,18 @@ describe("composer action renderer accessibility", () => {
     expect(el.classList.contains("persona-composer-action-button")).toBe(true);
   });
 
+  it("sizes iconless label controls from their text instead of an icon box", () => {
+    const harness = mountRenderer({
+      configActions: [button({ id: "text", label: "Detailed reply" })],
+      getButtonSize: () => "32px",
+    });
+    const el = actionButton(harness, "text");
+    expect(el.classList.contains("persona-composer-action-button--text")).toBe(true);
+    expect(el.style.width).toBe("");
+    expect(el.style.minWidth).toBe("");
+    expect(el.textContent).toBe("Detailed reply");
+  });
+
   it("renders shortLabel as visible text while label stays the accessible name", () => {
     const harness = mountRenderer({
       configActions: [
@@ -496,6 +512,50 @@ describe("composer action renderer accessibility", () => {
         "data-persona-composer-disable-when-streaming"
       )
     ).toBe(true);
+  });
+});
+
+describe("composer action tooltips", () => {
+  beforeEach(() => resetTooltipTiming({ delayMs: 0, skipDelayMs: 0 }));
+  afterEach(() => {
+    resetTooltipTiming();
+    vi.restoreAllMocks();
+  });
+
+  const cases: Array<[string, Partial<ComposerButtonAction>, string | null]> = [
+    ["icon label", { iconName: "mic" }, "Start dictation"],
+    ["custom copy", { iconName: "mic", tooltipText: "Use your microphone" }, "Use your microphone"],
+    ["explicit opt-out", { iconName: "mic", tooltipText: "Hidden", showTooltip: false }, null],
+    ["visible text", { iconName: "mic", shortLabel: "Dictate" }, null],
+    ["iconless text", {}, null],
+    ["text with custom copy", { shortLabel: "Dictate", tooltipText: "Use your microphone" }, "Use your microphone"],
+    ["text with explicit opt-in", { shortLabel: "Dictate", showTooltip: true }, "Start dictation"],
+  ];
+  it.each(cases)("handles %s", (_name, patch, expected) => {
+    const harness = mountRenderer({ configActions: [button({ id: "dictate", label: "Start dictation", ...patch })] });
+    const el = actionButton(harness, "dictate");
+    el.parentElement!.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(document.querySelector('[role="tooltip"]')?.textContent ?? null).toBe(expected);
+    expect(el.getAttribute("aria-label")).toBe("Start dictation");
+    expect(el.hasAttribute("title")).toBe(false);
+    harness.renderer.destroy();
+    harness.elements.footer.remove();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+  });
+
+  it("supports keyboard focus and live opt-out without stale tooltips", () => {
+    const harness = mountRenderer({ configActions: [button({ id: "dictate", label: "Dictate", iconName: "mic" })] });
+    const el = actionButton(harness, "dictate");
+    vi.spyOn(el, "matches").mockImplementation(selector => selector === ":focus-visible");
+    el.focus();
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toBe("Dictate");
+    harness.live.configActions = [button({ id: "dictate", label: "Dictate", iconName: "mic", showTooltip: false })];
+    harness.renderer.resolve();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    actionButton(harness, "dictate").parentElement!.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    harness.renderer.destroy();
+    harness.elements.footer.remove();
   });
 });
 
@@ -541,6 +601,33 @@ describe("composer action renderer control sizing", () => {
     expect(el.style.height).toBe("32px");
     expect(el.style.minWidth).toBe("32px");
     expect(el.style.minHeight).toBe("32px");
+  });
+});
+
+describe("composer voice icon motion", () => {
+  it.each([false, true])("supports opt-in motion and live removal (pill: %s)", (pill) => {
+    const action = { id: "voice", placement: "end" as const, label: "Start voice", onSelect: () => {}, iconName: "voice-bars", shortLabel: "Voice", trailingIconName: "chevron-down" };
+    const harness = mountRenderer({ pill, configActions: [action] });
+    expect(actionButton(harness, "voice").querySelectorAll("svg:first-child > path")).toHaveLength(5);
+    expect(actionButton(harness, "voice").querySelector(".persona-voice-bars--animated")).toBeNull();
+
+    harness.live.configActions = [{ ...action, iconAnimation: "voice" }];
+    harness.renderer.resolve();
+    const icons = actionButton(harness, "voice").querySelectorAll("svg");
+    expect(icons[0].classList.contains("persona-voice-bars--animated")).toBe(true);
+    expect(icons[0].getAttribute("aria-hidden")).toBe("true");
+    expect(icons[1].classList.contains("persona-voice-bars--animated")).toBe(false);
+
+    harness.live.configActions = [action];
+    harness.renderer.resolve();
+    expect(actionButton(harness, "voice").querySelector(".persona-voice-bars--animated")).toBeNull();
+    harness.renderer.destroy();
+  });
+
+  it("does not animate unrelated icon geometry", () => {
+    const harness = mountRenderer({ configActions: [button({ id: "mic", iconName: "mic", iconAnimation: "voice" })] });
+    expect(actionButton(harness, "mic").querySelector(".persona-voice-bars--animated")).toBeNull();
+    harness.renderer.destroy();
   });
 });
 

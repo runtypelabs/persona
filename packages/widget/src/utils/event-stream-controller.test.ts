@@ -12,7 +12,7 @@ describe("Event Stream Controller Events", () => {
     eventBus.emit("eventStream:opened", { timestamp: now });
 
     expect(handler).toHaveBeenCalledOnce();
-    expect(handler).toHaveBeenCalledWith({ timestamp: now });
+    expect(handler).toHaveBeenCalledWith({ timestamp: now }, { instanceId: "" });
   });
 
   it("should emit eventStream:closed with timestamp", () => {
@@ -24,7 +24,7 @@ describe("Event Stream Controller Events", () => {
     eventBus.emit("eventStream:closed", { timestamp: now });
 
     expect(handler).toHaveBeenCalledOnce();
-    expect(handler).toHaveBeenCalledWith({ timestamp: now });
+    expect(handler).toHaveBeenCalledWith({ timestamp: now }, { instanceId: "" });
   });
 
   it("should allow unsubscription from eventStream events", () => {
@@ -67,8 +67,8 @@ describe("Event Stream Controller Events", () => {
     const now = Date.now();
     eventBus.emit("eventStream:opened", { timestamp: now });
 
-    expect(handler1).toHaveBeenCalledWith({ timestamp: now });
-    expect(handler2).toHaveBeenCalledWith({ timestamp: now });
+    expect(handler1).toHaveBeenCalledWith({ timestamp: now }, { instanceId: "" });
+    expect(handler2).toHaveBeenCalledWith({ timestamp: now }, { instanceId: "" });
   });
 });
 
@@ -411,7 +411,7 @@ describe("Event Stream Window Events", () => {
     mockWindow.dispatchEvent(new CustomEvent("persona:showEventStream"));
 
     expect(handler).toHaveBeenCalledOnce();
-    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ timestamp: expect.any(Number) }));
+    expect(handler).toHaveBeenCalledWith(expect.objectContaining({ timestamp: expect.any(Number) }), { instanceId: "" });
   });
 
   it("should fire eventStream:closed event via controller.on when closed via window event", () => {
@@ -424,7 +424,7 @@ describe("Event Stream Window Events", () => {
     mockWindow.dispatchEvent(new CustomEvent("persona:hideEventStream"));
 
     expect(closedHandler).toHaveBeenCalledOnce();
-    expect(closedHandler).toHaveBeenCalledWith(expect.objectContaining({ timestamp: expect.any(Number) }));
+    expect(closedHandler).toHaveBeenCalledWith(expect.objectContaining({ timestamp: expect.any(Number) }), { instanceId: "" });
   });
 
   it("should handle detail being null gracefully (broadcast)", () => {

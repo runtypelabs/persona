@@ -176,6 +176,22 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
     expect(errors).toEqual([]);
   });
 
+  it("sends the continuation bubble's id so the stored reply dedupes by id (core#9961)", async () => {
+    const calls = mockFetch(
+      sse([
+        { type: "text_start", id: "t1" },
+        { type: "text_delta", id: "t1", delta: "Order placed." },
+        { type: "text_complete", id: "t1" },
+        { type: "execution_complete", kind: "agent", success: true },
+      ])
+    );
+    const { approve, last } = setup();
+    await approve();
+
+    expect(calls[0].body.assistantMessageId).toMatch(/^ast_/);
+    expect(last()?.id).toBe(calls[0].body.assistantMessageId);
+  });
+
   it.each([
     [
       403,
@@ -210,7 +226,7 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
     await approve();
 
     expect(bubble()?.approval?.status).toBe(badge);
-    expect(last()).toMatchObject({ id: "approval-error-appr_1", content: text });
+    expect(last()).toMatchObject({ id: "approval-error-appr_1", content: text, localOnly: true });
     expect(session.isStreaming()).toBe(false);
     expect(errors.map((e) => e.message)).toEqual([text]);
     // A refused request settles too: its token must not outlive it.

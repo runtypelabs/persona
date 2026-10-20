@@ -1,3 +1,17 @@
+/** Optional brand inputs, derived beneath explicit theme tokens. */
+export interface BrandConfig {
+  /** Opaque hex or rgb() color for primary actions and the accent ramp. */
+  accent?: string;
+  /** Opaque hex or rgb() base surface; dark values infer a dark scheme. */
+  neutral?: string;
+  /** CSS font-family stack. */
+  font?: string;
+  /** Shared corner scale; circular controls keep their circular shape. */
+  radius?: 'none' | 'sm' | 'md' | 'lg';
+  density?: 'compact' | 'comfortable' | 'spacious';
+  elevation?: 'flat' | 'subtle' | 'raised';
+}
+
 export type TokenType = 'color' | 'spacing' | 'typography' | 'shadow' | 'border' | 'radius';
 
 export type TokenReference<_T extends TokenType = TokenType> = string;
@@ -229,6 +243,8 @@ export interface LauncherTokens extends ComponentTokenSet {
 }
 
 export interface PanelTokens extends ComponentTokenSet {
+  /** Chat shell background. Defaults to semantic.colors.surface; embedded: transparent. */
+  background?: TokenReference<'color'>;
   width: string;
   maxWidth: string;
   height: string;
@@ -266,7 +282,29 @@ export interface TextStyleTokens {
  * explicit key always wins, and `iconBackground` / `iconForeground` (the avatar
  * tile) keep their own defaults rather than deriving.
  */
+/** Independent control chrome. Optional leaves retain the shared control defaults. */
+export interface ControlTokens {
+  /** Box edge (CSS length); send box sizing applies in icon mode only. */
+  size?: string;
+  /** Glyph edge, independently configurable from the box. */
+  iconSize?: string;
+  /** SVG stroke width (unitless). Built-in glyphs inherit the foreground. */
+  iconStrokeWidth?: string;
+  background?: TokenReference<'color'>;
+  foreground?: TokenReference<'color'>;
+  borderColor?: TokenReference<'color'>;
+  /** CSS length. Border color alone does not introduce a visible border. */
+  borderWidth?: string;
+  borderRadius?: TokenReference<'radius'>;
+  /** CSS padding shorthand. Legacy axis overrides win on their own axis. */
+  padding?: string;
+}
+
 export interface HeaderTokens extends ComponentTokenSet {
+  /** Close control only; other header controls retain their own colors and sizing. */
+  close?: ControlTokens;
+  /** Clear-chat control only, independent of Messages and trailing actions. */
+  clear?: ControlTokens;
   background: TokenReference<'color'>;
   /**
    * Hairline under the header. Unset, it derives as
@@ -284,6 +322,11 @@ export interface HeaderTokens extends ComponentTokenSet {
   iconForeground: TokenReference<'color'>;
   /** Header identity glyph size as a fraction of its icon box. @default "0.6" */
   iconScale?: string;
+  /** Space around the identity icon/image, added outside headerIconSize.
+   * V5 defaults to "auto": 6px for a filled background, 0px for transparent.
+   * V4 defaults to 0px. Explicit CSS padding (including "0") overrides auto.
+   */
+  iconPadding?: string;
   /**
    * Legacy alias of `title.color`; `title.color` wins when both are set.
    * Unset, the title takes `foreground`, then the primary color.
@@ -313,7 +356,7 @@ export interface HeaderTokens extends ComponentTokenSet {
    * 40px regardless. @default "32px"
    */
   controlSize?: string;
-  /** Glyph box inside a header control. @default "20px" */
+  /** Glyph box inside a header control. @default "16px" */
   controlIconSize?: string;
   /**
    * Stroke weight of the glyph inside a header control. Unitless, as an SVG
@@ -509,6 +552,10 @@ export interface MessageGeometryTokens {
 }
 
 export interface MessageTokens {
+  /** Transcript surface, independent of code and activity surfaces. */
+  background?: TokenReference<'color'>;
+  /** Shell fill exposed by the top fade. Defaults to the transcript background. */
+  topFadeBackground?: TokenReference<'color'>;
   /** Height of the optional transcript top fade. Default 18px. */
   topFadeHeight?: string;
   /** Vertical gap between transcript turns. @default "12px" */
@@ -543,6 +590,9 @@ export interface MessageTokens {
  * to replace it wholesale.
  */
 export interface IntroCardTokens extends ComponentTokenSet {
+  /** Inline welcome symbol dimensions and space before the title. */
+  inlineIconSize?: string;
+  inlineIconGap?: string;
   background?: TokenReference<'color'>;
   borderRadius?: TokenReference<'radius'>;
   padding?: TokenReference<'spacing'>;
@@ -621,6 +671,8 @@ export interface MarkdownTokens {
 }
 
 export interface VoiceTokens {
+  /** Idle mic chrome. Legacy iconSize overrides both size and iconSize. */
+  control?: ControlTokens;
   recording: {
     indicator: TokenReference<'color'>;
     background: TokenReference<'color'>;
@@ -629,9 +681,12 @@ export interface VoiceTokens {
   processing: {
     icon: TokenReference<'color'>;
     background: TokenReference<'color'>;
+    border?: TokenReference<'color'>;
   };
   speaking: {
     icon: TokenReference<'color'>;
+    background?: TokenReference<'color'>;
+    border?: TokenReference<'color'>;
   };
 }
 
@@ -642,27 +697,105 @@ export interface ApprovalTokens {
     text: TokenReference<'color'>;
     /** Box-shadow for the approval bubble (token ref or raw CSS, e.g. `none`). */
     shadow: string;
+    /** Title foreground; falls back through an explicit requested.text override. */
+    titleColor?: TokenReference<'color'>;
+    /** Summary and details foreground; falls back through explicit requested.text. */
+    descriptionColor?: TokenReference<'color'>;
+    /** Agent-attributed reason foreground; falls back through explicit requested.text. */
+    reasonColor?: TokenReference<'color'>;
+    parameters?: {
+      background?: TokenReference<'color'>;
+      foreground?: TokenReference<'color'>;
+    };
   };
   approve: ComponentTokenSet;
   deny: ComponentTokenSet;
 }
 
+/** Appearance of the existing question sheet; behavior stays in feature config. */
+export interface AskUserQuestionTokens {
+  sheet?: {
+    background?: TokenReference<'color'>;
+    border?: TokenReference<'color'>;
+    shadow?: string;
+  };
+  pill?: {
+    background?: TokenReference<'color'>;
+    foreground?: TokenReference<'color'>;
+    borderRadius?: string;
+    selectedBackground?: TokenReference<'color'>;
+    selectedForeground?: TokenReference<'color'>;
+  };
+  customInput?: { background?: TokenReference<'color'> };
+}
+
+/** Each preview kind inherits unset values from composer.remove. */
+export interface AttachmentRemoveTokens {
+  size?: string;
+  iconSize?: string;
+  background?: string;
+  foreground?: string;
+  hoverBackground?: string;
+  hoverForeground?: string;
+  borderColor?: string;
+  borderWidth?: string;
+  borderRadius?: string;
+  inset?: string;
+}
+
 export interface AttachmentTokens {
+  /** Composer previews only; transcript attachment tokens remain independent. */
+  composer?: {
+    gap?: string;
+    image?: {
+      /** Thumbnail dimensions, including inside a chip. */
+      width?: string;
+      height?: string;
+      borderRadius?: string;
+      background?: string;
+      borderColor?: string;
+      chip?: { background?: string; borderColor?: string; borderRadius?: string; padding?: string; gap?: string; foreground?: string; fontSize?: string; width?: string; minHeight?: string };
+      remove?: AttachmentRemoveTokens;
+    };
+    file?: { width?: string; minHeight?: string; borderRadius?: string; background?: string; borderColor?: string; foreground?: string; mutedForeground?: string; padding?: string; gap?: string; iconSize?: string; iconForeground?: string; iconBackground?: string; fontSize?: string; remove?: AttachmentRemoveTokens };
+    remove?: AttachmentRemoveTokens;
+  };
   image: {
     background: TokenReference<'color'>;
     border: TokenReference<'color'>;
   };
 }
 
-/** Tool-call row chrome (collapsible tool bubbles). */
+/** Expanded activity detail panel; border color alone keeps the default zero width. */
+export interface ActivityPanelTokens {
+  background?: TokenReference<'color'>;
+  borderColor?: TokenReference<'color'>;
+  borderWidth?: string;
+  borderRadius?: string;
+  padding?: string;
+}
+
+/** Scroll limits shared by expanded reasoning and each tool detail section. */
+export interface ActivityOverflowTokens {
+  /** CSS max-height; "none" disables the cap. V5: 240px. */
+  maxHeight?: string;
+  /** Edge fade height; "0px" disables fades. V5: 12px. */
+  fadeHeight?: string;
+}
+
+/** Shared tool and reasoning activity chrome. */
 export interface ActivityTokens {
+  /** Per-kind overflow properties override shared activity properties individually. */
+  overflow?: ActivityOverflowTokens;
+  /** Shared detail panel defaults; per-kind panel properties override individually. */
+  panel?: ActivityPanelTokens;
   /** Minimum activity row height. */
   rowHeight?: string;
-  /** Group child indentation; falls back to indent when unset. V5: 0px. */
+  /** Group child indentation; falls back to indent when unset. V5: 16px. */
   groupIndent?: string;
-  /** Extra vertical gap between grouped rows. V5: 0px. */
+  /** Extra vertical gap between grouped rows. V5: 2px. */
   groupGap?: string;
-  /** Padding around expanded group children. V5: 0px. */
+  /** Padding around expanded group children. V5: 2px 0. */
   groupPadding?: string;
   /** Gap between consecutive activity entries. V5: 0px. */
   transcriptGap?: string;
@@ -687,6 +820,16 @@ export interface ActivityTokens {
 export interface ToolBubbleTokens extends ActivityTokens {
   /** Box-shadow for tool bubbles (token ref or raw CSS, e.g. `none`). */
   shadow: string;
+  background?: TokenReference<'color'>;
+  borderColor?: TokenReference<'color'>;
+  borderWidth?: string;
+  borderRadius?: string;
+  header?: { background?: TokenReference<'color'>; foreground?: TokenReference<'color'>; padding?: string };
+  content?: { background?: TokenReference<'color'>; foreground?: TokenReference<'color'>; padding?: string };
+  codeBlock?: { background?: TokenReference<'color'>; foreground?: TokenReference<'color'>; borderColor?: TokenReference<'color'> };
+  toggleForeground?: TokenReference<'color'>;
+  labelForeground?: TokenReference<'color'>;
+  loading?: { primary?: TokenReference<'color'>; secondary?: TokenReference<'color'>; duration?: string };
 }
 
 /** Reasoning / “thinking” row chrome. */
@@ -744,6 +887,14 @@ export interface ScrollbarTokens {
  * surface-colored pill on the active segment).
  */
 export interface ComposerSegmentedTokens {
+  /** Space between segments, independent of composer row spacing. @default "2px" */
+  gap?: string;
+  /** Segment typography; unset size/line-height retain the composer input scale. */
+  fontSize?: string;
+  lineHeight?: string;
+  fontWeight?: string;
+  /** Minimum segment height, independent of icon controls. */
+  minHeight?: string;
   /** Track fill behind the segments. @default semantic.colors.container */
   trackBackground?: TokenReference<'color'>;
   /** Track corner radius; each segment follows it. @default "9999px" */
@@ -777,6 +928,14 @@ export interface ComposerSegmentedTokens {
  * button tokens.
  */
 export interface ComposerModelPickerTokens {
+  /** Closed label typography. Defaults: inherited family, 13px, normal weight. */
+  fontSize?: string;
+  fontWeight?: string;
+  /** Closed control height and minimum width, independent of icon controls. */
+  height?: string;
+  minWidth?: string;
+  /** Closed control logical padding (CSS shorthand), including chevron space. */
+  paddingInline?: string;
   /** Closed control fill. @default the ghost button fill (transparent) */
   background?: TokenReference<'color'>;
   /** Closed control fill under hover. @default the ghost hover wash */
@@ -823,10 +982,51 @@ export interface ComposerOverflowMenuTokens {
   foreground?: TokenReference<'color'>;
   /** Panel elevation (raw CSS box-shadow, `none` allowed). @default palette.shadows.md */
   shadow?: string;
+  /** Panel inset and vertical space between rows. */
+  padding?: string;
+  rowGap?: string;
+  /** Row inset and corner radius. */
+  rowPadding?: string;
+  rowBorderRadius?: TokenReference<'radius'>;
+  fontSize?: string;
+  lineHeight?: string;
+  /** Glyph box and space between glyph and label. */
+  iconSize?: string;
+  iconGap?: string;
+  hoverBackground?: TokenReference<'color'>;
+  focusBackground?: TokenReference<'color'>;
+  descriptionColor?: TokenReference<'color'>;
+  descriptionFontSize?: string;
+  dividerColor?: TokenReference<'color'>;
+  dividerSpacing?: string;
+  /** Content width floor and panel height cap, both constrained to the viewport. */
+  minWidth?: string;
+  maxHeight?: string;
+}
+
+/** Independent mode buttons; unset keys retain the existing action-button appearance. */
+export interface ComposerModeTokens {
+  fontSize?: string;
+  fontWeight?: string;
+  height?: string;
+  paddingInline?: string;
+  /** Gap between icon, label and optional trailing icon. */
+  gap?: string;
+  borderRadius?: TokenReference<'radius'>;
+  /** Inset outline colors; drawing an outline never changes the box size. */
+  borderColor?: TokenReference<'color'>;
+  activeBorderColor?: TokenReference<'color'>;
+  activeBackground?: TokenReference<'color'>;
 }
 
 /** Composer (message input) chrome. */
 export interface ComposerChromeTokens {
+  /** Submit chrome. Theme padding/background can also style text mode; legacy icon padding and text-mode background remain ignored. */
+  send?: ControlTokens;
+  /** Footer background in block placement. Embedded default: transparent. */
+  footerBackground?: TokenReference<'color'>;
+  /** Footer padding (CSS shorthand), independent of the input form padding. */
+  footerPadding?: string;
   /** Box-shadow on the composer form (raw CSS, e.g. `none`). */
   shadow: string;
   /** Border color of the composer form. @default semantic.colors.border */
@@ -837,8 +1037,22 @@ export interface ComposerChromeTokens {
   focusRing?: string;
   /** Inner padding of the composer form (raw CSS shorthand). @default "0.75rem 1rem" */
   padding?: string;
+  /** Expanded composer inset. V5: 12px 16px; an explicit padding also overrides this. */
+  expandedPadding?: string;
+  /** Expanded composer corners. V5: 24px; an explicit input.borderRadius also overrides this. */
+  expandedBorderRadius?: TokenReference<'radius'>;
   /** Gap between the textarea row and the actions row. @default "0.5rem" */
   gap?: string;
+  /** Horizontal space between controls. Independent of row gap. @default "0.5rem" */
+  controlGap?: string;
+  /** Minimum editor height; unset retains the 24px floor. */
+  editorMinHeight?: string;
+  /** Optional editor inset (CSS padding shorthand); unset preserves native padding. */
+  editorPadding?: string;
+  /** Space above starter suggestions placed below the composer. @default "0.5rem" */
+  suggestionsGap?: string;
+  /** Independent mode-button chrome (segmented groups use segmented tokens). */
+  mode?: ComposerModeTokens;
   /** Composer textarea font-size. @default "0.875rem" */
   fontSize?: string;
   /** Composer textarea line-height. @default "1.25rem" */
@@ -862,8 +1076,9 @@ export interface ComposerChromeTokens {
   /**
    * Background painted behind an overlaid composer footer
    * (`composer.placement: "overlay"`). Any CSS `background` value, gradients
-   * included — same convention as the shadow tokens. Inert under
-   * `placement: "block"`.
+   * included — same convention as the shadow tokens. Also paints the 24px
+   * transcript edge above fixed composer-bar follow-ups when more content
+   * is hidden below. Otherwise inert under `placement: "block"`.
    * @default "transparent" (V4); a theme-aware 24px fade (V5)
    */
   overlayBand?: string;
@@ -876,7 +1091,7 @@ export interface ComposerChromeTokens {
 }
 
 /**
- * Motion timing shared by every composer animation.
+ * Motion timing shared by composer animations and scroll-to-bottom visibility fades.
  *
  * Setting either duration to `0ms` is a kill switch: the transitions and
  * keyframes that consume these tokens complete instantly, with no other config
@@ -894,6 +1109,10 @@ export interface MotionTokens {
 
 /** Artifact toolbar chrome. */
 export interface ArtifactToolbarTokens {
+  iconColor?: string;
+  toggleActiveBackground?: string;
+  toggleActiveBorderColor?: string;
+  toggleActiveColor?: string;
   iconHoverColor?: string;
   iconHoverBackground?: string;
   iconPadding?: string;
@@ -927,6 +1146,8 @@ export interface ArtifactToolbarTokens {
 
 /** Artifact tab strip chrome. */
 export interface ArtifactTabTokens {
+  /** Width of enabled edge fades (CSS length). */
+  fadeSize?: string;
   background?: string;
   activeBackground?: string;
   activeBorder?: string;
@@ -955,6 +1176,12 @@ export interface ArtifactCardTokens {
 
 /** Artifact pane chrome. */
 export interface ArtifactPaneTokens {
+  padding?: string;
+  borderRadius?: string;
+  shadow?: string;
+  /** Full CSS border shorthand; takes precedence over borderLeft. */
+  border?: string;
+  borderLeft?: string;
   /**
    * Background for the artifact column (toolbar + content), resolved from the theme.
    * Defaults to `semantic.colors.container` so the pane matches assistant message surfaces.
@@ -1047,6 +1274,18 @@ export interface ScrollToBottomTokens extends ComponentTokenSet {
   gap?: string;
   fontSize?: string;
   iconSize?: string;
+  /** Unread-count badge; omitted values retain the current pill/semantic colors. */
+  countBadge?: {
+    background?: TokenReference<'color'>;
+    foreground?: TokenReference<'color'>;
+    border?: TokenReference<'color'>;
+    borderRadius?: TokenReference<'radius'>;
+    /** Minimum width and height. Defaults to 18px. */
+    size?: string;
+    padding?: string;
+    fontSize?: string;
+    fontWeight?: string;
+  };
 }
 
 /** Visual tokens shared by one suggestion presentation variant. */
@@ -1103,8 +1342,16 @@ export interface ComponentTokens {
   markdown?: MarkdownTokens;
   voice: VoiceTokens;
   approval: ApprovalTokens;
+  askUserQuestion?: AskUserQuestionTokens;
   attachment: AttachmentTokens;
   activity?: ActivityTokens;
+  /** Divider below the grouped turn-activity disclosure ("Worked …"). */
+  turnActivity?: {
+    /** Defaults to the theme primary color at 8% opacity. */
+    dividerColor?: TokenReference<'color'>;
+    /** CSS border width. Defaults to 1px; use 0px to hide the divider. */
+    dividerWidth?: string;
+  };
   toolBubble: ToolBubbleTokens;
   reasoningBubble: ReasoningBubbleTokens;
   /** Event-stream inspector badge chips. */
@@ -1129,6 +1376,8 @@ export interface ComponentTokens {
     toolbar?: ArtifactToolbarTokens;
     tab?: ArtifactTabTokens;
     pane?: ArtifactPaneTokens;
+    chat?: { shadow?: string };
+    split?: { outerRadius?: string };
     card?: ArtifactCardTokens;
     inline?: ArtifactInlineTokens;
   };

@@ -1,11 +1,21 @@
-import { activityVariant, activityDuration, createActivityLifecycle, createActivityGroup } from "./components/activity-row";
+import type { BrowserRecognitionEvent } from "./voice/browser-recognition-handlers";
+import { createRenderReadiness } from "./utils/render-readiness";
+import { activityDependencies } from "./activity-dependencies";
+import { prepareRendererModules } from "./renderer-preparation";
+import { loadDictationRuntime, getDictationRuntimeSync, type DictationRuntimeModule } from "./dictation-runtime-loader";
+import { getComposerActionsSync, loadComposerActions, type ComposerActionsModule } from "./composer-actions-loader";
+import { createScrollAnimation, createScrollToLatest } from "./utils/scroll-animation";
+import { createScrollToBottomControl } from "./components/scroll-to-bottom";
+import { createLayoutSlots } from "./utils/layout-slots";
+import { isBrowserLocalApproval } from "./utils/restored-browser-state";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
-import { usesSessionVoice } from "./utils/voice-support";
+import type { DictationSession } from "./dictation-session";
+import { usesSessionVoice, usesSessionVoiceForConfig } from "./utils/voice-support";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
-import { onMarkdownParsersReady, getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
+import { getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { loadClientStream } from "./client-stream-loader";
 import { HistoryClientError } from "./client";
 import { HistoryProviderError } from "./internal/history-provider";
@@ -14,10 +24,14 @@ import type { AskUserSheetContext, AskUserSheetHandlers } from "./ui-ask-user-sh
 import {
   AgentWidgetSession,
   AgentWidgetSessionStatus,
+  SessionHistoryError,
   type SessionHistoryNotice,
   type SessionHistoryState
 } from "./session";
 import {
+  DictationState,
+  DictationRenderHandle,
+  DictationProviderConfig,
   AgentWidgetConfig,
   AgentWidgetConfigPatch,
   AgentWidgetSessionInitHook,
@@ -52,6 +66,7 @@ import {
   AgentWidgetContentSegment,
   AgentWidgetContextMentionRef,
   AgentWidgetStoredDraft,
+  AgentWidgetOpenConversationOptions,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionSource,
   AgentWidgetWelcomeIcon,
@@ -72,6 +87,7 @@ import {
   ComposerSubmissionSnapshot,
   AgentWidgetReasoning
 } from "./types";
+import type { AgentWidgetComponentRenderer, AgentWidgetComponentRenderContext, AgentWidgetComponentRenderHandle } from "./types";
 import { AttachmentManager, type PendingAttachment } from "./utils/attachment-manager";
 import { createComposerStore } from "./utils/composer-store";
 import {
@@ -80,19 +96,11 @@ import {
 } from "./components/composer-bindings";
 import {
   COMPOSER_ACTION_ORDER,
-  createComposerActionRenderer,
+  COMPOSER_ACTION_ATTR,
   type ComposerActionRenderer,
   type ComposerBuiltInDescriptor,
 } from "./components/composer-actions";
-import {
-  createComposerModelPickerAction,
-  type ComposerModelPicker,
-} from "./components/composer-model-picker";
-import { createComposerModeChipRow } from "./components/composer-mode-chips";
-import {
-  createComposerSegmentedModeAction,
-  type ComposerSegmentedModeControl,
-} from "./components/composer-segmented-modes";
+import type { createComposerModeChipRow } from "./components/composer-mode-chips";
 import {
   COMPOSER_CHIP_ROW_SELECTOR,
   ensureComposerChipRow,
@@ -118,17 +126,17 @@ import {
   chipVisibleComposerModes,
   clearOnceComposerModes,
   composerModeActionId,
-  composerModeOrder,
-  isSegmentedModeGroup,
   pruneComposerModes,
   resolveComposerModePlaceholder,
   toggleComposerMode,
+  selectComposerModes,
 } from "./utils/composer-modes";
 import {
   createComposerCompactLatch,
   isComposerCompact,
   isEditorWrapped,
 } from "./utils/composer-compact";
+import { createComposerFitObserver } from "./utils/composer-fit";
 import { requestFormSubmit } from "./utils/composer-input";
 import {
   DEFAULT_COMPOSER_MAX_LINES,
@@ -155,10 +163,10 @@ import { createMentionButton } from "./components/context-mention-button";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme, getColorScheme } from "./utils/theme";
-import { resolveTokenValue } from "./utils/tokens";
+import { resolveTokenValue, resolveThemeDefaults } from "./utils/tokens";
 import { deepMerge } from "./utils/deep-merge";
 import { Activity, Check, Copy } from "lucide";
-import { renderLucideIcon, onExtraIconsReady } from "./utils/icons";
+import { renderLucideIcon } from "./utils/icons";
 import { renderIconNode } from "./utils/icon-node";
 import { createElement } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
@@ -169,18 +177,18 @@ import {
   parseAnchorFraction,
   resolveComposerPlacement,
 } from "./utils/composer-placement";
-import { attachTooltip, configureTooltipTiming } from "./utils/tooltip";
+import { attachTooltip, hideTooltipFor, configureTooltipTiming } from "./utils/tooltip";
 import {
   DEFAULT_TOOLTIP_DELAY_MS,
   DEFAULT_TOOLTIP_SKIP_DELAY_MS,
 } from "./utils/tooltip-timing";
-import { createShortcutRegistry } from "./utils/shortcuts";
+import { createShortcutRegistry, parseCombo, formatCombo, ariaCombo } from "./utils/shortcuts";
 // The artifact download/copy helpers live in the lazy artifacts-ui chunk;
 // reached via getArtifactsUiSync() in the delegated click handlers (which can
 // only fire on DOM the adopted chunk rendered).
 import { morphMessages } from "./utils/morph";
 import { getVoiceRuntimeSync, loadVoiceRuntime, type VoiceRuntimeModule } from "./voice-runtime-loader";
-import type { MicStateStyles, OriginalMicStyles } from "./voice/mic-state-styles";
+import type { MicStateStyles } from "./voice/mic-state-styles";
 import { normalizeCopiedSelectionText } from "./utils/copy-selection";
 import {
   navigateComposerHistory,
@@ -227,14 +235,15 @@ import {
   COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE,
   COMPOSER_BAR_CLOSE_ICON_SIZE,
   resolvePanelGeometry,
+  resolveInlinePanelWidth,
 } from "./components/panel";
 import { buildPillComposer } from "./components/pill-composer-builder";
 import {
   COMPOSER_CONTROL_CLASS,
-  COMPOSER_CONTROL_FALLBACK_PX,
   COMPOSER_CONTROL_GLYPH_CLASS,
   COMPOSER_CONTROL_ICON_FALLBACK_PX,
-  buildSendGlyphStack,
+  applySendButtonStyle,
+  applyMicButtonStyle,
   createMicButton,
 } from "./components/composer-parts";
 import { createWidgetView, resolveLauncher } from "./components/widget-view";
@@ -255,22 +264,24 @@ import {
 } from "./welcome";
 import { HEADER_THEME_CSS } from "./components/header-builder";
 import {
-  applyHeaderControlGlyph,
+  applyHeaderControlStyle,
   createHeaderIconButton,
 } from "./components/header-parts";
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
-import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer, MessageActionEligibility } from "./components/message-bubble";
+import { MessageTransform, MessageActionCallbacks, MessageActionEligibility } from "./components/message-bubble";
 import {
   createStandardBubble,
   createTypingIndicator,
   getBubbleClasses,
+  applyBubbleGeometry,
   CUSTOM_MESSAGE_ACTION_PREFIX,
 } from "./components/message-bubble";
-import { createReasoningBubble, updateReasoningBubbleUI } from "./components/reasoning-bubble";
+import { getActivityUiSync, type ActivityUiModule } from "./activity-ui-loader";
+import { getLoadingLabelRuntimeSync, type LoadingLabelRuntime } from "./loading-label-runtime-loader";
 import { copyToolDetail } from "./components/tool-details";
-import { createToolBubble, updateToolBubbleUI } from "./components/tool-bubble";
+
 import {
   ensureAskUserQuestionSheet,
   isAskUserQuestionMessage,
@@ -282,7 +293,7 @@ import {
   latestAgentSuggestions,
   resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
-import { formatElapsedMs, isShortReasoning } from "./utils/formatting";
+import { isShortReasoning } from "./utils/formatting";
 import { loadApprovalUi, getApprovalUiSync, type ApprovalUiModule } from "./approval-ui-loader";
 import { getWebMcpToolDisplayTitle } from "./webmcp-bridge";
 import type { AgentWidgetPlugin } from "./plugins/types";
@@ -308,6 +319,7 @@ import {
 import {
   artifactsSidebarEnabled,
   applyArtifactLayoutCssVars,
+  artifactStyle,
   applyArtifactPaneAppearance,
   isArtifactPaneAppearanceDetached,
   shouldExpandLauncherForArtifacts
@@ -317,27 +329,27 @@ import { resolveConfigPreferences } from "./utils/feature-preferences";
 import {
   ARTIFACT_RESIZE_CHAT_MIN_PX,
   ARTIFACT_RESIZE_RAILED_TRANSCRIPT_MIN_PX,
-  readFlexGapPx,
-  resolveArtifactPaneWidthPx,
 } from "./utils/artifact-resize";
 import { loadFormsUi, getFormsUiSync } from "./forms-ui-loader";
 import { pluginRegistry } from "./plugins/registry";
 import { DEFAULT_HEADER_ICON_SIZE, mergeWithDefaults } from "./defaults";
 import { mergeConfigUpdate } from "./utils/config-merge";
-import { getPanelAliasProvenance } from "./utils/panel-config";
+import { createLegacyDiagnosticContext, updateLegacyDiagnostics, type LegacyDiagnosticContext } from "./utils/legacy-diagnostics";
+import { getPanelAliasProvenance, isEmbeddedLayout, isHeaderVisible } from "./utils/panel-config";
 import { createEventBus } from "./utils/events";
 import {
   createActionManager,
   defaultActionHandlers,
   defaultJsonActionParser
 } from "./utils/actions";
-import { createLocalStorageAdapter } from "./utils/storage";
+import { createLocalStorageAdapter, transcriptStorageKey } from "./utils/storage";
+import { isLocalOnlyMessage } from "./utils/local-only-message";
 import { createVisitorStore, type VisitorStore } from "./utils/visitor-store";
 import { loadHistoryView } from "./history-view-loader";
 import { getHistoryShellSync, loadHistoryShell, type HistoryShellModule } from "./history-shell-loader";
 import type { HistoryShell, HistoryShellContext } from "./history-shell";
 import { getHistoryProviderFactory } from "./internal/history-provider-registry";
-import { componentRegistry } from "./components/registry";
+import { resolveComponentOptions, resolveComponentRenderer } from "./components/registry";
 import {
   renderComponentDirective,
   extractComponentDirectiveFromMessage,
@@ -451,30 +463,18 @@ function normalizePersistStateConfig(
 ): NormalizedPersistConfig | null {
   if (!config) return null;
 
-  if (config === true) {
-    // Use defaults
-    return {
-      storage: 'session',
-      keyPrefix: 'persona-',
-      persist: {
-        openState: true,
-        voiceState: true,
-        focusInput: true
-      },
-      clearOnChatClear: true
-    };
-  }
+  const settings = config === true ? {} : config;
 
   // Object config - merge with defaults
   return {
-    storage: config.storage ?? 'session',
-    keyPrefix: config.keyPrefix ?? 'persona-',
+    storage: settings.storage ?? 'session',
+    keyPrefix: settings.keyPrefix ?? 'persona-',
     persist: {
-      openState: config.persist?.openState ?? true,
-      voiceState: config.persist?.voiceState ?? true,
-      focusInput: config.persist?.focusInput ?? true
+      openState: settings.persist?.openState ?? true,
+      voiceState: settings.persist?.voiceState ?? true,
+      focusInput: settings.persist?.focusInput ?? true
     },
-    clearOnChatClear: config.clearOnChatClear ?? true
+    clearOnChatClear: settings.clearOnChatClear ?? true
   };
 }
 
@@ -501,13 +501,19 @@ const ensureRecord = (value: unknown): Record<string, unknown> => {
   return { ...(value as Record<string, unknown>) };
 };
 
-const stripStreamingFromMessages = (messages: AgentWidgetMessage[]) =>
-  messages.map((message) => ({
-    ...message,
-    streaming: false
-  }));
+const messagesForStorage = (messages: AgentWidgetMessage[]) =>
+  messages
+    .filter((message) => !isLocalOnlyMessage(message))
+    .map((message) => ({
+      ...message,
+      streaming: false
+    }));
 
 type Controller = {
+  /** Resolves once the configured UI and its styles can be shown together.
+   * Rejects on a preparation failure; update() retries missing modules. */
+  readonly ready: Promise<void>;
+  readonly instanceId: string;
   update: (config: AgentWidgetConfigPatch) => void;
   destroy: () => void;
   open: () => void;
@@ -521,6 +527,8 @@ type Controller = {
    * The same payload rides the `persona:composer:state` DOM event.
    */
   getComposerState: () => Readonly<ComposerState>;
+  /** Set valid active modes; last requested mode wins each single-selection group. */
+  setComposerModes: (ids: readonly string[]) => void;
   /**
    * Set the composer quote/reply-to. Renders a dismissible banner above the
    * editor; the next send carries the quote as a delimited block ahead of the
@@ -535,6 +543,11 @@ type Controller = {
    * No-op unless a resumable durable turn dropped and `reconnectStream` is set.
    */
   reconnect: () => void;
+  startDictation: () => boolean;
+  finishDictation: () => boolean;
+  cancelDictation: () => boolean;
+  sendDictation: () => boolean;
+  getDictationState: () => DictationState;
   startVoiceRecognition: () => boolean;
   stopVoiceRecognition: () => boolean;
   /**
@@ -566,6 +579,10 @@ type Controller = {
   injectComponentDirective: (
     options: InjectComponentDirectiveOptions
   ) => AgentWidgetMessage;
+  /** Replace the props of an existing component directive; false if not found. */
+  updateComponentProps: (messageId: string, props: Record<string, unknown>) => boolean;
+  /** Remove an existing component directive and retire its renderer lifetime. */
+  removeComponentMessage: (messageId: string) => boolean;
   /**
    * @deprecated Use injectMessage() instead.
    */
@@ -591,11 +608,11 @@ type Controller = {
   ) => void;
   on: <K extends keyof AgentWidgetControllerEventMap>(
     event: K,
-    handler: (payload: AgentWidgetControllerEventMap[K]) => void
+    handler: (payload: AgentWidgetControllerEventMap[K], context: Readonly<{ instanceId: string }>) => void
   ) => () => void;
   off: <K extends keyof AgentWidgetControllerEventMap>(
     event: K,
-    handler: (payload: AgentWidgetControllerEventMap[K]) => void
+    handler: (payload: AgentWidgetControllerEventMap[K], context: Readonly<{ instanceId: string }>) => void
   ) => void;
   // State query methods
   isOpen: () => boolean;
@@ -681,7 +698,7 @@ type Controller = {
    */
   openConversation: (
     conversationId: string,
-    opts?: { focus?: boolean }
+    opts?: AgentWidgetOpenConversationOptions
   ) => Promise<void>;
   /** Clean local state plus a new owned server conversation. `focus` as on `openConversation`. */
   startNewConversation: (opts?: { focus?: boolean }) => Promise<void>;
@@ -758,9 +775,7 @@ export const buildPostprocessor = (
   // since DOMPurify will strip any tags/attributes not in the allowlist.
   if (cfg?.postprocessMessage && sanitize && cfg?.sanitize === undefined) {
     console.warn(
-      "[Persona] A custom postprocessMessage is active with the default HTML sanitizer. " +
-      "Tags or attributes not in the built-in allowlist will be stripped. " +
-      "To keep custom HTML, set `sanitize: false` or provide a custom sanitize function."
+      "[Persona] postprocessMessage HTML is sanitized: unsupported tags/attributes are stripped. Provide a custom sanitize function to allow them, or sanitize: false only for trusted HTML."
     );
   }
 
@@ -904,7 +919,7 @@ export const mergeFinalizedMentions = (
 export const createAgentExperience = (
   mount: HTMLElement,
   initialConfig?: AgentWidgetConfig,
-  runtimeOptions?: { debugTools?: boolean }
+  runtimeOptions?: { debugTools?: boolean; registerHostMove?: (move: (reparent: () => void) => void) => void; diagnostics?: LegacyDiagnosticContext; preparation?: Promise<unknown>[] }
 ): Controller => {
   if (mount == null) {
     throw new Error(
@@ -915,23 +930,38 @@ export const createAgentExperience = (
   if (mount.id && !mount.getAttribute("data-persona-instance")) {
     mount.setAttribute("data-persona-instance", mount.id);
   }
+  const instanceId = mount.getAttribute("data-persona-instance") ||
+    `persona-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  mount.setAttribute("data-persona-instance", instanceId);
   // Ensure root marker is present for Tailwind scoping and DOM traversal
   if (!mount.hasAttribute("data-persona-root")) {
     mount.setAttribute("data-persona-root", "true");
   }
 
   let config = mergeWithDefaults(initialConfig) as AgentWidgetConfig;
+  const renderReadiness = createRenderReadiness(mount);
+  const diagnostics = runtimeOptions?.diagnostics ?? createLegacyDiagnosticContext(initialConfig);
   // Message ids are only unique within a widget session. Keep disclosure state
   // beside the widget that renders it, not in component module scope.
+  let activityUi: ActivityUiModule | null = null;
+  let loadingLabelLifecycle: ReturnType<LoadingLabelRuntime["createLoadingLabelLifecycle"]> | undefined;
+  let activityLifecycle: ReturnType<ActivityUiModule["createActivityLifecycle"]> | undefined;
+  const ensureActivityUi = (): ActivityUiModule | null => {
+    const loadingLabels = getLoadingLabelRuntimeSync();
+    loadingLabelLifecycle ??= loadingLabels?.createLoadingLabelLifecycle(mount, () => config);
+    if (activityUi) return activityUi;
+    const ready = getActivityUiSync();
+    if (ready && loadingLabels) {
+      ready.initActivityUi(renderLucideIcon, loadingLabels, activityDependencies);
+      activityLifecycle = ready.createActivityLifecycle(
+        mount, () => config, toolExpansionState, reasoningExpansionState, messageCache, queryMessageBubble
+      );
+      return activityUi = ready;
+    }
+    return null;
+  };
   const toolExpansionState = new Set<string>();
   const reasoningExpansionState = new Set<string>();
-  const activityLifecycle = createActivityLifecycle((id, kind) => {
-    messageCache.delete(id);
-    const bubble = Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]")).find(node => node.dataset.messageId === id);
-    if (!bubble) return;
-    if (kind === "tool") updateToolBubbleUI(id, bubble, toolExpansionState, config);
-    else updateReasoningBubbleUI(id, bubble, reasoningExpansionState);
-  });
   const approvalDetailsExpansionState = new Map<string, boolean>();
   const applyTooltipTiming = (): void => {
     configureTooltipTiming({
@@ -979,12 +1009,14 @@ export const createAgentExperience = (
   let teardownBuiltInApprovals: (() => void) | null = null;
   let approvalUiDisposed = false;
   let onApprovalUiReady: (() => void) | null = null;
-  const adoptApprovalUi = (mod: ApprovalUiModule): void => {
+  const adoptApprovalUi = (mod: ApprovalUiModule, controls: ComposerActionsModule): void => {
     approvalUi = mod;
     // Inject the core bridge's webmcp title map: the chunk is bundled
     // noExternal and must not read its own (empty) copy.
     mod.initApprovalUi({
       webMcpToolTitle: getWebMcpToolDisplayTitle,
+      popover: controls,
+      icons: { render: renderLucideIcon, node: renderIconNode },
     });
     const built = mod.createBuiltInApprovalPlugin(approvalDetailsExpansionState);
     builtInApprovalPlugin = built.plugin;
@@ -995,16 +1027,17 @@ export const createAgentExperience = (
     // Synchronous when the module was provided eagerly (tests) or already
     // loaded by another widget instance on the page.
     const sync = getApprovalUiSync();
-    if (sync) {
-      adoptApprovalUi(sync);
+    const controls = getComposerActionsSync();
+    if (sync && controls) {
+      adoptApprovalUi(sync, controls);
       return sync;
     }
     // No local in-flight flag: the chunk loader dedupes concurrent loads,
     // caches success, and clears a rejection so the next render retries.
-    void loadApprovalUi()
-      .then((mod) => {
+    void Promise.all([loadApprovalUi(), loadComposerActions()])
+      .then(([mod, controls]) => {
         if (approvalUiDisposed || approvalUi) return;
-        adoptApprovalUi(mod);
+        adoptApprovalUi(mod, controls);
         onApprovalUiReady?.();
       })
       .catch(() => {
@@ -1051,11 +1084,8 @@ export const createAgentExperience = (
       });
   };
 
-  // Register components from config
-  if (config.components) {
-    componentRegistry.registerAll(config.components);
-  }
-  const eventBus = createEventBus<AgentWidgetControllerEventMap>();
+  // Config component registrations are resolved per instance, never copied globally.
+  const eventBus = createEventBus<AgentWidgetControllerEventMap>(Object.freeze({ instanceId }));
 
   // When persistState is explicitly false, message-history persistence is
   // disabled: including any user-supplied storageAdapter. This is the strict
@@ -1064,7 +1094,12 @@ export const createAgentExperience = (
   const storageAdapter: AgentWidgetStorageAdapter | null =
     messagePersistenceDisabled
       ? null
-      : (config.storageAdapter ?? createLocalStorageAdapter());
+      : (config.storageAdapter ??
+        createLocalStorageAdapter(
+          transcriptStorageKey(
+            typeof config.persistState === "object" ? config.persistState.keyPrefix : undefined
+          )
+        ));
   const personaOwnsClientTokenRecovery =
     Boolean(config.clientToken) && typeof config.reconnectStream !== "function";
   let persistentMetadata: Record<string, unknown> = {};
@@ -1240,7 +1275,6 @@ export const createAgentExperience = (
   let showReasoning = config.features?.showReasoning ?? true;
   let showToolCalls = config.features?.showToolCalls ?? true;
   let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
-  let scrollToBottomFeature = config.features?.scrollToBottom ?? {};
   let scrollBehaviorFeature = config.features?.scrollBehavior ?? {};
   // Live-read: `update()` may change the persistState shape, which re-keys the
   // visitor store.
@@ -1457,11 +1491,9 @@ export const createAgentExperience = (
   let attachmentPreviewsContainer: HTMLElement | null = panelElements.attachmentPreviewsContainer;
   container.classList.add("persona-relative");
   body.classList.add("persona-relative");
-  const SCROLL_TO_BOTTOM_EDGE_OFFSET = 12;
+  const SCROLL_TO_BOTTOM_EDGE_OFFSET = 16;
 
-  const getScrollToBottomLabel = () => scrollToBottomFeature.label ?? "";
-  const getScrollToBottomIconName = () => scrollToBottomFeature.iconName ?? "arrow-down";
-  const isScrollToBottomEnabled = () => scrollToBottomFeature.enabled !== false;
+  const isScrollToBottomEnabled = () => config.features?.scrollToBottom?.enabled !== false;
   // Default is "anchor-top" (see DEFAULT_WIDGET_CONFIG). This `??` only applies
   // when a partial config sets `scrollBehavior.mode` to undefined explicitly;
   // it must agree with the declared default.
@@ -1484,24 +1516,23 @@ export const createAgentExperience = (
     scrollBehaviorFeature.showActivityWhilePinned !== false;
   const isAnnounceEnabled = () => scrollBehaviorFeature.announce === true;
   const getScrollbarPolicy = () => scrollBehaviorFeature.scrollbar ?? "on-scroll";
-  const scrollToBottomButton = createElement(
-    "button",
-    "persona-scroll-to-bottom-indicator persona-absolute persona-bottom-3 persona-left-1/2 persona-z-10 persona-flex persona-items-center persona-gap-1 persona-text-xs persona-transform persona--translate-x-1/2 persona-cursor-pointer"
-  ) as HTMLButtonElement;
-  scrollToBottomButton.type = "button";
-  scrollToBottomButton.style.display = "none";
-  scrollToBottomButton.setAttribute("data-persona-scroll-to-bottom", "true");
-  const scrollToBottomIcon = createElement("span", "persona-flex persona-items-center");
-  const scrollToBottomLabel = createElement("span", "");
-  // Count of messages that arrived while auto-follow was paused (or, in
-  // non-follow scroll modes, while the user was away from the bottom).
-  // Rendered as a small badge on the scroll-to-bottom affordance, mirroring
-  // the event stream view's "Jump to latest (N)" indicator.
-  const scrollToBottomCount = createElement("span", "");
-  scrollToBottomCount.setAttribute("data-persona-scroll-to-bottom-count", "");
-  scrollToBottomCount.style.display = "none";
-  scrollToBottomButton.append(scrollToBottomIcon, scrollToBottomLabel, scrollToBottomCount);
+  const scrollToBottomControl = createScrollToBottomControl(renderLucideIcon, "transcript", body);
+  const scrollToBottomButton = scrollToBottomControl.element;
   container.appendChild(scrollToBottomButton);
+  // The docked history rail gives the transcript its own positioned column.
+  // Follow that live parent so 50% stays centered over the conversation through
+  // rail mounting, resizing, and restoration to the full-width container.
+  const scrollToBottomHost = () => body.parentElement ?? container;
+  // Persistent-composer follow-ups stay on the panel surface, outside the
+  // scrolling transcript, rather than floating over the host page.
+  const panelSuggestions = createElement("div", "persona-panel-suggestions");
+  panelSuggestions.setAttribute("data-persona-panel-suggestions", "");
+  panelSuggestions.hidden = true;
+  container.appendChild(panelSuggestions);
+  const panelSuggestionsFade = createElement("div", "persona-panel-suggestions-fade");
+  panelSuggestionsFade.setAttribute("aria-hidden", "true");
+  panelSuggestionsFade.hidden = true;
+  container.appendChild(panelSuggestionsFade);
 
   // Anchor-top scroll mode: zero-height spacer kept after the messages
   // wrapper. Sized on send so the just-sent user message can be scrolled to
@@ -1581,13 +1612,60 @@ export const createAgentExperience = (
     parseFloat(mount.style.getPropertyValue("--persona-composer-lift")) ||
     0;
 
+  // Walk offsetParents up to the positioned ancestor (`body` by default) to get a
+  // node's top relative to the scroll content. offsetTop avoids skew from any
+  // in-flight entrance transforms. Mirrors the anchor-top geometry.
+  const offsetTopWithinBody = (el: HTMLElement, ancestor: HTMLElement = body): number => {
+    let top = 0;
+    let node: HTMLElement | null = el;
+    while (node && node !== ancestor) {
+      top += node.offsetTop;
+      node = node.offsetParent as HTMLElement | null;
+    }
+    return top;
+  };
+
   const updateScrollToBottomButtonOffset = () => {
     const footerHidden = footer.style.display === "none";
-    const footerHeight = footerHidden ? 0 : footer.offsetHeight;
-    // Both placements raise the footer, so the affordance clears the lift too.
-    scrollToBottomButton.style.bottom = `${footerHeight + readLiftPx() + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
+    const host = scrollToBottomHost();
+    if (isComposerBar()) {
+      // The fixed composer is a sibling of the transcript. Anchored panels
+      // already clear it; only reserve space when it overlaps the panel
+      // (for example in fullscreen mode).
+      const overlap = footerHidden || !footer.offsetHeight ? 0 :
+        Math.max(0, host.getBoundingClientRect().bottom - footer.getBoundingClientRect().top);
+      const suggestionOverlap = panelSuggestions.hidden ? 0 :
+        Math.max(0, host.getBoundingClientRect().bottom - panelSuggestions.getBoundingClientRect().top);
+      scrollToBottomButton.style.bottom = `${Math.max(overlap, suggestionOverlap) + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
+      return;
+    }
+    let footerHeight = footerHidden ? 0 : footer.offsetHeight;
+    if (footerHeight > 0 && resolveComposerPlacement(config, isComposerBar()) === "overlay") {
+      let contentTop = Infinity;
+      // Overlay padding is transparent; block placement clears the full footer.
+      // Header children also cover the pill's display:contents attachment row.
+      for (const child of footer.querySelectorAll<HTMLElement>(":scope > *, [data-persona-composer-header] > *")) {
+        if (child.hidden || !child.offsetHeight || getComputedStyle(child).visibility === "hidden") continue;
+        contentTop = Math.min(contentTop, offsetTopWithinBody(child, host));
+      }
+      if (contentTop < Infinity) footerHeight -= contentTop - offsetTopWithinBody(footer, host);
+    }
+    scrollToBottomButton.style.bottom = `${footerHeight + (footerHidden ? 0 : readLiftPx()) + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
   };
   updateScrollToBottomButtonOffset();
+
+  const syncComposerBarClearance = () => {
+    if (!isComposerBar()) return;
+    // Measure the visible composer, including suggestions and attachments.
+    // The invisible peek banner still occupies layout space outside it.
+    const height = footer.style.display === "none" ? 0 : footer.offsetHeight;
+    if (height > 0) {
+      wrapper.style.setProperty("--persona-measured-pill-area-height", `${height + 8}px`);
+    } else {
+      wrapper.style.removeProperty("--persona-measured-pill-area-height");
+    }
+    wrapper.style.setProperty("--persona-pill-bottom", config.launcher?.composerBar?.bottomOffset ?? "16px");
+  };
 
   // block+center raises the footer with flex spacing, not absolute
   // positioning: the container is a flex column with body { flex: 1 1 0% }, so
@@ -1650,26 +1728,12 @@ export const createAgentExperience = (
     );
     blockCenterLiftPx = placement === "block" ? lift : 0;
     applyBlockCenterLift();
+    syncComposerBarClearance();
     updateScrollToBottomButtonOffset();
+    syncTranscriptEdgeFades();
   };
 
-  const renderScrollToBottomButton = () => {
-    const hasLabel = Boolean(getScrollToBottomLabel());
-    scrollToBottomButton.setAttribute("aria-label", getScrollToBottomLabel() || "Jump to latest");
-    scrollToBottomButton.title = getScrollToBottomLabel();
-    scrollToBottomButton.setAttribute("data-persona-scroll-to-bottom-has-label", hasLabel ? "true" : "false");
-    scrollToBottomIcon.innerHTML = "";
-    const icon = renderLucideIcon(getScrollToBottomIconName(), "14px", "currentColor", 2);
-    if (icon) {
-      scrollToBottomIcon.appendChild(icon);
-      scrollToBottomIcon.style.display = "";
-    } else {
-      scrollToBottomIcon.style.display = "none";
-    }
-    scrollToBottomLabel.textContent = getScrollToBottomLabel();
-    scrollToBottomLabel.style.display = hasLabel ? "" : "none";
-  };
-  renderScrollToBottomButton();
+  scrollToBottomControl.update(config, false);
 
   // Initialized after composer plugins rebind footer DOM (see `bindComposerRefsFromFooter`)
   let attachmentManager: AttachmentManager | null = null;
@@ -1686,7 +1750,7 @@ export const createAgentExperience = (
     try {
       container.dispatchEvent(
         new CustomEvent("persona:composer:state", {
-          detail: state,
+          detail: { ...state, instanceId },
           bubbles: true,
           composed: true,
         })
@@ -1720,6 +1784,31 @@ export const createAgentExperience = (
     progress: attachment.progress,
     error: attachment.error,
   });
+  const attachmentManagerConfig = () => ({
+    allowedTypes: config.attachments?.allowedTypes,
+    maxFileSize: config.attachments?.maxFileSize,
+    maxFiles: config.attachments?.maxFiles,
+    adapter: config.attachments?.adapter,
+    onFileRejected: config.attachments?.onFileRejected,
+    instanceId, widgetConfig: config, preview: config.attachments?.preview,
+    renderAttachmentPreview: renderAttachmentPreviewForInstance,
+  });
+  const renderAttachmentPreviewForInstance = (context: import("./types").AttachmentPreviewRenderContext) => {
+    for (const plugin of pluginRegistry.getForInstance(config.plugins)) {
+      try {
+        const rendered = plugin.renderAttachmentPreview?.(context);
+        if (rendered) return rendered;
+      } catch (error) { console.error(`[AgentWidget] plugin ${plugin.id} attachment preview failed:`, error); }
+    }
+    return null;
+  };
+  const createScopedAttachmentManager = (): AttachmentManager => {
+    const manager = AttachmentManager.fromConfig(config.attachments, (attachments) => {
+      if (attachmentManager === manager) syncComposerAttachments(attachments);
+    });
+    manager.updateConfig(attachmentManagerConfig());
+    return manager;
+  };
   const syncComposerAttachments = (attachments: PendingAttachment[]): void => {
     const states = Object.freeze(attachments.map(toComposerAttachmentState));
     composerStore.setAttachments(states);
@@ -1745,7 +1834,7 @@ export const createAgentExperience = (
    * state itself, so a chip beside it would be a second copy of it.
    */
   const composerChipModes = (): readonly ComposerMode[] =>
-    chipVisibleComposerModes(composerModes(), config.composer?.modeGroups);
+    chipVisibleComposerModes(composerModes(), config.composer?.modeGroups, Boolean(config.future?.v5Defaults));
 
   // Authored initial selection. Everything downstream reads the store, and a
   // restored draft overwrites this in `restoreComposerDraft`.
@@ -1761,7 +1850,7 @@ export const createAgentExperience = (
   function selectComposerModel(modelId: string): void {
     if (composerStore.getState().selectedModelId === modelId) return;
     composerStore.setSelectedModelId(modelId);
-    composerModelPicker?.repaint();
+    composerCoreControls?.repaint();
     try {
       config.composer?.onModelChange?.(modelId);
     } catch (error) {
@@ -1772,7 +1861,7 @@ export const createAgentExperience = (
   function setActiveComposerModes(ids: readonly string[]): void {
     composerStore.setActiveModeIds(ids);
     composerModeChips?.render(ids, composerChipModes());
-    composerSegmentedGroups.forEach((group) => group.repaint());
+    composerCoreControls?.repaint();
     // `pressed` is read off config at resolve time, so the row must re-resolve.
     composerActionRenderer?.resolve();
     updateCopy();
@@ -1780,6 +1869,14 @@ export const createAgentExperience = (
   }
 
   function toggleComposerModeById(modeId: string): void {
+    const root = mount.getRootNode();
+    const focused = root instanceof ShadowRoot ? root.activeElement : mount.ownerDocument.activeElement;
+    const actionId = composerModeActionId(modeId);
+    const menu = composerActionRenderer?.getOverflowMenu();
+    const ownsFocus = focused && (
+      focused.closest(`[${COMPOSER_ACTION_ATTR}]`)?.getAttribute(COMPOSER_ACTION_ATTR) === actionId ||
+      menu?.trigger.contains(focused)
+    );
     setActiveComposerModes(
       toggleComposerMode(
         composerStore.getState().activeModeIds,
@@ -1788,15 +1885,20 @@ export const createAgentExperience = (
         config.composer?.modeGroups
       )
     );
+    // Selecting the last folded mode removes the menu trigger; deselecting a
+    // pinned mode can fold its focused button into a detached menu. Keep focus
+    // on the equivalent visible control without moving unrelated editor/slot focus.
+    if (ownsFocus && !focused.isConnected) {
+      const visibleAction = Array.from(mount.querySelectorAll<HTMLElement>(`[${COMPOSER_ACTION_ATTR}]`))
+        .find((element) => element.getAttribute(COMPOSER_ACTION_ATTR) === actionId);
+      const replacement = visibleAction?.querySelector<HTMLButtonElement>("button") ??
+        composerActionRenderer?.getOverflowMenu()?.triggerButton;
+      if (replacement?.isConnected) replacement.focus();
+    }
   }
 
-  /** Model picker + one toggle per configured mode, as ordinary actions. */
-  let composerModelPicker: ComposerModelPicker | null = null;
-  /** Presentation the cached picker was built for; a change rebuilds it. */
-  let composerModelPickerMode: "native" | "popover" | null = null;
+  let composerCoreControls: ReturnType<ComposerActionsModule["createComposerCoreControls"]> | null = null;
   let composerModeChips: ReturnType<typeof createComposerModeChipRow> | null = null;
-  /** One cached segmented track per `presentation: "segmented"` mode group. */
-  const composerSegmentedGroups = new Map<string, ComposerSegmentedModeControl>();
 
   // --- Quote / reply-to (roadmap section 13) --------------------------------
   let composerQuoteBanner: ReturnType<typeof createComposerQuoteBanner> | null = null;
@@ -1843,81 +1945,14 @@ export const createAgentExperience = (
     syncComposerCompact();
   }
 
-  /** Cached so the track keeps its element identity across re-resolves. */
-  const ensureSegmentedModeGroup = (
-    groupId: string
-  ): ComposerSegmentedModeControl => {
-    const existing = composerSegmentedGroups.get(groupId);
-    if (existing) return existing;
-    const control = createComposerSegmentedModeAction({
-      groupId,
-      getGroup: () =>
-        config.composer?.modeGroups?.find((group) => group.id === groupId),
-      getModes: () =>
-        composerModes().filter((mode) => mode.groupId === groupId),
-      getActiveIds: () => composerStore.getState().activeModeIds,
-      onSelect: (modeId) => toggleComposerModeById(modeId),
-    });
-    composerSegmentedGroups.set(groupId, control);
-    return control;
-  };
-
   const collectComposerCoreActions = (): ComposerAction[] => {
-    const actions: ComposerAction[] = [];
-    const active = composerStore.getState().activeModeIds;
-    const seenSegmentedGroups = new Set<string>();
-    composerModes().forEach((mode, index) => {
-      // A segmented group contributes one track at its first member's slot; the
-      // members themselves contribute no loose buttons.
-      if (isSegmentedModeGroup(mode.groupId, config.composer?.modeGroups)) {
-        const groupId = mode.groupId as string;
-        if (seenSegmentedGroups.has(groupId)) return;
-        seenSegmentedGroups.add(groupId);
-        const control = ensureSegmentedModeGroup(groupId);
-        control.action.order = composerModeOrder(index);
-        control.action.label =
-          config.composer?.modeGroups?.find((group) => group.id === groupId)
-            ?.label ?? groupId;
-        actions.push(control.action);
-        return;
-      }
-      actions.push({
-        id: composerModeActionId(mode.id),
-        kind: "button",
-        placement: "start",
-        order: composerModeOrder(index),
-        presentation: mode.presentation ?? "auto",
-        label: mode.label,
-        shortLabel: mode.shortLabel,
-        iconName: mode.iconName,
-        pressed: active.includes(mode.id),
-        onSelect: () => toggleComposerModeById(mode.id),
-      });
+    composerCoreControls ??= getComposerActionsSync()!.createComposerCoreControls({
+      getConfig: () => config, getState: () => composerStore.getState(),
+      getModes: composerModes, getChipModes: composerChipModes,
+      hasComposerPlugin: () => plugins.some(plugin => plugin.renderComposer),
+      renderIcon: renderLucideIcon, onModelChange: selectComposerModel, onModeChange: toggleComposerModeById,
     });
-    // Exactly symmetric with the plugin handoff: a `renderComposer` plugin
-    // already receives `models`/`selectedModelId`/`onModelChange` and owns the
-    // control, so the built-in picker would be a second affordance.
-    if (
-      config.composer?.models?.length &&
-      !plugins.some((plugin) => plugin.renderComposer)
-    ) {
-      // A presentation flip is a different control, so it rebuilds: the fresh
-      // `render` identity is what makes the action registry swap the element.
-      const presentation =
-        config.composer?.modelPicker?.presentation ?? "native";
-      if (!composerModelPicker || composerModelPickerMode !== presentation) {
-        composerModelPickerMode = presentation;
-        composerModelPicker = createComposerModelPickerAction({
-          getModels: () => config.composer?.models ?? [],
-          getSelectedModelId: () => composerStore.getState().selectedModelId,
-          onSelect: (modelId) => selectComposerModel(modelId),
-          presentation,
-          getSuffix: () => config.composer?.modelPicker?.suffix,
-        });
-      }
-      actions.push(composerModelPicker.action);
-    }
-    return actions;
+    return composerCoreControls.collect();
   };
 
   /** Wired after `handleMicButtonClick` is defined; used by `renderComposer` `onVoiceToggle`. */
@@ -1964,6 +1999,7 @@ export const createAgentExperience = (
       ensureEventStreamRuntime();
       return;
     }
+    latestScroll.cancel();
     eventStreamVisible = true;
     if (!eventStreamView) {
       // The panel lives in a lazy chunk; mount when it resolves, unless the
@@ -1972,6 +2008,7 @@ export const createAgentExperience = (
         .then((mod) => {
           if (eventStreamView || !eventStreamVisible || !eventStreamBuffer) return;
           eventStreamView = mod.createEventStreamView({
+            scroll: { createScrollToLatest, createScrollToBottomControl },
             buffer: eventStreamBuffer,
             getFullHistory: () => eventStreamBuffer!.getAllFromStore(),
             onClose: () => toggleEventStreamOff(),
@@ -1981,6 +2018,9 @@ export const createAgentExperience = (
               throughputTracker?.getMetric() ?? { status: "idle" },
             // Inject the string-name resolver: the chunk carries no registry.
             renderIconByName: renderLucideIcon,
+            getResponseActive: isScrollResponseActive,
+            getConfig: () => config,
+            getViewVisible: () => eventStreamVisible,
           });
           mountEventStreamView();
         })
@@ -2016,6 +2056,7 @@ export const createAgentExperience = (
     if (!eventStreamVisible) return;
     eventStreamVisible = false;
     if (eventStreamView) {
+      eventStreamView.update();
       eventStreamView.element.remove();
     }
     body.style.display = "";
@@ -2288,10 +2329,7 @@ export const createAgentExperience = (
       return;
     }
     if (!attachmentManager) {
-      attachmentManager = AttachmentManager.fromConfig(
-        config.attachments,
-        syncComposerAttachments
-      );
+      attachmentManager = createScopedAttachmentManager();
       attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
     } else {
       attachmentManager.remountPreviews(attachmentPreviewsContainer);
@@ -2455,9 +2493,14 @@ export const createAgentExperience = (
   };
 
   /** Rebuild the renderer against the CURRENT bindings and resolve once. */
+  let composerActionsTornDown = false;
   const setupComposerActions = (): void => {
+    if (composerActionsTornDown) return;
+    const runtime = getComposerActionsSync();
+    if (!runtime) return;
     composerActionRenderer?.destroy();
-    composerActionRenderer = createComposerActionRenderer({
+    composerActionRenderer = runtime.createComposerActionRenderer({
+      deps: { renderLucideIcon, attachTooltip, hideTooltipFor },
       getBindings: () => composerBindings,
       collect: () => ({
         builtIns: collectComposerBuiltIns(),
@@ -2505,7 +2548,10 @@ export const createAgentExperience = (
     if (!composerChipModes().length) return;
     const header = composerBindings?.header;
     if (!header) return;
-    composerModeChips = createComposerModeChipRow({
+    const runtime = getComposerActionsSync();
+    if (!runtime) return;
+    composerModeChips = runtime.createComposerModeChipRow({
+      renderIcon: renderLucideIcon,
       row: ensureComposerChipRow(header),
       onRemove: (modeId) => toggleComposerModeById(modeId),
       // A rebuild hands the new row the chips the user is already looking at;
@@ -2548,9 +2594,22 @@ export const createAgentExperience = (
   };
   setupComposerHeaderCards();
 
-  // --- Compact state (roadmap section 14) ------------------------------------
-  // The attribute is the only contract; core CSS changes no layout with it.
+  // Draft expansion and action-width fit have separate lifetimes: the wrap
+  // latch survives edits, but a narrow host must recover when it widens.
   const composerCompactLatch = createComposerCompactLatch();
+  const composerFit = createComposerFitObserver({
+    getSurface: () => {
+      if (isComposerBar() || !composerBindings) return null;
+      return {
+        form: composerBindings.form,
+        input: composerBindings.input,
+        start: composerBindings.actionsStart,
+        end: composerBindings.actionsEnd,
+        resizeInput: config.composer?.layout === "single-row",
+      };
+    },
+    onMeasure: () => syncComposerCompact(),
+  });
   /**
    * Chips of either kind, read from the one shared header row. Falls back to
    * composer state on a surface that binds no header (no row to read).
@@ -2568,21 +2627,36 @@ export const createAgentExperience = (
   };
   function syncComposerCompact(): void {
     const state = composerStore.getState();
+    const measuredFit = composerFit.measure();
+    const fits = config.composer?.layout !== "single-row" && config.composer?.attachmentLayout !== "single-row" || measuredFit;
+    const crowded = composerFit.toolbarCrowded();
+    if (footer.hasAttribute("data-persona-composer-crowded") !== crowded) {
+      footer.toggleAttribute("data-persona-composer-crowded", crowded);
+    }
+    if (footer.hasAttribute("data-persona-composer-fit") !== fits) {
+      footer.toggleAttribute("data-persona-composer-fit", fits);
+    }
     const wrapped = composerCompactLatch.observe(
-      isEditorWrapped(textarea as unknown as HTMLElement | null),
+      fits && isEditorWrapped(textarea as unknown as HTMLElement | null),
       state.text
     );
-    footer.toggleAttribute(
-      "data-persona-composer-compact",
-      isComposerCompact({
-        text: state.text,
-        wrapped,
-        hasAttachments: state.attachments.length > 0,
-        hasChips: hasComposerChips(),
-        hasQuote: state.quote !== undefined,
-        hasPendingSubmission: state.pendingSubmission !== undefined,
-      })
-    );
+    footer.toggleAttribute("data-persona-has-attachments", state.attachments.length > 0);
+    footer.toggleAttribute("data-persona-attachment-row-compact", isComposerCompact({ text: state.text, wrapped, hasAttachments: false, hasChips: hasComposerChips(), hasQuote: state.quote !== undefined, hasPendingSubmission: state.pendingSubmission !== undefined }));
+    const compact = isComposerCompact({
+      text: state.text,
+      wrapped,
+      hasAttachments: state.attachments.length > 0,
+      hasChips: hasComposerChips(),
+      hasQuote: state.quote !== undefined,
+      hasPendingSubmission: state.pendingSubmission !== undefined,
+    });
+    if (footer.hasAttribute("data-persona-composer-compact") !== compact) {
+      footer.toggleAttribute("data-persona-composer-compact", compact);
+    }
+    const expanded = !compact || !fits || config.composer?.layout !== "single-row";
+    if (footer.hasAttribute("data-persona-composer-expanded") !== expanded) {
+      footer.toggleAttribute("data-persona-composer-expanded", expanded);
+    }
   }
 
   /**
@@ -2596,6 +2670,9 @@ export const createAgentExperience = (
     } else {
       footer.removeAttribute("data-persona-composer-layout");
     }
+    if (config.composer?.attachmentLayout) footer.setAttribute("data-persona-attachment-layout", config.composer.attachmentLayout);
+    else footer.removeAttribute("data-persona-attachment-layout");
+    syncComposerCompact();
   }
   syncComposerLayout();
 
@@ -2620,108 +2697,117 @@ export const createAgentExperience = (
     if (!inert.length) return;
     warnedInertSlots = true;
     console.warn(
-      `[persona] layout.slots.${inert.join(" and layout.slots.")} ${inert.length > 1 ? "are" : "is"} deprecated and unsupported: the renderer never runs. Use the message render hooks for the transcript and the renderComposer plugin hook for the composer.`
+      `[persona] Ignoring deprecated layout.slots.${inert.join(" / layout.slots.")}. Use message render hooks or the renderComposer plugin hook.`
     );
   };
 
-  // Slot system: allow custom content injection into specific regions
-  const renderSlots = () => {
-    const slots = config.layout?.slots ?? {};
-    warnInertSlots(slots);
-
-    // Helper to get default slot content
-    const getDefaultSlotContent = (slot: WidgetLayoutSlot): HTMLElement | null => {
-      switch (slot) {
-        case "body-top":
-          // Intro card is identified by its data attribute; its utility classes
-          // are themable and must never be used as a selector.
-          return body.querySelector("[data-persona-intro-card]") as HTMLElement | null;
-        case "messages":
-          return messagesWrapper;
-        case "footer-top":
-          return suggestions;
-        case "composer":
-          return composerForm;
-        case "footer-bottom":
-          return statusText;
-        default:
-          return null;
-      }
-    };
-
-    // Helper to insert content into slot region
-    const insertSlotContent = (slot: WidgetLayoutSlot, element: HTMLElement) => {
-      switch (slot) {
-        case "header-left":
-        case "header-center":
-        case "header-right":
-          // Header slots - prepend/append to header
-          if (slot === "header-left") {
-            header.insertBefore(element, header.firstChild);
-          } else if (slot === "header-right") {
-            header.appendChild(element);
-          } else {
-            // header-center: insert after icon/title
-            const titleSection = header.querySelector(".persona-flex-col");
-            if (titleSection) {
-              titleSection.parentNode?.insertBefore(element, titleSection.nextSibling);
-            } else {
-              header.appendChild(element);
-            }
-          }
-          break;
-        case "body-top": {
-          // Replace or prepend to body
-          const introCard = body.querySelector("[data-persona-intro-card]");
-          if (introCard) {
-            introCard.replaceWith(element);
-          } else {
-            body.insertBefore(element, body.firstChild);
-          }
-          break;
-        }
-        case "body-bottom":
-          // Append after messages wrapper
-          body.appendChild(element);
-          break;
-        case "footer-top":
-          // Replace suggestions area
-          suggestions.replaceWith(element);
-          break;
-        case "footer-bottom":
-          // Replace or append after status text
-          statusText.replaceWith(element);
-          break;
-        default:
-          // "messages" / "composer": deprecated and unsupported, never rendered
-          // (warnInertSlots reports them in debug mode).
-          break;
-      }
-    };
-
-    // Process each configured slot
-    for (const [slotName, renderer] of Object.entries(slots) as [WidgetLayoutSlot, SlotRenderer][]) {
-      if (renderer) {
-        try {
-          const slotElement = renderer({
-            config,
-            defaultContent: () => getDefaultSlotContent(slotName)
-          });
-          if (slotElement) {
-            insertSlotContent(slotName, slotElement);
-          }
-        } catch (error) {
-          if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
-            console.error(`[AgentWidget] Error rendering slot "${slotName}":`, error);
-          }
-        }
-      }
+  // Preserve replacement-slot defaults so null/removal restores the same nodes.
+  const slotDefaults = new Map<WidgetLayoutSlot, { anchor: Comment; element: HTMLElement }>();
+  const slotWrappers = new Map<WidgetLayoutSlot, HTMLElement>();
+  const defaultSlotContent = (slot: WidgetLayoutSlot): HTMLElement | null => {
+    const saved = slotDefaults.get(slot);
+    if (saved) return saved.element;
+    let element: HTMLElement | null = null;
+    if (slot === "body-top") element = body.querySelector("[data-persona-intro-card]");
+    if (slot === "messages") return messagesWrapper;
+    if (slot === "composer") return composerForm;
+    if (slot === "footer-top") element = suggestions;
+    if (slot === "footer-bottom") element = statusText;
+    if (element?.parentNode) {
+      const anchor = document.createComment(`persona:${slot}`);
+      element.before(anchor);
+      slotDefaults.set(slot, { anchor, element });
     }
+    return element;
   };
+  const slots = createLayoutSlots({
+    config: () => config,
+    defaultContent: defaultSlotContent,
+    remove(slot, element) {
+      // Unsupported slots never own DOM, even if their renderer returns a core node.
+      if (slot === "messages" || slot === "composer") return;
+      element?.remove();
+      slotWrappers.get(slot)?.remove();
+      slotWrappers.delete(slot);
+      const saved = slotDefaults.get(slot);
+      if (saved) {
+        saved.anchor.replaceWith(saved.element);
+        slotDefaults.delete(slot);
+      }
+    },
+    mount(slot, element) {
+      // Retain the legacy inert-slot invocation but never attach its output.
+      if (slot === "messages" || slot === "composer") return;
+      if (element.parentNode && wrapper.contains(element)) return;
+      if (slot === "body-top" || slot === "footer-top" || slot === "footer-bottom") {
+        const original = defaultSlotContent(slot);
+        const saved = slotDefaults.get(slot);
+        if (original && saved?.anchor.parentNode) {
+          saved.anchor.after(element);
+          if (original !== element && !element.contains(original)) original.remove();
+          return;
+        }
+      }
+      switch (slot) {
+        case "header-left": header.prepend(element); break;
+        case "header-right": header.append(element); break;
+        case "header-center": {
+          const title = header.querySelector(".persona-flex-col");
+          if (title) title.after(element); else header.append(element);
+          break;
+        }
+        case "body-top": body.prepend(element); break;
+        case "body-bottom": body.append(element); break;
+        case "footer-top": footer.prepend(element); break;
+        case "footer-bottom": footer.append(element); break;
+        case "transcript-top": {
+          const host = document.createElement("div");
+          host.setAttribute("data-persona-layout-slot", slot);
+          host.style.cssText = "width:100%;min-width:0;max-width:var(--persona-content-max-width, 100%);margin-inline:auto;flex-shrink:0";
+          host.append(element);
+          messagesWrapper.before(host);
+          slotWrappers.set(slot, host);
+          break;
+        }
+        case "composer-start":
+        case "composer-end":
+        case "composer-before-send": {
+          const target = slot === "composer-start" ? leftActions :
+            slot === "composer-end" ? rightActions : sendButtonWrapper?.parentElement;
+          if (!target) break;
+          const host = document.createElement("div");
+          host.setAttribute("data-persona-layout-slot", slot);
+          host.style.cssText = "display:flex;align-items:center;min-width:0;max-width:100%";
+          host.append(element);
+          if (slot === "composer-start") target.prepend(host);
+          else if (slot === "composer-before-send") sendButtonWrapper?.before(host);
+          else target.append(host);
+          slotWrappers.set(slot, host);
+          break;
+        }
+      }
+    },
+  });
+  warnInertSlots(config.layout?.slots ?? {});
+  slots.update();
 
-  // Render custom slots
-  renderSlots();
+  const routeLinkClick = (event: MouseEvent) => {
+    if (!config.onLinkClick || event.defaultPrevented || event.button !== 0 ||
+        event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest<HTMLAnchorElement>("a[href]");
+    if (!anchor || !mount.contains(anchor) || anchor.hasAttribute("download")) return;
+    if (anchor.closest("[data-persona-root]") !== mount) return;
+    const linkTarget = anchor.getAttribute("target") ?? anchor.ownerDocument.querySelector("base[target]")?.getAttribute("target");
+    if (linkTarget && linkTarget.toLowerCase() !== "_self") return;
+    if (!/^(https?:|mailto:|tel:)/i.test(anchor.href)) return;
+    try {
+      config.onLinkClick({ url: anchor.href, anchor, originalEvent: event,
+        preventDefault: () => event.preventDefault() });
+    } catch (error) { console.error("[AgentWidget] onLinkClick failed:", error); }
+  };
+  mount.addEventListener("click", routeLinkClick);
 
   messagesWrapper.addEventListener("click", (event) => {
     const target = event.target;
@@ -2732,6 +2818,16 @@ export const createAgentExperience = (
     event.stopPropagation();
     void copyToolDetail(button);
   });
+
+  // Approval plugins own their disclosure clicks. Pause follow in capture,
+  // before their listener grows the details and ResizeObserver follows it.
+  messagesWrapper.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.persona-approval-head[data-action="toggle-params"]')) {
+      markReaderEngaged();
+      pauseAutoScroll();
+    }
+  }, { capture: true });
 
   // Add event delegation for reasoning and tool bubble expansion
   // This handles clicks even after idiomorph morphs the DOM
@@ -2756,27 +2852,21 @@ export const createAgentExperience = (
     pauseAutoScroll();
     const bubbleType = headerButton.getAttribute('data-bubble-type');
     if (bubble.classList.contains("persona-activity-row")) {
-      activityLifecycle.manual(messageId);
+      activityLifecycle?.manual(messageId);
       const group = bubble.parentElement?.closest<HTMLElement>("[data-persona-tool-group]");
-      if (group?.dataset.messageId) activityLifecycle.manual(group.dataset.messageId);
+      if (group?.dataset.messageId) activityLifecycle?.manual(group.dataset.messageId);
     }
 
 
     // Toggle expansion state
-    if (bubbleType === 'reasoning') {
-      if (reasoningExpansionState.has(messageId)) {
-        reasoningExpansionState.delete(messageId);
-      } else {
-        reasoningExpansionState.add(messageId);
-      }
-      updateReasoningBubbleUI(messageId, bubble, reasoningExpansionState);
-    } else if (bubbleType === 'tool') {
-      if (toolExpansionState.has(messageId)) {
-        toolExpansionState.delete(messageId);
-      } else {
-        toolExpansionState.add(messageId);
-      }
-      updateToolBubbleUI(messageId, bubble, toolExpansionState, config);
+    if (bubbleType === 'reasoning' || bubbleType === 'tool') {
+      const reasoning = bubbleType === 'reasoning';
+      const expansionState = reasoning ? reasoningExpansionState : toolExpansionState;
+      if (expansionState.has(messageId)) expansionState.delete(messageId);
+      else expansionState.add(messageId);
+      if (activityUi) (reasoning ? activityUi.updateReasoningBubbleUI : activityUi.updateToolBubbleUI)(
+        messageId, bubble, expansionState, config
+      );
     } else if (bubbleType === 'approval' && approvalUi) {
       // approvalUi is always set here: approval bubbles only exist after the
       // chunk was adopted. The guard keeps a stray click on a stub harmless.
@@ -3055,8 +3145,8 @@ export const createAgentExperience = (
 
     // WebMCP gate approvals resolve a local Promise the bridge is parked on
     // (no server round-trip); server-driven approvals call the API. The
-    // `toolType` marker set in `requestWebMcpApproval` discriminates the two.
-    if (approvalMessage.approval.toolType === "webmcp") {
+    // `toolType` marker and absent execution id identify browser-local gates.
+    if (isBrowserLocalApproval(approvalMessage.approval)) {
       session.resolveWebMcpApproval(messageId, decision);
     } else {
       session.resolveApproval(approvalMessage.approval, decision);
@@ -3338,6 +3428,7 @@ export const createAgentExperience = (
   // Only events from inside a mounted sheet need them.
   let askUserHandlers: AskUserSheetHandlers | null = null;
   const askUserCtx: AskUserSheetContext = {
+    instanceId,
     mount,
     overlay: askUserOverlay,
     sessionRef,
@@ -3419,9 +3510,7 @@ export const createAgentExperience = (
   document.addEventListener("keydown", handleAskUserDigitKey);
 
   let artifactSplitRoot: HTMLElement | null = null;
-  let artifactResizeHandle: HTMLElement | null = null;
-  let artifactResizeUnbind: (() => void) | null = null;
-  let artifactResizeDocEnd: (() => void) | null = null;
+  let artifactResizer: ReturnType<ArtifactsUiModule["createArtifactResizer"]> | null = null;
   let reconcileArtifactResize: () => void = () => {};
   // Expanded-state transition tracking: stash the resizer's inline width/maxWidth
   // (which would otherwise beat the expanded class) once per enter, restore once
@@ -3429,11 +3518,6 @@ export const createAgentExperience = (
   let artifactExpandedApplied = false;
   let artifactStashedWidth = "";
   let artifactStashedMaxWidth = "";
-
-  function stopArtifactResizePointer() {
-    artifactResizeDocEnd?.();
-    artifactResizeDocEnd = null;
-  }
 
   /**
    * Chat-column minimum for an artifact drag. A docked in-flow rail lives
@@ -3452,37 +3536,6 @@ export const createAgentExperience = (
   };
 
   /** Flush split: overlay handle on the seam so it does not consume flex gap (extension + resizable). */
-  const positionExtensionArtifactResizeHandle = () => {
-    if (!artifactSplitRoot || !artifactResizeHandle) return;
-    // Welded splits (panel + seamless) have gap 0, so the handle overlays the seam
-    // instead of consuming flex width; detached keeps a real gap and a flex handle.
-    const ext = mount.classList.contains("persona-artifact-welded-split");
-    const ownerWin = mount.ownerDocument.defaultView ?? window;
-    const mobile = ownerWin.innerWidth <= 640;
-    if (!ext || mount.classList.contains("persona-artifact-narrow-host") || mobile) {
-      artifactResizeHandle.style.removeProperty("position");
-      artifactResizeHandle.style.removeProperty("left");
-      artifactResizeHandle.style.removeProperty("top");
-      artifactResizeHandle.style.removeProperty("bottom");
-      artifactResizeHandle.style.removeProperty("width");
-      artifactResizeHandle.style.removeProperty("z-index");
-      return;
-    }
-    const chat = artifactSplitRoot.firstElementChild as HTMLElement | null;
-    if (!chat || chat === artifactResizeHandle) return;
-    const hitW = 10;
-    artifactResizeHandle.style.position = "absolute";
-    artifactResizeHandle.style.top = "0";
-    artifactResizeHandle.style.bottom = "0";
-    artifactResizeHandle.style.width = `${hitW}px`;
-    artifactResizeHandle.style.zIndex = "5";
-    // Center the overlay on the seam: with an explicit welded gap the seam sits
-    // half a gap past the chat's right edge (welded default gap is 0).
-    const gapPx = readFlexGapPx(artifactSplitRoot, ownerWin);
-    const left = chat.offsetWidth + gapPx / 2 - hitW / 2;
-    artifactResizeHandle.style.left = `${Math.max(0, left)}px`;
-  };
-
   /** No-op until artifact pane is created; replaced below when artifacts are enabled. */
   let applyLauncherArtifactPanelWidth: () => void = () => {};
 
@@ -3570,6 +3623,7 @@ export const createAgentExperience = (
       typeof config.features?.artifacts?.layout?.onDocumentToolbarRefresh === "function"
     );
     artifactPaneApi.setCustomActions(config.features?.artifacts?.toolbarActions ?? []);
+    artifactPaneApi.setStyleConfig(config);
     artifactPaneApi.setTabFade(config.features?.artifacts?.layout?.tabFade);
     artifactPaneApi.setRenderTabBar(config.features?.artifacts?.renderTabBar);
     if (!expandToggleEnabled && !artifactPaneExpandedPinned) artifactPaneExpanded = false;
@@ -3650,6 +3704,8 @@ export const createAgentExperience = (
             syncArtifactPane();
           }
         });
+        artifactResizer = mod.createArtifactResizer({ mount, splitRoot, pane: artifactPaneApi,
+          getConfig: () => config, chatMinWidth: railedChatMinPx, isVisible: artifactPaneVisible });
         artifactPaneApi.element.classList.add("persona-hidden");
         splitRoot.appendChild(artifactPaneApi.element);
         if (artifactPaneApi.backdrop) {
@@ -3675,103 +3731,7 @@ export const createAgentExperience = (
       });
     }
 
-    reconcileArtifactResize = () => {
-      if (!artifactSplitRoot || !artifactPaneApi) return;
-      const want = config.features?.artifacts?.layout?.resizable === true;
-      if (!want) {
-        artifactResizeUnbind?.();
-        artifactResizeUnbind = null;
-        stopArtifactResizePointer();
-        if (artifactResizeHandle) {
-          artifactResizeHandle.remove();
-          artifactResizeHandle = null;
-        }
-        artifactPaneApi.element.style.removeProperty("width");
-        artifactPaneApi.element.style.removeProperty("maxWidth");
-        return;
-      }
-      if (!artifactResizeHandle) {
-        const handle = createElement(
-          "div",
-          "persona-artifact-split-handle persona-shrink-0 persona-h-full"
-        );
-        handle.setAttribute("role", "separator");
-        handle.setAttribute("aria-orientation", "vertical");
-        handle.setAttribute("aria-label", "Resize artifacts panel");
-        handle.tabIndex = 0;
-
-        const doc = mount.ownerDocument;
-        const win = doc.defaultView ?? window;
-
-        const onPointerDown = (e: PointerEvent) => {
-          if (!artifactPaneApi || e.button !== 0) return;
-          if (mount.classList.contains("persona-artifact-narrow-host")) return;
-          if (mount.classList.contains("persona-artifact-expanded")) return;
-          if (win.innerWidth <= 640) return;
-          e.preventDefault();
-          stopArtifactResizePointer();
-          const startX = e.clientX;
-          const startW = artifactPaneApi.element.getBoundingClientRect().width;
-          const layout = config.features?.artifacts?.layout;
-          const onMove = (ev: PointerEvent) => {
-            const splitW = artifactSplitRoot!.getBoundingClientRect().width;
-            const weldedChrome = mount.classList.contains("persona-artifact-welded-split");
-            // Read the effective flex gap either way: welded defaults to 0 but an
-            // explicit splitGap opens a real gap that still consumes row width.
-            const gapPx = readFlexGapPx(artifactSplitRoot!, win);
-            // Welded overlays the handle on the seam (out of flow), so it consumes
-            // no width; detached keeps it as an in-flow flex child.
-            const handleW = weldedChrome ? 0 : handle.getBoundingClientRect().width || 6;
-            // Handle is left of the artifact: drag left widens artifact, drag right narrows it.
-            const next = startW - (ev.clientX - startX);
-            const clamped = resolveArtifactPaneWidthPx(
-              next,
-              splitW,
-              gapPx,
-              handleW,
-              layout?.resizableMinWidth,
-              layout?.resizableMaxWidth,
-              railedChatMinPx()
-            );
-            artifactPaneApi!.element.style.width = `${clamped}px`;
-            artifactPaneApi!.element.style.maxWidth = "none";
-            positionExtensionArtifactResizeHandle();
-          };
-          const onUp = () => {
-            doc.removeEventListener("pointermove", onMove);
-            doc.removeEventListener("pointerup", onUp);
-            doc.removeEventListener("pointercancel", onUp);
-            artifactResizeDocEnd = null;
-            try {
-              handle.releasePointerCapture(e.pointerId);
-            } catch {
-              /* ignore */
-            }
-          };
-          artifactResizeDocEnd = onUp;
-          doc.addEventListener("pointermove", onMove);
-          doc.addEventListener("pointerup", onUp);
-          doc.addEventListener("pointercancel", onUp);
-          try {
-            handle.setPointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
-        };
-
-        handle.addEventListener("pointerdown", onPointerDown);
-        artifactResizeHandle = handle;
-        artifactSplitRoot.insertBefore(handle, artifactPaneApi.element);
-        artifactResizeUnbind = () => {
-          handle.removeEventListener("pointerdown", onPointerDown);
-        };
-      }
-      if (artifactResizeHandle) {
-        const has = artifactPaneVisible();
-        artifactResizeHandle.classList.toggle("persona-hidden", !has);
-        positionExtensionArtifactResizeHandle();
-      }
-    };
+    reconcileArtifactResize = () => artifactResizer?.update();
 
     applyLauncherArtifactPanelWidth = () => {
       if (!launcherEnabled || !artifactPaneApi) return;
@@ -3885,7 +3845,7 @@ export const createAgentExperience = (
     }
     const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
+    const fullHeight = isEmbeddedLayout(config) || dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
     /** Script-tag / div embed: launcher off, host supplies a sized mount. */
     const isInlineEmbed = config.launcher?.enabled === false;
     /** Detached appearance: inset card over a canvas instead of flush chrome. */
@@ -4170,7 +4130,8 @@ export const createAgentExperience = (
     // Re-apply panel width/maxWidth from initial setup
     const geometry = resolvePanelGeometry(config);
     if (!sidebarMode && !dockedMode) {
-      if (isInlineEmbed && fullHeight) {
+      if (isInlineEmbed) {
+        wrapper.style.width = resolveInlinePanelWidth(config);
         panel.style.width = "100%";
         panel.style.maxWidth = "100%";
       } else {
@@ -4220,7 +4181,9 @@ export const createAgentExperience = (
     if (weldedSplitActive) {
       const wl = config.features?.artifacts?.layout;
       weldedOuterRadius =
-        wl?.unifiedSplitOuterRadius?.trim() || wl?.paneBorderRadius?.trim() || panelBorderRadius;
+        wl?.unifiedSplitOuterRadius?.trim() || wl?.paneBorderRadius?.trim() ||
+        artifactStyle(config, undefined, "split.outerRadius") ||
+        artifactStyle(config, undefined, "pane.borderRadius") || panelBorderRadius;
     } else {
       weldedOuterRadius = null;
     }
@@ -4256,6 +4219,7 @@ export const createAgentExperience = (
       mount.style.flexDirection = 'column';
       mount.style.height = '100%';
       mount.style.minHeight = '0';
+      if (isEmbeddedLayout(config)) mount.style.flex = '1 1 0%';
       // min-width:0 baseline is applied above (outside this branch) for every
       // fill mount, including the launcher-off, no-fullHeight embed.
       if (isInlineEmbed) {
@@ -4446,12 +4410,21 @@ export const createAgentExperience = (
   let warnedComposerBarPlacement = false;
   // mount.style.cssText is wiped by applyFullHeightStyles, so every
   // mount-level var re-stamps here, next to applyContentMaxWidthVar.
-  function syncTranscriptTopFade() {
+  function syncTranscriptEdgeFades() {
     if (config.layout?.topFade && body.scrollTop > 1) body.setAttribute("data-persona-top-fade", "true");
     else body.removeAttribute("data-persona-top-fade");
+    // The fixed suggestion row is the lower transcript boundary. Reuse the
+    // existing overlay-band theme; transparent disables its paint in V4 or
+    // for hosts that opt out. Only show it while content remains below.
+    panelSuggestionsFade.hidden = !isComposerBar() || panelSuggestions.hidden ||
+      body.scrollHeight - body.clientHeight - body.scrollTop <= 1;
+    if (!panelSuggestionsFade.hidden) {
+      panelSuggestionsFade.style.bottom = `${container.getBoundingClientRect().bottom -
+        panelSuggestions.getBoundingClientRect().top - container.clientTop}px`;
+    }
   }
   const applyComposerPlacement = () => {
-    syncTranscriptTopFade();
+    syncTranscriptEdgeFades();
     const placement = resolveComposerPlacement(config, isComposerBar());
     if (
       isComposerBar() &&
@@ -4485,7 +4458,7 @@ export const createAgentExperience = (
     if (isComposerBar()) return;
     const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
+    const fullHeight = isEmbeddedLayout(config) || dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
     if (fullHeight || !launcherEnabled) return;
     const ownerWindow = mount.ownerDocument.defaultView ?? window;
     const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
@@ -4526,6 +4499,7 @@ export const createAgentExperience = (
   };
 
   const destroyCallbacks: Array<() => void> = [];
+  destroyCallbacks.push(() => composerFit.destroy());
   destroyCallbacks.push(() => {
     artifactsUiDisposed = true;
   });
@@ -4561,13 +4535,8 @@ export const createAgentExperience = (
   }
 
   destroyCallbacks.push(() => {
-    artifactResizeUnbind?.();
-    artifactResizeUnbind = null;
-    stopArtifactResizePointer();
-    if (artifactResizeHandle) {
-      artifactResizeHandle.remove();
-      artifactResizeHandle = null;
-    }
+    artifactResizer?.destroy();
+    artifactResizer = null;
     artifactPaneApi?.element.style.removeProperty("width");
     artifactPaneApi?.element.style.removeProperty("maxWidth");
     // Release the pane preview's pending file-preview timers/listeners.
@@ -4601,9 +4570,18 @@ export const createAgentExperience = (
     }
     // Set up new observer if colorScheme is 'auto'
     if (config.colorScheme === 'auto') {
-      cleanupThemeObserver = createThemeObserver(() => {
-        // Re-apply theme when color scheme changes
-        applyThemeVariables(mount, config);
+      let observedScheme = getColorScheme(config);
+      cleanupThemeObserver = createThemeObserver((scheme) => {
+        if (scheme === observedScheme) return;
+        observedScheme = scheme;
+        // Dark-only optional tokens can activate structural hooks, not just variables.
+        // Reuse existing chrome and transcript updates without resetting expansion state.
+        syncPanelChrome();
+        syncArtifactPane();
+        if (session) {
+          configVersion++;
+          renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+        }
       });
     }
   };
@@ -4683,10 +4661,12 @@ export const createAgentExperience = (
   let composerSuggestionsManager = createSuggestions(suggestions);
   const starterSuggestionsManager = createSuggestions(starterSuggestions);
   const transcriptSuggestionsManager = createSuggestions(transcriptSuggestions);
+  const panelSuggestionsManager = createSuggestions(panelSuggestions);
   const suggestionManagers = [
     composerSuggestionsManager,
     starterSuggestionsManager,
     transcriptSuggestionsManager,
+    panelSuggestionsManager,
   ];
   destroyCallbacks.push(() => {
     suggestionManagers.forEach((manager) => manager.destroy());
@@ -4713,6 +4693,8 @@ export const createAgentExperience = (
   // once another user message appends or a newer suggest_replies message lands.
   let hostFollowUpsUserCount = 0;
   let hostFollowUpsAgentId: string | null = null;
+  const dismissedFollowUpIds = new Set<string>();
+  destroyCallbacks.push(() => dismissedFollowUpIds.clear());
 
   const countUserMessages = (messages: AgentWidgetMessage[]): number =>
     messages.reduce(
@@ -4735,7 +4717,7 @@ export const createAgentExperience = (
     if (warnedPinnedStarterPlacement || config.debug !== true) return;
     warnedPinnedStarterPlacement = true;
     console.warn(
-      '[persona] suggestions.starters.placement is pinned to "welcome" but the welcome surface is hidden (welcome.variant: "none" or copy.showWelcomeCard: false), so no starters render. Use "auto" or "composer".',
+      '[persona] Starters are hidden: suggestions.starters.placement is "welcome", but welcome is disabled. Use "auto" or "composer".',
     );
   };
   // Debug-only setup hint: a stream this session ended without the agent ever
@@ -4756,13 +4738,23 @@ export const createAgentExperience = (
     if (messages.some(isSuggestRepliesMessage)) return;
     hintedFollowUpsNeverCalled = true;
     console.info(
-      "[persona] Follow-up suggestions are enabled but the agent has not called suggest_replies. The model needs the tool declared (runtimeTools server-side, suggestions.followUps.expose: true from the widget, or your own backend's tool definition) and benefits from instructions telling it when to offer follow-ups. See the integration paths table in UI-COMPONENTS.md."
+      "[persona] No suggest_replies call received. Declare the tool server-side or set suggestions.followUps.expose: true, and instruct the model when to use it. See UI-COMPONENTS.md."
     );
   };
 
   const renderSuggestions = (messages?: AgentWidgetMessage[]) => {
     if (!session) return;
     const current = messages ?? session.getMessages();
+    // Reset first so switching back to legacy starters or follow-ups restores
+    // the shared composer surface. The starter branch opts into below again.
+    suggestions.removeAttribute("data-persona-suggestions-below");
+    if (suggestions.parentElement === footer) footer.insertBefore(suggestions, footer.firstChild);
+    if (dismissedFollowUpIds.size) {
+      const currentIds = new Set(current.map((message) => message.id));
+      for (const id of dismissedFollowUpIds) {
+        if (!currentIds.has(id)) dismissedFollowUpIds.delete(id);
+      }
+    }
     const clearManager = (manager: ReturnType<typeof createSuggestions>) => {
       manager.render([], session, textarea, current);
     };
@@ -4785,9 +4777,16 @@ export const createAgentExperience = (
     // still render.
     const followUpsFeature = resolveFollowUpsFeature(config);
     hintFollowUpsNeverCalled(current, followUpsFeature);
-    const agentSuggestions = followUpsFeature.enabled
-      ? latestAgentSuggestions(current)
+    const latestFollowUpId = latestSuggestRepliesId(current);
+    const agentSuggestions = followUpsFeature.enabled &&
+      !(config.future?.v5Defaults && latestFollowUpId && dismissedFollowUpIds.has(latestFollowUpId))
+      ? latestAgentSuggestions(current, config.suggestions?.followUps?.maxItems ??
+          (config.future?.v5Defaults ? 5 : 4))
       : null;
+    if (config.future?.v5Defaults && session.isStreaming()) {
+      suggestionManagers.forEach(clearManager);
+      return;
+    }
     const followUpSuggestions = hostFollowUps ?? agentSuggestions;
     const followUpSource: AgentWidgetSuggestionSource = hostFollowUps
       ? "host"
@@ -4806,7 +4805,7 @@ export const createAgentExperience = (
       const manager =
         placement === "after-message"
           ? transcriptSuggestionsManager
-          : composerSuggestionsManager;
+          : isComposerBar() ? panelSuggestionsManager : composerSuggestionsManager;
       clearOthers(manager);
       manager.render(
         followUpSuggestions,
@@ -4819,11 +4818,10 @@ export const createAgentExperience = (
           surface: "followUp",
           variant: followUps?.variant ?? "chip",
           behavior: followUps?.behavior ?? "send",
-          // Wrap by default: 2-4 compact chips always fit at widget width,
-          // and a scroll strip hides most of the set behind a fade. Hosts
-          // with large sets opt back in with overflow: "scroll".
-          overflow: followUps?.overflow ?? "wrap",
-          maxItems: followUps?.maxItems ?? 4,
+          overflow: followUps?.overflow ?? (config.future?.v5Defaults ? "scroll" : "wrap"),
+          maxItems: followUps?.maxItems ?? (config.future?.v5Defaults
+            ? isWelcomeFullscreen() ? 5 : 3
+            : 4),
           config,
           plugins,
           submitPrompt: submitSuggestionPrompt,
@@ -4859,6 +4857,9 @@ export const createAgentExperience = (
         suggestionManagers.forEach(clearManager);
         return;
       }
+      suggestions.toggleAttribute("data-persona-suggestions-below", placement === "below-composer");
+      if (placement === "below-composer") composerForm.after(suggestions);
+      else footer.insertBefore(suggestions, footer.firstChild);
       const manager =
         placement === "welcome"
           ? starterSuggestionsManager
@@ -4904,6 +4905,15 @@ export const createAgentExperience = (
     );
   };
 
+  // Dismiss only the current set: fresh suggestions from the next run may render.
+  const dismissFollowUps = () => {
+    if (!config.future?.v5Defaults || !session) return;
+    hostFollowUps = null;
+    const id = latestSuggestRepliesId(session.getMessages());
+    if (id) dismissedFollowUpIds.add(id);
+    renderSuggestions();
+  };
+
   const clearHostFollowUps = () => {
     if (!hostFollowUps) return;
     hostFollowUps = null;
@@ -4926,6 +4936,13 @@ export const createAgentExperience = (
 
   let isStreaming = false;
   const messageCache = createMessageCache();
+  // Assistant message ids seen streaming in a coalesced (never-applied)
+  // transcript snapshot; see `coalesceStreamingChange`.
+  const coalescedStreamingIds = new Set<string>();
+  // Fingerprint each live transcript row was last morphed to, by message id.
+  // A row whose message still has that fingerprint is left in place by the
+  // next render pass instead of being cloned from the cache and re-morphed.
+  let liveRowFingerprints = new Map<string, string>();
   // Tracks the last fingerprint we rendered a plugin-rendered ask_user_question
   // bubble for, per message id. Lets us skip unnecessary rebuilds across
   // re-renders so user state inside the plugin (typed text, focus) survives.
@@ -4936,6 +4953,30 @@ export const createAgentExperience = (
   // expensive rebuild on fingerprint change so user state inside the rendered
   // component (e.g. partially-filled form inputs) is not wiped on every pass.
   const lastComponentDirectiveFingerprint = new Map<string, string>();
+  type ComponentLifetime = {
+    renderer: AgentWidgetComponentRenderer | undefined;
+    component: string;
+    controller: AbortController;
+    handle: AgentWidgetComponentRenderHandle;
+    context: AgentWidgetComponentRenderContext;
+  };
+  const componentLifetimes = new Map<string, ComponentLifetime>();
+  const disposeComponentRender = (id: string): void => {
+    const lifetime = componentLifetimes.get(id);
+    componentLifetimes.delete(id);
+    lastComponentDirectiveFingerprint.delete(id);
+    findMessageRow(messagesWrapper, id)?.removeAttribute("data-preserve-runtime");
+    if (!lifetime) return;
+    lifetime.controller.abort();
+    try {
+      lifetime.handle.destroy?.();
+    } catch (error) {
+      console.error("[AgentWidget] Component cleanup failed:", error);
+    }
+  };
+  destroyCallbacks.push(() => {
+    for (const id of componentLifetimes.keys()) disposeComponentRender(id);
+  });
   // Same idea for plugin-rendered approval bubbles (`renderApproval`). The
   // custom element is injected into the live DOM post-morph so its event
   // listeners (Approve/Deny, an expandable parameters accordion, etc.) survive;
@@ -4943,6 +4984,16 @@ export const createAgentExperience = (
   // a collapsed accordion) is not reset on every pass while the approval is
   // pending.
   const lastApprovalBubbleFingerprint = new Map<string, string>();
+  const approvalRenderControllers = new Map<string, AbortController>();
+  const disposeApprovalRender = (id: string): void => {
+    approvalRenderControllers.get(id)?.abort();
+    approvalRenderControllers.delete(id);
+    lastApprovalBubbleFingerprint.delete(id);
+  };
+  const disposeApprovalRenders = (): void => {
+    for (const id of approvalRenderControllers.keys()) disposeApprovalRender(id);
+  };
+  destroyCallbacks.push(disposeApprovalRenders);
 
   // --- Edit-and-resend (roadmap section 10) ---------------------------------
   // "Editing message X" is UI state consumed BY the render path, never a
@@ -4968,11 +5019,6 @@ export const createAgentExperience = (
   }
 
   let configVersion = 0;
-  // Whether the markdown parsers (marked + dompurify) were already loaded when
-  // this widget mounted. False only on the IIFE/CDN lazy path before the
-  // `markdown-parsers.js` chunk resolves; in that window messages render as
-  // escaped plain text and are re-rendered once the chunk lands (see below).
-  const markdownReadyAtInit = getMarkdownParsersSync() !== null;
   const autoFollow = createFollowStateController();
   let lastScrollTop = 0;
   let scrollRAF: number | null = null;
@@ -5114,7 +5160,7 @@ export const createAgentExperience = (
     }));
   };
   const maybeRestoreVoiceFromMetadata = () => {
-    if (config.voiceRecognition?.enabled === false) return;
+    if (config.voiceRecognition?.enabled === false || config.voiceRecognition?.dictation || (config.voiceRecognition?.provider?.type === "custom" && config.voiceRecognition.completionBehavior === "review")) return;
     const rawVoiceState = ensureRecord((persistentMetadata as any).voiceState);
     const wasActive = Boolean(rawVoiceState.active);
     const timestamp = Number(rawVoiceState.timestamp ?? 0);
@@ -5159,7 +5205,7 @@ export const createAgentExperience = (
 
   const getMessagesForPersistence = () =>
     session
-      ? stripStreamingFromMessages(session.getMessages()).filter(msg => !(msg as any).__skipPersist)
+      ? messagesForStorage(session.getMessages()).filter(msg => !(msg as any).__skipPersist)
       : [];
 
   let storageMutationTail: Promise<void> | null = null;
@@ -5205,11 +5251,11 @@ export const createAgentExperience = (
   };
 
   function persistState(messagesOverride?: AgentWidgetMessage[]) {
-    if (!storageAdapter?.save) return;
+    if (conversationPersistenceOwner !== null || !storageAdapter?.save) return;
 
     // Allow saving even if session doesn't exist yet (for metadata during init)
     const messages = messagesOverride
-      ? stripStreamingFromMessages(messagesOverride)
+      ? messagesForStorage(messagesOverride)
       : session
         ? getMessagesForPersistence()
         : [];
@@ -5243,6 +5289,7 @@ export const createAgentExperience = (
   // keeps owning conversation scoping. No `File` objects: attachments are not
   // part of a persisted draft in v1.
   let currentStoredDraft: AgentWidgetStoredDraft | undefined;
+  let conversationPersistenceOwner: number | null = null;
 
   const draftPersistenceEnabled = (): boolean => {
     if (!storageAdapter?.save) return false;
@@ -5304,7 +5351,7 @@ export const createAgentExperience = (
     }
     if (restored.selectedModelId) {
       composerStore.setSelectedModelId(restored.selectedModelId);
-      composerModelPicker?.repaint();
+      composerCoreControls?.repaint();
     }
     // Unconditional: a restored draft's selection beats
     // `composer.defaultActiveModeIds`, including when it deselected everything.
@@ -5324,7 +5371,7 @@ export const createAgentExperience = (
   }
 
   // Track ongoing smooth scroll animation
-  let smoothScrollRAF: number | null = null;
+  const smoothScrollAnimation = createScrollAnimation();
 
   // Get the scrollable container using its unique ID
   const getScrollableContainer = (): HTMLElement => {
@@ -5335,10 +5382,7 @@ export const createAgentExperience = (
   };
 
   const cancelSmoothScroll = () => {
-    if (smoothScrollRAF !== null) {
-      cancelAnimationFrame(smoothScrollRAF);
-      smoothScrollRAF = null;
-    }
+    smoothScrollAnimation.cancel();
     isAutoScrolling = false;
   };
 
@@ -5356,33 +5400,23 @@ export const createAgentExperience = (
   // the scroll-to-bottom affordance (Principle 8: show what's happening out of
   // view). In anchor-top mode this is gated behind `showActivityWhilePinned`
   // so the historical "silent while pinned" behavior is preserved by default.
+  // Busy covers network/tool work too. Durable reconnects and waits for user
+  // input are idle even while the session retains its busy state.
+  const isScrollResponseActive = () => {
+    const status = session?.getStatus();
+    return isStreaming && status !== "paused" && status !== "resuming" && status !== "error" &&
+      !session?.getMessages().some((message) =>
+        (message.agentMetadata?.awaitingLocalTool === true && message.agentMetadata.askUserQuestionAnswered !== true) ||
+        (message.variant === "approval" && message.approval?.status === "pending"));
+  };
   const isStreamingOutOfView = () =>
-    isStreaming &&
-    isAwayFromLatest() &&
+    isScrollResponseActive() && isAwayFromLatest() &&
     (getScrollMode() !== "anchor-top" || isActivityWhilePinnedEnabled());
 
   const updateScrollToBottomCountBadge = () => {
-    const base = getScrollToBottomLabel() || "Jump to latest";
-    const streamingBelow = isStreamingOutOfView();
-    scrollToBottomButton.toggleAttribute(
-      "data-persona-scroll-to-bottom-streaming",
-      streamingBelow
-    );
-    if (newMessagesSincePause > 0) {
-      scrollToBottomCount.textContent = String(newMessagesSincePause);
-      scrollToBottomCount.style.display = "";
-      scrollToBottomButton.setAttribute(
-        "aria-label",
-        `${base} (${newMessagesSincePause} new)`
-      );
-    } else {
-      scrollToBottomCount.textContent = "";
-      scrollToBottomCount.style.display = "none";
-      scrollToBottomButton.setAttribute(
-        "aria-label",
-        streamingBelow ? `${base} (response streaming below)` : base
-      );
-    }
+    scrollToBottomControl.update(config,
+      scrollToBottomButton.getAttribute("data-persona-scroll-to-bottom-visible") === "true",
+      isStreamingOutOfView(), newMessagesSincePause);
   };
 
   const resetNewMessagesCount = () => {
@@ -5391,27 +5425,25 @@ export const createAgentExperience = (
     updateScrollToBottomCountBadge();
   };
 
-  // "Near the latest content", ignoring anchor-spacer air: while a turn is
-  // anchored, the spacer keeps scrollable space below the last message, so
-  // container-bottom distance reads "away" even with the whole reply on
-  // screen (and flickers as the spacer drains). Measure against the real
-  // content bottom instead; the button only appears once content actually
-  // extends below the viewport.
+  // Spacer air and composer reserve are scrollable, but aren't unread content.
+  // Compare the real content bottom with the readable viewport instead. An
+  // overlay footer clips that viewport; a block footer sits below it.
   const isNearLatestContent = () => {
-    const spacerHeight = anchorState?.spacerHeight ?? 0;
-    if (spacerHeight <= 0) return isElementNearBottom(body, BOTTOM_THRESHOLD);
-    const contentHeight = measureContentHeight(spacerHeight);
-    return (
-      contentHeight - body.scrollTop - body.clientHeight <= BOTTOM_THRESHOLD
-    );
+    const contentHeight = measureContentHeight(anchorState?.spacerHeight ?? 0, false);
+    const bodyRect = body.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    const readableHeight = footerRect.height > 0 && footerRect.bottom > bodyRect.top
+      ? Math.min(body.clientHeight, Math.max(0, footerRect.top - bodyRect.top - body.clientTop))
+      : body.clientHeight;
+    return contentHeight - body.scrollTop - readableHeight <= BOTTOM_THRESHOLD;
   };
 
   // Whether the user is currently away from the latest content: drives both
-  // the scroll-to-bottom affordance and the new-messages badge. When following
-  // the bottom (follow mode, or a no-anchor anchor-top fallback turn) that's
-  // "auto-follow paused"; otherwise it's simply "not near the bottom".
+  // the scroll-to-bottom affordance and the new-messages badge. Effective
+  // follow must be paused, and every mode requires actual content below the
+  // readable viewport. Reaching visible content never changes follow intent.
   const isAwayFromLatest = () =>
-    isFollowEffective() ? !autoFollow.isFollowing() : !isNearLatestContent();
+    (!isFollowEffective() || !autoFollow.isFollowing()) && !isNearLatestContent();
 
   // Empty transcript = welcome-only view: there is no "latest message" to
   // follow, jump to, or badge, and bottom-scrolling clips the greeting when
@@ -5421,25 +5453,21 @@ export const createAgentExperience = (
 
   const syncScrollToBottomButton = () => {
     if (!isScrollToBottomEnabled() || fullPanelOverlayVisible()) {
+      scrollToBottomControl.update(config, false);
       if (scrollToBottomButton.parentNode) {
         scrollToBottomButton.remove();
       }
-      scrollToBottomButton.style.display = "none";
       return;
     }
-    if (scrollToBottomButton.parentNode !== container) {
-      container.appendChild(scrollToBottomButton);
+    const host = scrollToBottomHost();
+    if (scrollToBottomButton.parentNode !== host) {
+      host.insertBefore(scrollToBottomButton, host === container ? panelSuggestions : null);
     }
     updateScrollToBottomButtonOffset();
     const hasOverflow = getScrollBottomOffset(body) > 0;
-    const show = hasOverflow && isAwayFromLatest() && transcriptHasMessages();
-    if (!show) {
-      resetNewMessagesCount();
-    } else {
-      // Refresh the streaming-below hint while the affordance is visible.
-      updateScrollToBottomCountBadge();
-    }
-    scrollToBottomButton.style.display = show ? "" : "none";
+    const show = !latestScroll.active && hasOverflow && isAwayFromLatest() && transcriptHasMessages();
+    if (!show) newMessagesSincePause = 0;
+    scrollToBottomControl.update(config, show, isStreamingOutOfView(), newMessagesSincePause);
   };
 
   const pauseAutoScroll = () => {
@@ -5458,7 +5486,7 @@ export const createAgentExperience = (
     // Auto-follow applies in "follow" mode, and in anchor-top only for a
     // no-anchor fallback turn (see `isFollowEffective`). Anchored anchor-top
     // turns and "none" never chase the bottom during streaming.
-    if (!isFollowEffective()) return;
+    if (latestScroll.active || !isFollowEffective()) return;
     if (!transcriptHasMessages()) return;
 
     if (!autoFollow.isFollowing()) return;
@@ -5500,66 +5528,17 @@ export const createAgentExperience = (
     duration: number,
     shouldContinue: () => boolean = () => true
   ) => {
-    const start = element.scrollTop;
-    let target = resolveTarget();
-    let distance = target - start;
-
-    // Cancel any ongoing smooth scroll animation
     cancelSmoothScroll();
-
-    // Nothing to scroll: land exactly on target and skip the rAF loop. Avoids a
-    // no-op animation when already in place (e.g. anchoring with zero overflow),
-    // which also keeps environments with a synchronous rAF from spinning.
-    if (Math.abs(distance) < 1) {
-      isAutoScrolling = true;
-      element.scrollTop = target;
-      lastScrollTop = element.scrollTop;
-      isAutoScrolling = false;
-      return;
-    }
-
-    const startTime = performance.now();
     isAutoScrolling = true;
-
-    // Easing function: ease-out cubic for smooth deceleration
-    const easeOutCubic = (t: number): number => {
-      return 1 - Math.pow(1 - t, 3);
-    };
-
-    const animate = (currentTime: number) => {
-      if (!shouldContinue()) {
-        cancelSmoothScroll();
-        return;
-      }
-
-      // Recalculate target each frame in case scrollHeight changed
-      const currentTarget = resolveTarget();
-      if (currentTarget !== target) {
-        target = currentTarget;
-        distance = target - start;
-      }
-
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = easeOutCubic(progress);
-
-      const currentScroll = start + distance * eased;
-      element.scrollTop = currentScroll;
-      lastScrollTop = element.scrollTop;
-
-      if (progress < 1) {
-        smoothScrollRAF = requestAnimationFrame(animate);
-      } else {
-        // Ensure we end exactly at the target
-        element.scrollTop = target;
-        lastScrollTop = element.scrollTop;
-        smoothScrollRAF = null;
-        isAutoScrolling = false;
-      }
-    };
-
-    smoothScrollRAF = requestAnimationFrame(animate);
+    smoothScrollAnimation.start(element, resolveTarget, duration,
+      () => { lastScrollTop = element.scrollTop; },
+      () => { isAutoScrolling = false; }, shouldContinue);
   };
+
+  const latestScroll = createScrollToLatest(body, container,
+    () => { lastScrollTop = body.scrollTop; },
+    () => { resumeAutoScroll(); scheduleAutoScroll(true); syncScrollToBottomButton(); },
+    () => { autoFollow.pause(); syncScrollToBottomButton(); });
 
   // Custom smooth scroll animation with easing
   const smoothScrollToBottom = (element: HTMLElement, duration = 500) => {
@@ -5604,19 +5583,6 @@ export const createAgentExperience = (
     lastScrollTop = element.scrollTop;
     isAutoScrolling = false;
     syncScrollToBottomButton();
-  };
-
-  // Walk offsetParents up to `body` (the positioned scroll ancestor) to get a
-  // node's top relative to the scroll content. offsetTop avoids skew from any
-  // in-flight entrance transforms. Mirrors the anchor-top geometry.
-  const offsetTopWithinBody = (el: HTMLElement): number => {
-    let top = 0;
-    let node: HTMLElement | null = el;
-    while (node && node !== body) {
-      top += node.offsetTop;
-      node = node.offsetParent as HTMLElement | null;
-    }
-    return top;
   };
 
   // Defined here (rather than beside the scroll listeners) because
@@ -5695,17 +5661,18 @@ export const createAgentExperience = (
   // anchor target then sits past maxScrollTop, the ease clamps early, and
   // every transient content dip during streaming bounces the viewport.
   // Layoutless environments (jsdom) measure 0; fall back to the naive value.
-  const measureContentHeight = (previousSpacerHeight: number): number => {
+  const measureContentHeight = (previousSpacerHeight: number, includePadding = true): number => {
     const paddingBottom =
       parseFloat(getComputedStyle(body).paddingBottom) || 0;
     let bottom = 0;
-    for (const child of Array.from(body.children) as HTMLElement[]) {
+    for (const node of body.children) {
+      const child = node as HTMLElement;
       if (child === anchorSpacer || child.offsetHeight === 0) continue;
-      const childBottom = offsetTopWithinBody(child) + child.offsetHeight;
-      if (childBottom > bottom) bottom = childBottom;
+      bottom = Math.max(bottom, offsetTopWithinBody(child) + child.offsetHeight);
     }
     const naive = body.scrollHeight - previousSpacerHeight;
-    return bottom > 0 ? Math.min(bottom + paddingBottom, naive) : naive;
+    const height = bottom > 0 ? Math.min(bottom + paddingBottom, naive) : naive;
+    return includePadding ? height : height - paddingBottom;
   };
 
   // Stream-end spacer trim: the ResizeObserver drain is growth-driven, so it
@@ -5737,6 +5704,7 @@ export const createAgentExperience = (
     // Also stop an in-flight anchor scroll animation: otherwise its
     // remaining frames keep easing scrollTop toward the stale anchor target
     // after a jump-to-latest, chat clear, or scroll-mode change.
+    latestScroll.cancel();
     cancelSmoothScroll();
     anchorState = null;
     anchorSpacer.style.height = "0px";
@@ -5753,6 +5721,14 @@ export const createAgentExperience = (
       `[data-message-id="${escapeMessageId(messageId)}"]`
     );
 
+  // Progress inside a turn disclosure belongs to its visible header. Pinning
+  // the nested prose instead clips that header, and leaves a hidden anchor
+  // when the completed turn folds away. Keep ordinary message lookups intact.
+  const queryScrollAnchor = (messageId: string): HTMLElement | null => {
+    const bubble = queryMessageBubble(messageId);
+    return bubble?.closest<HTMLElement>("[data-persona-turn-activity]") ?? bubble;
+  };
+
   // Anchor-top mode: scroll `messageId` to rest `anchorTopOffset` px below the
   // viewport top and hold it there while the response streams in beneath it.
   // Deferred one frame so the message bubble has been rendered and laid out.
@@ -5762,10 +5738,7 @@ export const createAgentExperience = (
     }
     anchorRAF = requestAnimationFrame(() => {
       anchorRAF = null;
-      const escapedId = escapeMessageId(messageId);
-      const bubble = body.querySelector<HTMLElement>(
-        `[data-message-id="${escapedId}"]`
-      );
+      const bubble = queryScrollAnchor(messageId);
       if (!bubble) return;
 
       // Bubble top relative to the scroll content. offsetTop is used instead
@@ -5818,7 +5791,7 @@ export const createAgentExperience = (
   const repinAnchoredMessage = () => {
     if (getScrollMode() !== "anchor-top") return;
     if (!anchorState || !anchoredMessageId) return;
-    const bubble = queryMessageBubble(anchoredMessageId);
+    const bubble = queryScrollAnchor(anchoredMessageId);
     if (!bubble) return;
     cancelSmoothScroll();
     const previousSpacerHeight = anchorState.spacerHeight;
@@ -5851,6 +5824,7 @@ export const createAgentExperience = (
   // stays constant and nothing jumps).
   const handleContentResize = () => {
     if (isFollowEffective()) {
+      syncScrollToBottomButton();
       if (!autoFollow.isFollowing()) return;
       if (isElementNearBottom(body, 1)) return;
       scheduleAutoScroll(!isStreaming);
@@ -5944,7 +5918,7 @@ export const createAgentExperience = (
   const isFirstUnreadStranded = (messageId: string): boolean => {
     if (lastSentUserMessageId === null) return true;
     const userBubble = queryMessageBubble(lastSentUserMessageId);
-    const blockBubble = queryMessageBubble(messageId);
+    const blockBubble = queryScrollAnchor(messageId);
     // Unmeasurable geometry: fall back to handing off (pre-conditional
     // behavior) rather than risking an answer parked below the fold.
     if (!userBubble || !blockBubble) return true;
@@ -6020,7 +5994,7 @@ export const createAgentExperience = (
 
       if (
         message.role === "assistant" &&
-        previous?.streaming &&
+        (previous?.streaming || coalescedStreamingIds.has(message.id)) &&
         message.streaming === false
       ) {
         eventBus.emit("assistant:complete", message);
@@ -6040,6 +6014,7 @@ export const createAgentExperience = (
     nextState.forEach((value, key) => {
       messageState.set(key, value);
     });
+    coalescedStreamingIds.clear();
   };
 
 
@@ -6089,54 +6064,40 @@ export const createAgentExperience = (
     return wrapper;
   };
 
+  // Attribute lookup stays local even when sibling widgets use identical ids.
+  const findMessageRow = (container: HTMLElement, id: string): HTMLElement | undefined =>
+    Array.from(container.querySelectorAll<HTMLElement>("[data-wrapper-id]"))
+      .find((row) => row.getAttribute("data-wrapper-id") === id);
+
   const renderMessagesWithPluginsImpl = (
     container: HTMLElement,
     messages: AgentWidgetMessage[],
     transform: MessageTransform
   ) => {
     const activityIds = new Set<string>();
-    for (const message of messages) {
-      const kind = message.variant === "tool" ? "tool" : message.variant === "reasoning" ? "reasoning" : null;
-      if (!kind || activityVariant(config, kind) !== "row") continue;
-      const display = kind === "tool" ? config.features?.toolCallDisplay : config.features?.reasoningDisplay;
-      if (display?.expandable === false) continue;
-      activityIds.add(message.id);
-      activityLifecycle.observe(message, kind, kind === "tool" ? toolExpansionState : reasoningExpansionState, display);
-    }
+    ensureActivityUi();
+    activityLifecycle?.observeMessages(messages, activityIds);
     // Build new content in a temporary container for morphing
     const tempContainer = document.createElement("div");
 
-    // Create inline loading indicator renderer using priority chain: plugin -> config -> default
-    const getInlineLoadingIndicatorRenderer = (): LoadingIndicatorRenderer | undefined => {
-      // Check if any plugin has renderLoadingIndicator
-      const loadingPlugin = plugins.find(p => p.renderLoadingIndicator);
-      if (loadingPlugin?.renderLoadingIndicator) {
-        return loadingPlugin.renderLoadingIndicator;
+    // Unchanged messages keep their live row: the pass appends an empty
+    // `data-persona-reuse` stub that `morphMessages` matches by id and skips,
+    // so a render costs O(changed rows) rather than a deep clone, serialize,
+    // and morph of the whole transcript. Tool grouping restyles and re-parents
+    // rows after this loop, so grouped transcripts always rebuild.
+    const reuseLiveRows = !config.features?.toolCallDisplay?.grouped;
+    const liveRows = new Set<string>();
+    if (reuseLiveRows) {
+      for (const child of Array.from(container.children)) {
+        const id = child.getAttribute("data-wrapper-id");
+        if (id) liveRows.add(id);
       }
+    }
+    const nextLiveRowFingerprints = new Map<string, string>();
 
-      // Check if config has loadingIndicator.render
-      if (config.loadingIndicator?.render) {
-        return config.loadingIndicator.render;
-      }
-
-      // Return undefined to use default in createStandardBubble
-      return undefined;
-    };
-
-    const inlineLoadingRenderer = getInlineLoadingIndicatorRenderer();
-    const appendRenderedValue = (
-      containerEl: HTMLElement,
-      value: HTMLElement | string | null | undefined
-    ): boolean => {
-      if (value == null) return false;
-      if (typeof value === "string") {
-        containerEl.textContent = value;
-        return true;
-      }
-      containerEl.appendChild(value);
-      return true;
-    };
-
+    // Custom renderers take precedence; the built-in path remains in the bubble.
+    const inlineLoadingRenderer = plugins.find(plugin => plugin.renderLoadingIndicator)?.renderLoadingIndicator
+      ?? config.loadingIndicator?.render;
     // Track active message IDs for cache pruning
     const activeMessageIds = new Set<string>();
     const messageRolesById = new Map<string, AgentWidgetMessage["role"]>();
@@ -6188,6 +6149,7 @@ export const createAgentExperience = (
       messageId: string;
       fingerprint: string;
       bubble: HTMLElement | null;
+      focusDefault?: boolean;
     };
     const approvalPluginHydrate: ApprovalPluginHydrate[] = [];
 
@@ -6195,9 +6157,18 @@ export const createAgentExperience = (
     // regenerate control lives on exactly one message and only while the thread
     // is settled.
     const actionsCfg = config.messageActions;
+    let lastAssistantId: string | undefined;
+    if (config.future?.v5Defaults && actionsCfg?.visibility === undefined) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === "assistant" && !messages[i].variant) {
+          lastAssistantId = messages[i].id;
+          break;
+        }
+      }
+    }
     const retryableAssistantId =
-      actionsCfg?.showRegenerate === true &&
-      actionsCfg.enabled !== false &&
+      (actionsCfg?.showRegenerate === true || config.errorDisplay === "block") &&
+      actionsCfg?.enabled !== false &&
       // The first pass paints restored history before the session exists.
       sessionRef.current?.isStreaming() !== true
         ? findRetryableAssistantMessageId(messages)
@@ -6239,7 +6210,8 @@ export const createAgentExperience = (
       return (
         dropCompletedToolCalls &&
         message.variant === "tool" &&
-        message.toolCall?.status === "complete"
+        message.toolCall?.status === "complete" &&
+        !message.toolCall.interrupted
       );
     };
 
@@ -6249,6 +6221,12 @@ export const createAgentExperience = (
       }
       activeMessageIds.add(message.id);
       messageRolesById.set(message.id, message.role);
+      if (((message.variant === "tool" && message.toolCall && showToolCalls) ||
+           (message.variant === "reasoning" && message.reasoning && showReasoning)) && !ensureActivityUi()) {
+        tempContainer.appendChild(createMessageRow(message.id, message.role));
+        return;
+      }
+
 
       // Edited message: append a runtime-preserved stub now and graft the live
       // editor in post-morph. The editor element is built once per edit session,
@@ -6275,18 +6253,18 @@ export const createAgentExperience = (
       // If a message stops being an approval-plugin bubble, strip
       // `data-preserve-runtime` so the next morph can replace the live wrapper.
       if (!approvalWithPlugin && lastApprovalBubbleFingerprint.has(message.id)) {
-        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        const existing = findMessageRow(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
-        lastApprovalBubbleFingerprint.delete(message.id);
+        disposeApprovalRender(message.id);
       }
 
       // If a message previously rendered as a directive bubble but no longer
       // does (e.g. content was rewritten), strip `data-preserve-runtime` from
       // the live wrapper so the next morph can replace it.
       if (!hasDirectiveBubble && lastComponentDirectiveFingerprint.has(message.id)) {
-        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        const existing = findMessageRow(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
-        lastComponentDirectiveFingerprint.delete(message.id);
+        disposeComponentRender(message.id);
       }
 
       // Fingerprint cache: skip re-rendering unchanged messages. Append the
@@ -6301,7 +6279,9 @@ export const createAgentExperience = (
           }`
         : "";
       const actionEligibility: MessageActionEligibility = {
-        canRegenerate: retryableAssistantId === message.id,
+        isLastAssistant: message.id === lastAssistantId,
+        canRegenerate: retryableAssistantId === message.id &&
+          (actionsCfg?.showRegenerate === true || message.dispatchError === true),
         canEdit: editEnabled && isEditableUserMessage(message),
         canQuote:
           quoteEnabled && !message.variant && (message.content?.trim().length ?? 0) > 0,
@@ -6311,14 +6291,43 @@ export const createAgentExperience = (
       // transcript grows.
       const eligibilityKey = `${actionEligibility.canRegenerate ? "r" : ""}${
         actionEligibility.canEdit ? "e" : ""
-      }${actionEligibility.canQuote ? "q" : ""}`;
+      }${actionEligibility.canQuote ? "q" : ""}${actionEligibility.isLastAssistant ? "l" : ""}`;
+      // A turn/execution id can contain many calls. Only an explicit per-call
+      // link is safe; approval acceptance never implies tool completion.
+      const linkedTools = message.approval?.toolCallId
+        ? messages.filter((candidate) =>
+            candidate.variant === "tool" &&
+            candidate.toolCall?.id === message.approval?.toolCallId &&
+            (!candidate.agentMetadata?.executionId || !message.approval?.executionId ||
+              candidate.agentMetadata.executionId === message.approval.executionId))
+        : [];
+      const linkedTool = linkedTools.length === 1 ? linkedTools[0].toolCall : undefined;
+      const execution: Parameters<NonNullable<AgentWidgetPlugin["renderApproval"]>>[0]["execution"] =
+        linkedTool && linkedTool.status !== "pending"
+          ? { toolCallId: linkedTool.id, status: linkedTool.status === "running"
+              ? "running" : linkedTool.success === false || linkedTool.error ? "failed" : "completed" }
+          : undefined;
       const fingerprint =
-        computeMessageFingerprint(message, configVersion) + askMeta + `:${eligibilityKey}`;
-      const cachedWrapper = (askWithPlugin || approvalWithPlugin || hasDirectiveBubble)
+        computeMessageFingerprint(message, configVersion) + askMeta + `:${eligibilityKey}` +
+        (approvalWithPlugin ? `:${message.approval?.toolCallId ?? ""}:${JSON.stringify(execution)}` : "");
+      const cachedWrapper = (askWithPlugin || approvalWithPlugin || hasDirectiveBubble ||
+        (message.dispatchError && config.errorDisplay === "block" && !approvalUi))
         ? null
         : getCachedWrapper(messageCache, message.id, fingerprint);
       if (cachedWrapper) {
-        tempContainer.appendChild(cachedWrapper.cloneNode(true));
+        if (
+          liveRows.has(message.id) &&
+          liveRowFingerprints.get(message.id) === fingerprint
+        ) {
+          const stub = document.createElement("div");
+          stub.id = `wrapper-${message.id}`;
+          stub.setAttribute("data-wrapper-id", message.id);
+          stub.setAttribute("data-persona-reuse", "true");
+          tempContainer.appendChild(stub);
+        } else {
+          tempContainer.appendChild(cachedWrapper.cloneNode(true));
+        }
+        if (reuseLiveRows) nextLiveRowFingerprints.set(message.id, fingerprint);
         // Keep the overlay sheet alive only while the server is actively
         // waiting on the user (awaitingLocalTool === true). Before await
         // fires, or after the answer resumes the flow, omit from
@@ -6340,6 +6349,20 @@ export const createAgentExperience = (
 
       let bubble: HTMLElement | null = null;
 
+      const renderDefaultMessage = (): HTMLElement => {
+        if (message.dispatchError && config.errorDisplay === "block") {
+          const mod = ensureApprovalUi();
+          if (mod) return mod.createErrorBlock(message, transform, actionEligibility.canRegenerate === true);
+        }
+        // Keep the detail readable even while the secondary UI chunk loads.
+        const bubble = createStandardBubble(message, transform, config.layout?.messages,
+          config.messageActions, messageActionCallbacks, {
+            loadingIndicatorRenderer: inlineLoadingRenderer, widgetConfig: config, actionEligibility
+          });
+        bubble.dataset.personaDefaultMessage = "true";
+        return bubble;
+      };
+
       // Try plugins first
       const matchingPlugin = plugins.find((p) => {
         if (message.variant === "reasoning" && p.renderReasoning) {
@@ -6356,9 +6379,6 @@ export const createAgentExperience = (
         }
         return false;
       });
-
-      // Get message layout config
-      const messageLayoutConfig = config.layout?.messages;
 
       // ask_user_question has two rendering modes while waiting for an answer:
       //   1. Plugin `renderAskUserQuestion`: returns an inline transcript
@@ -6380,7 +6400,7 @@ export const createAgentExperience = (
         // Drop any previously-mounted plugin bubble so the morph pass
         // removes the now-stale interactive sheet.
         lastAskBubbleFingerprint.delete(message.id);
-        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        const existing = findMessageRow(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
         return;
       }
@@ -6493,12 +6513,14 @@ export const createAgentExperience = (
         const lastFp = lastApprovalBubbleFingerprint.get(message.id);
         const needsRebuild = lastFp !== fingerprint;
         let liveBubble: HTMLElement | null = null;
+        let focusDefault = false;
 
         if (needsRebuild && approvalPlugin?.renderApproval) {
           // Re-find the live message at decision time so we resolve against
           // current state, and route WebMCP gate approvals to the local
           // resolver: mirroring the built-in delegated handler.
           const approvalMessageId = message.id;
+          let decisionSent = false;
           const resolveDecision = (
             decision: "approved" | "denied",
             options?: AgentWidgetApprovalDecisionOptions
@@ -6506,77 +6528,79 @@ export const createAgentExperience = (
             const live = sessionRef.current
               ?.getMessages()
               .find((m) => m.id === approvalMessageId);
-            if (!live?.approval) return;
-            if (live.approval.toolType === "webmcp") {
+            if (decisionSent || live?.approval?.status !== "pending") return;
+            decisionSent = true;
+            if (isBrowserLocalApproval(live.approval)) {
               sessionRef.current?.resolveWebMcpApproval(live.id, decision);
             } else {
               sessionRef.current?.resolveApproval(live.approval, decision, options);
             }
           };
-          liveBubble = approvalPlugin.renderApproval({
+          // Retire the previous lifetime before any replacement renderer runs.
+          disposeApprovalRender(message.id);
+          const lifetime = new AbortController();
+          approvalRenderControllers.set(message.id, lifetime);
+          const context: Parameters<NonNullable<AgentWidgetPlugin["renderApproval"]>>[0] = {
             message,
-            defaultRenderer: () => approvalMod.createApprovalBubble(message, config, approvalDetailsExpansionState),
+            execution,
+            signal: lifetime.signal,
+            // The configured built-in plugin owns defaults, shortcuts and cleanup.
+            defaultRenderer: () => renderDefault(),
             config,
-            approve: (options) => resolveDecision("approved", options),
-            deny: (options) => resolveDecision("denied", options)
-          });
+            approve: (options) => {
+              if (!lifetime.signal.aborted) resolveDecision("approved", options);
+            },
+            deny: (options) => {
+              if (!lifetime.signal.aborted) resolveDecision("denied", options);
+            }
+          };
+          let defaultBubble: HTMLElement | null = null;
+          const defaultLifetime = new AbortController();
+          lifetime.signal.addEventListener("abort", () => defaultLifetime.abort(), { once: true });
+          const renderDefault = (): HTMLElement => {
+            defaultBubble ??= builtInApprovalPlugin?.renderApproval?.({ ...context, signal: defaultLifetime.signal }) ??
+              approvalMod.createApprovalBubble(message, config, approvalDetailsExpansionState);
+            return defaultBubble;
+          };
+          liveBubble = approvalPlugin === builtInApprovalPlugin
+            ? renderDefault()
+            : approvalPlugin.renderApproval(context) ?? renderDefault();
+          const usesDefault = defaultBubble !== null &&
+            (liveBubble === defaultBubble || liveBubble.contains(defaultBubble));
+          if (!usesDefault) defaultLifetime.abort();
+          const root = mount.getRootNode() as Document | ShadowRoot;
+          focusDefault = usesDefault && lastFp === undefined &&
+            message.approval?.status === "pending" && config.approval !== false &&
+            config.approval?.keyboardShortcuts === "focused" &&
+            mount.contains(root.activeElement);
         }
 
-        if (needsRebuild && liveBubble === null) {
-          // Plugin opted out for this state (e.g. a resolved approval, where the
-          // demo plugin defers to the built-in approved/denied bubble). Render
-          // the built-in bubble: it resolves via the delegated `messagesWrapper`
-          // handler and morphs normally, and drop any preserved live wrapper so
-          // morph can replace the now-stale pending bubble.
-          const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
-          existing?.removeAttribute("data-preserve-runtime");
-          lastApprovalBubbleFingerprint.delete(message.id);
-          bubble = approvalMod.createApprovalBubble(message, config, approvalDetailsExpansionState);
-        } else {
-          // A fresh live bubble to hydrate (needsRebuild), or fingerprint
-          // unchanged so we reuse the preserved live wrapper (`bubble: null`).
-          const stub = createMessageRow(message.id, message.role);
-          stub.setAttribute("data-approval-plugin-stub", "true");
-          stub.setAttribute("data-preserve-runtime", "true");
-          tempContainer.appendChild(stub);
-          approvalPluginHydrate.push({
-            messageId: message.id,
-            fingerprint,
-            bubble: liveBubble
-          });
-          return;
-        }
+        const stub = createMessageRow(message.id, message.role);
+        stub.setAttribute("data-approval-plugin-stub", "true");
+        stub.setAttribute("data-preserve-runtime", "true");
+        tempContainer.appendChild(stub);
+        approvalPluginHydrate.push({ messageId: message.id, fingerprint, bubble: liveBubble, focusDefault });
+        return;
       } else if (matchingPlugin) {
         if (message.variant === "reasoning" && message.reasoning && matchingPlugin.renderReasoning) {
           if (!showReasoning) return;
           bubble = matchingPlugin.renderReasoning({
             message,
-            defaultRenderer: () => createReasoningBubble(message, config, reasoningExpansionState),
+            defaultRenderer: () => activityUi!.createReasoningBubble(message, config, reasoningExpansionState),
             config
           });
         } else if (message.variant === "tool" && message.toolCall && matchingPlugin.renderToolCall) {
           if (!showToolCalls) return;
           bubble = matchingPlugin.renderToolCall({
             message,
-            defaultRenderer: () => createToolBubble(message, config, toolExpansionState),
+            defaultRenderer: () => activityUi!.createToolBubble(message, config, toolExpansionState),
             config
           });
         } else if (matchingPlugin.renderMessage) {
           bubble = matchingPlugin.renderMessage({
             message,
             defaultRenderer: () => {
-              const b = createStandardBubble(
-                message,
-                transform,
-                messageLayoutConfig,
-                config.messageActions,
-                messageActionCallbacks,
-                {
-                  loadingIndicatorRenderer: inlineLoadingRenderer,
-                  widgetConfig: config,
-                  actionEligibility
-                }
-              );
+              const b = renderDefaultMessage();
               if (message.role !== "user") {
                 enhanceWithFormsLazy(b, message, config, session);
               }
@@ -6587,6 +6611,8 @@ export const createAgentExperience = (
         }
       }
 
+      if (bubble && componentLifetimes.has(message.id)) disposeComponentRender(message.id);
+
       // Check for component directive if no plugin handled it. We use the
       // same stub-and-hydrate trick as ask_user_question plugins (see comment
       // above `componentDirectiveHydrate`): build the live element with its
@@ -6596,21 +6622,68 @@ export const createAgentExperience = (
         const directive = extractComponentDirectiveFromMessage(message);
         if (directive) {
           const lastFp = lastComponentDirectiveFingerprint.get(message.id);
-          const needsRebuild = lastFp !== fingerprint;
+          const wrapChrome =
+            config.wrapComponentDirectiveInBubble !== false &&
+            resolveComponentOptions(config, directive.component)?.bubbleChrome !== false;
+          // Raw-length-only fingerprints miss same-length prop replacements.
+          const directiveFingerprint = `${computeMessageFingerprint(message, configVersion)}:${wrapChrome}:${directive.raw}`;
+          const previousLifetime = componentLifetimes.get(message.id);
+          const renderer = resolveComponentRenderer(config, directive.component);
+          const rendererChanged = previousLifetime?.renderer !== renderer ||
+            previousLifetime?.component !== directive.component;
+          const needsRebuild = lastFp !== directiveFingerprint || rendererChanged;
+          if (previousLifetime) {
+            previousLifetime.context.message = message;
+            previousLifetime.context.config = config;
+          }
           // Wrap only when the global default allows it AND the component has
           // not opted out of bubble chrome (e.g. the artifact card carries its
           // own border, so it renders bare).
-          const wrapChrome =
-            config.wrapComponentDirectiveInBubble !== false &&
-            componentRegistry.getOptions(directive.component)?.bubbleChrome !== false;
           let liveBubble: HTMLElement | null = null;
 
           if (needsRebuild) {
-            let componentBubble = renderComponentDirective(directive, {
-              config,
-              message,
-              transform
-            });
+            let componentBubble: HTMLElement | null = null;
+            if (previousLifetime && !rendererChanged && previousLifetime.handle.update) {
+              previousLifetime.context.message = message;
+              previousLifetime.context.config = config;
+              try {
+                previousLifetime.handle.update(directive.props, previousLifetime.context);
+                componentBubble = previousLifetime.handle.element;
+              } catch (error) {
+                console.error("[AgentWidget] Component update failed:", error);
+                disposeComponentRender(message.id);
+              }
+            } else {
+              disposeComponentRender(message.id);
+              const lifetime = new AbortController();
+              const context: AgentWidgetComponentRenderContext = {
+                config,
+                message,
+                signal: lifetime.signal,
+                updateProps: (props) => {
+                  // A renderer may write while it is being mounted or updated.
+                  // Queue until hydration has completed, and reject retired writes.
+                  queueMicrotask(() => {
+                    if (!lifetime.signal.aborted) sessionRef.current?.updateComponentProps(message.id, props);
+                  });
+                },
+              };
+              const result = renderComponentDirective(directive, {
+                config,
+                message,
+                transform,
+                signal: lifetime.signal,
+                onPropsUpdate: context.updateProps,
+                context,
+              });
+              if (result) {
+                const handle = "element" in result ? result : { element: result };
+                componentBubble = handle.element;
+                componentLifetimes.set(message.id, {
+                  renderer, component: directive.component, controller: lifetime, handle, context,
+                });
+              } else lifetime.abort();
+            }
             // Reuse a mounted inline artifact block instead of the fresh
             // render: replacing it would cut the collapse-to-card animation
             // short and reload live file-preview iframes.
@@ -6707,14 +6780,14 @@ export const createAgentExperience = (
           // mounted from a previous pass), use the stub-and-hydrate path.
           // Otherwise fall through to the standard render path so the message
           // text is at least visible.
-          if (liveBubble || lastFp != null) {
+          if (liveBubble || componentLifetimes.has(message.id)) {
             const stub = createMessageRow(message.id, message.role);
             stub.setAttribute("data-component-directive-stub", "true");
             stub.setAttribute("data-preserve-runtime", "true");
             tempContainer.appendChild(stub);
             componentDirectiveHydrate.push({
               messageId: message.id,
-              fingerprint,
+              fingerprint: directiveFingerprint,
               bubble: liveBubble
             });
             return;
@@ -6726,10 +6799,10 @@ export const createAgentExperience = (
       if (!bubble) {
         if (message.variant === "reasoning" && message.reasoning) {
           if (!showReasoning) return;
-          bubble = createReasoningBubble(message, config, reasoningExpansionState);
+          bubble = activityUi!.createReasoningBubble(message, config, reasoningExpansionState);
         } else if (message.variant === "tool" && message.toolCall) {
           if (!showToolCalls) return;
-          bubble = createToolBubble(message, config, toolExpansionState);
+          bubble = activityUi!.createToolBubble(message, config, toolExpansionState);
         } else if (message.variant === "approval" && message.approval) {
           if (config.approval === false) return;
           const approvalMod = ensureApprovalUi();
@@ -6751,19 +6824,9 @@ export const createAgentExperience = (
               streaming: Boolean(message.streaming)
             });
           } else {
-            bubble = createStandardBubble(
-              message,
-              transform,
-              messageLayoutConfig,
-              config.messageActions,
-              messageActionCallbacks,
-              {
-                loadingIndicatorRenderer: inlineLoadingRenderer,
-                widgetConfig: config,
-                actionEligibility
-              }
-            );
+            bubble = renderDefaultMessage();
           }
+
           if (message.role !== "user" && bubble) {
             enhanceWithFormsLazy(bubble, message, config, session);
           }
@@ -6774,6 +6837,7 @@ export const createAgentExperience = (
       wrapper.appendChild(bubble);
       setCachedWrapper(messageCache, message.id, fingerprint, wrapper);
       tempContainer.appendChild(wrapper);
+      if (reuseLiveRows) nextLiveRowFingerprints.set(message.id, fingerprint);
     });
 
     // Prune any ask_user_question sheets whose source message is no longer in
@@ -6790,151 +6854,21 @@ export const createAgentExperience = (
       });
     }
 
-    if (config.features?.toolCallDisplay?.grouped) {
-      const toolGroups: AgentWidgetMessage[][] = [];
-      let currentGroup: AgentWidgetMessage[] = [];
-      const summaryOnly =
-        config.features.toolCallDisplay.groupedMode === "summary";
+    const hasTurnActivity = ensureActivityUi()?.groupToolRows({ root: mount, config, messages, tempContainer, streaming: sessionInitialized ? session.isStreaming() : false,
+      runActivity: session?.getRunActivity(),
+      showToolCalls, showReasoning,
+      dropCompletedToolCalls, dropReasoningRow, createMessageRow, activityIds, activityLifecycle: activityLifecycle!, toolExpansionState });
 
-      messages.forEach((message) => {
-        if (message.variant === "tool" && message.toolCall && showToolCalls) {
-          // A tool call hidden by `completedVisibility: "removed"` does not
-          // create a visible break in the transcript, so it should not split
-          // an otherwise contiguous group.
-          if (dropCompletedToolCalls && message.toolCall.status === "complete") {
-            return;
-          }
-          currentGroup.push(message);
-          return;
-        }
-        // A hidden reasoning row does not create a visible break in the
-        // transcript, so it should not split an otherwise contiguous tool
-        // sequence into separate groups.
-        if (
-          message.variant === "reasoning" &&
-          (!showReasoning ||
-            (message.reasoning?.status === "complete" &&
-              dropReasoningRow(message.reasoning)))
-        ) {
-          return;
-        }
-        // Summary mode owns the visible row from the first tool onward. Waiting
-        // for a second tool would replace the standalone tool bubble with a new
-        // group row, restarting custom activity animations and transiently
-        // dropping interactive DOM state during the handoff.
-        if (currentGroup.length > 1 || (summaryOnly && currentGroup.length > 0)) {
-          toolGroups.push(currentGroup);
-        }
-        currentGroup = [];
-      });
-      if (currentGroup.length > 1 || (summaryOnly && currentGroup.length > 0)) {
-        toolGroups.push(currentGroup);
-      }
+    activityLifecycle?.prune(activityIds);
 
-      toolGroups.forEach((group) => {
-        const wrappers = group
-          .map((groupMessage) =>
-            Array.from(tempContainer.children).find(
-              (child) =>
-                child instanceof HTMLElement &&
-                child.getAttribute("data-wrapper-id") === groupMessage.id
-            ) as HTMLElement | undefined
-          )
-          .filter((wrapper): wrapper is HTMLElement => Boolean(wrapper));
-
-        if (wrappers.length < (summaryOnly ? 1 : 2)) {
-          return;
-        }
-
-        const groupWrapper = createMessageRow(
-          `tool-group-${group[0].id}`,
-          "assistant"
-        );
-        groupWrapper.setAttribute("data-persona-tool-group-row", "true");
-
-        if (config.features?.toolCallDisplay?.groupedMode === "collapsible") {
-          const id = `tool-group-${group[0].id}`;
-          const active = group.some(item => item.toolCall?.status !== "complete");
-          const synthetic: AgentWidgetMessage = { ...group[0], id, toolCall: {
-            id, name: `${group.length} tools`, status: active ? "running" : "complete",
-            chunks: group.flatMap(item => item.toolCall?.chunks ?? []),
-            success: !group.some(item => item.toolCall?.success === false),
-          } };
-          activityIds.add(id);
-          activityLifecycle.observe(synthetic, "tool", toolExpansionState, config.features.toolCallDisplay);
-          const label = `${active ? "Using" : "Used"} ${group.length} tools`;
-          const custom = config.toolCall?.renderGroupedSummary?.({ messages: group, toolCalls: group.map(item => item.toolCall!), defaultSummary: label, config });
-          const row = createActivityGroup(synthetic, config, toolExpansionState.has(id), custom ?? label);
-          row.bubble.classList.add("persona-tool-group");
-          row.body.dataset.personaToolGroupStack = "true";
-          wrappers[0].before(groupWrapper);
-          groupWrapper.appendChild(row.bubble);
-          wrappers.forEach((wrapper, index) => {
-            wrapper.style.setProperty("--persona-message-row-max-width", "100%");
-            wrapper.style.setProperty("--persona-activity-stagger", `${index * 40}ms`);
-            wrapper.classList.add("persona-activity-group-child");
-            row.body.appendChild(wrapper);
-          });
-          return;
-        }
-
-        const groupContainer = document.createElement("div");
-        groupContainer.className =
-          "persona-tool-group persona-flex persona-w-full persona-flex-col persona-gap-2";
-        groupContainer.setAttribute("data-persona-tool-group", "true");
-
-        const summary = document.createElement("div");
-        summary.className =
-          "persona-tool-group-summary persona-text-xs persona-text-persona-muted";
-        summary.id = `tool-group-summary-${group[0].id}`;
-
-        const defaultSummary = `Called ${group.length} ${group.length === 1 ? "tool" : "tools"}`;
-        const renderedSummary = config.toolCall?.renderGroupedSummary?.({
-          messages: group,
-          toolCalls: group
-            .map((groupMessage) => groupMessage.toolCall)
-            .filter((toolCall): toolCall is NonNullable<typeof group[number]["toolCall"]> => Boolean(toolCall)),
-          defaultSummary,
-          config,
-        });
-        if (!appendRenderedValue(summary, renderedSummary)) {
-          summary.textContent = defaultSummary;
-        }
-
-        const stack = document.createElement("div");
-        stack.className = "persona-tool-group-stack persona-flex persona-flex-col";
-        stack.id = `tool-group-stack-${group[0].id}`;
-        stack.setAttribute("data-persona-tool-group-stack", "true");
-
-        groupContainer.appendChild(summary);
-        if (!summaryOnly) {
-          groupContainer.appendChild(stack);
-        }
-        groupWrapper.appendChild(groupContainer);
-        wrappers[0].before(groupWrapper);
-
-        wrappers.forEach((wrapper, wrapperIndex) => {
-          if (summaryOnly) {
-            wrapper.remove();
-            return;
-          }
-          // The outer group row owns role sizing. Inner message rows fill that
-          // resolved track instead of applying the role max-width a second
-          // time (which would turn an 85% cap into 72.25%).
-          wrapper.style.setProperty("--persona-message-row-max-width", "100%");
-          const item = document.createElement("div");
-          item.className = "persona-tool-group-item persona-relative";
-          item.setAttribute("data-persona-tool-group-item", "true");
-          if (wrapperIndex < wrappers.length - 1) {
-            item.setAttribute("data-persona-tool-group-connector", "true");
-          }
-          item.appendChild(wrapper);
-          stack.appendChild(item);
-        });
-      });
+    for (const id of componentLifetimes.keys()) {
+      if (!activeMessageIds.has(id)) disposeComponentRender(id);
     }
 
-    activityLifecycle.prune(activityIds);
+    // Abort removed renderers before the morph detaches their live elements.
+    for (const id of approvalRenderControllers.keys()) {
+      if (!activeMessageIds.has(id)) disposeApprovalRender(id);
+    }
 
     // Remove cache entries for messages that no longer exist
     pruneCache(messageCache, activeMessageIds);
@@ -6977,38 +6911,24 @@ export const createAgentExperience = (
       lastMessage.variant !== "approval" &&
       !hasHiddenActivityAfterLastVisible;
 
-    if (isStreaming && messages.some((msg) => msg.role === "user") && !hasStreamingAssistantMessage && !hasRecentAssistantResponse) {
+    if (!hasTurnActivity && isStreaming && messages.some((msg) => msg.role === "user") && !hasStreamingAssistantMessage && !hasRecentAssistantResponse) {
       // Get loading indicator using priority chain: plugin -> config -> default
       const loadingIndicatorContext: LoadingIndicatorRenderContext = {
         config,
         streaming: true,
         location: 'standalone',
-        defaultRenderer: createTypingIndicator
+        defaultRenderer: () => createTypingIndicator(config)
       };
 
-      // Try plugin renderLoadingIndicator first
-      const loadingPlugin = plugins.find(p => p.renderLoadingIndicator);
-      let typingIndicator: HTMLElement | null = null;
-
-      if (loadingPlugin?.renderLoadingIndicator) {
-        typingIndicator = loadingPlugin.renderLoadingIndicator(loadingIndicatorContext);
-      }
-
-      // Try config loadingIndicator.render if no plugin handled it
-      if (typingIndicator === null && config.loadingIndicator?.render) {
-        typingIndicator = config.loadingIndicator.render(loadingIndicatorContext);
-      }
-
-      // Fall back to default
-      if (typingIndicator === null) {
-        typingIndicator = createTypingIndicator();
-      }
+      const typingIndicator = plugins.find(plugin => plugin.renderLoadingIndicator)?.renderLoadingIndicator?.(loadingIndicatorContext)
+        ?? config.loadingIndicator?.render?.(loadingIndicatorContext)
+        ?? createTypingIndicator(config);
 
       // Only render if we have an indicator (allows hiding via returning null)
       if (typingIndicator) {
-        // Bubble wrapper for the typing indicator. It borrows the assistant
-        // bubble's classes and background so the "thinking" bubble matches the
-        // message bubbles that replace it under every layout preset.
+        // Dots and custom renderers borrow the assistant bubble's chrome.
+        // CSS removes it around a built-in V5 activity label, just as it does
+        // for the same label inside an empty streaming assistant message.
         const typingBubble = document.createElement("div");
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
         const messageLayout = config.layout?.messages?.layout ?? "bubble";
@@ -7054,18 +6974,8 @@ export const createAgentExperience = (
       };
 
       // Get idle indicator using priority chain: plugin -> config -> null (default)
-      // Try plugin renderIdleIndicator first
-      const idlePlugin = plugins.find(p => p.renderIdleIndicator);
-      let idleIndicator: HTMLElement | null = null;
-
-      if (idlePlugin?.renderIdleIndicator) {
-        idleIndicator = idlePlugin.renderIdleIndicator(idleIndicatorContext);
-      }
-
-      // Try config loadingIndicator.renderIdle if no plugin handled it
-      if (idleIndicator === null && config.loadingIndicator?.renderIdle) {
-        idleIndicator = config.loadingIndicator.renderIdle(idleIndicatorContext);
-      }
+      const idleIndicator = plugins.find(plugin => plugin.renderIdleIndicator)?.renderIdleIndicator?.(idleIndicatorContext)
+        ?? config.loadingIndicator?.renderIdle?.(idleIndicatorContext);
 
       // Only render if we have an indicator (default is null - no idle indicator)
       if (idleIndicator) {
@@ -7104,8 +7014,21 @@ export const createAgentExperience = (
     // wrapper exists on both sides of the diff (survives streaming re-renders).
     wrapScrollableTables(tempContainer);
 
+    // Dispose replaced effects before cleanup can disturb the new default DOM.
+    loadingLabelLifecycle?.prepare(tempContainer);
+    activityLifecycle?.prepare(tempContainer);
     // Use idiomorph to morph the container contents
     morphMessages(container, tempContainer);
+    liveRowFingerprints = nextLiveRowFingerprints;
+    // A stub idiomorph inserted instead of matching to its live row would
+    // leave an empty row; restore it from the cache.
+    for (const stub of Array.from(
+      container.querySelectorAll<HTMLElement>(":scope > [data-persona-reuse]")
+    )) {
+      const cached = messageCache.get(stub.getAttribute("data-wrapper-id") ?? "");
+      if (cached) stub.replaceWith(cached.wrapper.cloneNode(true));
+      else stub.remove();
+    }
 
     // Set initial edge-fade state on the live table wrappers and attach the
     // delegated scroll listener (once) that keeps the fades in sync.
@@ -7119,7 +7042,7 @@ export const createAgentExperience = (
         messageId: string;
         element: HTMLElement;
       };
-      const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+      const wrapper = findMessageRow(container, messageId);
       if (wrapper && element.parentElement !== wrapper) {
         applyMessageRowLayout(wrapper, messageRolesById.get(messageId) ?? "user");
         wrapper.replaceChildren(element);
@@ -7132,7 +7055,7 @@ export const createAgentExperience = (
     // the real, listener-bearing bubble directly into the live DOM.
     if (askPluginHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of askPluginHydrate) {
-        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+        const wrapper = findMessageRow(container, messageId);
         if (!wrapper) continue;
         applyMessageRowLayout(
           wrapper,
@@ -7163,7 +7086,7 @@ export const createAgentExperience = (
     // the ask-question hydration above.
     if (componentDirectiveHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of componentDirectiveHydrate) {
-        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+        const wrapper = findMessageRow(container, messageId);
         if (!wrapper) continue;
         applyMessageRowLayout(
           wrapper,
@@ -7190,8 +7113,8 @@ export const createAgentExperience = (
     // Hydrate plugin-rendered approval bubbles into their stub wrappers,
     // mirroring the ask-question / component-directive hydration above.
     if (approvalPluginHydrate.length > 0) {
-      for (const { messageId, fingerprint, bubble } of approvalPluginHydrate) {
-        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+      for (const { messageId, fingerprint, bubble, focusDefault } of approvalPluginHydrate) {
+        const wrapper = findMessageRow(container, messageId);
         if (!wrapper) continue;
         applyMessageRowLayout(
           wrapper,
@@ -7206,6 +7129,7 @@ export const createAgentExperience = (
         wrapper.replaceChildren(bubble);
         wrapper.setAttribute("data-bubble-fp", fingerprint);
         lastApprovalBubbleFingerprint.set(messageId, fingerprint);
+        if (focusDefault) bubble.querySelector<HTMLButtonElement>('[data-action="allow"]')?.focus();
       }
     }
 
@@ -7214,39 +7138,24 @@ export const createAgentExperience = (
         if (!activeMessageIds.has(id)) lastApprovalBubbleFingerprint.delete(id);
       }
     }
+    ensureActivityUi();
+    loadingLabelLifecycle?.sync();
+    activityLifecycle?.sync();
   };
 
   // Alias for clarity - the implementation handles flicker prevention via typing indicator logic.
   // Re-apply read-aloud button state after each render so a playing/paused
   // message keeps its icon across idiomorph DOM morphs.
-  // Markdown parsers (marked + DOMPurify) live in a lazy sibling chunk. Warm
-  // them the first time the panel is actually visible OR the first time a
-  // non-empty transcript renders (restored history, intro/injected messages —
-  // content that would otherwise paint escaped while closed and flash at
-  // open), instead of at page load: visitors who never open the launcher and
-  // have no messages never fetch the ~21 kB chunk. Renders that still beat the
-  // chunk show escaped text and self-heal via onMarkdownParsersReady
-  // (subscriber at the end of the factory).
-  let markdownParsersWarmed = false;
-  const warmMarkdownParsers = () => {
-    if (markdownParsersWarmed) return;
-    markdownParsersWarmed = true;
-    // The stream processor is needed for the first reply; warm it too.
-    loadClientStream().catch(() => {});
-    loadMarkdownParsers().catch(() => {
-      // Failed fetch (ad blocker, offline): allow the next visibility change
-      // or render to retry; the chunk loader resets its cached promise on
-      // rejection.
-      markdownParsersWarmed = false;
-    });
-  };
+  // Renderers and parsers are prepared before reveal. Warm request processing
+  // on panel visibility so sending does not wait for another download.
+  const warmClientStream = () => { void loadClientStream().catch(() => {}); };
 
   const renderMessagesWithPlugins = (
     container: HTMLElement,
     messages: AgentWidgetMessage[],
     transform: MessageTransform
   ) => {
-    if (messages.length > 0) warmMarkdownParsers();
+    if (messages.length > 0) warmClientStream();
     renderMessagesWithPluginsImpl(container, messages, transform);
     refreshReadAloudButtons();
   };
@@ -7605,11 +7514,10 @@ export const createAgentExperience = (
     const modalMaxWidth = cb.modalMaxWidth ?? "880px";
     const modalMaxHeight = cb.modalMaxHeight ?? "min(90vh, 800px)";
     const viewportClamp = "calc(100vw - 32px)";
-    // Static fallback for the pill area's height (pill + 8px gap + peek
-    // slack). Anchored mode uses this to compute the wrapper's bottom edge
-    // so the chat panel chrome doesn't overlap the pill below. Defer
-    // ResizeObserver-based dynamic sizing until we see a real misalignment.
-    const pillAreaClearance = "var(--persona-pill-area-height, 80px)";
+    // Retain the authored override and use measured clearance as the default.
+    // ResizeObserver updates this when suggestions or composer content grow.
+    syncComposerBarClearance();
+    const pillAreaClearance = "var(--persona-pill-area-height, var(--persona-measured-pill-area-height, 80px))";
 
     // Reset everything geometry-related so each branch sets exactly what it
     // needs. Using empty strings drops the inline declaration entirely so
@@ -7677,7 +7585,7 @@ export const createAgentExperience = (
   const updateOpenState = () => {
     // Before the toggleable check: docked/fullscreen panels are visible from
     // init but never toggle, and must still warm the markdown chunk.
-    if (open) warmMarkdownParsers();
+    if (open) warmClientStream();
     if (!isPanelToggleable()) return;
 
     // Composer-bar mode morphs the wrapper between collapsed pill and
@@ -8063,6 +7971,10 @@ export const createAgentExperience = (
   };
 
   const maybeFocusInput = () => {
+    if (mount.hasAttribute("data-persona-preparing")) {
+      void renderReadiness.ready.then(maybeFocusInput, () => {});
+      return;
+    }
     if (voiceState.active) return;
     if (!textarea) return;
     textarea.focus();
@@ -8080,7 +7992,7 @@ export const createAgentExperience = (
   let conversationOpenTakeover = false;
 
   // Welcome visibility is derived, never stored: `resolveWelcomeConfig` owns
-  // the config and the session's user messages own the dismissal.
+  // the config and the session's transcript activity owns the dismissal.
   let welcomeShown = !welcomeHost.hidden;
   // The dismiss runs across many renders (assistant placeholder, every
   // streaming chunk), so the in-flight animation owns the host until it settles.
@@ -8575,81 +8487,53 @@ export const createAgentExperience = (
       }
       const now = Date.now();
       spans.forEach((span) => {
-        const startedAt = Number(span.getAttribute("data-tool-elapsed"));
-        if (!startedAt) return;
-        span.textContent = span.closest(".persona-activity-row") ? activityDuration(now - startedAt) : formatElapsedMs(now - startedAt);
+        activityUi?.updateActivityElapsed(span, now);
       });
     }, 100);
   };
 
-  const isDeepEqual = (left: unknown, right: unknown): boolean => {
-    if (Object.is(left, right)) return true;
-    if (left === null || right === null) return false;
-    if (typeof left !== "object" || typeof right !== "object") return false;
-    if (Array.isArray(left) || Array.isArray(right)) {
-      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-        return false;
-      }
-      return left.every((value, index) => isDeepEqual(value, right[index]));
-    }
-    const leftRecord = left as Record<string, unknown>;
-    const rightRecord = right as Record<string, unknown>;
-    const leftKeys = Object.keys(leftRecord);
-    const rightKeys = Object.keys(rightRecord);
-    return (
-      leftKeys.length === rightKeys.length &&
-      leftKeys.every(
-        (key) =>
-          Object.prototype.hasOwnProperty.call(rightRecord, key) &&
-          isDeepEqual(leftRecord[key], rightRecord[key])
-      )
-    );
-  };
+  /**
+   * Changes that must reach the DOM (and storage) in the same task rather than
+   * on the next animation frame: a new or edited user message drives send
+   * anchoring and `user:message`, and an approval or a pending local tool
+   * (ask_user_question, WebMCP) is waiting on the user and must be durable
+   * before the page can unload. Everything else in a streaming burst is
+   * coalesced.
+   */
+  const needsImmediateApply = (message: AgentWidgetMessage) =>
+    message.role === "user" ||
+    message.variant === "approval" ||
+    message.agentMetadata?.awaitingLocalTool === true ||
+    isAskUserQuestionMessage(message);
 
-  const withoutStreamingText = (message: AgentWidgetMessage) => {
-    const { content: _content, rawContent: _rawContent, llmContent: _llmContent, ...rest } = message;
-    return rest;
-  };
-
-  const isPlainStreamingAssistant = (message: AgentWidgetMessage) =>
-    message.role === "assistant" &&
-    message.streaming === true &&
-    !message.variant &&
-    !message.toolCall &&
-    !message.tools &&
-    !message.approval &&
-    !message.reasoning &&
-    !message.contentParts &&
-    !message.stopReason &&
-    !hasComponentDirective(message);
-
-  const isPureStreamingTextProgression = (
+  /**
+   * One pass over a streaming update: returns false when a changed entry needs
+   * an immediate apply, and otherwise remembers assistant messages that
+   * streamed inside the coalesced burst, so `trackMessages` still emits
+   * `assistant:complete` when a message starts and finishes between two
+   * applied snapshots. The session copies only the messages it changes, so
+   * identity marks the changed entries; this pointer scan costs no more than
+   * the array copy the session makes for every update.
+   */
+  const coalesceStreamingChange = (
     previous: AgentWidgetMessage[],
-    next: AgentWidgetMessage[],
-    candidate: { index: number; id: string }
+    next: AgentWidgetMessage[]
   ) => {
-    if (previous.length !== next.length) return false;
-    const before = previous[candidate.index];
-    const after = next[candidate.index];
-    if (!before || !after || before.id !== candidate.id || after.id !== candidate.id) {
-      return false;
+    if (next.length < previous.length) return false;
+    for (let index = 0; index < next.length; index += 1) {
+      const message = next[index];
+      if (message === previous[index]) continue;
+      if (needsImmediateApply(message)) return false;
+      if (message.role === "assistant" && message.streaming) {
+        coalescedStreamingIds.add(message.id);
+      }
     }
-    const textChanged =
-      !Object.is(before.content, after.content) ||
-      !Object.is(before.rawContent, after.rawContent) ||
-      !Object.is(before.llmContent, after.llmContent);
-    return (
-      textChanged &&
-      isPlainStreamingAssistant(before) &&
-      isPlainStreamingAssistant(after) &&
-      isDeepEqual(withoutStreamingText(before), withoutStreamingText(after))
-    );
+    return true;
   };
 
   let lastAppliedMessages: AgentWidgetMessage[] | null = null;
-  let activeStreamingTextCandidate: { index: number; id: string } | null = null;
-  let pendingStreamingTextMessages: AgentWidgetMessage[] | null = null;
-  let streamingTextRAF: number | null = null;
+  let pendingMessages: AgentWidgetMessage[] | null = null;
+  let pendingMessagesRAF: number | null = null;
   let pendingDurablePersistenceMessages: AgentWidgetMessage[] | null = null;
 
   const persistMessages = (messages: AgentWidgetMessage[]) => {
@@ -8658,26 +8542,25 @@ export const createAgentExperience = (
     queueMicrotask(() => {
       if (pendingDurablePersistenceMessages === messages) {
         pendingDurablePersistenceMessages = null;
-        persistState(messages);
+        // The resume cursor is read now, so save the newest snapshot: updates
+        // coalesced after this one (still waiting on a frame) already advanced it.
+        persistState(pendingMessages ?? messages);
       }
     });
   };
 
   const applyMessagesChanged = (messages: AgentWidgetMessage[]) => {
+    if (!messages.length && config.future?.v5Defaults) hostFollowUps = null;
     lastAppliedMessages = messages;
     let lastUserMessage: AgentWidgetMessage | undefined;
     let lastAssistantMessage: AgentWidgetMessage | undefined;
-    activeStreamingTextCandidate = null;
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
       if (!lastUserMessage && message.role === "user") lastUserMessage = message;
       if (!lastAssistantMessage && message.role === "assistant") {
         lastAssistantMessage = message;
       }
-      if (!activeStreamingTextCandidate && isPlainStreamingAssistant(message)) {
-        activeStreamingTextCandidate = { index, id: message.id };
-      }
-      if (lastUserMessage && lastAssistantMessage && activeStreamingTextCandidate) break;
+      if (lastUserMessage && lastAssistantMessage) break;
     }
     renderMessagesWithPlugins(messagesWrapper, messages, postprocess);
     // Freshly (re)built inline artifact blocks render from their persisted
@@ -8691,6 +8574,8 @@ export const createAgentExperience = (
     renderSuggestions(messages);
     scheduleAutoScroll(!isStreaming);
     trackMessages(messages);
+    syncScrollToBottomButton();
+    eventStreamView?.update();
 
     if (messages.length === 0) {
       resetAnchorState();
@@ -8724,58 +8609,61 @@ export const createAgentExperience = (
     voiceState.lastUserMessageWasVoice = Boolean(lastUserMessage?.viaVoice);
     persistMessages(messages);
     syncComposerBarPeek();
+    eventBus.emit("messages:changed", messages);
   };
 
-  const flushPendingStreamingText = () => {
-    if (streamingTextRAF !== null) {
-      cancelAnimationFrame(streamingTextRAF);
-      streamingTextRAF = null;
+  const flushPendingMessages = () => {
+    if (pendingMessagesRAF !== null) {
+      cancelAnimationFrame(pendingMessagesRAF);
+      pendingMessagesRAF = null;
     }
-    const pending = pendingStreamingTextMessages;
-    pendingStreamingTextMessages = null;
+    const pending = pendingMessages;
+    pendingMessages = null;
     if (pending) applyMessagesChanged(pending);
   };
 
-  const discardPendingStreamingText = () => {
-    if (streamingTextRAF !== null) cancelAnimationFrame(streamingTextRAF);
-    streamingTextRAF = null;
-    pendingStreamingTextMessages = null;
+  const discardPendingMessages = () => {
+    if (pendingMessagesRAF !== null) cancelAnimationFrame(pendingMessagesRAF);
+    pendingMessagesRAF = null;
+    pendingMessages = null;
   };
 
+  // While a turn streams, every SSE frame changes the transcript, and a render
+  // pass costs O(messages). Applying each frame synchronously makes a burst of
+  // N frames (a long tool run, or a finished transcript replayed through
+  // `connectStream`) cost O(N²) and block the main thread. Coalesce streaming
+  // updates to one render per animation frame; the stream ending, a clear, or
+  // a change in `needsImmediateApply` flushes synchronously.
   const handleMessagesChanged = (messages: AgentWidgetMessage[]) => {
-    const comparison = pendingStreamingTextMessages ?? lastAppliedMessages;
-    if (
-      isStreaming &&
-      comparison &&
-      activeStreamingTextCandidate &&
-      isPureStreamingTextProgression(
-        comparison,
-        messages,
-        activeStreamingTextCandidate
-      )
-    ) {
-      pendingStreamingTextMessages = messages;
-      if (streamingTextRAF === null) {
-        streamingTextRAF = requestAnimationFrame(() => {
-          streamingTextRAF = null;
-          const pending = pendingStreamingTextMessages;
-          pendingStreamingTextMessages = null;
+    if (messages.length === 0) {
+      discardPendingMessages();
+      applyMessagesChanged(messages);
+      return;
+    }
+    const comparison = pendingMessages ?? lastAppliedMessages;
+    if (isStreaming && comparison && coalesceStreamingChange(comparison, messages)) {
+      pendingMessages = messages;
+      if (pendingMessagesRAF === null) {
+        pendingMessagesRAF = requestAnimationFrame(() => {
+          pendingMessagesRAF = null;
+          const pending = pendingMessages;
+          pendingMessages = null;
           if (pending) applyMessagesChanged(pending);
         });
       }
       return;
     }
-
-    if (messages.length === 0) {
-      discardPendingStreamingText();
-      applyMessagesChanged(messages);
-      return;
-    }
-    flushPendingStreamingText();
+    flushPendingMessages();
     applyMessagesChanged(messages);
   };
 
   session = new AgentWidgetSession(config, {
+    onRunStarted: (event) => eventBus.emit("run:started", event),
+    onRunFinished(event) {
+      flushPendingMessages();
+      if (config.turnActivity?.enabled) renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+      eventBus.emit("run:finished", event);
+    },
     onMessagesChanged(messages) {
       handleMessagesChanged(messages);
     },
@@ -8791,18 +8679,22 @@ export const createAgentExperience = (
         return statusCopy[s];
       };
       applyStatusToElement(statusText, getCurrentStatusText(status), currentStatusConfig, status);
+      syncScrollToBottomButton();
+      eventStreamView?.update();
       // A paused/resuming durable turn gates the history button too.
       historyChromeSync();
     },
     onStreamingChanged(streaming) {
       if (!streaming) {
         if (session?.getMessages().length === 0) {
-          discardPendingStreamingText();
+          discardPendingMessages();
         } else {
-          flushPendingStreamingText();
+          flushPendingMessages();
         }
       }
       isStreaming = streaming;
+      if (streaming) dismissFollowUps();
+      else if (config.future?.v5Defaults) renderSuggestions();
       setComposerDisabled(streaming);
       historyChromeSync();
       // Re-render messages to show/hide typing indicator
@@ -8826,6 +8718,7 @@ export const createAgentExperience = (
       // Keep the "streaming below" hint and its announcement in sync with the
       // streaming lifecycle (Principles 8 + 15).
       syncScrollToBottomButton();
+      eventStreamView?.update();
       announce(streaming ? "Responding…" : "Response complete.");
       // Composer-bar peek: streaming state is one of the two visibility
       // triggers (the other is composer hover), so re-evaluate now.
@@ -8920,6 +8813,13 @@ export const createAgentExperience = (
     onHistoryNotice(notice) {
       historyNoticeHandler(notice);
     },
+    onHistoryScopeInvalidated() {
+      discardConversationContinuity();
+      historyShell?.clearConversationOpenPending();
+    },
+    onConversationExecutionState(state) {
+      eventBus.emit("conversation:executionState", state);
+    },
     onReconnect(event) {
       // Map the durable-reconnect lifecycle to public controller events.
       const { executionId, lastEventId } = event.handle;
@@ -8982,7 +8882,7 @@ export const createAgentExperience = (
   scrollSendSeeded = true;
 
   // Setup Runtype voice provider when configured (connects WebSocket for server-side STT)
-  if (config.voiceRecognition?.enabled === true && usesSessionVoice(config.voiceRecognition.provider)) {
+  if (config.voiceRecognition?.enabled === true && usesSessionVoiceForConfig(config)) {
     try {
       session.setupVoice();
     } catch (err) {
@@ -9147,6 +9047,176 @@ export const createAgentExperience = (
     }
   });
 
+  // Volatile state belongs to this widget/provider/visitor, never to storage.
+  type ConversationReadingState = {
+    top: number;
+    anchorId?: string;
+    anchorOffset: number;
+    following: boolean;
+    followFallback: boolean;
+    anchored: boolean;
+    anchoredId: string | null;
+    readerEngaged: boolean;
+    anchor: { initialSpacerHeight: number; contentHeightAtAnchor: number; spacerHeight: number } | null;
+    unread: number;
+  };
+  type ConversationContinuity = {
+    draft: AgentWidgetStoredDraft;
+    document?: import("./utils/composer-document").ComposerDocument;
+    mentions: import("./utils/context-mention-manager").ContextMentionDraft;
+    attachments: AttachmentManager | null;
+    pending: Readonly<ComposerSubmissionSnapshot> | undefined;
+    reading: ConversationReadingState;
+  };
+  const conversationContinuity = new Map<string, ConversationContinuity>();
+  const conversationStateKey = (id = session.getActiveConversationId(), scope = historyShell?.historyOperationScope() ?? config.features?.history?.scope ?? (config.getIdentityProof ? "verified-user" : "browser")): string =>
+    JSON.stringify([scope, id]);
+  let pendingConversationReading: { key: string; reading: ConversationReadingState } | null = null;
+  let composerConversationGeneration = 0;
+
+  const captureConversationReading = (): ConversationReadingState => {
+    const viewportTop = body.getBoundingClientRect().top;
+    const anchor = body.clientHeight > 0
+      ? Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]")).find(
+        (node) => node.getBoundingClientRect().bottom > viewportTop)
+      : undefined;
+    return {
+      top: body.scrollTop,
+      anchorId: anchor?.dataset.messageId,
+      anchorOffset: anchor ? anchor.getBoundingClientRect().top - viewportTop : 0,
+      following: autoFollow.isFollowing(),
+      followFallback: followFallbackActive,
+      anchored: currentTurnAnchored,
+      anchoredId: anchoredMessageId,
+      readerEngaged: readerEngagedThisTurn,
+      anchor: anchorState ? { ...anchorState } : null,
+      unread: newMessagesSincePause,
+    };
+  };
+
+  const saveConversationContinuity = (): void => {
+    // cancel() synchronously restores the pre-recording draft and invalidates
+    // provider callbacks, so capture only after that restoration.
+    dismissDictation();
+    stopVoiceRecognition("system");
+    if (usesSessionVoiceForConfig(config)) session.cleanupVoice();
+    ++composerConversationGeneration;
+    submissionAbort?.abort();
+    submissionAbort = null;
+    composerStore.setPreparing(false);
+    cancelMessageEdit();
+    flushDraftPersist();
+    const state = composerStore.getState();
+    const key = conversationStateKey();
+    conversationContinuity.set(key, {
+      draft: {
+        text: state.text,
+        mentionRefs: [...state.mentionRefs],
+        contentSegments: readInlineContentSegments(),
+        quote: state.quote,
+        selectedModelId: state.selectedModelId,
+        activeModeIds: [...state.activeModeIds],
+      },
+      document: mentionOrchestrator?.getInlineInput()?.getDocument?.(),
+      mentions: mentionOrchestrator?.captureDraft() ?? [],
+      attachments: attachmentManager,
+      pending: state.pendingSubmission,
+      reading: pendingConversationReading?.key === key
+        ? pendingConversationReading.reading : captureConversationReading(),
+    });
+    draftWriter.cancel();
+  };
+
+  const restoreConversationReading = (reading: ConversationReadingState): void => {
+    followFallbackActive = reading.followFallback;
+    currentTurnAnchored = reading.anchored;
+    anchoredMessageId = reading.anchoredId;
+    readerEngagedThisTurn = reading.readerEngaged;
+    anchorState = reading.anchor ? { ...reading.anchor } : null;
+    setAnchorSpacerHeight(reading.anchor?.spacerHeight ?? 0);
+    if (reading.following) autoFollow.resume(); else autoFollow.pause();
+    newMessagesSincePause = reading.unread;
+    const anchor = Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find((node) => node.dataset.messageId === reading.anchorId);
+    isAutoScrolling = true;
+    if (reading.following && isFollowEffective()) body.scrollTop = getScrollBottomOffset(body);
+    else if (anchor) body.scrollTop += anchor.getBoundingClientRect().top - body.getBoundingClientRect().top - reading.anchorOffset;
+    else body.scrollTop = reading.top;
+    isAutoScrolling = false;
+    lastScrollTop = body.scrollTop;
+    lastBottomOffset = getScrollBottomOffset(body);
+    updateScrollToBottomCountBadge();
+    syncTranscriptEdgeFades();
+    syncScrollToBottomButton();
+
+  };
+
+  const restoreConversationContinuity = (fresh = false, persist = true): void => {
+    const saved = fresh ? undefined : conversationContinuity.get(conversationStateKey());
+    mentionOrchestrator?.clear();
+    attachmentManager?.setPreviewsContainer(null);
+    attachmentManager = saved?.attachments ?? (config.attachments?.enabled ? createScopedAttachmentManager() : null);
+    attachmentManager?.updateConfig(attachmentManagerConfig());
+    attachmentManager?.remountPreviews(attachmentPreviewsContainer);
+    syncComposerAttachments(attachmentManager?.getAttachments() ?? []);
+    const draft = saved?.draft;
+    const input = mentionOrchestrator?.getInlineInput();
+    if (saved?.document && input?.setDocument) input.setDocument(saved.document);
+    else if (input) input.setValueWithCaret(draft?.text ?? "", (draft?.text ?? "").length);
+    else textarea.value = draft?.text ?? "";
+    mentionOrchestrator?.restoreDraft(saved?.mentions ?? []);
+    syncComposerText();
+    syncComposerMentions();
+    composerStore.setSelectedModelId(draft
+      ? (config.composer?.models?.some((model) => model.id === draft.selectedModelId) ? draft.selectedModelId : undefined)
+      : config.composer?.selectedModelId);
+    composerCoreControls?.repaint();
+    setActiveComposerModes(pruneComposerModes(draft?.activeModeIds ?? config.composer?.defaultActiveModeIds ?? [], composerModes()));
+    setComposerQuote(draft?.quote);
+    setPendingSubmission(saved?.pending);
+    resetHistoryNavigation();
+    resetAnchorState();
+    cancelAutoScroll();
+    // Slow opens hide the transcript; restore its layout before measuring.
+    historyShell?.cancelConversationOpenTakeover();
+    if (conversationOpenPendingEl) conversationOpenPendingEl.hidden = true;
+    conversationOpenTakeover = false;
+    messagesWrapper.style.removeProperty("display");
+    if (saved) {
+      restoreConversationReading(saved.reading);
+    } else {
+      resumeAutoScroll();
+      if (!restoreScrollPosition()) jumpToBottomInstant();
+    }
+    // Persistence resumes only with the complete destination transcript and
+    // composer. Draft opt-out still applies to this in-memory restoration.
+    if (persist) currentStoredDraft = draftPersistenceEnabled() ? buildStoredDraft({ ...composerStore.getState(), contentSegments: readInlineContentSegments() }) : undefined;
+    draftWriter.cancel();
+    if (persist) persistState();
+    pendingConversationReading = { key: conversationStateKey(), reading: saved?.reading ?? captureConversationReading() };
+  };
+
+  const discardConversationContinuity = (id?: string | null, restore = true, persist = true): void => {
+    for (const [key, saved] of conversationContinuity) {
+      if (id !== undefined && (JSON.parse(key) as [HistoryScope, string | null])[1] !== id) continue;
+      saved.attachments?.destroy({ release: true });
+      if (attachmentManager === saved.attachments) attachmentManager = null;
+      conversationContinuity.delete(key);
+    }
+    if (id === undefined || id === session.getActiveConversationId()) {
+      ++composerConversationGeneration;
+      conversationPersistenceOwner = null;
+      submissionAbort?.abort();
+      submissionAbort = null;
+      dismissDictation();
+      attachmentManager?.destroy({ release: true });
+      attachmentManager = null;
+      if (restore) restoreConversationContinuity(true, persist);
+      pendingConversationReading = null;
+    }
+  };
+
+
   // --- session-driven state ------------------------------------------------
 
   historyStateHandler = (state) => {
@@ -9164,6 +9234,8 @@ export const createAgentExperience = (
       notice.code === "history_continuity_reset" ||
       notice.code === "conversation_deleted_recovered"
     ) {
+      discardConversationContinuity();
+      historyShell?.clearConversationOpenPending();
       messageCache.clear();
       resetAnchorState();
       resumeAutoScroll();
@@ -9179,6 +9251,34 @@ export const createAgentExperience = (
   // `features.history` is enabled (at mount or by a later `update()`), or on
   // the first history API call. Until then history is simply unavailable.
   const historyShellContext: HistoryShellContext = {
+    getBubbleClasses,
+    parseCombo, formatCombo, ariaCombo, usesSessionVoiceForConfig,
+    applyBubbleGeometry,
+    resolveThemeDefaults,
+    composerStore,
+    get attachmentManager() { return attachmentManager; },
+    set attachmentManager(value) { attachmentManager = value; },
+    get composerConversationGeneration() { return composerConversationGeneration; },
+    set composerConversationGeneration(value) { composerConversationGeneration = value; },
+    get submissionAbort() { return submissionAbort; },
+    set submissionAbort(value) { submissionAbort = value; },
+    persistState,
+    applyMessageRowLayout,
+    SessionHistoryError,
+
+    instanceId,
+    discardConversationContinuity,
+    clearPersistedDraft,
+    saveConversationContinuity,
+    restoreConversationContinuity,
+    get pendingConversationReading() { return pendingConversationReading; },
+    set pendingConversationReading(value) { pendingConversationReading = value; },
+    conversationStateKey,
+    captureConversationReading,
+    restoreConversationReading,
+    get conversationPersistenceOwner() { return conversationPersistenceOwner; },
+    set conversationPersistenceOwner(value) { conversationPersistenceOwner = value; },
+    setComposerDisabled,
     get actionManager() { return actionManager; },
     get activeConversationTitle() { return activeConversationTitle; },
     announceHistory,
@@ -9220,6 +9320,8 @@ export const createAgentExperience = (
     get open() { return open; },
     panel,
     panelElements,
+    panelSuggestions,
+    panelSuggestionsFade,
     get persistentMetadata() { return persistentMetadata; },
     set persistentMetadata(value) { persistentMetadata = value; },
     plugins,
@@ -9236,6 +9338,7 @@ export const createAgentExperience = (
     get suppressScrollSend() { return suppressScrollSend; },
     set suppressScrollSend(value) { suppressScrollSend = value; },
     syncScrollToBottomButton,
+    scrollToBottomButton,
     updateWelcome,
     getHistoryProviderFactory,
     historyErrors: { HistoryClientError, HistoryProviderError },
@@ -9428,7 +9531,7 @@ export const createAgentExperience = (
           }
           // Restored markdown exists before the first open: warm the parsers
           // now so opening paints markdown instead of flashing escaped text.
-          warmMarkdownParsers();
+          warmClientStream();
         }
         if (state.artifacts?.length) {
           session.hydrateArtifacts(
@@ -9587,7 +9690,7 @@ export const createAgentExperience = (
     }
     if (pending.options.selectedModelId) {
       composerStore.setSelectedModelId(pending.options.selectedModelId);
-      composerModelPicker?.repaint();
+      composerCoreControls?.repaint();
     }
     if (pending.options.activeModeIds?.length) {
       setActiveComposerModes(pending.options.activeModeIds);
@@ -9624,11 +9727,13 @@ export const createAgentExperience = (
    * send paths that never awaited before still don't.
    */
   const performSubmit = (intent: SubmissionIntent = {}): void | Promise<void> => {
+    if (dictationCapturing() || conversationOpenPendingEl) return;
+    const generation = composerConversationGeneration;
     const draft = (intent.overrideText ?? textarea?.value ?? "").trim();
     if (intent.resolveInlineCommand && draft) {
       return (
         mentionOrchestrator?.takeInlineCommand(draft) ?? Promise.resolve(null)
-      ).then((inline) => continueSubmit(intent, draft, inline));
+      ).then((inline) => { if (generation === composerConversationGeneration) return continueSubmit(intent, draft, inline); });
     }
     return continueSubmit(intent, draft, null);
   };
@@ -9781,8 +9886,10 @@ export const createAgentExperience = (
 
     const abort = new AbortController();
     submissionAbort = abort;
+    const generation = composerConversationGeneration;
     const settle = (outcome: BeforeSendOutcome): void => {
-      submissionAbort = null;
+      if (abort.signal.aborted || generation !== composerConversationGeneration) return;
+      if (submissionAbort === abort) submissionAbort = null;
       if (outcome.status === "error") {
         reportSubmissionError(outcome.error);
         return;
@@ -9799,7 +9906,7 @@ export const createAgentExperience = (
     composerStore.setPreparing(true);
     return outcome
       .then(settle)
-      .finally(() => composerStore.setPreparing(false));
+      .finally(() => { if (generation === composerConversationGeneration) composerStore.setPreparing(false); });
   };
 
   /**
@@ -9922,6 +10029,10 @@ export const createAgentExperience = (
   };
 
   const doSubmit = async (submitOptions?: SubmissionIntent) => {
+    if (dictationCapturing()) {
+      if (config.voiceRecognition?.dictation?.showSend && !isComposerSendBlocked()) finishDictation(true);
+      return;
+    }
     if (submitInFlight) return;
     submitInFlight = true;
     try {
@@ -10027,6 +10138,7 @@ export const createAgentExperience = (
     // is not user typing: it must neither open the mention menu (an undefined
     // inputType reads as menu-opening) nor exit history-navigation mode.
     if (suppressHistoryReset) return;
+    dismissFollowUps();
     // Drive the mention menu (open/update/close) + lazy-load on first trigger.
     // Skip while an IME composition is active: the intermediate value isn't the
     // user's committed text, so it must not open or filter the menu.
@@ -10161,11 +10273,98 @@ export const createAgentExperience = (
     await attachmentManager.handleFiles(clipboardImageFiles);
   };
 
+  // Independent opt-in STT capture. The implementation and renderer share the lazy voice chunk.
+  let dictation: DictationSession | null = null;
+  let dictationRender: DictationRenderHandle | null = null;
+  let dictationLoading = false;
+  let dictationLoadFailure: DictationState | null = null;
+  let dictationQueuedFinish: boolean | null = null;
+  let dictationRequest = 0;
+  const idleDictation: DictationState = Object.freeze({ phase: "idle", recordingId: 0, transcript: "", interimTranscript: "", error: null, audioLevel: null });
+  const usesDedicatedDictation = () => !!config.voiceRecognition?.dictation ||
+    (config.voiceRecognition?.provider?.type === "custom" && dictationReviewMode());
+  const dictationCapturing = () => dictationLoading || ["recording", "processing"].includes(dictation?.getState().phase ?? "idle");
+  const dismissDictation = () => {
+    ++dictationRequest;
+    dictationLoading = false;
+    dictationQueuedFinish = null;
+    if (dictationLoadFailure) {
+      dictationLoadFailure = null;
+      dictationRender?.element.remove(); dictationRender = null;
+      const { audioLevel: _level, ...state } = idleDictation;
+      eventBus.emit("dictation:state", { ...state, instanceId, timestamp: Date.now() });
+      return true;
+    }
+    return dictation?.cancel() ?? false;
+  };
+  const finishDictation = (send = false): boolean => {
+    if (dictationLoading) { dictationQueuedFinish = send || dictationQueuedFinish === true; return true; }
+    return dictation?.finish(send) || (send && dictation?.send()) || false;
+  };
+  const startDictation = (): boolean => {
+    if (isComposerInputDisabled() || session.isStreaming() || dictationCapturing() || isActiveSessionVoice()) return false;
+    const voice = config.voiceRecognition;
+    if (voice?.enabled === false) return false;
+    const provider: DictationProviderConfig = voice?.dictation?.provider ??
+      (voice?.provider?.type === "custom" ? { type: "custom", custom: voice.provider.custom } : { type: "browser", browser: voice?.provider?.browser });
+    if (provider.type === "browser" && !getSpeechRecognitionClass()) return false;
+    if (provider.type === "custom" && !provider.custom) return false;
+    if (!open && isPanelToggleable()) setOpenState(true, "system");
+    if (dictationLoadFailure) dismissDictation();
+    const draft = { text: textarea.value,
+      logicalEnd: mentionOrchestrator?.getInlineInput()?.getLogicalText().length ?? null,
+      readOnly: textarea.readOnly, contentEditable: textarea.getAttribute("contenteditable") };
+    dictationLoading = true;
+    dictationQueuedFinish = null;
+    const request = ++dictationRequest;
+    void loadDictationRuntime().then((runtime) => {
+      if (request !== dictationRequest) return;
+      dictationLoading = false;
+      dictation ??= runtime.createDictationSession({
+        instanceId, getTextarea: () => textarea, getFooter: () => footer, getConfig: () => config, plugins,
+        getInlineInput: () => mentionOrchestrator?.getInlineInput(),
+        isInputDisabled: isComposerInputDisabled, isSendBlocked: isComposerSendBlocked,
+        syncText: syncComposerText, onSend: () => { void doSubmit({ viaVoice: true }); },
+        rendererDeps: { renderLucideIcon, attachTooltip },
+        onState: (state, capturing) => {
+          const { audioLevel: _level, ...eventState } = state;
+          eventBus.emit("dictation:state", { ...eventState, instanceId, timestamp: Date.now() });
+          voiceState.active = state.phase === "recording";
+          setMicState(capturing ? (state.phase === "recording" ? "recording" : "processing") : "idle");
+          emitVoiceState("system");
+        },
+      });
+      session.stopSpeaking();
+      dictation.start(provider, { autoSend: !dictationReviewMode(), pauseDuration: voice?.pauseDuration }, draft);
+      if (dictationQueuedFinish !== null) { dictation.finish(dictationQueuedFinish); dictationQueuedFinish = null; }
+    }).catch((error: unknown) => {
+      if (request !== dictationRequest) return;
+      dictationLoading = false;
+      const message = error instanceof Error ? error.message : "Unable to load dictation.";
+      dictationLoadFailure = Object.freeze({ ...idleDictation, recordingId: request, phase: "error", error: message });
+      const element = createElement("div", "persona-dictation");
+      element.setAttribute("role", "alert"); element.textContent = message;
+      const close = document.createElement("button"); close.type = "button"; close.textContent = "Dismiss dictation";
+      close.addEventListener("click", () => { dismissDictation(); }); element.append(close);
+      dictationRender = { element }; footer.append(element);
+      const { audioLevel: _level, ...state } = dictationLoadFailure;
+      eventBus.emit("dictation:state", { ...state, instanceId, timestamp: Date.now() });
+    });
+    return true;
+  };
+  destroyCallbacks.push(() => {
+    ++dictationRequest;
+    dictation?.destroy();
+    dictationRender?.destroy?.();
+    dictationRender?.element.remove();
+  });
+
+  if (config.voiceRecognition?.dictation) void loadDictationRuntime().catch(() => {});
+
   // Voice recognition state and logic
   let speechRecognition: any = null;
   let isRecording = false;
-  let pauseTimer: number | null = null;
-  let originalMicStyles: OriginalMicStyles | null = null;
+  let disposeRecognitionHandlers: (() => void) | undefined;
 
   /**
    * `voiceRecognition.completionBehavior` (roadmap section 14). Default stays
@@ -10185,84 +10384,36 @@ export const createAgentExperience = (
   function setMicState(
     state: "idle" | "recording" | "processing" | "speaking"
   ): void {
-    micButton?.setAttribute("data-state", state);
+    if (micButton) applyMicButtonStyle(micButton, config, state, session.getVoiceInterruptionMode());
+    footer?.setAttribute("data-persona-voice-state", state);
     if (state === "recording") startVoiceLevelLoop();
     else stopVoiceLevelLoop();
   }
 
-  // --- Live voice level (`--persona-voice-level`) ----------------------------
-  // One rAF loop, alive only while the mic is recording. It publishes a 0..1
-  // amplitude so a theme can drive waveforms and pulse intensity in pure CSS.
-  //
-  // The variable is DATA, not motion, so it keeps updating under
-  // prefers-reduced-motion; only the default visual that consumes it is gated.
-  const VOICE_LEVEL_PROPERTY = "--persona-voice-level";
-  /** Providers with no audio graph report nothing; assume a steady midpoint. */
-  const VOICE_LEVEL_FALLBACK = 0.5;
-  let voiceLevelFrame: number | null = null;
-  let voiceLevelPublished = -1;
-  let voiceLevelSmoothed = 0;
-
-  /** Every element the property is written to. */
-  const voiceLevelTargets = (): HTMLElement[] => {
-    const targets: HTMLElement[] = [];
-    // The wrapper, not the button: the recording ring is a ::after on the
-    // button, and a theme's own waveform usually sits beside the glyph.
-    const wrapper = micButtonWrapper ?? micButton?.parentElement ?? null;
-    if (wrapper) targets.push(wrapper);
-    // Mirrored on the footer so a theme can place a waveform anywhere in the
-    // composer without having to descend from the mic.
-    if (footer) targets.push(footer);
-    return targets;
-  };
-
-  const writeVoiceLevel = (value: number): void => {
-    // Quantized to 0.01 and skipped when unchanged: at 60fps this turns a
-    // continuous signal into at most a handful of style writes per second.
-    const quantized = Math.round(Math.max(0, Math.min(1, value)) * 100) / 100;
-    if (quantized === voiceLevelPublished) return;
-    voiceLevelPublished = quantized;
-    for (const target of voiceLevelTargets()) {
-      target.style.setProperty(VOICE_LEVEL_PROPERTY, String(quantized));
-    }
-  };
-
-  const clearVoiceLevel = (): void => {
-    voiceLevelPublished = -1;
-    voiceLevelSmoothed = 0;
-    for (const target of voiceLevelTargets()) {
-      target.style.removeProperty(VOICE_LEVEL_PROPERTY);
-    }
-  };
-
+  let voiceLevelIndicator: ReturnType<DictationRuntimeModule["createVoiceLevelIndicator"]> | undefined;
+  let voiceLevelActive = false;
   function startVoiceLevelLoop(): void {
-    if (voiceLevelFrame !== null) return;
-    if (typeof requestAnimationFrame !== "function") {
-      // No frame loop available: publish once so the property still exists.
-      writeVoiceLevel(sessionInitialized ? (session.getVoiceLevel() ?? VOICE_LEVEL_FALLBACK) : VOICE_LEVEL_FALLBACK);
-      return;
-    }
-    const tick = (): void => {
-      voiceLevelFrame = requestAnimationFrame(tick);
-      const raw = sessionInitialized ? session.getVoiceLevel() : null;
-      if (raw === null) {
-        writeVoiceLevel(VOICE_LEVEL_FALLBACK);
-        return;
-      }
-      // Providers report at their capture cadence (~85ms), far slower than a
-      // frame, so the published value eases toward the latest sample.
-      voiceLevelSmoothed += (raw - voiceLevelSmoothed) * 0.3;
-      writeVoiceLevel(voiceLevelSmoothed);
+    voiceLevelActive = true;
+    const start = (runtime: DictationRuntimeModule) => {
+      if (!voiceLevelActive) return;
+      voiceLevelIndicator ??= runtime.createVoiceLevelIndicator({
+        targets: () => [micButtonWrapper ?? micButton?.parentElement, footer].filter((node): node is HTMLElement => !!node),
+        sample: () => {
+          const state = dictation?.getState();
+          return state?.phase === "recording"
+            ? { level: state.audioLevel, fallback: false }
+            : { level: sessionInitialized ? session.getVoiceLevel() : null, fallback: true };
+        },
+      });
+      voiceLevelIndicator.start();
     };
-    voiceLevelFrame = requestAnimationFrame(tick);
+    const ready = getDictationRuntimeSync();
+    if (ready) start(ready);
+    else void loadDictationRuntime().then(start, () => {});
   }
-
   function stopVoiceLevelLoop(): void {
-    if (voiceLevelFrame !== null) {
-      cancelAnimationFrame(voiceLevelFrame);
-      voiceLevelFrame = null;
-    }
-    clearVoiceLevel();
+    voiceLevelActive = false;
+    voiceLevelIndicator?.stop();
   }
 
   const getSpeechRecognitionClass = (): any => {
@@ -10279,6 +10430,7 @@ export const createAgentExperience = (
     if (!SpeechRecognitionClass) return;
 
     speechRecognition = new SpeechRecognitionClass();
+    const recognition = speechRecognition;
     const voiceConfig = config.voiceRecognition ?? {};
     const pauseDuration = voiceConfig.pauseDuration ?? 2000;
 
@@ -10291,77 +10443,28 @@ export const createAgentExperience = (
     // Store the initial text that was in the textarea
     const initialText = textarea.value;
 
-    speechRecognition.onresult = (event: any) => {
-      // Build the complete transcript from all results
-      let fullTranscript = "";
-      let interimTranscript = "";
-
-      // Process all results from the beginning
-      for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i];
-        const transcript = result[0].transcript;
-
-        if (result.isFinal) {
-          fullTranscript += transcript + " ";
-        } else {
-          // Only take the last interim result
-          interimTranscript = transcript;
-        }
-      }
-
-      // Update textarea with initial text + full transcript + interim
-      const newValue = initialText + fullTranscript + interimTranscript;
-      textarea.value = newValue;
-      // Programmatic write: no input event fires, so mirror it explicitly.
-      syncComposerText();
-
-      // Reset pause timer on each result
-      if (pauseTimer) {
-        clearTimeout(pauseTimer);
-      }
-
-      // Set timer to auto-submit after pause when we have any speech
-      if (fullTranscript || interimTranscript) {
-        pauseTimer = window.setTimeout(() => {
-          const finalValue = textarea.value.trim();
-          if (finalValue && speechRecognition && isRecording) {
-            stopVoiceRecognition();
-            // `review`: the transcript is already in the composer (and the
-            // store); leave it there for the user to edit and send.
-            if (dictationReviewMode()) return;
-            // Route through the normal submit path so mentions are collected +
-            // cleared like a manual send (the transcript already lives in the
-            // composer). Sending directly would leave stale tracked mention
-            // context to attach to the next unrelated message.
-            void doSubmit({ viaVoice: true });
-          }
-        }, pauseDuration);
-      }
+    let handlers: ReturnType<DictationRuntimeModule["createBrowserRecognitionHandlers"]> | undefined;
+    const route = (kind: "result" | "error" | "end", event: BrowserRecognitionEvent) => {
+      const apply = (runtime: DictationRuntimeModule) => {
+        if (speechRecognition !== recognition || !isRecording) return;
+        handlers ??= runtime.createBrowserRecognitionHandlers({
+          textarea, initialText, pauseDuration,
+          isActive: () => speechRecognition === recognition && isRecording,
+          syncText: syncComposerText, stop: stopVoiceRecognition, review: dictationReviewMode,
+          submit: () => { void doSubmit({ viaVoice: true }); },
+        });
+        disposeRecognitionHandlers = () => handlers?.dispose();
+        handlers[kind](event);
+      };
+      const ready = getDictationRuntimeSync();
+      if (ready) apply(ready);
+      else void loadDictationRuntime().then(apply, () => {
+        if (speechRecognition === recognition) stopVoiceRecognition("system");
+      });
     };
-
-    speechRecognition.onerror = (event: any) => {
-      // Don't stop on "no-speech" error, just ignore it
-      if (event.error !== 'no-speech') {
-        stopVoiceRecognition();
-      }
-    };
-
-    speechRecognition.onend = () => {
-      // If recognition ended naturally (not manually stopped), submit if there's text
-      if (isRecording) {
-        const finalValue = textarea.value.trim();
-        if (
-          !dictationReviewMode() &&
-          finalValue &&
-          finalValue !== initialText.trim()
-        ) {
-          // Route through the normal submit path (mentions collect + clear), same
-          // as the pause-timer branch above.
-          void doSubmit({ viaVoice: true });
-        }
-        stopVoiceRecognition();
-      }
-    };
+    recognition.onresult = (event: BrowserRecognitionEvent) => route("result", event);
+    recognition.onerror = (event: BrowserRecognitionEvent) => route("error", event);
+    recognition.onend = (event: BrowserRecognitionEvent) => route("end", event);
 
     try {
       speechRecognition.start();
@@ -10375,36 +10478,8 @@ export const createAgentExperience = (
       // Reconcile content geometry without treating recording as extra content.
       syncComposerCompact();
       if (micButton) {
-        // Store original styles (including icon info for restoration)
-        const voiceConfig = config.voiceRecognition ?? {};
-        originalMicStyles = {
-          backgroundColor: micButton.style.backgroundColor,
-          color: micButton.style.color,
-          borderColor: micButton.style.borderColor,
-          iconName: voiceConfig.iconName ?? "mic",
-          iconSize: parseFloat(voiceConfig.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX,
-        };
-
-        // Apply recording state styles from config or theme tokens
-        const recordingBackgroundColor = voiceConfig.recordingBackgroundColor;
-        const recordingIconColor = voiceConfig.recordingIconColor;
-        const recordingBorderColor = voiceConfig.recordingBorderColor;
-
         micButton.classList.add("persona-voice-recording");
         setMicState("recording");
-        micButton.style.backgroundColor = recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)";
-        micButton.style.color = recordingIconColor ?? "var(--persona-voice-recording-indicator, #ffffff)";
-
-        if (recordingIconColor) {
-          const svg = micButton.querySelector("svg");
-          if (svg) {
-            svg.setAttribute("stroke", recordingIconColor);
-          }
-        }
-
-        if (recordingBorderColor) {
-          micButton.style.borderColor = recordingBorderColor;
-        }
 
         micButton.setAttribute("aria-label", "Stop voice recognition");
       }
@@ -10419,10 +10494,8 @@ export const createAgentExperience = (
     if (!isRecording) return;
 
     isRecording = false;
-    if (pauseTimer) {
-      clearTimeout(pauseTimer);
-      pauseTimer = null;
-    }
+    disposeRecognitionHandlers?.();
+    disposeRecognitionHandlers = undefined;
 
     if (speechRecognition) {
       try {
@@ -10442,22 +10515,7 @@ export const createAgentExperience = (
       micButton.classList.remove("persona-voice-recording");
       setMicState("idle");
 
-      // Restore original styles
-      if (originalMicStyles) {
-        micButton.style.backgroundColor = originalMicStyles.backgroundColor;
-        micButton.style.color = originalMicStyles.color;
-        micButton.style.borderColor = originalMicStyles.borderColor;
-
-        // Restore SVG stroke color if present
-        const svg = micButton.querySelector("svg");
-        if (svg) {
-          svg.setAttribute("stroke", originalMicStyles.color || "currentColor");
-        }
-
-        originalMicStyles = null;
-      }
-
-      micButton.setAttribute("aria-label", "Start voice recognition");
+      micButton.setAttribute("aria-label", config.voiceRecognition?.tooltipText ?? "Start voice recognition");
     }
   };
 
@@ -10474,15 +10532,7 @@ export const createAgentExperience = (
         mic: () => micButton,
         config: () => config,
         session: () => session,
-        get original() {
-          return originalMicStyles;
-        },
-        set original(next) {
-          originalMicStyles = next;
-        },
         setMicState,
-        renderIcon: renderLucideIcon,
-        iconFallbackPx: COMPOSER_CONTROL_ICON_FALLBACK_PX,
       });
       run(micStateStyles);
     };
@@ -10500,6 +10550,11 @@ export const createAgentExperience = (
   const handleMicButtonClick = () => {
     // Dictation is composition: a locked input takes none of it.
     if (isComposerInputDisabled()) return;
+    if (usesDedicatedDictation()) {
+      if (dictation?.getState().phase === "recording") dictation.finish();
+      else if (!dictationCapturing()) startDictation();
+      return;
+    }
     // Runtype provider: use session.toggleVoice() (WebSocket-based STT)
     if (usesSessionVoice(config.voiceRecognition?.provider)) {
       const voiceStatus = session.getVoiceStatus();
@@ -10641,9 +10696,11 @@ export const createAgentExperience = (
   // explicit Stop or a stream error never reaches this seam, so the item stays
   // pending for the user to send, edit, or remove.
   const pendingSubmissionUnsub = eventBus.on("assistant:complete", () => {
-    if (!composerStore.getState().pendingSubmission) return;
+    const pending = composerStore.getState().pendingSubmission;
+    const generation = composerConversationGeneration;
+    if (!pending) return;
     setTimeout(() => {
-      if (session.isStreaming()) return;
+      if (session.isStreaming() || generation !== composerConversationGeneration || composerStore.getState().pendingSubmission !== pending) return;
       sendPendingSubmission();
     }, 0);
   });
@@ -10655,7 +10712,9 @@ export const createAgentExperience = (
     if (voiceAutoResumeMode === "assistant" && !voiceState.lastUserMessageWasVoice) {
       return;
     }
+    const generation = composerConversationGeneration;
     setTimeout(() => {
+      if (generation !== composerConversationGeneration) return;
       if (!voiceState.active && !voiceState.manuallyDeactivated) {
         if (usesSessionVoice(config.voiceRecognition?.provider)) {
           session.toggleVoice().then(() => {
@@ -10743,6 +10802,7 @@ export const createAgentExperience = (
     footerResizeObserver.observe(footer);
     footerResizeObserver.observe(container);
     footerResizeObserver.observe(welcomeHost);
+    footerResizeObserver.observe(panelSuggestions);
   };
 
   let lastWelcomeFullscreen = isWelcomeFullscreen();
@@ -10801,7 +10861,11 @@ export const createAgentExperience = (
 
       if (!launcherEnabled && !dockedMode) {
         panel.style.height = "";
-        panel.style.width = "";
+        if (!sidebarMode) {
+          wrapper.style.width = resolveInlinePanelWidth(config);
+          panel.style.width = "100%";
+          panel.style.maxWidth = "100%";
+        }
         return;
       }
 
@@ -10866,6 +10930,7 @@ export const createAgentExperience = (
   if (typeof ResizeObserver !== "undefined") {
     footerResizeObserver = new ResizeObserver(() => {
       syncComposerOverlayMetrics();
+      syncScrollToBottomButton();
     });
     observeComposerFooter();
     destroyCallbacks.push(() => {
@@ -10888,7 +10953,7 @@ export const createAgentExperience = (
   let lastBottomOffset = getScrollBottomOffset(body);
 
   const handleScroll = () => {
-    syncTranscriptTopFade();
+    syncTranscriptEdgeFades();
     const scrollTop = body.scrollTop;
     // When content mutates (e.g. stream-animation plugins re-rendering text)
     // or the viewport grows (composer shrinking back), the maximum scroll
@@ -10901,6 +10966,12 @@ export const createAgentExperience = (
     const currentBottomOffset = getScrollBottomOffset(body);
     const bottomOffsetShrank = currentBottomOffset < lastBottomOffset;
     lastBottomOffset = currentBottomOffset;
+
+    if (latestScroll.interrupted) {
+      lastScrollTop = scrollTop;
+      syncScrollToBottomButton();
+      return;
+    }
 
     if (!isFollowEffective()) {
       // No follow state to manage (anchored anchor-top / none): just keep the
@@ -10924,25 +10995,21 @@ export const createAgentExperience = (
       lastScrollTop,
       nearBottom: isElementNearBottom(body, BOTTOM_THRESHOLD),
       userScrollThreshold: USER_SCROLL_THRESHOLD,
-      isAutoScrolling: isAutoScrolling || hasPendingAutoScroll || bottomOffsetShrank,
+      isAutoScrolling: latestScroll.active || isAutoScrolling || hasPendingAutoScroll || bottomOffsetShrank,
       pauseOnUpwardScroll: true,
       pauseWhenAwayFromBottom: false,
       resumeRequiresDownwardScroll: true
     });
     lastScrollTop = nextLastScrollTop;
 
-    if (action === "resume") {
-      // Drag-selecting downward near the bottom edge auto-scrolls down and
-      // would otherwise read as a resume gesture; keep follow paused while a
-      // transcript selection is active so it isn't yanked mid-drag.
-      if (!hasActiveTranscriptSelection()) {
-        resumeAutoScroll();
-      }
-      return;
-    }
-
-    if (action === "pause") {
+    // Drag-selecting near the bottom can look like a resume gesture. Keep
+    // follow paused during selection, but still refresh content visibility.
+    if (action === "resume" && !hasActiveTranscriptSelection()) {
+      resumeAutoScroll();
+    } else if (action === "pause") {
       pauseAutoScroll();
+    } else {
+      syncScrollToBottomButton();
     }
   };
 
@@ -10957,6 +11024,7 @@ export const createAgentExperience = (
   if (typeof ResizeObserver !== "undefined") {
     const contentResizeObserver = new ResizeObserver(() => {
       handleContentResize();
+      syncTranscriptEdgeFades();
       // A resize can start or stop a table overflowing without a render or a
       // scroll, which are the only other things that recompute the fades.
       refreshTableScrollFades(messagesWrapper);
@@ -11025,6 +11093,7 @@ export const createAgentExperience = (
   });
 
   const handleWheel = (event: WheelEvent) => {
+    if (latestScroll.interruptedBy(event)) { markReaderEngaged(); return; }
     // A wheel tick is unambiguous reader intent in every mode — including
     // anchored anchor-top, where there is no follow state to pause.
     if (event.deltaY !== 0) markReaderEngaged();
@@ -11057,13 +11126,13 @@ export const createAgentExperience = (
     // first so "bottom" means the real end of content, not spacer padding
     // that would keep shrinking underneath the reader.
     resetAnchorState();
-    body.scrollTop = body.scrollHeight;
-    lastScrollTop = body.scrollTop;
-    resumeAutoScroll();
-    scheduleAutoScroll(true);
+    cancelAutoScroll();
+    autoFollow.pause();
+    latestScroll.start(config);
     syncScrollToBottomButton();
   });
-  destroyCallbacks.push(() => scrollToBottomButton.remove());
+  destroyCallbacks.push(() => latestScroll.destroy());
+  destroyCallbacks.push(() => scrollToBottomControl.destroy());
   destroyCallbacks.push(() => {
     cancelAutoScroll();
     resetAnchorState();
@@ -11140,10 +11209,12 @@ export const createAgentExperience = (
 
       // Dispatch custom event for external handlers (e.g., localStorage clearing in examples)
       const clearEvent = new CustomEvent("persona:clear-chat", {
-        detail: { timestamp: new Date().toISOString() }
+        detail: { instanceId, timestamp: new Date().toISOString() }
       });
       window.dispatchEvent(clearEvent);
 
+      // Remove any stored draft before the terminal clear mutation is queued.
+      clearPersistedDraft();
       if (storageAdapter?.clear) {
         runStorageMutation(
           () => storageAdapter.clear!(),
@@ -11154,7 +11225,8 @@ export const createAgentExperience = (
       actionManager.syncFromMetadata();
       // Pending attachments belong to the cleared conversation: drop the tiles
       // and abort anything still uploading.
-      attachmentManager?.clearAttachments();
+      discardConversationContinuity(session.getActiveConversationId(), true, false);
+      clearComposerDraft();
       // The draft, quote, and any deferred submission belong to it too.
       clearPersistedDraft();
       setPendingSubmission(undefined);
@@ -11242,6 +11314,7 @@ export const createAgentExperience = (
       applyComposerInputConfig();
       applyComposerLock();
       syncComposerText();
+      dictation?.refresh();
     });
   };
   registerComposerSwapHandler();
@@ -11258,6 +11331,7 @@ export const createAgentExperience = (
     if (composerRebuilding) return;
     composerRebuilding = true;
     try {
+      slots.detach(["footer-top", "footer-bottom", "composer-start", "composer-end", "composer-before-send"]);
       // 1. Snapshot text/focus/state.
       const previousValue = textarea?.value ?? "";
       const activeDoc = footer.ownerDocument ?? document;
@@ -11319,6 +11393,8 @@ export const createAgentExperience = (
       composerSuggestionsManager = createSuggestions(suggestions);
       if (managerIndex >= 0) suggestionManagers[managerIndex] = composerSuggestionsManager;
 
+      slots.remount();
+
       // 7. Restore focus and synchronize state.
       if (textarea) textarea.value = previousValue;
       syncComposerText();
@@ -11334,6 +11410,7 @@ export const createAgentExperience = (
       // has to restore the live state, which also re-arms the level loop
       // against the new footer and wrapper.
       if (voiceState.active) setMicState("recording");
+      dictation?.refresh();
       // The new footer carries none of the per-mode inline styles. Full
       // chrome sync, not bare applyFullHeightStyles: the latter resets
       // mount.style.cssText, which silently drops every theme variable.
@@ -11450,6 +11527,7 @@ export const createAgentExperience = (
     // No rAF may outlive the widget.
     stopVoiceLevelLoop();
     // Runs every custom action's `destroy()` and tears down the overflow menu.
+    composerActionsTornDown = true;
     composerActionRenderer?.destroy();
     composerActionRenderer = null;
     composerModeChips?.destroy();
@@ -11458,8 +11536,7 @@ export const createAgentExperience = (
     composerQuoteBanner = null;
     composerPendingCard?.destroy();
     composerPendingCard = null;
-    composerModelPicker = null;
-    composerModelPickerMode = null;
+    composerCoreControls = null;
     // Flush before the store is destroyed: the pending write reads its state.
     flushDraftPersist();
     draftWriter.destroy();
@@ -11467,6 +11544,8 @@ export const createAgentExperience = (
     cancelMessageEdit();
     submissionAbort?.abort();
     submissionAbort = null;
+    historyShell?.clearConversationOpenPending();
+    discardConversationContinuity(undefined, false);
     // Aborts every in-flight upload; late completions write no state.
     attachmentManager?.destroy();
     attachmentManager = null;
@@ -11499,14 +11578,84 @@ export const createAgentExperience = (
     });
   }
 
+  // Relocation is deliberately narrower than update(): no renderer, composer,
+  // session, or subscription is rebuilt. Snapshot reader intent before the
+  // browser can clamp scrollTop while moving/reflowing the host.
+  runtimeOptions?.registerHostMove?.((reparent) => {
+    const top = body.scrollTop;
+    const following = isFollowEffective() && autoFollow.isFollowing();
+    const viewportTop = body.getBoundingClientRect().top;
+    const readingAnchor = !following && body.clientHeight > 0
+      ? Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]")).find(
+        (node) => node.getBoundingClientRect().bottom > viewportTop
+      ) : undefined;
+    const anchorOffset = readingAnchor ? readingAnchor.getBoundingClientRect().top - viewportTop : 0;
+    cancelAutoScroll();
+    reparent();
+    getComposerActionsSync()?.ensureComposerActionStyles(mount);
+    getArtifactsUiSync()?.ensureArtifactStyles(mount);
+    recalcPanelHeight();
+    applyRailChrome();
+    if (following) body.scrollTop = getScrollBottomOffset(body);
+    else if (readingAnchor) body.scrollTop += readingAnchor.getBoundingClientRect().top - body.getBoundingClientRect().top - anchorOffset;
+    else body.scrollTop = top;
+    if (!following && !readerEngagedThisTurn) repinAnchoredMessage();
+    lastScrollTop = body.scrollTop;
+    lastBottomOffset = getScrollBottomOffset(body);
+    syncTranscriptEdgeFades();
+    syncScrollToBottomButton();
+    // Open popovers/tooltips listen at their own instance root, including
+    // lazy chunks with separate module copies. Other widgets are untouched.
+    mount.dispatchEvent(new Event("persona:internal:host-moved"));
+  });
+
+  const showFeedback = (create: () => HTMLElement) => {
+    if (!open && isPanelToggleable()) setOpenState(true, "system");
+    messagesWrapper.querySelector(".persona-feedback-container")?.remove();
+    const element = create();
+    messagesWrapper.appendChild(element);
+    element.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
+
+  let presentationPrepared = false;
+  let queuedUpdates: AgentWidgetConfigPatch[] = [];
+  let applyingPreparedUpdates = false;
+  const applyQueuedUpdates = () => {
+    const updates = queuedUpdates;
+    queuedUpdates = [];
+    applyingPreparedUpdates = true;
+    try { for (const patch of updates) controller.update(patch); }
+    finally { applyingPreparedUpdates = false; }
+  };
   const controller: Controller = {
+    get ready() { return renderReadiness.ready; },
+    get instanceId() { return instanceId; },
     update(nextConfig: AgentWidgetConfigPatch) {
+      // Keep a complete existing view while a newly enabled renderer loads.
+      // Replay raw patches so explicit-undefined resets and provenance survive.
+      if (!applyingPreparedUpdates) {
+        queuedUpdates.push(nextConfig);
+        const nextPresentation = queuedUpdates.reduce(mergeConfigUpdate, { ...config, features: baseFeatures });
+        const pending = prepareRendererModules(resolveConfigPreferences(nextPresentation));
+        if (pending.length) {
+          renderReadiness.prepare(pending, applyQueuedUpdates, presentationPrepared);
+          return;
+        }
+        if (queuedUpdates.length > 1) {
+          renderReadiness.prepare([], applyQueuedUpdates, presentationPrepared);
+          return;
+        }
+        queuedUpdates = [];
+      }
+      if (!runtimeOptions?.diagnostics) updateLegacyDiagnostics(diagnostics, nextConfig);
+      const nextVoice = nextConfig.voiceRecognition;
+      if (nextVoice && (nextVoice.enabled === false ||
+        (nextVoice.dictation?.provider && nextVoice.dictation.provider !== config.voiceRecognition?.dictation?.provider) ||
+        (nextVoice.provider?.custom && nextVoice.provider.custom !== config.voiceRecognition?.provider?.custom))) dismissDictation();
       const previousDefaultsVersion = config.future?.v5Defaults === true;
-      const previousToolCallConfig = config.toolCall;
       const previousMessageActions = config.messageActions;
       const previousLayoutMessages = config.layout?.messages;
       const previousColorScheme = config.colorScheme;
-      const previousLoadingIndicator = config.loadingIndicator;
       const previousIterationDisplay = config.iterationDisplay;
       const previousShowReasoning = config.features?.showReasoning;
       const previousShowToolCalls = config.features?.showToolCalls;
@@ -11531,13 +11680,9 @@ export const createAgentExperience = (
       baseFeatures = config.features;
       config = resolveConfigPreferences(config);
       applyTooltipTiming();
-      // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
-      applyFullHeightStyles();
-      applyThemeVariables(mount, config);
-      applyArtifactLayoutCssVars(mount, config);
-      applyArtifactPaneAppearance(mount, config);
-      // Rail width/side are config-derived, so an open rail re-derives here too.
-      applyRailChrome();
+      // The shared chrome pass restores owned variables after resetting mount styles,
+      // including the welded radius even when the artifact split mode stays unchanged.
+      syncPanelChrome();
       syncArtifactPane();
 
       // Re-setup theme observer if colorScheme changed
@@ -11556,7 +11701,7 @@ export const createAgentExperience = (
       autoExpand = config.launcher?.autoExpand ?? false;
       showReasoning = config.features?.showReasoning ?? true;
       showToolCalls = config.features?.showToolCalls ?? true;
-      scrollToBottomFeature = config.features?.scrollToBottom ?? {};
+      latestScroll.cancel();
       const prevScrollMode = getScrollMode();
       scrollBehaviorFeature = config.features?.scrollBehavior ?? {};
       if (prevScrollMode !== getScrollMode()) {
@@ -11566,7 +11711,6 @@ export const createAgentExperience = (
         resumeAutoScroll();
       }
       applyScrollbarPolicy();
-      renderScrollToBottomButton();
       syncScrollToBottomButton();
       const prevShowEventStreamToggle = showEventStreamToggle;
       showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
@@ -11615,6 +11759,8 @@ export const createAgentExperience = (
       } else if (!showEventStreamToggle && prevShowEventStreamToggle) {
         // Flag changed from true to false - hide and clean up
         toggleEventStreamOff();
+        eventStreamView?.destroy();
+        eventStreamView = null;
         if (eventStreamToggleBtn) {
           eventStreamToggleBtn.remove();
           eventStreamToggleBtn = null;
@@ -11724,7 +11870,7 @@ export const createAgentExperience = (
       }
 
       // Update header visibility based on layout.showHeader
-      const showHeader = config.layout?.showHeader !== false; // default to true
+      const showHeader = isHeaderVisible(config);
       if (header) {
         header.style.display = showHeader ? "" : "none";
       }
@@ -11764,20 +11910,23 @@ export const createAgentExperience = (
       refreshCloseButton();
 
       // Re-render messages if config affecting message rendering changed
-      const toolCallConfigChanged = JSON.stringify(config.toolCall) !== JSON.stringify(previousToolCallConfig);
       const messageActionsChanged = JSON.stringify(config.messageActions) !== JSON.stringify(previousMessageActions);
-      const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages);
-      const loadingIndicatorChanged = config.loadingIndicator?.render !== previousLoadingIndicator?.render
-        || config.loadingIndicator?.renderIdle !== previousLoadingIndicator?.renderIdle
-        || config.loadingIndicator?.showBubble !== previousLoadingIndicator?.showBubble;
+      const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages)
+        || config.layout?.messages?.renderAssistantMessage !== previousLayoutMessages?.renderAssistantMessage
+        || config.layout?.messages?.renderUserMessage !== previousLayoutMessages?.renderUserMessage;
       const iterationDisplayChanged = config.iterationDisplay !== previousIterationDisplay;
       const featuresChanged = (config.features?.showReasoning ?? true) !== (previousShowReasoning ?? true)
         || (config.features?.showToolCalls ?? true) !== (previousShowToolCalls ?? true)
         || JSON.stringify(config.features?.toolCallDisplay) !== JSON.stringify(previousToolCallDisplay)
         || JSON.stringify(config.features?.reasoningDisplay) !== JSON.stringify(previousReasoningDisplay);
       const messagesConfigChanged = (config.future?.v5Defaults === true) !== previousDefaultsVersion
-        || toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged
-        || loadingIndicatorChanged || iterationDisplayChanged || featuresChanged;
+        || "toolCall" in nextConfig || messageActionsChanged || layoutMessagesChanged
+        || "loadingIndicator" in nextConfig || iterationDisplayChanged || featuresChanged
+        || "turnActivity" in nextConfig || "loadingLabel" in nextConfig || "expansion" in nextConfig
+        || "errorDisplay" in nextConfig || "theme" in nextConfig || "darkTheme" in nextConfig
+        || "approval" in nextConfig || config.colorScheme !== previousColorScheme
+        || "askUserQuestion" in (nextConfig.features ?? {})
+        || ("features" in nextConfig && nextConfig.features === undefined);
       if (messagesConfigChanged && session) {
         configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
@@ -11914,16 +12063,6 @@ export const createAgentExperience = (
           isPanelToggleable() && config.layout?.header?.showCloseButton !== false;
         closeButton.style.display = layoutShowCloseButton ? "" : "none";
 
-        // Composer-bar mode owns its close sizing, same as clear chat below.
-        // Elsewhere, unset clears the inline box so the header control-size
-        // token wins; writing a fallback here would pin it past the token.
-        if (!isComposerBar()) {
-          const closeButtonSize = launcher.closeButtonSize ?? "";
-          closeButton.style.height = closeButtonSize;
-          closeButton.style.width = closeButtonSize;
-          closeButton.style.minWidth = closeButtonSize;
-          closeButton.style.minHeight = closeButtonSize;
-        }
         const closeButtonPlacement = launcher.closeButtonPlacement ?? "inline";
 
         // Update placement if changed - move the wrapper (not just the button) to preserve tooltip
@@ -11954,63 +12093,10 @@ export const createAgentExperience = (
           }
         }
 
-        // Close icon: launcher color wins; else theme.components.header.actionIconForeground
-        closeButton.style.color =
-          launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
-
-        if (launcher.closeButtonBackgroundColor) {
-          closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
-          closeButton.classList.remove("hover:persona-bg-gray-100");
-        } else {
-          closeButton.style.backgroundColor = "";
-          closeButton.classList.add("hover:persona-bg-gray-100");
-        }
-
-        // Apply border if width and/or color are provided
-        if (launcher.closeButtonBorderWidth || launcher.closeButtonBorderColor) {
-          const borderWidth = launcher.closeButtonBorderWidth || "0px";
-          const borderColor = launcher.closeButtonBorderColor || "transparent";
-          closeButton.style.border = `${borderWidth} solid ${borderColor}`;
-          closeButton.classList.remove("persona-border-none");
-        } else {
-          closeButton.style.border = "";
-          closeButton.classList.add("persona-border-none");
-        }
-
-        if (launcher.closeButtonBorderRadius) {
-          closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
-          closeButton.classList.remove("persona-rounded-full");
-        } else {
-          closeButton.style.borderRadius = "";
-          closeButton.classList.add("persona-rounded-full");
-        }
-
-        // Update padding
-        if (launcher.closeButtonPaddingX) {
-          closeButton.style.paddingLeft = launcher.closeButtonPaddingX;
-          closeButton.style.paddingRight = launcher.closeButtonPaddingX;
-        } else {
-          closeButton.style.paddingLeft = "";
-          closeButton.style.paddingRight = "";
-        }
-        if (launcher.closeButtonPaddingY) {
-          closeButton.style.paddingTop = launcher.closeButtonPaddingY;
-          closeButton.style.paddingBottom = launcher.closeButtonPaddingY;
-        } else {
-          closeButton.style.paddingTop = "";
-          closeButton.style.paddingBottom = "";
-        }
-
-        // Update icon through the shared renderer so a restyle can never
-        // repaint the glyph at a different size or stroke than the builder.
-        applyHeaderControlGlyph(
-          closeButton,
-          launcher.closeButtonIconName ?? "x",
-          {
-            iconSize: isComposerBar() ? COMPOSER_BAR_CLOSE_ICON_SIZE : undefined,
-            iconText: launcher.closeButtonIconText ?? "×",
-          }
-        );
+        applyHeaderControlStyle(closeButton, config, "close", {
+          buttonSize: isComposerBar() ? closeButton.style.width : undefined,
+          iconSize: isComposerBar() ? COMPOSER_BAR_CLOSE_ICON_SIZE : undefined,
+        });
 
         // Update tooltip
         const closeButtonTooltipText = launcher.closeButtonTooltipText ?? "Close chat";
@@ -12110,77 +12196,10 @@ export const createAgentExperience = (
         }
 
         if (shouldShowClearChat) {
-          // Update size: composer-bar mode owns its sizing, so leave size
-          // alone there. Elsewhere, unset clears the inline box so the header
-          // control-size token wins.
-          if (!isComposerBar()) {
-            const clearChatSize = clearChatConfig.size ?? "";
-            clearChatButton.style.height = clearChatSize;
-            clearChatButton.style.width = clearChatSize;
-            clearChatButton.style.minWidth = clearChatSize;
-            clearChatButton.style.minHeight = clearChatSize;
-          }
-
-          const clearChatIconColor = clearChatConfig.iconColor ?? "";
-          clearChatButton.style.color =
-            clearChatIconColor || HEADER_THEME_CSS.actionIconColor;
-
-          // Same shared renderer as the builder, so a restyle can never
-          // repaint the glyph at a different size or stroke.
-          applyHeaderControlGlyph(
-            clearChatButton,
-            clearChatConfig.iconName ?? "refresh-cw",
-            {
-              iconSize: isComposerBar()
-                ? COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE
-                : undefined,
-            }
-          );
-
-          // Update background color
-          if (clearChatConfig.backgroundColor) {
-            clearChatButton.style.backgroundColor = clearChatConfig.backgroundColor;
-            clearChatButton.classList.remove("hover:persona-bg-gray-100");
-          } else {
-            clearChatButton.style.backgroundColor = "";
-            clearChatButton.classList.add("hover:persona-bg-gray-100");
-          }
-
-          // Update border
-          if (clearChatConfig.borderWidth || clearChatConfig.borderColor) {
-            const borderWidth = clearChatConfig.borderWidth || "0px";
-            const borderColor = clearChatConfig.borderColor || "transparent";
-            clearChatButton.style.border = `${borderWidth} solid ${borderColor}`;
-            clearChatButton.classList.remove("persona-border-none");
-          } else {
-            clearChatButton.style.border = "";
-            clearChatButton.classList.add("persona-border-none");
-          }
-
-          // Update border radius
-          if (clearChatConfig.borderRadius) {
-            clearChatButton.style.borderRadius = clearChatConfig.borderRadius;
-            clearChatButton.classList.remove("persona-rounded-full");
-          } else {
-            clearChatButton.style.borderRadius = "";
-            clearChatButton.classList.add("persona-rounded-full");
-          }
-
-          // Update padding
-          if (clearChatConfig.paddingX) {
-            clearChatButton.style.paddingLeft = clearChatConfig.paddingX;
-            clearChatButton.style.paddingRight = clearChatConfig.paddingX;
-          } else {
-            clearChatButton.style.paddingLeft = "";
-            clearChatButton.style.paddingRight = "";
-          }
-          if (clearChatConfig.paddingY) {
-            clearChatButton.style.paddingTop = clearChatConfig.paddingY;
-            clearChatButton.style.paddingBottom = clearChatConfig.paddingY;
-          } else {
-            clearChatButton.style.paddingTop = "";
-            clearChatButton.style.paddingBottom = "";
-          }
+          applyHeaderControlStyle(clearChatButton, config, "clear", {
+            buttonSize: isComposerBar() ? clearChatButton.style.width : undefined,
+            iconSize: isComposerBar() ? COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE : undefined,
+          });
 
           const clearChatTooltipText = clearChatConfig.tooltipText ?? "Clear chat";
           const clearChatShowTooltip = clearChatConfig.showTooltip ?? true;
@@ -12230,6 +12249,9 @@ export const createAgentExperience = (
         config.clientToken !== previousClientToken
       ) {
         historyShell?.closeHistory({ restoreFocus: false });
+        if (config.getIdentityProof !== previousIdentityProof || config.clientToken !== previousClientToken) {
+          historyShell?.discardConversationContinuity();
+        }
         historyShell?.installHistoryProvider();
       }
       historyShell?.syncHistoryChromeImpl();
@@ -12263,14 +12285,14 @@ export const createAgentExperience = (
       }
 
       // Update voice recognition mic button visibility
-      const voiceRecognitionEnabled = config.voiceRecognition?.enabled === true;
+      const voiceRecognitionEnabled = config.voiceRecognition?.enabled === true && config.voiceRecognition.showButton !== false;
       const hasSpeechRecognition =
         typeof window !== 'undefined' &&
         (typeof (window as any).webkitSpeechRecognition !== 'undefined' ||
          typeof (window as any).SpeechRecognition !== 'undefined');
       const hasSessionProvider =
         usesSessionVoice(config.voiceRecognition?.provider);
-      const hasVoiceInput = hasSpeechRecognition || hasSessionProvider;
+      const hasVoiceInput = hasSpeechRecognition || hasSessionProvider || config.voiceRecognition?.dictation?.provider?.type === "custom";
 
       if (voiceRecognitionEnabled && hasVoiceInput) {
         // Create or update mic button
@@ -12308,86 +12330,14 @@ export const createAgentExperience = (
         } else {
           // Update existing mic button with new config
           const voiceConfig = config.voiceRecognition ?? {};
-          const sendButtonConfig = config.sendButton ?? {};
-
-          // Update icon name and size
-          const micIconName = voiceConfig.iconName ?? "mic";
-          // Unset clears the inline box so the control-size token takes over.
-          const micIconSize = voiceConfig.iconSize;
-          const micIconSizeNum =
-            parseFloat(micIconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX;
-
-          micButton.classList.add(COMPOSER_CONTROL_CLASS);
-          micButton.classList.toggle(COMPOSER_CONTROL_GLYPH_CLASS, !micIconSize);
-          micButton.style.width = micIconSize ?? "";
-          micButton.style.height = micIconSize ?? "";
-          micButton.style.minWidth = micIconSize ?? "";
-          micButton.style.minHeight = micIconSize ?? "";
-
-
-          // Update icon; color chain and stroke 1.5 match the mount-time
-          // builder (composer-parts.ts) so an unrelated update cannot restyle.
-          const iconColor = voiceConfig.iconColor ?? sendButtonConfig.textColor;
-          micButton.innerHTML = "";
-          const micIconSvg = renderLucideIcon(
-            micIconName,
-            micIconSizeNum,
-            iconColor || "currentColor",
-            1.5
-          );
-          if (micIconSvg) {
-            micButton.appendChild(micIconSvg);
-          } else {
-            micButton.textContent = "🎤";
-          }
-
-          // Update colors from config or theme tokens
-          const backgroundColor = voiceConfig.backgroundColor ?? sendButtonConfig.backgroundColor;
-          if (backgroundColor) {
-            micButton.style.backgroundColor = backgroundColor;
-          } else {
-            micButton.style.backgroundColor = "";
-          }
-
-          if (iconColor) {
-            micButton.style.color = iconColor;
-          } else {
-            micButton.style.color = "var(--persona-text, #111827)";
-          }
-
-          // Update border styling
-          if (voiceConfig.borderWidth) {
-            micButton.style.borderWidth = voiceConfig.borderWidth;
-            micButton.style.borderStyle = "solid";
-          } else {
-            micButton.style.borderWidth = "";
-            micButton.style.borderStyle = "";
-          }
-          if (voiceConfig.borderColor) {
-            micButton.style.borderColor = voiceConfig.borderColor;
-          } else {
-            micButton.style.borderColor = "";
-          }
-
-          // Update padding styling
-          if (voiceConfig.paddingX) {
-            micButton.style.paddingLeft = voiceConfig.paddingX;
-            micButton.style.paddingRight = voiceConfig.paddingX;
-          } else {
-            micButton.style.paddingLeft = "";
-            micButton.style.paddingRight = "";
-          }
-          if (voiceConfig.paddingY) {
-            micButton.style.paddingTop = voiceConfig.paddingY;
-            micButton.style.paddingBottom = voiceConfig.paddingY;
-          } else {
-            micButton.style.paddingTop = "";
-            micButton.style.paddingBottom = "";
-          }
+          const micState = micButton.getAttribute("data-state");
+          applyMicButtonStyle(micButton, config,
+            micState === "recording" || micState === "processing" || micState === "speaking" ? micState : "idle",
+            session.getVoiceInterruptionMode());
 
           const tooltipText = voiceConfig.tooltipText ?? "Start voice recognition";
           const showTooltip = voiceConfig.showTooltip ?? false;
-          micButton.setAttribute("aria-label", tooltipText);
+          if (micState === "idle") micButton.setAttribute("aria-label", tooltipText);
           if (micButtonWrapper) {
             attachTooltip({
               anchor: micButton,
@@ -12405,11 +12355,13 @@ export const createAgentExperience = (
         // Hide mic button
         if (micButton && micButtonWrapper) {
           micButtonWrapper.style.display = "none";
-          // Stop any active recording if disabling
-          if (usesSessionVoice(config.voiceRecognition?.provider)) {
-            if (session.isVoiceActive()) session.toggleVoice();
-          } else if (isRecording) {
-            stopVoiceRecognition();
+          // Hiding the button retains programmatic voice controls; disabling voice stops capture.
+          if (config.voiceRecognition?.enabled !== true || !hasVoiceInput) {
+            if (usesSessionVoice(config.voiceRecognition?.provider)) {
+              if (session.isVoiceActive()) session.toggleVoice();
+            } else if (isRecording) {
+              stopVoiceRecognition();
+            }
           }
         }
       }
@@ -12511,10 +12463,7 @@ export const createAgentExperience = (
 
           // Initialize attachment manager
           if (!attachmentManager && attachmentInput && attachmentPreviewsContainer) {
-            attachmentManager = AttachmentManager.fromConfig(
-              attachmentsConfig,
-              syncComposerAttachments
-            );
+            attachmentManager = createScopedAttachmentManager();
             attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
 
             composerBindings?.addListener(attachmentInput, "change", async () => {
@@ -12534,16 +12483,6 @@ export const createAgentExperience = (
           if (attachmentInput) {
             attachmentInput.accept = (attachmentsConfig.allowedTypes ?? ALL_SUPPORTED_MIME_TYPES).join(",");
             attachmentInput.multiple = (attachmentsConfig.maxFiles ?? 4) > 1;
-          }
-
-          // Update attachment manager config
-          if (attachmentManager) {
-            attachmentManager.updateConfig({
-              allowedTypes: attachmentsConfig.allowedTypes,
-              maxFileSize: attachmentsConfig.maxFileSize,
-              maxFiles: attachmentsConfig.maxFiles,
-              adapter: attachmentsConfig.adapter
-            });
           }
         }
 
@@ -12590,139 +12529,9 @@ export const createAgentExperience = (
       }
 
       // Update send button styling
-      const sendButtonConfig = config.sendButton ?? {};
-      const useIcon = sendButtonConfig.useIcon ?? false;
-      const iconText = sendButtonConfig.iconText ?? "↑";
-      const iconName = sendButtonConfig.iconName;
-      const tooltipText = sendButtonConfig.tooltipText ?? "Send message";
-      const showTooltip = sendButtonConfig.showTooltip ?? false;
-      // Unset clears the inline box so the control-size token takes over.
-      const buttonSize = sendButtonConfig.size;
-      const buttonSizeNum =
-        parseFloat(buttonSize ?? "") || COMPOSER_CONTROL_FALLBACK_PX;
-      const backgroundColor = sendButtonConfig.backgroundColor;
-      const textColor = sendButtonConfig.textColor;
-
-      // Update button content and styling based on mode
-      if (useIcon) {
-        // Icon mode: circular button
-        sendButton.style.width = buttonSize ?? "";
-        sendButton.style.height = buttonSize ?? "";
-        sendButton.style.minWidth = buttonSize ?? "";
-        sendButton.style.minHeight = buttonSize ?? "";
-        sendButton.style.fontSize = "18px";
-        sendButton.style.lineHeight = "1";
-
-        // Set foreground color from config or theme token
-        if (textColor) {
-          sendButton.style.color = textColor;
-        } else {
-          sendButton.style.color =
-            "var(--persona-send-button-fg, var(--persona-button-primary-fg, #ffffff))";
-        }
-
-        // Skip the icon-content re-render while streaming: the button holds the
-        // stop icon (owned by setSendButtonMode), and clobbering it here would
-        // show the send arrow mid-stream while the aria-label still says stop.
-        if (!session.isStreaming()) {
-          sendButton.innerHTML = "";
-          if (iconName) {
-            // Same derivation as the mount-time builder (composer-parts.ts):
-            // half the box unless `iconSize` names a glyph explicitly.
-            const iconSize =
-              parseFloat(sendButtonConfig.iconSize ?? "") ||
-              Math.round(buttonSizeNum * 0.5);
-            const iconColor = textColor?.trim() || "currentColor";
-            const iconStroke = sendButtonConfig.iconStrokeWidth ?? 2;
-            const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, iconStroke);
-            // Rebuild the crossfade stack, not a bare glyph: `setSendButtonMode`
-            // resolves it from the DOM, so a single-glyph rebuild here would
-            // leave the stop state with nothing to reveal.
-            const stopSvg = renderLucideIcon(
-              sendButtonConfig.stopIconName ?? "square",
-              iconSize,
-              iconColor,
-              iconStroke
-            );
-            if (iconSvg && stopSvg) {
-              // Not streaming, so send is the live mode by definition.
-              sendButton.appendChild(buildSendGlyphStack(iconSvg, stopSvg));
-            } else if (iconSvg) {
-              sendButton.appendChild(iconSvg);
-            } else {
-              sendButton.textContent = iconText;
-            }
-          } else {
-            sendButton.textContent = iconText;
-          }
-        }
-
-        // Update classes
-        sendButton.className = `persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer ${COMPOSER_CONTROL_CLASS}`;
-
-        if (backgroundColor) {
-          sendButton.style.backgroundColor = backgroundColor;
-          sendButton.classList.remove("persona-bg-persona-primary");
-        } else {
-          sendButton.style.backgroundColor = "";
-          sendButton.classList.add("persona-bg-persona-primary");
-        }
-      } else {
-        // Text mode: existing behavior
-        sendButton.textContent = config.copy?.sendButtonLabel ?? "Send";
-        sendButton.style.width = "";
-        sendButton.style.height = "";
-        sendButton.style.minWidth = "";
-        sendButton.style.minHeight = "";
-        sendButton.style.fontSize = "";
-        sendButton.style.lineHeight = "";
-
-        // Update classes
-        sendButton.className = "persona-rounded-button persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold persona-text-white disabled:persona-opacity-50 persona-cursor-pointer";
-
-        if (backgroundColor) {
-          sendButton.style.backgroundColor = backgroundColor;
-          sendButton.classList.remove("persona-bg-persona-accent");
-        } else {
-          sendButton.classList.add("persona-bg-persona-accent");
-        }
-
-        if (textColor) {
-          sendButton.style.color = textColor;
-        } else {
-          sendButton.classList.add("persona-text-white");
-        }
-      }
-
-      // Apply border styling
-      if (sendButtonConfig.borderWidth) {
-        sendButton.style.borderWidth = sendButtonConfig.borderWidth;
-        sendButton.style.borderStyle = "solid";
-      } else {
-        sendButton.style.borderWidth = "";
-        sendButton.style.borderStyle = "";
-      }
-      if (sendButtonConfig.borderColor) {
-        sendButton.style.borderColor = sendButtonConfig.borderColor;
-      } else {
-        sendButton.style.borderColor = "";
-      }
-
-      // Apply padding styling (works in both icon and text mode)
-      if (sendButtonConfig.paddingX) {
-        sendButton.style.paddingLeft = sendButtonConfig.paddingX;
-        sendButton.style.paddingRight = sendButtonConfig.paddingX;
-      } else {
-        sendButton.style.paddingLeft = "";
-        sendButton.style.paddingRight = "";
-      }
-      if (sendButtonConfig.paddingY) {
-        sendButton.style.paddingTop = sendButtonConfig.paddingY;
-        sendButton.style.paddingBottom = sendButtonConfig.paddingY;
-      } else {
-        sendButton.style.paddingTop = "";
-        sendButton.style.paddingBottom = "";
-      }
+      const tooltipText = config.sendButton?.tooltipText ?? "Send message";
+      const showTooltip = config.sendButton?.showTooltip ?? false;
+      applySendButtonStyle(sendButton, config);
 
       if (!session.isStreaming()) {
         sendButton.setAttribute("aria-label", tooltipText);
@@ -12737,6 +12546,11 @@ export const createAgentExperience = (
         });
       }
 
+      const attachmentManagers = new Set([attachmentManager, ...Array.from(conversationContinuity.values(), saved => saved.attachments)]);
+      for (const manager of attachmentManagers) {
+        manager?.updateConfig(attachmentManagerConfig());
+      }
+      if ("plugins" in nextConfig) attachmentManager?.remountPreviews(attachmentPreviewsContainer);
       syncComposerLayout();
       // Placement may change through a live option or defaults-version switch.
       applyComposerPlacement();
@@ -12751,22 +12565,14 @@ export const createAgentExperience = (
       const wantsModeChips = composerChipModes().length > 0;
       if (wantsModeChips !== Boolean(composerModeChips)) setupComposerModeChips();
       composerModeChips?.render(prunedModes, composerChipModes());
-      // Drop tracks whose group is gone, then repaint the survivors: a live edit
-      // can change a group's modes, label, or presentation.
-      for (const groupId of [...composerSegmentedGroups.keys()]) {
-        if (!isSegmentedModeGroup(groupId, config.composer?.modeGroups)) {
-          composerSegmentedGroups.delete(groupId);
-        }
-      }
-      composerSegmentedGroups.forEach((group) => group.repaint());
-      // A live `composer.models` edit changes options the picker built once.
-      composerModelPicker?.repaint();
+      composerCoreControls?.repaint();
 
       // Re-resolve the action row LAST of the composer work: `composer.actions`,
       // the plugin list, and the built-in elements above have all settled, so
       // added/removed/changed actions re-render and every `visible`/`disabled`
       // predicate is re-evaluated against the current state.
-      composerActionRenderer?.resolve();
+      if (composerActionRenderer) composerActionRenderer.resolve();
+      else setupComposerActions();
 
       // Update contentMaxWidth on messages wrapper and composer. Same
       // composer-bar fallback as the initial read above.
@@ -12858,6 +12664,11 @@ export const createAgentExperience = (
       // Last: this pass rebuilds the header and rewrites header/footer
       // visibility, any of which would expose an open panel host's chrome.
       reapplyHistoryHostChrome();
+      warnInertSlots(config.layout?.slots ?? {});
+      if (dictationCapturing() && isComposerInputDisabled()) dismissDictation();
+      dictation?.refresh();
+      slots.update();
+      preparePresentation();
     },
     open() {
       if (!isPanelToggleable()) return;
@@ -12875,9 +12686,11 @@ export const createAgentExperience = (
       session.reconnectNow();
     },
     clearChat() {
+      dismissDictation();
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
+      disposeApprovalRenders();
       artifactsPaneUserHidden = false;
-      activityLifecycle.clear();
+      activityLifecycle?.clear();
       toolExpansionState.clear();
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();
@@ -12911,10 +12724,12 @@ export const createAgentExperience = (
 
       // Dispatch custom event for external handlers (e.g., localStorage clearing in examples)
       const clearEvent = new CustomEvent("persona:clear-chat", {
-        detail: { timestamp: new Date().toISOString() }
+        detail: { instanceId, timestamp: new Date().toISOString() }
       });
       window.dispatchEvent(clearEvent);
 
+      // Remove any stored draft before the terminal clear mutation is queued.
+      clearPersistedDraft();
       if (storageAdapter?.clear) {
         runStorageMutation(
           () => storageAdapter.clear!(),
@@ -12925,7 +12740,8 @@ export const createAgentExperience = (
       actionManager.syncFromMetadata();
       // Pending attachments belong to the cleared conversation: drop the tiles
       // and abort anything still uploading.
-      attachmentManager?.clearAttachments();
+      discardConversationContinuity(session.getActiveConversationId(), true, false);
+      clearComposerDraft();
       // The draft, quote, and any deferred submission belong to it too.
       clearPersistedDraft();
       setPendingSubmission(undefined);
@@ -12938,7 +12754,7 @@ export const createAgentExperience = (
       eventStreamView?.update();
     },
     setMessage(message: string): boolean {
-      if (!textarea) return false;
+      if (!textarea || dictationCapturing()) return false;
       if (session.isStreaming()) return false;
       if (isComposerInputDisabled()) return false;
 
@@ -12953,7 +12769,7 @@ export const createAgentExperience = (
       return true;
     },
     submitMessage(message?: string): boolean {
-      if (session.isStreaming()) return false;
+      if (session.isStreaming() || dictationCapturing()) return false;
       // Every submission path is blocked, including the programmatic one.
       if (isComposerSendBlocked()) return false;
 
@@ -12976,6 +12792,9 @@ export const createAgentExperience = (
     getComposerState(): Readonly<ComposerState> {
       return composerStore.getState();
     },
+    setComposerModes(ids: readonly string[]): void {
+      setActiveComposerModes(selectComposerModes(ids, composerModes(), config.composer?.modeGroups));
+    },
     setQuote(quote: ComposerQuote): void {
       const text = quote?.text?.trim();
       if (!text) return;
@@ -12984,8 +12803,17 @@ export const createAgentExperience = (
     clearQuote(): void {
       setComposerQuote(undefined);
     },
+    startDictation,
+    finishDictation: () => finishDictation(),
+    cancelDictation: () => { const loading = dictationLoading; return dismissDictation() || loading; },
+    sendDictation: () => {
+      if (!config.voiceRecognition?.dictation?.showSend || isComposerSendBlocked()) return false;
+      return finishDictation(true);
+    },
+    getDictationState: () => dictationLoadFailure ?? dictation?.getState() ?? idleDictation,
     startVoiceRecognition(): boolean {
-      if (session.isStreaming()) return false;
+      if (session.isStreaming() || dictationCapturing()) return false;
+      if (usesDedicatedDictation() && !config.voiceRecognition?.dictation?.provider && config.voiceRecognition?.provider?.type !== "runtype") return startDictation();
       if (usesSessionVoice(config.voiceRecognition?.provider)) {
         if (session.isVoiceActive() || session.isBargeInActive()) return true;
         if (!open && isPanelToggleable()) setOpenState(true, "system");
@@ -13009,6 +12837,7 @@ export const createAgentExperience = (
       return true;
     },
     stopVoiceRecognition(): boolean {
+      if (dictationCapturing()) return finishDictation();
       if (usesSessionVoice(config.voiceRecognition?.provider)) {
         if (!session.isVoiceActive() && !session.isBargeInActive()) return false;
         const stop = session.isBargeInActive()
@@ -13092,6 +12921,12 @@ export const createAgentExperience = (
       }
       return session.injectComponentDirective(options);
     },
+    updateComponentProps(messageId, props) {
+      return session.updateComponentProps(messageId, props);
+    },
+    removeComponentMessage(messageId) {
+      return session.removeComponentMessage(messageId);
+    },
     /** @deprecated Use injectMessage() instead */
     injectTestMessage(event: AgentWidgetEvent) {
       // Auto-open widget if closed and the panel is toggleable
@@ -13131,11 +12966,12 @@ export const createAgentExperience = (
     },
     openConversation(
       conversationId: string,
-      opts?: { focus?: boolean }
+      opts?: AgentWidgetOpenConversationOptions
     ): Promise<void> {
       return withHistoryShell((shell) =>
         shell.openHistoryConversation(conversationId, {
           focusComposer: opts?.focus === true,
+          busy: opts?.busy,
         })
       );
     },
@@ -13277,8 +13113,8 @@ export const createAgentExperience = (
       // Mirror the in-panel click handler: WebMCP gate bubbles resolve a local
       // Promise the bridge is parked on (no server round-trip and they carry an
       // empty executionId/agentId), so they must NOT hit the server approval
-      // API. Route by the `toolType` marker set in `requestWebMcpApproval`.
-      if (approvalMessage.approval.toolType === "webmcp") {
+      // API. Server-backed approvals retain their execution id and use the API.
+      if (isBrowserLocalApproval(approvalMessage.approval)) {
         session.resolveWebMcpApproval(approvalMessage.id, decision);
         return;
       }
@@ -13358,18 +13194,7 @@ export const createAgentExperience = (
     },
     // Feedback methods (CSAT/NPS)
     showCSATFeedback(options?: Partial<CSATFeedbackOptions>) {
-      // Auto-open widget if closed and the panel is toggleable
-      if (!open && isPanelToggleable()) {
-        setOpenState(true, "system");
-      }
-
-      // Remove any existing feedback forms
-      const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
-      if (existingFeedback) {
-        existingFeedback.remove();
-      }
-
-      const feedbackEl = createCSATFeedback({
+      showFeedback(() => createCSATFeedback({
         onSubmit: async (rating, comment) => {
           if (session.isClientTokenMode()) {
             await session.submitCSATFeedback(rating, comment);
@@ -13378,25 +13203,10 @@ export const createAgentExperience = (
         },
         onDismiss: options?.onDismiss,
         ...options,
-      });
-
-      // Append to messages area at the bottom
-      messagesWrapper.appendChild(feedbackEl);
-      feedbackEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }));
     },
     showNPSFeedback(options?: Partial<NPSFeedbackOptions>) {
-      // Auto-open widget if closed and the panel is toggleable
-      if (!open && isPanelToggleable()) {
-        setOpenState(true, "system");
-      }
-
-      // Remove any existing feedback forms
-      const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
-      if (existingFeedback) {
-        existingFeedback.remove();
-      }
-
-      const feedbackEl = createNPSFeedback({
+      showFeedback(() => createNPSFeedback({
         onSubmit: async (rating, comment) => {
           if (session.isClientTokenMode()) {
             await session.submitNPSFeedback(rating, comment);
@@ -13405,11 +13215,7 @@ export const createAgentExperience = (
         },
         onDismiss: options?.onDismiss,
         ...options,
-      });
-
-      // Append to messages area at the bottom
-      messagesWrapper.appendChild(feedbackEl);
-      feedbackEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }));
     },
     async submitCSATFeedback(rating: number, comment?: string): Promise<void> {
       return session.submitCSATFeedback(rating, comment);
@@ -13418,19 +13224,26 @@ export const createAgentExperience = (
       return session.submitNPSFeedback(rating, comment);
     },
     destroy() {
+      renderReadiness.destroy();
+      slots.destroy();
+      mount.removeEventListener("click", routeLinkClick);
       // Commit the latest coalesced transcript while the live DOM and storage
       // pipeline still exist, then let the normal teardown cancel any work
       // scheduled by that final apply.
-      flushPendingStreamingText();
+      flushPendingMessages();
+      // Cancel session work before the final effect/timer cleanup: cancellation
+      // can render a terminal activity state.
+      destroyCallbacks.forEach((cb) => cb());
       if (toolElapsedTimerId != null) {
         clearInterval(toolElapsedTimerId);
         toolElapsedTimerId = null;
       }
-      activityLifecycle.clear();
+      activityLifecycle?.destroy();
+      loadingLabelLifecycle?.destroy();
       toolExpansionState.clear();
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();
-      destroyCallbacks.forEach((cb) => cb());
+      eventBus.dispose();
       wrapper.remove();
       pillRoot?.remove();
       launcherSurfaceInstance?.destroy();
@@ -13470,105 +13283,33 @@ export const createAgentExperience = (
   // INSTANCE-SCOPED WINDOW EVENTS FOR PROGRAMMATIC CONTROL
   // ============================================================================
   if (typeof window !== "undefined") {
-    const instanceId = mount.getAttribute("data-persona-instance") || mount.id || "persona-" + Math.random().toString(36).slice(2, 8);
-
-    const handleFocusInput = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.focusInput();
-      }
+    type CommandDetail = { instanceId?: string; artifact?: PersonaArtifactManualUpsert; id?: string };
+    const bindCommand = (name: string, run: (detail?: CommandDetail) => unknown) => {
+      const listener = (event: Event) => {
+        const detail = (event as CustomEvent<CommandDetail>).detail;
+        if (!detail?.instanceId || detail.instanceId === instanceId) run(detail);
+      };
+      window.addEventListener(name, listener);
+      destroyCallbacks.push(() => window.removeEventListener(name, listener));
     };
-    window.addEventListener("persona:focusInput", handleFocusInput);
-    destroyCallbacks.push(() => {
-      window.removeEventListener("persona:focusInput", handleFocusInput);
-    });
-
+    bindCommand("persona:focusInput", () => controller.focusInput());
     if (showEventStreamToggle) {
-      const handleShowEvent = (e: Event) => {
-        const detail = (e as CustomEvent).detail;
-        if (!detail?.instanceId || detail.instanceId === instanceId) {
-          controller.showEventStream();
-        }
-      };
-      const handleHideEvent = (e: Event) => {
-        const detail = (e as CustomEvent).detail;
-        if (!detail?.instanceId || detail.instanceId === instanceId) {
-          controller.hideEventStream();
-        }
-      };
-      window.addEventListener("persona:showEventStream", handleShowEvent);
-      window.addEventListener("persona:hideEventStream", handleHideEvent);
-      destroyCallbacks.push(() => {
-        window.removeEventListener("persona:showEventStream", handleShowEvent);
-        window.removeEventListener("persona:hideEventStream", handleHideEvent);
-      });
+      bindCommand("persona:showEventStream", () => controller.showEventStream());
+      bindCommand("persona:hideEventStream", () => controller.hideEventStream());
     }
-
     // Show/hide only. Identity status stays on the instance-scoped controller
     // bus so authentication state is never broadcast page-wide.
-    const handleShowHistory = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        void controller.showHistory();
-      }
-    };
-    const handleHideHistory = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.hideHistory();
-      }
-    };
-    window.addEventListener("persona:showHistory", handleShowHistory);
-    window.addEventListener("persona:hideHistory", handleHideHistory);
-    destroyCallbacks.push(() => {
-      window.removeEventListener("persona:showHistory", handleShowHistory);
-      window.removeEventListener("persona:hideHistory", handleHideHistory);
+    bindCommand("persona:showHistory", () => controller.showHistory());
+    bindCommand("persona:hideHistory", () => controller.hideHistory());
+    bindCommand("persona:showArtifacts", () => controller.showArtifacts());
+    bindCommand("persona:hideArtifacts", () => controller.hideArtifacts());
+    bindCommand("persona:upsertArtifact", (detail) => {
+      if (detail?.artifact) controller.upsertArtifact(detail.artifact);
     });
-
-    const handleShowArtifacts = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.showArtifacts();
-      }
-    };
-    const handleHideArtifacts = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.hideArtifacts();
-      }
-    };
-    const handleUpsertArtifact = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.instanceId && detail.instanceId !== instanceId) return;
-      if (detail?.artifact) {
-        controller.upsertArtifact(detail.artifact as PersonaArtifactManualUpsert);
-      }
-    };
-    const handleSelectArtifact = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.instanceId && detail.instanceId !== instanceId) return;
-      if (typeof detail?.id === "string") {
-        controller.selectArtifact(detail.id);
-      }
-    };
-    const handleClearArtifacts = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.clearArtifacts();
-      }
-    };
-    window.addEventListener("persona:showArtifacts", handleShowArtifacts);
-    window.addEventListener("persona:hideArtifacts", handleHideArtifacts);
-    window.addEventListener("persona:upsertArtifact", handleUpsertArtifact);
-    window.addEventListener("persona:selectArtifact", handleSelectArtifact);
-    window.addEventListener("persona:clearArtifacts", handleClearArtifacts);
-    destroyCallbacks.push(() => {
-      window.removeEventListener("persona:showArtifacts", handleShowArtifacts);
-      window.removeEventListener("persona:hideArtifacts", handleHideArtifacts);
-      window.removeEventListener("persona:upsertArtifact", handleUpsertArtifact);
-      window.removeEventListener("persona:selectArtifact", handleSelectArtifact);
-      window.removeEventListener("persona:clearArtifacts", handleClearArtifacts);
+    bindCommand("persona:selectArtifact", (detail) => {
+      if (typeof detail?.id === "string") controller.selectArtifact(detail.id);
     });
+    bindCommand("persona:clearArtifacts", () => controller.clearArtifacts());
   }
 
   // ============================================================================
@@ -13644,7 +13385,10 @@ export const createAgentExperience = (
         };
 
         // Listen for clear chat event
-        const handleClearChat = () => clearPersistState();
+        const handleClearChat = (event: Event) => {
+          const detail = (event as CustomEvent).detail;
+          if (detail?.instanceId === instanceId) clearPersistState();
+        };
         window.addEventListener('persona:clear-chat', handleClearChat);
 
         // Clean up listener on destroy
@@ -13670,31 +13414,8 @@ export const createAgentExperience = (
   // the panel.
   syncComposerBarPeek();
 
-  // IIFE/CDN lazy path only: the parsers were not ready at mount, so any
-  // messages rendered so far (restored history, eager intro/injected messages)
-  // were escaped to plain text. Once the `markdown-parsers.js` chunk resolves,
-  // bust the message cache and re-render so they pick up real markdown. Bumping
-  // `configVersion` + clearing the cache is required because the message
-  // content is unchanged, so the fingerprint cache would otherwise reuse the
-  // stale escaped wrappers. `onMarkdownParsersReady` no-ops when the parsers are
-  // already loaded (the ESM build, and the CDN build after the first load), so
-  // the `markdownReadyAtInit` guard is redundant — kept only to skip the
-  // subscription bookkeeping on the common eager path.
-  if (!markdownReadyAtInit) {
-    const unsubscribeParsersReady = onMarkdownParsersReady(() => {
-      if (!session) return;
-      configVersion++;
-      messageCache.clear();
-      renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
-    });
-    // Drop the subscription on teardown so a late chunk resolution can't clear
-    // the cache and render into a detached `messagesWrapper`.
-    destroyCallbacks.push(unsubscribeParsersReady);
-  }
-
   // Approval rows rendered while the approval-ui chunk was in flight are empty
-  // stubs; once it lands, rebuild them into real cards. Mirrors the markdown
-  // heal above. (`approvalUiDisposed` guards a post-destroy resolution.)
+  // stubs; once it lands, rebuild them into real cards. (`approvalUiDisposed` guards a post-destroy resolution.)
   onApprovalUiReady = () => {
     if (!session) return;
     configVersion++;
@@ -13702,46 +13423,20 @@ export const createAgentExperience = (
     renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
   };
 
-  // Synchronously restored/seeded transcripts (sync storage adapter,
-  // initialMessages, onStateLoaded) exist before any render or open — a
-  // floating launcher starts closed. Warm the parsers now so the first open
-  // paints markdown instead of flashing escaped text. The async-adapter path
-  // warms in its hydration `.then` above; fresh empty sessions fetch nothing.
-  if (session.getMessages().length > 0) warmMarkdownParsers();
+  // Seeded/restored transcripts may send immediately after reveal.
+  if (session.getMessages().length > 0) warmClientStream();
 
   // Form placeholders rendered while the forms-ui chunk was in flight are the
   // bare divs the postprocessor emitted; once the chunk lands, rebuild them
-  // into real forms. Mirrors the markdown heal above. (`formsUiDisposed`
+  // into real forms. (`formsUiDisposed`
   // guards a post-destroy resolution.)
-  onFormsUiReady = () => {
-    if (!session) return;
-    configVersion++;
-    messageCache.clear();
-    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
-  };
-
-  // Extra-tier icons rendered into the transcript fill their placeholders in
-  // place, but the fingerprint cache + idiomorph CLONE nodes — a cloned
-  // pending placeholder never self-fills. Re-render once the icons-extra
-  // chunk lands so cloned copies rebuild with real data. Chrome surfaces
-  // (header, composer, launcher) keep their original elements and fill in
-  // place without this.
-  const unsubscribeExtraIcons = onExtraIconsReady(() => {
-    if (!session) return;
-    configVersion++;
-    messageCache.clear();
-    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
-  });
-  destroyCallbacks.push(unsubscribeExtraIcons);
+  onFormsUiReady = onApprovalUiReady;
 
   // Artifact directives rendered while the artifacts-ui chunk was in flight
   // are empty placeholders; once it's adopted, rebuild them into real
   // cards/inline blocks and sync the pane. Same heal shape as above.
   const unsubscribeArtifactsUi = onArtifactsUiReady(() => {
-    if (!session) return;
-    configVersion++;
-    messageCache.clear();
-    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+    onApprovalUiReady?.();
     getArtifactsUiSync()?.updateInlineArtifactBlocks(
       messagesWrapper,
       lastArtifactsState.artifacts,
@@ -13751,6 +13446,25 @@ export const createAgentExperience = (
   });
   destroyCallbacks.push(unsubscribeArtifactsUi);
 
+  const preparePresentation = () => {
+    const pending = prepareRendererModules(config);
+    if (!presentationPrepared) pending.push(...(runtimeOptions?.preparation ?? []));
+    if (historyFeatureEnabled() && !historyShell) pending.push(ensureHistoryShell());
+    if (!pending.length && !mount.hasAttribute("data-persona-preparing")) {
+      presentationPrepared = true;
+      return;
+    }
+    renderReadiness.prepare(pending, () => {
+      if (!composerActionRenderer) setupComposerActions();
+      if (!composerModeChips) setupComposerModeChips();
+      ensureActivityUi();
+      getComposerActionsSync()?.ensureComposerActionStyles(mount);
+      getArtifactsUiSync()?.ensureArtifactStyles(mount);
+      onApprovalUiReady?.();
+      presentationPrepared = true;
+    });
+  };
+  preparePresentation();
   return controller;
 };
 

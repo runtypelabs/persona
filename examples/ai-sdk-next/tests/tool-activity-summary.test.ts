@@ -3,7 +3,7 @@ import { renderToolActivitySummary } from "../app/lib/tool-activity-summary";
 
 type Context = Parameters<typeof renderToolActivitySummary>[0];
 const summarize = (toolCalls: Context["toolCalls"], messages: Context["messages"] = []) =>
-  renderToolActivitySummary({ toolCalls, messages, defaultSummary: "Used tools", config: {} });
+  renderToolActivitySummary({ toolCalls, messages, defaultSummary: "Used tools", streaming: false, isLatestGroup: true, isCurrentRunGroup: true, config: {} });
 const call = (name: string, status: "running" | "complete" = "complete") => ({ id: name, name, status });
 
 describe("optional activity summary recipe", () => {

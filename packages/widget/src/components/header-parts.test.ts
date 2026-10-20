@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  applyHeaderControlGlyph,
   createCloseButton,
   createClearChatButton,
   createHeaderIconButton,
@@ -29,6 +30,7 @@ describe("createHeaderIconButton", () => {
     expect(button.type).toBe("button");
     expect(button.getAttribute("aria-label")).toBe("Do it");
     expect(button.style.color).toBe(HEADER_THEME_CSS.actionIconColor);
+    expect(button.querySelector("svg")?.getAttribute("width")).toBe("16px");
   });
 
   it("writes an inline box and drops the glyph class for explicit sizes", () => {
@@ -71,6 +73,7 @@ describe("createHeaderIconButton", () => {
   it("compensates the sparse X glyph in both the class hook and the attributes", () => {
     const token = createHeaderIconButton({ ariaLabel: "Close", iconName: "x" });
     expect(token.button.classList.contains(HEADER_CONTROL_SPARSE_CLASS)).toBe(true);
+    expect(token.button.querySelector("svg")?.getAttribute("width")).toBe("22px");
 
     const explicit = createHeaderIconButton({
       ariaLabel: "Close",
@@ -83,6 +86,24 @@ describe("createHeaderIconButton", () => {
     expect(svg.getAttribute("width")).toBe("14px");
     expect(svg.getAttribute("stroke-width")).toBe("1.05");
     expect(explicit.button.classList.contains(HEADER_CONTROL_SPARSE_CLASS)).toBe(false);
+  });
+
+  it("restores the default glyph after an explicit size without resizing its button", () => {
+    const { button } = createHeaderIconButton({
+      ariaLabel: "Do it",
+      iconName: "refresh-cw",
+      size: "32px",
+      iconSize: "20px",
+    });
+    expect(button.querySelector("svg")?.getAttribute("width")).toBe("20px");
+    expect(button.classList.contains(HEADER_CONTROL_GLYPH_CLASS)).toBe(false);
+
+    applyHeaderControlGlyph(button, "refresh-cw");
+
+    expect(button.querySelector("svg")?.getAttribute("width")).toBe("16px");
+    expect(button.classList.contains(HEADER_CONTROL_GLYPH_CLASS)).toBe(true);
+    expect(button.style.width).toBe("32px");
+    expect(button.style.minHeight).toBe("32px");
   });
 
   it("swaps the transparent default classes for an explicit background", () => {

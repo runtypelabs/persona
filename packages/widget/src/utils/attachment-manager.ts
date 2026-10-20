@@ -5,20 +5,19 @@
  * for the composer attachment feature. Supports both images and documents.
  */
 
-import { createElement, createNode } from "./dom";
-import { File as FileIcon, FileCode, FileSpreadsheet, FileText, X, type IconNode } from "lucide";
-import { renderIconNode } from "./icon-node";
-import { renderLucideIcon } from "./icons";
+import { createAttachmentPreview } from "./attachment-preview";
 import type {
   AgentWidgetAttachmentAdapter,
   AgentWidgetAttachmentsConfig,
-  ContentPart
+  ContentPart,
+  AgentWidgetConfig,
+  AttachmentPreviewRenderContext,
+  AttachmentPreviewRenderHandle
 } from "../types";
 import {
   fileToContentPart,
   validateFile,
   isImageFile,
-  getFileTypeName,
   ALL_SUPPORTED_MIME_TYPES
 } from "./content";
 
@@ -45,6 +44,7 @@ export interface PendingAttachment {
   /** 0 to 1, only while `uploading` and only when the adapter reports it. */
   progress?: number;
   error?: string;
+  lineCount?: number;
 }
 
 /**
@@ -58,6 +58,10 @@ export interface AttachmentManagerConfig {
   onAttachmentsChange?: (attachments: PendingAttachment[]) => void;
   /** Host upload adapter; without one, files convert to base64 in the browser. */
   adapter?: AgentWidgetAttachmentAdapter;
+  preview?: AgentWidgetAttachmentsConfig["preview"];
+  instanceId?: string;
+  widgetConfig?: AgentWidgetConfig;
+  renderAttachmentPreview?: (context: AttachmentPreviewRenderContext) => HTMLElement | AttachmentPreviewRenderHandle | null;
 }
 
 /**
@@ -90,54 +94,50 @@ function generateAttachmentId(): string {
 }
 
 /**
- * Get the appropriate Lucide icon data for a file type. Closed internal set:
- * direct icon-data imports keep this module off the string registry.
- */
-function getFileIconData(mimeType: string): IconNode {
-  if (mimeType === 'application/pdf') return FileText;
-  if (mimeType.startsWith('text/')) return FileText;
-  if (mimeType.includes('word')) return FileText;
-  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return FileSpreadsheet;
-  if (mimeType === 'application/json') return FileCode;
-  return FileIcon;
-}
-
-/**
  * Creates and manages attachments for the composer
  */
 export class AttachmentManager {
-  private attachments: PendingAttachment[] = [];
-  private config: Required<
+  #attachments: PendingAttachment[] = [];
+  #config: Required<
     Pick<AttachmentManagerConfig, "allowedTypes" | "maxFileSize" | "maxFiles">
   > &
     Pick<
       AttachmentManagerConfig,
-      "onFileRejected" | "onAttachmentsChange" | "adapter"
+      "onFileRejected" | "onAttachmentsChange" | "adapter" | "preview" | "widgetConfig" | "instanceId" | "renderAttachmentPreview"
     >;
+  #lineCountsRequested = new Set<string>();
+  #renders = new Map<string, AttachmentPreviewRenderHandle>();
   #previewsContainer: HTMLElement | null = null;
   /** In-flight `adapter.add` per attachment id; aborted on remove/clear/destroy. */
   #pendingAdds = new Map<string, AbortController>();
+  /** The adapter that produced each ready part owns its eventual removal. */
+  #partAdapters = new WeakMap<PendingAttachment, AgentWidgetAttachmentAdapter>();
   #destroyed = false;
+  #releaseOnDestroy = false;
 
   constructor(config: AttachmentManagerConfig = {}) {
-    this.config = {
+    this.#config = {
       allowedTypes: config.allowedTypes ?? DEFAULTS.allowedTypes,
       maxFileSize: config.maxFileSize ?? DEFAULTS.maxFileSize,
       maxFiles: config.maxFiles ?? DEFAULTS.maxFiles,
       onFileRejected: config.onFileRejected,
       onAttachmentsChange: config.onAttachmentsChange,
+      preview: config.preview,
+      widgetConfig: config.widgetConfig,
+      instanceId: config.instanceId,
+      renderAttachmentPreview: config.renderAttachmentPreview,
       adapter: config.adapter
     };
   }
 
   /** True when the host supplied an adapter (tiles then show upload state). */
   #hasCustomAdapter(): boolean {
-    return typeof this.config.adapter?.add === "function";
+    return typeof this.#config.adapter?.add === "function";
   }
 
   #adapter(): AgentWidgetAttachmentAdapter {
     return this.#hasCustomAdapter()
-      ? (this.config.adapter as AgentWidgetAttachmentAdapter)
+      ? (this.#config.adapter as AgentWidgetAttachmentAdapter)
       : BASE64_ADAPTER;
   }
 
@@ -145,6 +145,7 @@ export class AttachmentManager {
    * Set the previews container element
    */
   setPreviewsContainer(container: HTMLElement | null): void {
+    if (this.#previewsContainer !== container) this.#disposePreviews();
     this.#previewsContainer = container;
   }
 
@@ -153,10 +154,11 @@ export class AttachmentManager {
    * rebuild swaps the footer, so pending attachments must follow it.
    */
   remountPreviews(container: HTMLElement | null): void {
+    this.#disposePreviews();
     this.#previewsContainer = container;
     if (container) {
       container.innerHTML = "";
-      for (const attachment of this.attachments) {
+      for (const attachment of this.#attachments) {
         this.#renderPreview(attachment);
       }
     }
@@ -167,36 +169,43 @@ export class AttachmentManager {
    * Update the configuration (e.g., when allowed types change)
    */
   updateConfig(config: Partial<AttachmentManagerConfig>): void {
-    if (config.allowedTypes !== undefined) {
-      this.config.allowedTypes = config.allowedTypes.length > 0 ? config.allowedTypes : DEFAULTS.allowedTypes;
+    if ("allowedTypes" in config) {
+      this.#config.allowedTypes = config.allowedTypes?.length ? config.allowedTypes : DEFAULTS.allowedTypes;
     }
-    if (config.maxFileSize !== undefined) {
-      this.config.maxFileSize = config.maxFileSize;
+    if ("maxFileSize" in config) {
+      this.#config.maxFileSize = config.maxFileSize ?? DEFAULTS.maxFileSize;
     }
-    if (config.maxFiles !== undefined) {
-      this.config.maxFiles = config.maxFiles;
+    if ("maxFiles" in config) {
+      this.#config.maxFiles = config.maxFiles ?? DEFAULTS.maxFiles;
     }
-    if (config.onFileRejected !== undefined) {
-      this.config.onFileRejected = config.onFileRejected;
+    if ("onFileRejected" in config) {
+      this.#config.onFileRejected = config.onFileRejected;
     }
     if (config.onAttachmentsChange !== undefined) {
-      this.config.onAttachmentsChange = config.onAttachmentsChange;
+      this.#config.onAttachmentsChange = config.onAttachmentsChange;
     }
-    if (config.adapter !== undefined) {
-      this.config.adapter = config.adapter;
+    if ("adapter" in config) this.#config.adapter = config.adapter;
+    if ("preview" in config) this.#config.preview = config.preview;
+    if ("widgetConfig" in config) this.#config.widgetConfig = config.widgetConfig;
+    if ("instanceId" in config) this.#config.instanceId = config.instanceId;
+    if ("renderAttachmentPreview" in config && config.renderAttachmentPreview !== this.#config.renderAttachmentPreview) {
+      this.#config.renderAttachmentPreview = config.renderAttachmentPreview;
+      this.remountPreviews(this.#previewsContainer);
+    } else {
+      for (const attachment of this.#attachments) { this.#updatePreview(attachment); void this.#readLineCount(attachment); }
     }
   }
 
   /** Every attachment holds a content part; the send gate reads this. */
   isReady(): boolean {
-    return this.attachments.every((a) => a.status === "ready");
+    return this.#attachments.every((a) => a.status === "ready");
   }
 
   /**
    * Get current attachments
    */
   getAttachments(): PendingAttachment[] {
-    return [...this.attachments];
+    return [...this.#attachments];
   }
 
   /**
@@ -205,7 +214,7 @@ export class AttachmentManager {
    * before it can be reached.
    */
   getContentParts(): ContentPart[] {
-    return this.attachments
+    return this.#attachments
       .map((a) => a.contentPart)
       .filter((part): part is ContentPart => part !== null);
   }
@@ -214,14 +223,14 @@ export class AttachmentManager {
    * Check if there are any attachments
    */
   hasAttachments(): boolean {
-    return this.attachments.length > 0;
+    return this.#attachments.length > 0;
   }
 
   /**
    * Get the number of attachments
    */
   count(): number {
-    return this.attachments.length;
+    return this.#attachments.length;
   }
 
   /**
@@ -241,21 +250,21 @@ export class AttachmentManager {
     const accepted: PendingAttachment[] = [];
     for (const file of files) {
       // Check if we've hit the max files limit
-      if (this.attachments.length >= this.config.maxFiles) {
-        this.config.onFileRejected?.(file, "count");
+      if (this.#attachments.length >= this.#config.maxFiles) {
+        this.#config.onFileRejected?.(file, "count");
         continue;
       }
 
       // Validate the file
       const validation = validateFile(
         file,
-        this.config.allowedTypes,
-        this.config.maxFileSize
+        this.#config.allowedTypes,
+        this.#config.maxFileSize
       );
 
       if (!validation.valid) {
         const reason = validation.error?.includes("type") ? "type" : "size";
-        this.config.onFileRejected?.(file, reason);
+        this.#config.onFileRejected?.(file, reason);
         continue;
       }
 
@@ -268,9 +277,10 @@ export class AttachmentManager {
         status: this.#hasCustomAdapter() ? "uploading" : "processing",
         progress: this.#hasCustomAdapter() ? 0 : undefined
       };
-      this.attachments.push(attachment);
+      this.#attachments.push(attachment);
       this.#renderPreview(attachment);
       accepted.push(attachment);
+      void this.#readLineCount(attachment);
     }
 
     this.#updatePreviewsVisibility();
@@ -287,15 +297,16 @@ export class AttachmentManager {
   async #runAdd(attachment: PendingAttachment): Promise<void> {
     const controller = new AbortController();
     this.#pendingAdds.set(attachment.id, controller);
+    const adapter = this.#adapter();
 
     const stale = (): boolean =>
       this.#destroyed ||
       controller.signal.aborted ||
       this.#pendingAdds.get(attachment.id) !== controller ||
-      !this.attachments.includes(attachment);
+      !this.#attachments.includes(attachment);
 
     try {
-      const part = await this.#adapter().add(attachment.file, {
+      const part = await adapter.add(attachment.file, {
         signal: controller.signal,
         onProgress: (progress) => {
           if (stale() || attachment.status !== "uploading") return;
@@ -304,7 +315,13 @@ export class AttachmentManager {
           this.#notify();
         }
       });
-      if (stale()) return;
+      if (stale()) {
+        // An adapter may finish after ignoring the abort. An abandoned draft
+        // still owns that uploaded part and must release it on disposal.
+        if (this.#destroyed && this.#releaseOnDestroy) this.#releasePart(part, adapter);
+        return;
+      }
+      this.#partAdapters.set(attachment, adapter);
       attachment.contentPart = part;
       attachment.status = "ready";
       attachment.progress = undefined;
@@ -326,7 +343,7 @@ export class AttachmentManager {
 
   /** Retry a failed attachment from its error tile. */
   retryAttachment(id: string): void {
-    const attachment = this.attachments.find((a) => a.id === id);
+    const attachment = this.#attachments.find((a) => a.id === id);
     if (!attachment || attachment.status !== "error" || this.#destroyed) return;
     attachment.status = this.#hasCustomAdapter() ? "uploading" : "processing";
     attachment.progress = this.#hasCustomAdapter() ? 0 : undefined;
@@ -349,10 +366,10 @@ export class AttachmentManager {
    * completed one back to the adapter so remote storage can be released.
    */
   removeAttachment(id: string): void {
-    const index = this.attachments.findIndex((a) => a.id === id);
+    const index = this.#attachments.findIndex((a) => a.id === id);
     if (index === -1) return;
 
-    const attachment = this.attachments[index];
+    const attachment = this.#attachments[index];
     this.#abortAdd(id);
 
     // Revoke the object URL to free memory (only for images)
@@ -361,7 +378,10 @@ export class AttachmentManager {
     }
 
     // Remove from array
-    this.attachments.splice(index, 1);
+    this.#attachments.splice(index, 1);
+
+    this.#disposePreview(id);
+    this.#lineCountsRequested.delete(id);
 
     // Remove from DOM
     const previewEl = this.#previewsContainer?.querySelector(
@@ -372,23 +392,19 @@ export class AttachmentManager {
     }
 
     if (attachment.status === "ready" && attachment.contentPart) {
-      this.#releasePart(attachment.contentPart);
+      this.#releasePart(attachment.contentPart, this.#partAdapters.get(attachment));
     }
 
     this.#updatePreviewsVisibility();
     this.#notify();
   }
 
-  #releasePart(part: ContentPart): void {
-    const remove = this.config.adapter?.remove;
-    if (!remove) return;
+  async #releasePart(
+    part: ContentPart,
+    adapter: AgentWidgetAttachmentAdapter | undefined
+  ): Promise<void> {
     try {
-      const result = remove(part, { signal: new AbortController().signal });
-      if (result && typeof (result as Promise<void>).catch === "function") {
-        void (result as Promise<void>).catch((error: unknown) => {
-          console.error("[AttachmentManager] adapter.remove failed:", error);
-        });
-      }
+      await adapter?.remove?.(part, { signal: new AbortController().signal });
     } catch (error) {
       console.error("[AttachmentManager] adapter.remove failed:", error);
     }
@@ -400,14 +416,16 @@ export class AttachmentManager {
    * have just been handed to the model.
    */
   clearAttachments(): void {
-    for (const attachment of this.attachments) {
+    this.#disposePreviews();
+    this.#lineCountsRequested.clear();
+    for (const attachment of this.#attachments) {
       this.#abortAdd(attachment.id);
       if (attachment.previewUrl) {
         URL.revokeObjectURL(attachment.previewUrl);
       }
     }
 
-    this.attachments = [];
+    this.#attachments = [];
     this.#pendingAdds.clear();
 
     // Clear the previews container
@@ -419,193 +437,94 @@ export class AttachmentManager {
     this.#notify();
   }
 
-  /** Abort every in-flight upload and stop accepting new work. */
-  destroy(): void {
+  /**
+   * Abort every in-flight upload and stop accepting new work. A discarded
+   * conversation draft also releases ready uploads; ordinary widget teardown
+   * keeps the historical behavior of retaining completed parts.
+   */
+  destroy(opts?: { release?: boolean }): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
+    this.#disposePreviews();
+    this.#releaseOnDestroy = opts?.release === true;
     for (const controller of this.#pendingAdds.values()) controller.abort();
     this.#pendingAdds.clear();
-    for (const attachment of this.attachments) {
+    for (const attachment of this.#attachments) {
       if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      if (this.#releaseOnDestroy && attachment.status === "ready" && attachment.contentPart) {
+        this.#releasePart(attachment.contentPart, this.#partAdapters.get(attachment));
+      }
     }
-    this.attachments = [];
+    this.#attachments = [];
     this.#previewsContainer = null;
   }
 
   #notify(): void {
     if (this.#destroyed) return;
-    this.config.onAttachmentsChange?.(this.getAttachments());
+    this.#config.onAttachmentsChange?.(this.getAttachments());
   }
 
-  /**
-   * Render a preview for an attachment (image thumbnail or file icon)
-   */
+  #previewContext(attachment: PendingAttachment): AttachmentPreviewRenderContext {
+    const context: AttachmentPreviewRenderContext = {
+      instanceId: this.#config.instanceId ?? "",
+      state: Object.freeze({ id: attachment.id, name: attachment.file.name,
+        mimeType: attachment.file.type, size: attachment.file.size, status: attachment.status,
+        progress: attachment.progress, error: attachment.error, lineCount: attachment.lineCount,
+        kind: isImageFile(attachment.file) ? "image" : "file", previewUrl: attachment.previewUrl }),
+      config: { ...this.#config.widgetConfig, attachments: { ...this.#config.widgetConfig?.attachments, preview: this.#config.preview } },
+      actions: { remove: () => this.removeAttachment(attachment.id), retry: () => this.retryAttachment(attachment.id) },
+      defaultRenderer: () => createAttachmentPreview(context),
+    };
+    return context;
+  }
+
   #renderPreview(attachment: PendingAttachment): void {
     if (!this.#previewsContainer) return;
-
-    const isImage = isImageFile(attachment.file);
-
-    const previewWrapper = createElement(
-      "div",
-      "persona-attachment-preview persona-relative persona-inline-block"
-    );
-    previewWrapper.setAttribute("data-attachment-id", attachment.id);
-    previewWrapper.style.width = "48px";
-    previewWrapper.style.height = "48px";
-
-    if (isImage && attachment.previewUrl) {
-      // Render image thumbnail
-      const img = createElement("img") as HTMLImageElement;
-      img.src = attachment.previewUrl;
-      img.alt = attachment.file.name;
-      img.className =
-        "persona-w-full persona-h-full persona-object-cover persona-rounded-lg persona-border persona-border-gray-200";
-      img.style.width = "48px";
-      img.style.height = "48px";
-      img.style.objectFit = "cover";
-      img.style.borderRadius = "8px";
-      previewWrapper.appendChild(img);
-    } else {
-      // Render file icon with type label
-      const filePreview = createElement("div");
-      filePreview.style.width = "48px";
-      filePreview.style.height = "48px";
-      filePreview.style.borderRadius = "8px";
-      filePreview.style.backgroundColor = "var(--persona-container, #f3f4f6)";
-      filePreview.style.border = "1px solid var(--persona-border, #e5e7eb)";
-      filePreview.style.display = "flex";
-      filePreview.style.flexDirection = "column";
-      filePreview.style.alignItems = "center";
-      filePreview.style.justifyContent = "center";
-      filePreview.style.gap = "2px";
-      filePreview.style.overflow = "hidden";
-
-      // File icon
-      const iconData = getFileIconData(attachment.file.type);
-      const fileIcon = renderIconNode(iconData, 20, "var(--persona-muted, #6b7280)", 1.5);
-      if (fileIcon) {
-        filePreview.appendChild(fileIcon);
-      }
-
-      // File type label
-      const typeLabel = createElement("span");
-      typeLabel.textContent = getFileTypeName(attachment.file.type, attachment.file.name);
-      typeLabel.style.fontSize = "8px";
-      typeLabel.style.fontWeight = "600";
-      typeLabel.style.color = "var(--persona-muted, #6b7280)";
-      typeLabel.style.textTransform = "uppercase";
-      typeLabel.style.lineHeight = "1";
-      filePreview.appendChild(typeLabel);
-
-      previewWrapper.appendChild(filePreview);
-    }
-
-    // Status layer: progress bar while uploading, error affordance on failure.
-    // Always present so `updatePreview` can mutate it in place.
-    const status = createNode("div", {
-      className: "persona-attachment-status",
-      attrs: { "data-persona-attachment-status": "" },
-    });
-    const progressTrack = createElement("div", "persona-attachment-progress");
-    progressTrack.appendChild(
-      createElement("div", "persona-attachment-progress__bar")
-    );
-    const retryBtn = createNode("button", {
-      className: "persona-attachment-retry",
-      attrs: { type: "button", "aria-label": "Retry upload" },
-    }) as HTMLButtonElement;
-    const retryIcon = renderLucideIcon(
-      "rotate-cw",
-      12,
-      "var(--persona-text-inverse, #ffffff)",
-      2
-    );
-    if (retryIcon) retryBtn.appendChild(retryIcon);
-    else retryBtn.textContent = "↻";
-    retryBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.retryAttachment(attachment.id);
-    });
-    status.append(progressTrack, retryBtn);
-    previewWrapper.appendChild(status);
-
-    // Create remove button. Removal is available in every state, including
-    // while the upload is still in flight.
-    const removeBtn = createElement(
-      "button",
-      "persona-attachment-remove persona-absolute persona-flex persona-items-center persona-justify-center"
-    ) as HTMLButtonElement;
-    removeBtn.type = "button";
-    removeBtn.setAttribute("aria-label", "Remove attachment");
-    removeBtn.style.position = "absolute";
-    removeBtn.style.top = "-4px";
-    // Logical inset so the control stays on the trailing edge under dir=rtl.
-    removeBtn.style.insetInlineEnd = "-4px";
-    removeBtn.style.width = "18px";
-    removeBtn.style.height = "18px";
-    removeBtn.style.borderRadius = "50%";
-    removeBtn.style.backgroundColor = "var(--persona-palette-colors-black-alpha-60, rgba(0, 0, 0, 0.6))";
-    removeBtn.style.border = "none";
-    removeBtn.style.cursor = "pointer";
-    removeBtn.style.display = "flex";
-    removeBtn.style.alignItems = "center";
-    removeBtn.style.justifyContent = "center";
-    removeBtn.style.padding = "0";
-
-    // Add X icon
-    const xIcon = renderIconNode(X, 10, "var(--persona-text-inverse, #ffffff)", 2);
-    if (xIcon) {
-      removeBtn.appendChild(xIcon);
-    } else {
-      removeBtn.textContent = "×";
-      removeBtn.style.color = "var(--persona-text-inverse, #ffffff)";
-      removeBtn.style.fontSize = "14px";
-      removeBtn.style.lineHeight = "1";
-    }
-
-    // Remove on click
-    removeBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.removeAttachment(attachment.id);
-    });
-
-    previewWrapper.appendChild(removeBtn);
-    this.#previewsContainer.appendChild(previewWrapper);
-    this.#applyPreviewState(previewWrapper, attachment);
+    const context = this.#previewContext(attachment);
+    let rendered: HTMLElement | AttachmentPreviewRenderHandle | null = null;
+    try { rendered = this.#config.renderAttachmentPreview?.(context) ?? null; }
+    catch (error) { console.error("[AttachmentManager] preview renderer failed:", error); }
+    rendered ??= context.defaultRenderer();
+    const handle = rendered instanceof HTMLElement ? { element: rendered } : rendered;
+    handle.element.dataset.attachmentId = attachment.id;
+    this.#renders.set(attachment.id, handle);
+    this.#previewsContainer.appendChild(handle.element);
   }
 
-  /** Repaint only the status layer of a live tile; the thumbnail is untouched. */
   #updatePreview(attachment: PendingAttachment): void {
-    const tile = this.#previewsContainer?.querySelector<HTMLElement>(
-      `[data-attachment-id="${attachment.id}"]`
-    );
-    if (!tile) return;
-    this.#applyPreviewState(tile, attachment);
+    try { this.#renders.get(attachment.id)?.update?.(this.#previewContext(attachment)); }
+    catch (error) { console.error("[AttachmentManager] preview update failed:", error); }
   }
 
-  #applyPreviewState(
-    tile: HTMLElement,
-    attachment: PendingAttachment
-  ): void {
-    tile.dataset.status = attachment.status;
-    const busy = attachment.status !== "ready" && attachment.status !== "error";
-    tile.setAttribute("aria-busy", busy ? "true" : "false");
-    tile.title =
-      attachment.status === "error"
-        ? `${attachment.file.name}: ${attachment.error ?? "Upload failed"}`
-        : attachment.file.name;
-    const bar = tile.querySelector<HTMLElement>(
-      ".persona-attachment-progress__bar"
-    );
-    if (bar) {
-      // An adapter that reports no progress shows an indeterminate track
-      // (CSS-driven); a reported value drives the width.
-      const value = attachment.progress;
-      bar.style.width =
-        typeof value === "number" ? `${Math.round(value * 100)}%` : "";
-    }
+  #disposePreview(id: string): void {
+    const handle = this.#renders.get(id);
+    if (!handle) return;
+    this.#renders.delete(id);
+    try { handle.destroy?.(); } catch (error) { console.error("[AttachmentManager] preview cleanup failed:", error); } finally { handle.element.remove(); }
+  }
+
+  #disposePreviews(): void {
+    for (const id of this.#renders.keys()) this.#disposePreview(id);
+  }
+
+  /** Never inspect binary formats; bounded text decoding does not block uploads. */
+  async #readLineCount(attachment: PendingAttachment): Promise<void> {
+    const file = attachment.file;
+    if (this.#lineCountsRequested.has(attachment.id)) return;
+    if (this.#config.preview?.file?.metadata !== "line-count" || file.size > 1024 * 1024 ||
+      !["text/plain", "text/markdown", "text/csv", "application/json"].includes(file.type)) return;
+    this.#lineCountsRequested.add(attachment.id);
+    try {
+      const text = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+      });
+      if (this.#destroyed || !this.#attachments.includes(attachment) || text.includes("\0")) return;
+      attachment.lineCount = text === "" ? 0 : text.split(/\r\n|\r|\n/).length - (/\r?\n$|\r$/.test(text) ? 1 : 0);
+      this.#updatePreview(attachment);
+    } catch { /* Metadata is optional and never changes upload state. */ }
   }
 
   /**
@@ -614,7 +533,7 @@ export class AttachmentManager {
   #updatePreviewsVisibility(): void {
     if (!this.#previewsContainer) return;
     this.#previewsContainer.style.display =
-      this.attachments.length > 0 ? "flex" : "none";
+      this.#attachments.length > 0 ? "flex" : "none";
   }
 
   /**
@@ -633,6 +552,7 @@ export class AttachmentManager {
       maxFiles: config?.maxFiles,
       onFileRejected: config?.onFileRejected,
       onAttachmentsChange,
+      preview: config?.preview,
       adapter: config?.adapter
     });
   }

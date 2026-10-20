@@ -37,6 +37,16 @@ const GITHUB_MARK_SVG = `<svg viewBox="0 0 16 16" width="16" height="16" fill="c
 
 export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
   {
+    slug: "bento",
+    href: "/bento/",
+    title: "Bento Slides Copilot",
+    blurb: "A real slide editor you can talk to: GPT-Live voice, 23 WebMCP tools, hands-free presenting.",
+    badge: "Voice",
+    tier: "start",
+    tags: ["agent", "voice", "webmcp", "presentation"],
+    modes: ["inline"],
+  },
+  {
     slug: "analytics-agent-demo",
     href: "/analytics-agent-demo.html",
     title: "Talk to Your Data",
@@ -300,6 +310,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     gallery: false,
   },
   {
+    slug: "phone-agent-demo",
+    href: "/phone-agent-demo.html",
+    title: "Phone Agent",
+    blurb: "Low-latency voice receptionist on PhoneLLM Mini, calling a live weather tool.",
+    tier: "start",
+    tags: ["agent", "voice", "tool-use"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "dynamic-form-fields",
     href: "/dynamic-form-fields.html",
     title: "Form Field Reference",
@@ -343,6 +362,34 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     tier: "reference",
     tags: ["streaming", "scroll", "a11y", "dev"],
     modes: ["launcher"],
+  },
+  {
+    slug: "assistant-composers",
+    href: "/assistant-composers.html",
+    title: "Assistant Config Lab",
+    blurb: "Five assistant-inspired configurations. Compare public theme and composer options, with documented fidelity gaps and local sample replies.",
+    badge: "Preview",
+    tier: "reference",
+    tags: ["v5", "theming", "embedding"],
+    modes: ["inline"],
+  },
+  {
+    slug: "embedded-host",
+    href: "/embedded-host.html",
+    title: "Embedded Host APIs",
+    blurb: "Two independent assistants with host controls, instance events, managed slots, and interactive component lifecycles. Runs locally.",
+    tier: "reference",
+    tags: ["embedding", "events", "components"],
+    modes: ["inline"],
+  },
+  {
+    slug: "style-migration",
+    href: "/style-migration.html",
+    title: "Style Migration Lab",
+    blurb: "Real legacy/theme comparisons and a mounted widget with live migration, resets, light/dark themes, and narrow layouts.",
+    tier: "reference",
+    tags: ["theming", "migration", "v5", "welcome"],
+    modes: ["inline"],
   },
   {
     slug: "v5-preview",

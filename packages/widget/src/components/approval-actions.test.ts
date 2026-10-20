@@ -104,7 +104,10 @@ describe("built-in approval — flag off (default)", () => {
     expect(approve).toHaveBeenCalledTimes(1);
     expect(approve.mock.calls[0]).toEqual([]); // no { remember } argument
     click(el?.querySelector('[data-action="deny"]'));
-    expect(deny).toHaveBeenCalledTimes(1);
+    expect(deny).not.toHaveBeenCalled();
+    const denied = render();
+    click(denied.el?.querySelector('[data-action="deny"]'));
+    expect(denied.deny).toHaveBeenCalledTimes(1);
   });
 
   it("renders the title from the tool name and an optional source", () => {
@@ -345,4 +348,148 @@ describe("built-in approval — resolved states", () => {
     const { el } = render({}, makeMessage({ status: "timeout" }));
     expect(el?.textContent).toContain("timed out");
   });
+});
+
+describe("V5 approval cards", () => {
+  const config: AgentWidgetConfig = { future: { v5Defaults: true }, approval: { enableAlwaysAllow: true } };
+
+  it("keeps one-time permission primary and remembered permission in the menu", () => {
+    const { el, approve } = render(config);
+    expect(el?.querySelector('[data-action="always"]')).toBeNull();
+    expect(el?.querySelector('[data-action="allow"]')?.textContent).toBe("Allow once");
+    click(el?.querySelector('[data-action="allow"]'));
+    expect(approve).toHaveBeenCalledWith();
+  });
+
+  it("does not consume host-page keys or modified Enter", () => {
+    const { el, approve, deny } = render(config);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    const allow = el?.querySelector<HTMLButtonElement>('[data-action="allow"]');
+    allow?.focus();
+    allow?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }));
+    expect(approve).not.toHaveBeenCalled();
+    expect(deny).not.toHaveBeenCalled();
+    allow?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(approve).toHaveBeenCalledWith();
+  });
+
+  it("only resolves the instance owning the event", () => {
+    const first = render(config);
+    const second = render(config);
+    first.el?.querySelector('[data-action="deny"]')?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(first.deny).toHaveBeenCalledOnce();
+    expect(second.deny).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [undefined, "Allowed"],
+    ["running", "Allowed · running"],
+    ["completed", "Completed"],
+    ["failed", "Failed"],
+  ] as const)("renders compact approved rows with reliable execution status %s", (status, label) => {
+    const { plugin } = makePlugin();
+    const el = plugin.renderApproval!({
+      message: makeMessage({ status: "approved" }), config,
+      approve: vi.fn(), deny: vi.fn(), defaultRenderer: () => document.createElement("div"),
+      execution: status ? { toolCallId: "tool-1", status } : undefined,
+    });
+    expect(el?.querySelector(".persona-approval-status")?.textContent).toBe(label);
+    expect(el?.querySelector(".persona-approval-actions")).toBeNull();
+    expect(el?.classList.contains("persona-approval-row")).toBe(true);
+    expect(el?.querySelector(".persona-approval-head")?.textContent).toContain(`Search docs · ${label}`);
+    expect(el?.querySelector(".persona-approval-logo")).toBeNull();
+    expect(el?.textContent).not.toContain("wants to use");
+  });
+
+  it("renders denied rows without interpreting execution", () => {
+    const { el } = render(config, makeMessage({ status: "denied" }));
+    expect(el?.querySelector(".persona-approval-status")?.textContent).toBe("Denied");
+  });
+
+  it("honors explicit V4 presentation and shortcut overrides", () => {
+    const { el } = render({ ...config, approval: { resolvedDisplay: "trace", keyboardShortcuts: false } }, makeMessage({ status: "approved" }));
+    expect(el?.style.display).toBe("none");
+  });
+});
+
+it("accepts only one decision while a pending card remains mounted", () => {
+  const { el, approve, deny } = render({ future: { v5Defaults: true } });
+  const allow = el?.querySelector('[data-action="allow"]');
+  allow?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  click(allow);
+  click(el?.querySelector('[data-action="deny"]'));
+  expect(approve).toHaveBeenCalledOnce();
+  expect(deny).not.toHaveBeenCalled();
+});
+
+it("keeps timeout details usable without decision controls", () => {
+  const { el } = render({ future: { v5Defaults: true } }, makeMessage({ status: "timeout", parameters: { query: "docs" } }));
+  expect(el?.querySelector(".persona-approval-status")?.textContent).toBe("Timed out");
+  expect(el?.querySelector(".persona-approval-actions")).toBeNull();
+  click(el?.querySelector('[data-action="toggle-params"]'));
+  expect(el?.querySelector<HTMLElement>('[data-role="params"]')?.hidden).toBe(false);
+});
+
+
+it.each([false, true])("preserves the explicit retained-card option with V5=%s", (v5Defaults) => {
+  const { el } = render({ future: { v5Defaults }, approval: { resolvedDisplay: "status-line" } }, makeMessage({ status: "approved" }));
+  expect(el?.classList.contains("persona-approval-card")).toBe(true);
+  expect(el?.querySelector(".persona-approval-status")?.textContent).toBe("Allowed");
+  expect(el?.querySelector(".persona-approval-actions")).toBeNull();
+});
+
+it("retains decision context and per-instance disclosure through resolved rerenders", () => {
+  const config: AgentWidgetConfig = { future: { v5Defaults: true } };
+  const message = makeMessage({ reason: "Read public docs", parameters: { query: "theme" } });
+  const first = createBuiltInApprovalPlugin();
+  const second = createBuiltInApprovalPlugin();
+  teardowns.push(first.teardown, second.teardown);
+  const pending = renderWith(first.plugin, config, message).el;
+  click(pending?.querySelector('[data-action="toggle-params"]'));
+  const resolved = { ...message, approval: { ...message.approval!, status: "approved" as const } };
+  const firstRow = renderWith(first.plugin, config, resolved).el;
+  const otherRow = renderWith(second.plugin, config, resolved).el;
+  const firstDetails = firstRow?.querySelector<HTMLElement>('[data-role="params"]');
+  expect(firstDetails?.hidden).toBe(false);
+  expect(firstDetails?.textContent).toContain("Read public docs");
+  expect(firstDetails?.textContent).toContain('"query": "theme"');
+  expect(otherRow?.querySelector<HTMLElement>('[data-role="params"]')?.hidden).toBe(true);
+  const head = firstRow?.querySelector<HTMLElement>('[data-action="toggle-params"]');
+  expect(head?.getAttribute("aria-controls")).toBe(firstDetails?.id);
+  expect(head?.getAttribute("aria-controls")).not.toBe(otherRow?.querySelector("[aria-controls]")?.getAttribute("aria-controls"));
+  expect(head?.getAttribute("aria-label")).toBe("Search docs · Allowed. Hide details");
+  click(head);
+  expect(firstRow?.querySelector<HTMLElement>(".persona-approval-body")?.hidden).toBe(true);
+  expect(renderWith(first.plugin, config, resolved).el?.querySelector<HTMLElement>('[data-role="params"]')?.hidden).toBe(true);
+});
+
+it("makes reason-only resolved rows inspectable and honors hidden details", () => {
+  const message = makeMessage({ status: "denied", description: undefined, reason: "Check inventory" });
+  const { el } = render({ approval: { resolvedDisplay: "row" } }, message);
+  click(el?.querySelector('[data-action="toggle-params"]'));
+  expect(el?.querySelector<HTMLElement>('[data-role="params"]')?.hidden).toBe(false);
+  expect(el?.querySelector('[data-role="params"]')?.textContent).toContain("Agent's stated reason: Check inventory");
+  const hidden = render({ approval: { resolvedDisplay: "row", detailsDisplay: "hidden" } }, message).el;
+  expect(hidden?.querySelector("button")).toBeNull();
+  expect(hidden?.querySelector('[data-role="params"]')).toBeNull();
+  expect(hidden?.textContent).toBe("Search docs · Denied");
+});
+
+
+it("honors initially expanded compact rows without enabling decision shortcuts", () => {
+  const { el, approve, deny } = render({ future: { v5Defaults: true }, approval: { detailsDisplay: "expanded" } }, makeMessage({ status: "approved" }));
+  expect(el?.querySelector<HTMLElement>('[data-role="params"]')?.hidden).toBe(false);
+  expect(el?.querySelector<HTMLElement>(".persona-approval-body")?.hidden).toBe(false);
+  el?.querySelector("button")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  expect(approve).not.toHaveBeenCalled();
+  expect(deny).not.toHaveBeenCalled();
+});
+
+it("interrupted approvals explain expiry without action controls", () => {
+  const { el } = render({}, makeMessage({ status: "timeout", interrupted: true }));
+  expect(el?.textContent).toContain("approval expired");
+  expect(el?.textContent).toContain("chat restarted");
+  expect(el?.textContent).toContain("fresh proposal");
+  expect(el?.querySelector("button, [data-action]")).toBeNull();
 });

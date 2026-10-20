@@ -26,6 +26,7 @@ import type {
   InlineCommandResult,
 } from "../context-mentions-entry";
 import type { MentionSubmitBundle } from "./context-mention-manager";
+import type { ContextMentionDraft } from "./context-mention-manager";
 import type {
   AgentWidgetConfig,
   AgentWidgetContextMentionRef,
@@ -52,6 +53,10 @@ export interface ContextMentionOrchestrator {
   hasMentions: () => boolean;
   /** Refs of the currently tracked chips; read-only (nothing is detached). */
   getMentionRefs: () => AgentWidgetContextMentionRef[];
+  captureDraft: () => ContextMentionDraft;
+  restoreDraft: (draft: ContextMentionDraft) => void;
+  /** Inline document edits must preserve atomic mention tokens. */
+  getInlineInput: () => ComposerInputCapability | null;
   collectForSubmit: () =>
     | { refs: AgentWidgetContextMentionRef[]; finalize: () => Promise<MentionSubmitBundle> }
     | null;
@@ -165,7 +170,9 @@ export function createContextMentionOrchestrator(opts: {
     if (typeof window === "undefined") return;
     try {
       window.dispatchEvent(
-        new CustomEvent(`persona:mention:${event}`, { detail })
+        new CustomEvent(`persona:mention:${event}`, {
+          detail: { ...(detail as Record<string, unknown>), instanceId: opts.textarea.closest<HTMLElement>("[data-persona-instance]")?.dataset.personaInstance },
+        })
       );
     } catch {
       /* CustomEvent unavailable — ignore */
@@ -370,6 +377,9 @@ export function createContextMentionOrchestrator(opts: {
     isMenuOpen: () => engine?.isMenuOpen() ?? false,
     hasMentions: () => engine?.hasMentions() ?? false,
     getMentionRefs: () => engine?.getMentionRefs() ?? [],
+    captureDraft: () => engine?.captureDraft() ?? [],
+    restoreDraft: (draft) => engine?.restoreDraft(draft),
+    getInlineInput: () => inlineInput,
     collectForSubmit: () => engine?.collectForSubmit() ?? null,
     takeInlineCommand: async (text) => {
       if (!looksLikeCommand(text)) return null;

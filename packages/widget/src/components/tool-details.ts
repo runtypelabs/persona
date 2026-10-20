@@ -1,7 +1,7 @@
 import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { createNode } from "../utils/dom";
-import { formatUnknownValue } from "../utils/formatting";
-import { renderLucideIcon } from "../utils/icons";
+import { formatUnknownValue } from "../utils/format-value";
+import { renderLucideIcon, resolveToolStyles } from "./activity-deps";
 
 const isEmptyRequest = (value: unknown): boolean => {
   if (value == null) return true;
@@ -25,7 +25,7 @@ const isStructured = (value: unknown): boolean => {
 export function appendToolDetails(content: HTMLElement, message: AgentWidgetMessage, config: AgentWidgetConfig): void {
   const tool = message.toolCall;
   if (!tool) return;
-  const styles = config.toolCall ?? {};
+  const styles = resolveToolStyles(config);
   const section = (label: "Request" | "Response", value: unknown) => {
     const block = createNode("section", {
       className: "persona-tool-detail",
@@ -43,10 +43,9 @@ export function appendToolDetails(content: HTMLElement, message: AgentWidgetMess
     });
     const text = formatUnknownValue(value);
     const pre = createNode("pre", {
-      className: `persona-tool-detail-value${isStructured(value) ? " persona-tool-detail-code" : ""}`,
+      className: `persona-activity-scroll persona-tool-detail-value${isStructured(value) ? " persona-tool-detail-code" : ""}`,
       text,
-      attrs: text.length > 420 || text.split("\n").length > 7
-        ? { tabindex: "0", "aria-label": `${label} content` } : {},
+      attrs: { tabindex: "0", role: "region", "aria-label": `${label} content` },
       style: { color: styles.codeBlockTextColor ?? styles.contentTextColor },
     });
     const copy = createNode("button", {

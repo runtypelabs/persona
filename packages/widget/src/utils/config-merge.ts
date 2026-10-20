@@ -1,6 +1,7 @@
 import { DEFAULTS_V5, mergeWithDefaults } from "../defaults";
 import type { AgentWidgetConfig, AgentWidgetConfigPatch } from "../types";
 import { setPanelAliasProvenance, updatePanelAliasProvenance } from "./panel-config";
+import { setStyleProvenance, updateStyleProvenance } from "./style-provenance";
 
 import { omitInheritedDefaults, setDefaultProvenance, updateDefaultProvenance, versionedDefaultPaths } from "./defaults-provenance";
 
@@ -11,6 +12,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 // Dotted paths whose plain-object value replaces wholesale instead of recursing.
+// Documented in docs/configuration.md (mounted-update replacement table).
 // - user-defined key maps: recursive merge would strand stale keys from the old value
 //   (headers, targetProviders, components, artifact display scopes,
 //   features.streamAnimation.plugins).
@@ -71,6 +73,7 @@ export function mergeConfigUpdate(
   const merged = setDefaultProvenance(omitInheritedDefaults(
     mergePatch(previousConfig, patch, "") as Partial<AgentWidgetConfig>, paths, explicit
   ), explicit);
+  setStyleProvenance(merged, updateStyleProvenance(previousConfig, patch));
   return setPanelAliasProvenance(
     mergeWithDefaults(merged) as AgentWidgetConfig,
     updatePanelAliasProvenance(previousConfig, patch)

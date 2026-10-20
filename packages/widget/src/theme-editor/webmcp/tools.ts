@@ -9,8 +9,8 @@
  * coverage. Every mutation returns a compact summary + contrast warnings.
  */
 
-import { createTheme } from '../../utils/theme';
-import { applyFeaturePreferences } from '../../utils/feature-preferences';
+import { createTheme } from '../../utils/tokens';
+
 import type { AgentWidgetConfig } from '../../types';
 import type { PersonaTheme } from '../../types/theme';
 import { generateColorScale, SHADE_KEYS } from '../color-utils';
@@ -125,8 +125,8 @@ const LAUNCHER_POSITIONS = ['bottom-right', 'bottom-left', 'top-right', 'top-lef
 const MESSAGE_STYLES = ['bubble', 'flat', 'minimal'];
 
 const COPY_PATHS: Record<string, string> = {
-  title: 'copy.welcomeTitle',
-  subtitle: 'copy.welcomeSubtitle',
+  title: 'welcome.title',
+  subtitle: 'welcome.subtitle',
   placeholder: 'copy.inputPlaceholder',
   sendLabel: 'copy.sendButtonLabel',
 };
@@ -178,7 +178,7 @@ export function createThemeEditorTools(
     name: 'get_theme_overview',
     title: 'Get current theme & what is editable',
     description:
-      'Read theme summary, presets, and editable levers. Call before editing.',
+      'Read theme summary, presets, and real editable paths. Call before editing. Fresh authoring starts with brand, then theme.semantic, then theme.components; defaults remain V4 unless future.v5Defaults is true.',
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: 'object',
@@ -195,6 +195,7 @@ export function createThemeEditorTools(
       const { verbosity } = rec(input);
       const payload: Record<string, unknown> = {
         summary: buildSummary(state),
+        authoringGuide: 'docs/configuration.md: content in welcome/copy/suggestions, behavior in features/providers, geometry in layout/launcher. Idle send uses theme.components.composer.send; stop uses theme.components.button.stop. Explicit legacy styles win until cleared; modern welcome wins over legacy copy. Backups/resolved previews include defaults; unknown-origin imports must stay explicit.',
         availableRoles: ALL_ROLES.map((r) => ({
           role: roleKey(r.roleId),
           helper: r.helper,
@@ -227,6 +228,7 @@ export function createThemeEditorTools(
           path: f.path,
           type: f.type,
           label: f.label,
+          description: f.description,
           options: f.options?.map((o) => o.value),
         }));
       }
@@ -460,13 +462,16 @@ export function createThemeEditorTools(
       required: ['presetId'],
       additionalProperties: false,
     },
-    execute(input) {
+    async execute(input) {
       const { presetId } = rec(input);
       const preset = getThemeEditorPreset(String(presetId ?? ''));
       if (!preset) {
         const valid = THEME_EDITOR_PRESETS.map((p) => p.id).join(', ');
         throw new Error(`Unknown preset "${presetId}". Valid presets: ${valid}.`);
       }
+      const preferences = preset.behavior
+        ? await import("@runtypelabs/persona/preferences-runtime")
+        : null;
       const theme = createTheme(preset.theme, { validate: false });
       const config: AgentWidgetConfig = { ...state.getConfig() };
       if (preset.darkTheme) {
@@ -474,8 +479,8 @@ export function createThemeEditorTools(
         config.colorScheme = 'auto';
       }
       if (preset.toolCall) config.toolCall = preset.toolCall;
-      if (preset.behavior) {
-        config.features = applyFeaturePreferences(config.features, [preset.behavior]);
+      if (preset.behavior && preferences) {
+        config.features = preferences.applyFeaturePreferences(config.features, [preset.behavior]);
       }
       state.setFullConfig(config, theme);
       const warnings = quickContrastWarnings(state, ['body', 'assistant-message'], 'light');
@@ -597,7 +602,7 @@ export function createThemeEditorTools(
           throw new Error('`suggestions` must be an array of strings.');
         }
         const chips = args.suggestions.filter((s): s is string => typeof s === 'string');
-        writes['suggestionChips'] = chips;
+        writes['suggestions.starters.items'] = chips;
         applied.suggestions = chips;
       }
 
@@ -613,7 +618,7 @@ export function createThemeEditorTools(
     name: 'set_theme_fields',
     title: 'Set theme fields by id or path (advanced)',
     description:
-      'Advanced escape hatch: set fields by id or raw dot-path. Values are validated when metadata exists.',
+      'Advanced escape hatch: set fields by id or real dot-path, e.g. theme.components.composer.send.foreground, theme.components.button.stop.background, welcome.variant, suggestions.starters.placement. Metadata supplies value kinds; border colors and full CSS border shorthands differ. Clearing legacy overrides is a separate migration operation.',
     inputSchema: {
       type: 'object',
       properties: {

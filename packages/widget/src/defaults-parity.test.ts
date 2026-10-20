@@ -95,10 +95,11 @@ const resolveComputedTokens = (value: DefaultsSnapshot): DefaultsSnapshot => ({
         let resolved = declaration;
         while (!seen.has(resolved)) {
           seen.add(resolved);
-          const reference = /^var\((--[\w-]+)(?:,[\s\S]*)?\)$/.exec(resolved);
+          const reference = /^var\((--[\w-]+)(?:,\s*([\s\S]*))?\)$/.exec(resolved);
           const token = reference && value.themeCssVariables[reference[1]];
-          if (typeof token !== "string") break;
-          resolved = token;
+          if (typeof token === "string") resolved = token;
+          else if (reference?.[2] !== undefined) resolved = reference[2];
+          else break;
         }
         return [property, resolved.replace(/([\d.]+)rem\b/g, (_, amount) => `${Number(amount) * 16}px`)];
       })),
@@ -112,15 +113,21 @@ describe("4.22.0 defaults parity (flag off)", () => {
     // config and token values deterministic across Node versions.
     const actual = JSON.parse(JSON.stringify(snapshot(false)));
     const baseline = JSON.parse(readFileSync(fixturePath, "utf8"));
-    // Phase 3 activates formerly unused tokens. Lock their old and new values
-    // explicitly instead of rewriting the historical fixture or ignoring keys.
+    // Lock intentional default changes and newly activated tokens to their old
+    // and new values instead of rewriting the historical fixture or ignoring keys.
     const activatedTokens: Record<string, [string, string]> = {
+      "--persona-header-control-icon-size": ["20px", "16px"],
       "--persona-components-header-padding": ["1rem", "20px 24px"],
       "--persona-components-panel-height": ["600px", "min(640px, max(200px, calc(100vh - 64px)))"],
       "--persona-components-panel-maxHeight": ["calc(100vh - 80px)", "none"],
       "--persona-components-panel-maxWidth": ["440px", "none"],
     };
     const addedTokens: Record<string, string> = {
+      "--persona-panel-background": baseline.themeCssVariables["--persona-surface"],
+      "--persona-transcript-background": baseline.themeCssVariables["--persona-container"],
+      "--persona-transcript-top-fade-background": baseline.themeCssVariables["--persona-container"],
+      "--persona-composer-footer-background": baseline.themeCssVariables["--persona-surface"],
+      "--persona-composer-footer-padding": "1rem 1.5rem",
       "--persona-components-header-minimalPadding": "16px 24px",
       "--persona-components-message-gap": "12px",
       "--persona-cw-container": "#f9fafb",
@@ -153,6 +160,30 @@ describe("4.22.0 defaults parity (flag off)", () => {
       expect(actual.themeCssVariables[key], key).toBe(value);
       delete resolvedActual.themeCssVariables[key];
     }
+    // Deliberately lengthen hover timing in both V4 and V5 without rewriting
+    // the historical fixture. Keyboard focus and the scan window are unchanged.
+    expect(baseline.mergedDefaultConfig.tooltip.delayMs).toBe(200);
+    expect(actual.mergedDefaultConfig.tooltip.delayMs).toBe(400);
+    resolvedActual.mergedDefaultConfig.tooltip = {
+      ...resolvedActual.mergedDefaultConfig.tooltip,
+      delayMs: baseline.mergedDefaultConfig.tooltip.delayMs,
+    };
+    // Additive controls preserve V4 appearance; keep the historical fixture intact.
+    const tools = resolvedActual.mergedDefaultConfig.features!.toolCallDisplay!;
+    expect(baseline.mergedDefaultConfig.features.toolCallDisplay).not.toHaveProperty("groupBoundary");
+    expect(tools.groupBoundary).toBe("adjacent");
+    delete tools.groupBoundary;
+    const scroll = resolvedActual.mergedDefaultConfig.features!.scrollToBottom!;
+    expect(baseline.mergedDefaultConfig.features.scrollToBottom).not.toHaveProperty("streamingIndicator");
+    expect(baseline.mergedDefaultConfig.features.scrollToBottom).not.toHaveProperty("transition");
+    expect(scroll.streamingIndicator).toBe("arrow");
+    expect(scroll.transition).toBe("none");
+    expect(scroll.scrollBehavior).toBe("instant");
+    expect(scroll.scrollDurationMs).toBe(220);
+    delete scroll.streamingIndicator;
+    delete scroll.transition;
+    delete scroll.scrollBehavior;
+    delete scroll.scrollDurationMs;
     expect(resolvedActual).toEqual(resolvedBaseline);
   });
 });

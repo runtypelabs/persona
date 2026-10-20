@@ -2,10 +2,10 @@
 
 import type { AgentWidgetConfig } from '../types';
 import type { DeepPartial, PersonaTheme } from '../types/theme';
-import { createTheme } from '../utils/theme';
+import { createTheme } from '../utils/tokens';
 import { resolveDefaults, resolveDefaultsVersion } from '../defaults';
 import { deepMerge } from '../utils/deep-merge';
-import type { ConfiguratorSnapshot, ConfigChangeListener } from './types';
+import type { AuthoredConfigExport, ConfiguratorSnapshot, ConfigChangeListener } from './types';
 
 // ─── Dot-path utilities ─────────────────────────────────────────
 
@@ -57,6 +57,26 @@ function unsetByPath(obj: unknown, path: string): unknown {
   return result;
 }
 
+/** Copy data containers without serializing functions or private origin symbols. */
+function copyInputs<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(copyInputs) as T;
+  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, copyInputs(entry)])) as T;
+  }
+  return value;
+}
+
+/** History must distinguish callbacks and explicit undefined from absent inputs. */
+function sameInputs(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  if (Array.isArray(left) !== Array.isArray(right)) return false;
+  const a = Object.keys(left);
+  const b = Object.keys(right);
+  return a.length === b.length && a.every(key => Object.prototype.hasOwnProperty.call(right, key) &&
+    sameInputs((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]));
+}
+
 // ─── ThemeEditorState ───────────────────────────────────────────
 
 export class ThemeEditorState {
@@ -69,7 +89,8 @@ export class ThemeEditorState {
   #authoredConfig: Partial<AgentWidgetConfig> = {};
   #authoredTheme: DeepPartial<PersonaTheme> = {};
   #mergeDefaults = true;
-  #snapshotIntent = new WeakMap<ConfiguratorSnapshot, { config: Partial<AgentWidgetConfig>; theme: DeepPartial<PersonaTheme> }>();
+  private origin: AuthoredConfigExport['origin'] = 'authored';
+  #snapshotIntent = new WeakMap<ConfiguratorSnapshot, { config: Partial<AgentWidgetConfig>; theme: DeepPartial<PersonaTheme>; origin: AuthoredConfigExport['origin'] }>();
 
   constructor(
     initialTheme?: DeepPartial<PersonaTheme>,
@@ -78,14 +99,15 @@ export class ThemeEditorState {
   ) {
     const mergeDefaults = options?.mergeDefaults ?? true;
     this.#mergeDefaults = mergeDefaults;
-    this.#authoredConfig = { ...initialConfig };
-    this.#authoredTheme = initialTheme ?? {};
+    this.#authoredConfig = copyInputs({ ...initialConfig });
+    delete this.#authoredConfig.theme;
+    this.#authoredTheme = copyInputs(initialTheme ?? initialConfig?.theme ?? {});
     const defaults = resolveDefaults(initialConfig);
     this.config = (mergeDefaults
       ? { ...defaults, ...initialConfig }
       : (initialConfig ?? defaults)
     ) as AgentWidgetConfig;
-    this.theme = createTheme(initialTheme, {
+    this.theme = createTheme(this.#authoredTheme, {
       validate: false,
       future: this.config.future,
     });
@@ -214,7 +236,7 @@ export class ThemeEditorState {
 
   /** Replace the entire theme */
   setTheme(theme: PersonaTheme): void {
-    this.#authoredTheme = theme;
+    this.#authoredTheme = copyInputs(theme);
     this.theme = theme;
     this.#syncThemeIntoConfig();
     this.#recordHistory();
@@ -223,11 +245,13 @@ export class ThemeEditorState {
 
   /** Replace the entire config (for preset loading) */
   setFullConfig(config: AgentWidgetConfig, theme?: PersonaTheme): void {
-    this.#authoredConfig = { ...config };
-    if (theme) this.#authoredTheme = theme;
+    this.origin = 'imported';
+    this.#authoredConfig = copyInputs({ ...config });
+    delete this.#authoredConfig.theme;
+    if (theme || config.theme) this.#authoredTheme = copyInputs(theme ?? config.theme ?? {});
     this.config = { ...config };
-    if (theme) {
-      this.theme = theme;
+    if (theme || config.theme) {
+      this.theme = createTheme(theme ?? config.theme, { validate: false, future: config.future });
     }
     this.#syncThemeIntoConfig();
     this.#recordHistory();
@@ -242,23 +266,27 @@ export class ThemeEditorState {
 
     const parsed = snapshot as Partial<ConfiguratorSnapshot> & { config?: unknown; theme?: unknown };
 
+    this.origin = 'imported';
     if ('config' in parsed || 'theme' in parsed || parsed.version === 2) {
       const config = (parsed.config ?? this.config) as AgentWidgetConfig;
-      const theme = createTheme(
-        (parsed.theme ?? this.theme) as DeepPartial<PersonaTheme>,
-        { validate: false, future: config.future }
-      );
-      this.setFullConfig(config, theme);
-      return;
+      this.#authoredConfig = copyInputs({ ...config });
+      delete this.#authoredConfig.theme;
+      this.#authoredTheme = copyInputs((parsed.theme ?? config.theme ?? this.#authoredTheme) as DeepPartial<PersonaTheme>);
+      this.config = { ...config };
+      this.theme = createTheme(this.#authoredTheme, { validate: false, future: config.future });
+    } else {
+      this.#authoredTheme = copyInputs(parsed as DeepPartial<PersonaTheme>);
+      this.theme = createTheme(this.#authoredTheme, { validate: false, future: this.config.future });
     }
-
-    const theme = createTheme(parsed as DeepPartial<PersonaTheme>, { validate: false, future: this.config.future });
-    this.setTheme(theme);
+    this.#syncThemeIntoConfig();
+    this.#recordHistory();
+    this.#notifyListeners();
   }
 
   /** Reset to defaults */
   resetToDefaults(): void {
     const future = this.config.future;
+    this.origin = 'authored';
     this.#authoredConfig = future ? { future } : {};
     this.#authoredTheme = {};
     this.config = {
@@ -305,6 +333,22 @@ export class ThemeEditorState {
 
   // ─── Snapshots ──────────────────────────────────────────────
 
+  /**
+   * Export supplied inputs and subsequent edits as fresh configuration, without
+   * materializing defaults or guessing intent by comparing values. Imported
+   * snapshots/full configs remain explicit. Functions stay in memory; this is
+   * not a JSON serializer or a live reset patch. Snapshot v2 is unchanged.
+   */
+  exportAuthoredConfig(): AuthoredConfigExport {
+    return {
+      origin: this.origin,
+      config: copyInputs({
+        ...this.#authoredConfig,
+        ...(Object.keys(this.#authoredTheme).length ? { theme: this.#authoredTheme } : {}),
+      }),
+    };
+  }
+
   exportSnapshot(): ConfiguratorSnapshot {
     return {
       version: 2,
@@ -327,11 +371,11 @@ export class ThemeEditorState {
 
   #recordIntent(path: string, value: unknown, remove = false): void {
     const write = (target: object, key: string) => remove || value === undefined
-      ? unsetByPath(target, key) : setByPath(target, key, value);
+      ? unsetByPath(target, key) : setByPath(target, key, copyInputs(value));
     if (path.startsWith('theme.')) {
       this.#authoredTheme = write(this.#authoredTheme, path.slice(6)) as DeepPartial<PersonaTheme>;
     } else if (path === 'theme') {
-      this.#authoredTheme = (value ?? {}) as DeepPartial<PersonaTheme>;
+      this.#authoredTheme = copyInputs((value ?? {}) as DeepPartial<PersonaTheme>);
     } else {
       this.#authoredConfig = write(this.#authoredConfig, path) as Partial<AgentWidgetConfig>;
     }
@@ -365,7 +409,7 @@ export class ThemeEditorState {
 
   #pushHistorySnapshot(snapshot: ConfiguratorSnapshot, replaceCurrent = false): void {
     if (this.#suppressHistory) return;
-    this.#snapshotIntent.set(snapshot, { config: this.#authoredConfig, theme: this.#authoredTheme });
+    this.#snapshotIntent.set(snapshot, { config: this.#authoredConfig, theme: this.#authoredTheme, origin: this.origin });
 
     const serialized = JSON.stringify(snapshot);
     const currentSerialized =
@@ -381,7 +425,7 @@ export class ThemeEditorState {
     const currentIntent = this.#historyIndex >= 0
       ? this.#snapshotIntent.get(this.#history[this.#historyIndex]) : undefined;
     if (serialized === currentSerialized &&
-      JSON.stringify(this.#snapshotIntent.get(snapshot)) === JSON.stringify(currentIntent)) return;
+      sameInputs(this.#snapshotIntent.get(snapshot), currentIntent)) return;
 
     this.#history = this.#history.slice(0, this.#historyIndex + 1);
     this.#history.push(snapshot);
@@ -391,6 +435,7 @@ export class ThemeEditorState {
   #restoreSnapshot(snapshot: ConfiguratorSnapshot): void {
     this.#suppressHistory = true;
     const intent = this.#snapshotIntent.get(snapshot);
+    this.origin = intent?.origin ?? 'imported';
     this.#authoredConfig = intent?.config ?? snapshot.config as Partial<AgentWidgetConfig>;
     this.#authoredTheme = intent?.theme ?? snapshot.theme;
     this.config = snapshot.config as unknown as AgentWidgetConfig;

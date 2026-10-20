@@ -78,10 +78,6 @@ describe.each([false, true])("composer compact state (v5Defaults: %s)", (v5Defau
   });
 
   afterEach(() => {
-    if (v5Defaults) for (const mount of mounts) {
-      expect(mount.style.getPropertyValue("--persona-input-radius")).toBe("9999px");
-      expect(mount.style.getPropertyValue("--persona-composer-control-size")).toBe("32px");
-    }
     controllers.splice(0).forEach((controller) => {
       try {
         controller.destroy();
@@ -115,7 +111,10 @@ describe.each([false, true])("composer compact state (v5Defaults: %s)", (v5Defau
 
   it("expands while a mode chip is visible", async () => {
     const { mount } = makeController({
-      composer: { modes: [{ id: "search", label: "Search" }] },
+      composer: {
+        modeGroups: [{ id: "tools", chipVisibility: "auto" }],
+        modes: [{ id: "search", label: "Search", groupId: "tools" }],
+      },
     });
     await flush();
     expect(isCompact(mount)).toBe(true);

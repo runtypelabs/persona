@@ -372,6 +372,7 @@ type Harness = {
   notices: SessionHistoryNotice[];
   states: SessionHistoryState[];
   meta: Record<string, unknown>;
+  metadataWrites: Array<[string, string | null]>;
   failNext: (operation: FailableOperation) => void;
   backend: Backend | null;
   store: VisitorStore | null;
@@ -382,14 +383,17 @@ type Harness = {
 
 function createMetadataSeam() {
   const meta: Record<string, unknown> = {};
+  const metadataWrites: Array<[string, string | null]> = [];
   const read = (key: string): string | null =>
     typeof meta[key] === 'string' ? (meta[key] as string) : null;
   const write = (key: string, value: string | null) => {
+    metadataWrites.push([key, value]);
     if (value === null) delete meta[key];
     else meta[key] = value;
   };
   return {
     meta,
+    metadataWrites,
     config: {
       getStoredSessionId: () => read('sessionId'),
       setStoredSessionId: (value: string) => write('sessionId', value),
@@ -485,6 +489,7 @@ async function createRuntypeHarness(): Promise<Harness> {
     ...shell,
     provider,
     meta: seam.meta,
+    metadataWrites: seam.metadataWrites,
     backend,
     store,
     rawInternals,
@@ -526,6 +531,7 @@ async function createDemoHarness(): Promise<Harness> {
     ...shell,
     provider,
     meta: seam.meta,
+    metadataWrites: seam.metadataWrites,
     backend: null,
     store: null,
     rawInternals: internals,
@@ -754,6 +760,49 @@ describe('session history (Runtype transport specifics)', () => {
     await harness.session.startNewConversation();
 
     expect(harness.messages().map((m) => m.content)).toEqual([WELCOME]);
+  });
+
+  it('keeps the committed session id stored through new-conversation cleanup and callbacks', async () => {
+    await harness.session.openConversation('conv-a');
+    const previousSessionId = harness.meta.sessionId;
+    harness.metadataWrites.length = 0;
+    const onCommitted = vi.fn(() => {
+      const current = harness.session.getClient().getClientSession();
+      expect(current?.sessionId).toBeTruthy();
+      expect(harness.meta.sessionId).toBe(current?.sessionId);
+      expect(harness.meta.conversationId).toBe(current?.conversationId);
+    });
+
+    await harness.session.startNewConversation({ onCommitted });
+
+    const replacement = harness.session.getClient().getClientSession();
+    expect(replacement?.sessionId).not.toBe(previousSessionId);
+    expect(harness.meta.sessionId).toBe(replacement?.sessionId);
+    expect(harness.metadataWrites.filter(([key]) => key === 'sessionId'))
+      .toEqual([['sessionId', replacement?.sessionId]]);
+    expect(onCommitted).toHaveBeenCalledOnce();
+  });
+
+  it('leaves stored ids and transcript intact when a new-conversation commit fails', async () => {
+    await harness.session.openConversation('conv-a');
+    const before = { ...harness.meta };
+    const messages = harness.messages();
+    harness.metadataWrites.length = 0;
+    const prepareStartNew = harness.provider.prepareStartNew.bind(harness.provider);
+    vi.spyOn(harness.provider, 'prepareStartNew').mockImplementation(async opts => ({
+      ...await prepareStartNew(opts),
+      commit: async () => { throw new Error('commit unavailable'); },
+    }));
+    const onCommitted = vi.fn();
+
+    await expect(harness.session.startNewConversation({ onCommitted }))
+      .rejects.toThrow('commit unavailable');
+
+    expect(harness.meta).toEqual(before);
+    expect(harness.metadataWrites).toEqual([]);
+    expect(harness.messages()).toEqual(messages);
+    expect(harness.session.getActiveConversationId()).toBe('conv-a');
+    expect(onCommitted).not.toHaveBeenCalled();
   });
 
   it('bypasses the client session cache when preparing an open', async () => {

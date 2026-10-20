@@ -1,3 +1,4 @@
+import { getLoadingLabelRuntimeSync } from "../loading-label-runtime-loader";
 import { createElement, createNode } from "../utils/dom";
 import {
   AgentWidgetMessage,
@@ -44,15 +45,15 @@ export const getDefaultStopReasonNoticeCopy = (
 ): string | null => {
   switch (stopReason) {
     case "max_tool_calls":
-      return "Stopped after calling a tool. Send a follow-up to continue.";
+      // The tool budget may be exhausted before a final, tool-free iteration.
+      // This message-level reason does not establish that the whole run stopped.
+      return "Tool limit reached.";
     case "length":
-      return "Response cut off as max tokens reached. Ask for more to continue.";
+      return "Output token limit reached.";
     case "content_filter":
       return "The provider filtered this response.";
     case "error":
       return "Something went wrong generating this response.";
-    case "end_turn":
-    case "unknown":
     default:
       return null;
   }
@@ -74,9 +75,7 @@ export const resolveStopReasonNoticeText = (
   // for those keys are intentionally ignored.
   if (fallback === null) return null;
   const override = overrides?.[stopReason];
-  const text = override !== undefined ? override : fallback;
-  if (!text) return null;
-  return text;
+  return (override === undefined ? fallback : override) || null;
 };
 
 /**
@@ -86,17 +85,12 @@ export const resolveStopReasonNoticeText = (
 const createStopReasonNotice = (
   stopReason: StopReasonKind,
   text: string
-): HTMLElement => {
-  const notice = createElement(
-    "div",
-    "persona-message-stop-reason persona-text-xs persona-mt-2 persona-italic"
-  );
-  notice.setAttribute("data-stop-reason", stopReason);
-  notice.setAttribute("role", "note");
-  notice.style.opacity = "0.75";
-  notice.textContent = text;
-  return notice;
-};
+): HTMLElement => createNode("div", {
+  className: "persona-message-stop-reason persona-text-xs persona-mt-2 persona-italic",
+  attrs: { "data-stop-reason": stopReason, role: "note" },
+  style: { opacity: "0.75" },
+  text,
+});
 
 /** Validate that an image src URL uses a safe scheme (blocks javascript: and SVG data URIs). */
 export const isSafeImageSrc = (src: string): boolean => {
@@ -514,35 +508,45 @@ const createMessageFilePreviews = (
 };
 
 // Create typing indicator element
-export const createTypingIndicator = (): HTMLElement => {
-  const container = document.createElement("div");
-  container.className = "persona-flex persona-items-center persona-space-x-1 persona-h-5 persona-mt-2";
+export const createTypingIndicator = (config: import("../types").AgentWidgetConfig = {}): HTMLElement => {
+  const loading = config.loadingIndicator;
+  const v5 = config.future?.v5Defaults;
+  const variant = loading?.variant ?? (v5 ? "label" : "dots");
+  if (variant === "label") {
+    const label = createNode("div", { className: "persona-loading-label", attrs: { role: "status" } });
+    if (v5 && loading?.showBubble !== true) {
+      label.classList.add("persona-activity-row", "persona-activity-header");
+    }
+    const display = config.features?.toolCallDisplay;
+    const visibility = loading?.iconVisibility ?? (display?.grouped !== false && (display?.groupedMode ?? "collapsible") === "collapsible"
+      ? display?.groupIconVisibility : undefined) ?? display?.iconVisibility;
+    const name = loading?.iconName ?? "loader-circle";
+    if (visibility !== "never" && (v5 || loading?.iconName || loading?.iconVisibility)) {
+      const icon = renderLucideIcon(name, 16);
+      if (icon) {
+        icon.classList.add("persona-activity-icon");
+        icon.dataset.loadingIconAnimation = loading?.iconAnimation ?? (name === "loader-circle" ? "spin" : "none");
+        label.appendChild(icon);
+      }
+    }
+    const text = createNode("span", { text: loading?.label ?? "Thinking…" });
+    label.appendChild(text);
+    getLoadingLabelRuntimeSync()?.applyLoadingLabel(text, config, "waiting");
+    return label;
+  }
+  const container = createElement("div", "persona-flex persona-items-center persona-space-x-1 persona-h-5 persona-mt-2");
 
-  const dot1 = document.createElement("div");
-  dot1.className = "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
-  dot1.style.backgroundColor = "currentColor";
-  dot1.style.opacity = "0.4";
-  dot1.style.animationDelay = "0ms";
+  for (let index = 0; index < 3; index++) {
+    const dot = createElement("div", "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5");
+    dot.style.backgroundColor = "currentColor";
+    dot.style.opacity = "0.4";
+    dot.style.animationDelay = `${index * 250}ms`;
+    container.appendChild(dot);
+  }
 
-  const dot2 = document.createElement("div");
-  dot2.className = "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
-  dot2.style.backgroundColor = "currentColor";
-  dot2.style.opacity = "0.4";
-  dot2.style.animationDelay = "250ms";
-
-  const dot3 = document.createElement("div");
-  dot3.className = "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
-  dot3.style.backgroundColor = "currentColor";
-  dot3.style.opacity = "0.4";
-  dot3.style.animationDelay = "500ms";
-
-  const srOnly = document.createElement("span");
-  srOnly.className = "persona-sr-only";
+  const srOnly = createElement("span", "persona-sr-only");
   srOnly.textContent = "Loading";
 
-  container.appendChild(dot1);
-  container.appendChild(dot2);
-  container.appendChild(dot3);
   container.appendChild(srOnly);
 
   return container;
@@ -562,19 +566,10 @@ export const renderLoadingIndicatorWithFallback = (
     config: widgetConfig ?? ({} as import("../types").AgentWidgetConfig),
     streaming: true,
     location,
-    defaultRenderer: createTypingIndicator
+    defaultRenderer: () => createTypingIndicator(widgetConfig)
   };
 
-  // Try custom renderer first
-  if (customRenderer) {
-    const result = customRenderer(context);
-    if (result !== null) {
-      return result;
-    }
-  }
-
-  // Fall back to default
-  return createTypingIndicator();
+  return customRenderer?.(context) ?? createTypingIndicator(widgetConfig);
 };
 
 /**
@@ -818,7 +813,8 @@ export const createMessageActions = (
   actionsConfig: AgentWidgetMessageActionsConfig,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _callbacks?: MessageActionCallbacks,
-  eligibility?: MessageActionEligibility
+  eligibility?: MessageActionEligibility,
+  adaptiveVisibility = false
 ): HTMLElement => {
   const showCopy = actionsConfig.showCopy ?? true;
   const showUpvote = actionsConfig.showUpvote ?? false;
@@ -850,7 +846,8 @@ export const createMessageActions = (
     return empty;
   }
 
-  const visibility = actionsConfig.visibility ?? "hover";
+  const visibility = actionsConfig.visibility ??
+    (adaptiveVisibility && eligibility?.isLastAssistant ? "always" : "hover");
   const align = actionsConfig.align ?? "right";
   const layout = actionsConfig.layout ?? "pill-inside";
 
@@ -871,7 +868,7 @@ export const createMessageActions = (
     "div",
     `persona-message-actions persona-flex persona-items-center persona-gap-1 persona-mt-2 ${alignClass} ${layoutClass} ${
       visibility === "hover" ? "persona-message-actions-hover" : ""
-    }`
+    } ${adaptiveVisibility ? "persona-message-actions-adaptive" : ""}`
   );
   // Set id for idiomorph matching (prevents recreation on morph)
   container.id = `actions-${message.id}`;
@@ -955,6 +952,8 @@ export const createMessageActions = (
  * made by the transcript (which sees the whole list), not per bubble.
  */
 export type MessageActionEligibility = {
+  /** Latest ordinary assistant message, including an in-flight response. */
+  isLastAssistant?: boolean;
   canRegenerate?: boolean;
   canEdit?: boolean;
   canQuote?: boolean;
@@ -1324,7 +1323,8 @@ export const createStandardBubble = (
           { ...actionsConfig, showCopy: false, showUpvote: false, showDownvote: false, showReadAloud: false }
         : actionsConfig,
       actionCallbacks,
-      eligibility
+      eligibility,
+      options?.widgetConfig?.future?.v5Defaults === true && actionsConfig.visibility === undefined
     );
     bubble.appendChild(actions);
   }

@@ -1,3 +1,4 @@
+import { focusComposerOnBackgroundClick } from "../utils/composer-focus";
 import { createElement, createNode } from "../utils/dom";
 import { ChevronUp, MessageSquare } from "lucide";
 import { renderIconNode } from "../utils/icon-node";
@@ -136,17 +137,8 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
   if (mic) rightActions.append(mic.wrapper);
   rightActions.append(send.wrapper);
 
-  composerForm.addEventListener("click", (e) => {
-    if (
-      e.target !== send.button &&
-      e.target !== send.wrapper &&
-      e.target !== mic?.button &&
-      e.target !== mic?.wrapper &&
-      e.target !== attachment?.button &&
-      e.target !== attachment?.wrapper
-    ) {
-      textarea.focus();
-    }
+  composerForm.addEventListener("click", (event) => {
+    focusComposerOnBackgroundClick(composerForm, event);
   });
 
   if (attachment) composerForm.append(attachment.input);

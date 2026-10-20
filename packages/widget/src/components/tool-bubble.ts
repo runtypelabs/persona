@@ -1,12 +1,19 @@
+import { resolveToolStyles, applyToolPadding } from "./activity-deps";
 import { appendToolDetails } from "./tool-details";
-import { applyActivityRow, activityDisplay, activityVariant } from "./activity-row";
+import { applyActivityRow, activityDisplay, activityLayout } from "./activity-row";
 import { createElement, createNode } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
-import { DEFAULT_TOOL_CALL_DISPLAY } from "../defaults";
-import { formatUnknownValue, describeToolTitle, resolveToolHeaderText, computeToolElapsed, parseFormattedTemplate } from "../utils/formatting";
-import { appendCharSpans } from "../utils/tool-loading-animation";
+import { DEFAULT_TOOL_CALL_DISPLAY } from "../utils/activity-display-defaults";
+import { describeToolTitle, resolveToolHeaderText, computeToolElapsed } from "../utils/activity-formatting";
+import { applyLoadingLabel } from "../utils/loading-label-deps";
+import { formatUnknownValue } from "../utils/format-value";
+import { currentToolLabel, needsAttention, resolveActionTitle } from "../utils/turn-activity-display";
+import { toolActivityLabel } from "../utils/tool-activity-summary";
 import {
+  activityPreview,
   appendHeaderToggle,
+  appendActivitySummary,
+  renderActivityTitle,
   applyExpansionDisplay,
   createCollapsedPreviewSection,
   createExpandableBubbleShell,
@@ -24,69 +31,36 @@ const toolChevronColor = (
   toolCallConfig.headerTextColor ||
   (activityRow ? "currentColor" : "var(--persona-primary, #171717)");
 
-const getToolPreviewText = (message: AgentWidgetMessage, maxLines: number): string => {
-  const tool = message.toolCall;
-  if (!tool) return "";
+const getToolPreviewText = (tool: NonNullable<AgentWidgetMessage["toolCall"]>, maxLines: number): string => {
 
   const chunkText = (tool.chunks ?? []).join("").trim();
-  if (chunkText) {
-    const lines = chunkText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .slice(-maxLines);
-    return lines.join("\n");
-  }
+  if (chunkText) return activityPreview(chunkText, -maxLines);
 
-  const argsText = formatUnknownValue(tool.args).trim();
-  if (!argsText) return "";
-
-  return argsText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, maxLines)
-    .join("\n");
-};
-
-/**
- * Apply the colors for a tool-bubble code block (Arguments / Activity / Result).
- *
- * Defaults are theme-aware tokens so the blocks stay readable in dark themes.
- */
-const applyToolCodeBlockColors = (
-  pre: HTMLElement,
-  toolCallConfig: NonNullable<AgentWidgetConfig["toolCall"]>
-): void => {
-  pre.style.backgroundColor =
-    toolCallConfig.codeBlockBackgroundColor ?? "var(--persona-container, #f3f4f6)";
-  pre.style.borderColor =
-    toolCallConfig.codeBlockBorderColor ?? "var(--persona-border, #e5e7eb)";
-  pre.style.color = toolCallConfig.codeBlockTextColor ?? "var(--persona-text, #171717)";
+  return activityPreview(formatUnknownValue(tool.args), 0, maxLines);
 };
 
 const getToolSummaryText = (
   message: AgentWidgetMessage,
+  tool: NonNullable<AgentWidgetMessage["toolCall"]>,
   config?: AgentWidgetConfig
 ): { summary: string; previewText: string; isActive: boolean } => {
-  const tool = message.toolCall;
   const toolDisplayConfig = config?.features?.toolCallDisplay;
+  const row = activityLayout(config, "tool") === "row";
   const collapsedMode = toolDisplayConfig?.collapsedMode ?? DEFAULT_TOOL_CALL_DISPLAY.collapsedMode;
-  const previewText = tool?.success === false
+  const previewText = tool.success === false
     ? tool.error || "Tool failed"
     : getToolPreviewText(
-        message,
+        tool,
         toolDisplayConfig?.previewMaxLines ?? DEFAULT_TOOL_CALL_DISPLAY.previewMaxLines
       );
-  const defaultSummary = tool ? (activityVariant(config, "tool") === "row" ? `${tool.status === "complete" ? "Used" : "Using"} ${tool.name?.trim() || "tool"}` : describeToolTitle(tool)) : "";
-
-  if (!tool) {
-    return { summary: defaultSummary, previewText, isActive: false };
-  }
+  const defaultSummary = row && collapsedMode === "tool-call" ? toolActivityLabel({ ...tool, approvalStatus: message.approval?.status ?? tool.approvalStatus })
+    : tool.interrupted ? `${tool.name?.trim() || "Tool"} · Interrupted`
+    : (config?.future?.v5Defaults || row ? `${tool.status === "complete" ? "Used" : "Using"} ${tool.name?.trim() || "tool"}` : describeToolTitle(tool));
 
   const isActive = tool.status !== "complete";
   const toolCallConfig = config?.toolCall ?? {};
-  let summary = defaultSummary;
+  let summary = isActive && row && collapsedMode === "tool-call" && !needsAttention(message)
+    ? currentToolLabel(message, config) : defaultSummary;
   if (collapsedMode === "tool-name") {
     summary = tool.name?.trim() || defaultSummary;
   } else if (collapsedMode === "tool-preview" && previewText) {
@@ -96,12 +70,18 @@ const getToolSummaryText = (
   // Apply text templates if configured
   if (isActive && toolCallConfig.activeTextTemplate) {
     summary = resolveToolHeaderText(tool, toolCallConfig.activeTextTemplate, summary);
-  } else if (!isActive && toolCallConfig.completeTextTemplate) {
+  } else if (!isActive && !tool.interrupted && toolCallConfig.completeTextTemplate) {
     summary = resolveToolHeaderText(tool, toolCallConfig.completeTextTemplate, summary);
   }
 
-  if (tool.success === false) summary += " · Failed";
+  if (tool.interrupted) {
+    if (!summary.includes(" · Interrupted")) summary += " · Interrupted";
+  } else if (tool.success === false) summary += " · Failed";
   else if (tool.superseded) summary += " · Approved, ran again below";
+  const approval = message.approval?.status ?? tool.approvalStatus;
+  if (approval === "pending") summary += " · Waiting for approval";
+  else if (approval === "denied") summary += " · Approval denied";
+  else if (approval === "timeout") summary += " · Approval expired";
   return { summary, previewText, isActive };
 };
 
@@ -114,8 +94,8 @@ export const updateToolBubbleUI = (
 ): void => {
   updateExpandableBubbleUI(messageId, bubble, {
     stateSet: expansionState,
-    previewKind: "tool",
-    iconColor: toolChevronColor(config?.toolCall ?? {}, bubble.classList.contains("persona-activity-row")),
+    config,
+    iconColor: toolChevronColor(resolveToolStyles(config), bubble.classList.contains("persona-activity-row")),
   });
 };
 
@@ -124,9 +104,9 @@ export const createToolBubble = (
   config?: AgentWidgetConfig,
   expansionState = new Set<string>()
 ): HTMLElement => {
-  config = activityDisplay(config, "tool");
+  config = activityDisplay(config, "tool", message);
   const tool = message.toolCall;
-  const toolCallConfig = config?.toolCall ?? {};
+  const toolCallConfig = resolveToolStyles(config);
 
   const bubble = createExpandableBubbleShell("persona-tool-bubble", message.id);
 
@@ -152,10 +132,10 @@ export const createToolBubble = (
     return applyActivityRow(bubble, message, config, "tool");
   }
 
-  const toolDisplayConfig = config?.features?.toolCallDisplay ?? {};
+  const toolDisplayConfig = config.features!.toolCallDisplay!;
   const expandable = toolDisplayConfig.expandable ?? DEFAULT_TOOL_CALL_DISPLAY.expandable;
   const expanded = expandable && expansionState.has(message.id);
-  const { summary, previewText, isActive } = getToolSummaryText(message, config);
+  const { summary, previewText, isActive } = getToolSummaryText(message, tool, config);
 
   const header = createExpandableHeader({ expandable, expanded, bubbleType: "tool" });
 
@@ -163,14 +143,7 @@ export const createToolBubble = (
   if (toolCallConfig.headerBackgroundColor) {
     header.style.backgroundColor = toolCallConfig.headerBackgroundColor;
   }
-  if (toolCallConfig.headerPaddingX) {
-    header.style.paddingLeft = toolCallConfig.headerPaddingX;
-    header.style.paddingRight = toolCallConfig.headerPaddingX;
-  }
-  if (toolCallConfig.headerPaddingY) {
-    header.style.paddingTop = toolCallConfig.headerPaddingY;
-    header.style.paddingBottom = toolCallConfig.headerPaddingY;
-  }
+  applyToolPadding(header, config, "header");
 
   const headerContent = createElement("div", "persona-flex persona-flex-col persona-text-left");
   const title = createElement("span", "persona-text-xs persona-text-persona-primary");
@@ -184,7 +157,7 @@ export const createToolBubble = (
   // Helper: build a <span data-tool-elapsed> that the global timer in ui.ts updates
   const createElapsedSpan = (): HTMLElement => {
     const span = createElement("span", "");
-    span.setAttribute("data-tool-elapsed", startedAt);
+    if (isActive) span.setAttribute("data-tool-elapsed", startedAt);
     span.textContent = computeToolElapsed(tool);
     return span;
   };
@@ -193,108 +166,29 @@ export const createToolBubble = (
     message,
     toolCall: tool,
     defaultSummary: summary,
+    actionTitle: resolveActionTitle(message, config),
     previewText,
     collapsedMode: toolDisplayConfig.collapsedMode ?? DEFAULT_TOOL_CALL_DISPLAY.collapsedMode,
     isActive,
-    config: config ?? {},
+    config,
     elapsed: computeToolElapsed(tool),
     createElapsedElement: createElapsedSpan,
   });
-  if (typeof customSummary === "string" && customSummary.trim()) {
-    title.textContent = customSummary;
-    headerContent.appendChild(title);
-  } else if (customSummary instanceof HTMLElement) {
-    headerContent.appendChild(customSummary);
-  } else {
-    title.textContent = summary;
-    headerContent.appendChild(title);
-  }
+  const skipCustomElement = appendActivitySummary(headerContent, title, customSummary, summary);
 
   // Apply loading animation when tool is active and no custom HTMLElement was provided
-  const loadingAnimation = toolDisplayConfig.loadingAnimation ?? DEFAULT_TOOL_CALL_DISPLAY.loadingAnimation;
   const activeTemplate = toolCallConfig.activeTextTemplate;
-  const completeTemplate = toolCallConfig.completeTextTemplate;
+  const completeTemplate = tool.interrupted ? undefined : toolCallConfig.completeTextTemplate;
   const currentTemplate = isActive ? activeTemplate : completeTemplate;
-  const skipCustomElement = customSummary instanceof HTMLElement;
-
-  /**
-   * Renders a template into the title element, handling:
-   * - Inline formatting markers: **bold**, *italic*, ~dim~
-   * - {duration} as a live-updating elapsed span (active) or static text (complete)
-   * - Character-by-character animation wrapping when `animated` is true
-   */
-  const renderFormattedTitle = (template: string, animated: boolean) => {
-    title.textContent = "";
-    const toolName = tool.name?.trim() || "tool";
-    const segments = parseFormattedTemplate(template, toolName);
-    let charIndex = 0;
-
-    for (const seg of segments) {
-      // Determine parent: wrap in a styled span if formatting is present
-      const parent = seg.styles.length > 0
-        ? (() => {
-            const w = createElement("span", seg.styles.map(s => `persona-tool-text-${s}`).join(" "));
-            title.appendChild(w);
-            return w;
-          })()
-        : title;
-
-      if (seg.isDuration && isActive) {
-        // Live-updating elapsed span for active tools
-        parent.appendChild(createElapsedSpan());
-      } else {
-        // Static text (or resolved duration for completed tools)
-        const text = seg.isDuration ? computeToolElapsed(tool) : seg.text;
-        if (animated) {
-          charIndex = appendCharSpans(parent, text, charIndex);
-        } else {
-          parent.appendChild(document.createTextNode(text));
-        }
-      }
-    }
-  };
 
   if (!skipCustomElement) {
-    if (isActive && loadingAnimation !== "none") {
-      const animDuration = toolCallConfig.loadingAnimationDuration ?? 2000;
-      title.setAttribute("data-preserve-animation", "true");
-
-      if (loadingAnimation === "pulse") {
-        title.classList.add("persona-tool-loading-pulse");
-        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
-        if (currentTemplate) {
-          renderFormattedTitle(currentTemplate, false);
-        }
-      } else {
-        // Character-by-character modes: shimmer, shimmer-color, rainbow
-        title.classList.add(`persona-tool-loading-${loadingAnimation}`);
-        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
-
-        if (loadingAnimation === "shimmer-color") {
-          if (toolCallConfig.loadingAnimationColor) {
-            title.style.setProperty("--persona-tool-anim-color", toolCallConfig.loadingAnimationColor);
-          }
-          if (toolCallConfig.loadingAnimationSecondaryColor) {
-            title.style.setProperty("--persona-tool-anim-secondary-color", toolCallConfig.loadingAnimationSecondaryColor);
-          }
-        }
-
-        if (currentTemplate) {
-          renderFormattedTitle(currentTemplate, true);
-        } else {
-          const text = title.textContent || summary;
-          title.textContent = "";
-          appendCharSpans(title, text, 0);
-        }
-      }
-    } else if (currentTemplate) {
-      // Template with formatting but no animation (or completed tool)
-      renderFormattedTitle(currentTemplate, false);
-    }
+    if (currentTemplate) renderActivityTitle(title, currentTemplate, tool.name?.trim() || "tool", isActive, computeToolElapsed(tool), createElapsedSpan);
+    if (isActive) applyLoadingLabel(title, config, "tool");
   }
 
-  const iconColor = toolChevronColor(toolCallConfig, activityVariant(config, "tool") === "row");
+  const iconColor = toolChevronColor(toolCallConfig, activityLayout(config, "tool") === "row");
   const toggleIcon = appendHeaderToggle(header, headerContent, {
+    config,
     expandable,
     expanded,
     iconColor,
@@ -315,7 +209,7 @@ export const createToolBubble = (
         toolCall: tool,
         defaultPreview: previewText,
         isActive,
-        config: config ?? {},
+        config,
       }),
   });
 
@@ -337,75 +231,36 @@ export const createToolBubble = (
   if (toolCallConfig.contentTextColor) {
     content.style.color = toolCallConfig.contentTextColor;
   }
-  if (toolCallConfig.contentPaddingX) {
-    content.style.paddingLeft = toolCallConfig.contentPaddingX;
-    content.style.paddingRight = toolCallConfig.contentPaddingX;
-  }
-  if (toolCallConfig.contentPaddingY) {
-    content.style.paddingTop = toolCallConfig.contentPaddingY;
-    content.style.paddingBottom = toolCallConfig.contentPaddingY;
-  }
+  applyToolPadding(content, config, "content");
 
-  if (config.future?.v5Defaults === true) {
-    appendToolDetails(content, message, config);
-  } else {
-    // Add tool name at the top of content
-    if (tool.name) {
-      const toolName = createElement("div", "persona-text-xs persona-text-persona-muted persona-italic");
-      if (toolCallConfig.contentTextColor) {
-        toolName.style.color = toolCallConfig.contentTextColor;
-      } else if (toolCallConfig.headerTextColor) {
-        toolName.style.color = toolCallConfig.headerTextColor;
-      }
-      toolName.textContent = tool.name;
-      content.appendChild(toolName);
-    }
-
-    if (tool.args !== undefined) {
-      const argsBlock = createElement("div", "persona-space-y-1");
-      const argsLabel = createElement(
-        "div",
-        "persona-text-xs persona-text-persona-muted"
-      );
-      if (toolCallConfig.labelTextColor) {
-        argsLabel.style.color = toolCallConfig.labelTextColor;
-      }
-      argsLabel.textContent = "Arguments";
-      const argsPre = createElement(
-        "pre",
-        "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-px-3 persona-py-2 persona-text-xs"
-      );
-      // Ensure font size matches header text (0.75rem / 12px)
-      argsPre.style.fontSize = "0.75rem";
-      argsPre.style.lineHeight = "1rem";
-      applyToolCodeBlockColors(argsPre, toolCallConfig);
-      argsPre.textContent = formatUnknownValue(tool.args);
-      argsBlock.append(argsLabel, argsPre);
-      content.appendChild(argsBlock);
-    }
-
-    if (tool.chunks && tool.chunks.length) {
-      const logsBlock = createElement("div", "persona-space-y-1");
-      const logsLabel = createElement(
-        "div",
-        "persona-text-xs persona-text-persona-muted"
-      );
-      if (toolCallConfig.labelTextColor) {
-        logsLabel.style.color = toolCallConfig.labelTextColor;
-      }
-      logsLabel.textContent = "Activity";
-      const logsPre = createElement(
-        "pre",
-        "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-px-3 persona-py-2 persona-text-xs"
-      );
-      // Ensure font size matches header text (0.75rem / 12px)
-      logsPre.style.fontSize = "0.75rem";
-      logsPre.style.lineHeight = "1rem";
-      applyToolCodeBlockColors(logsPre, toolCallConfig);
-      logsPre.textContent = tool.chunks.join("");
-      logsBlock.append(logsLabel, logsPre);
-      content.appendChild(logsBlock);
-    }
+  const v5 = config.future?.v5Defaults === true;
+  if (toolDisplayConfig.showToolName && tool.name) content.appendChild(createNode("div", {
+    className: `persona-text-xs persona-text-persona-muted${v5 ? "" : " persona-italic"}`,
+    attrs: { "data-persona-tool-name": "" }, text: tool.name,
+    style: { color: v5 ? undefined : toolCallConfig.contentTextColor || toolCallConfig.headerTextColor },
+  }));
+  if (v5) appendToolDetails(content, message, config);
+  else {
+    const section = (label: string, value: unknown) => {
+      const block = createElement("div", "persona-space-y-1");
+      const title = createNode("div", {
+        className: "persona-text-xs persona-text-persona-muted", text: label,
+        style: { color: toolCallConfig.labelTextColor },
+      });
+      const pre = createNode("pre", {
+        className: "persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-px-3 persona-py-2 persona-text-xs",
+        style: {
+          fontSize: "0.75rem", lineHeight: "1rem",
+          backgroundColor: toolCallConfig.codeBlockBackgroundColor ?? "var(--persona-container, #f3f4f6)",
+          borderColor: toolCallConfig.codeBlockBorderColor ?? "var(--persona-border, #e5e7eb)",
+          color: toolCallConfig.codeBlockTextColor ?? "var(--persona-text, #171717)",
+        },
+      }, createNode("span", { className: "persona-activity-scroll", text: formatUnknownValue(value), attrs: { role: "region", "aria-label": label } }));
+      block.append(title, pre);
+      content.appendChild(block);
+    };
+    if (tool.args !== undefined) section("Arguments", tool.args);
+    if (tool.chunks?.length) section("Activity", tool.chunks.join(""));
 
     if (tool.success === false) {
       content.appendChild(createNode("div", {
@@ -415,44 +270,11 @@ export const createToolBubble = (
       }));
     }
 
-    if (tool.status === "complete" && tool.result !== undefined) {
-      const resultBlock = createElement("div", "persona-space-y-1");
-      const resultLabel = createElement(
-        "div",
-        "persona-text-xs persona-text-persona-muted"
-      );
-      if (toolCallConfig.labelTextColor) {
-        resultLabel.style.color = toolCallConfig.labelTextColor;
-      }
-      resultLabel.textContent = "Result";
-      const resultPre = createElement(
-        "pre",
-        "persona-max-h-48 persona-overflow-auto persona-whitespace-pre-wrap persona-rounded-lg persona-border persona-px-3 persona-py-2 persona-text-xs"
-      );
-      // Ensure font size matches header text (0.75rem / 12px)
-      resultPre.style.fontSize = "0.75rem";
-      resultPre.style.lineHeight = "1rem";
-      applyToolCodeBlockColors(resultPre, toolCallConfig);
-      resultPre.textContent = formatUnknownValue(tool.result);
-      resultBlock.append(resultLabel, resultPre);
-      content.appendChild(resultBlock);
-    }
-
-    if (tool.status === "complete" && typeof tool.duration === "number") {
-      const duration = createElement(
-        "div",
-        "persona-text-xs persona-text-persona-muted"
-      );
-      if (toolCallConfig.contentTextColor) {
-        duration.style.color = toolCallConfig.contentTextColor;
-      }
-      duration.textContent = `Duration: ${tool.duration}ms`;
-      content.appendChild(duration);
-    }
+    if (tool.status === "complete" && tool.result !== undefined) section("Result", tool.result);
 
   }
 
-  applyExpansionDisplay({ expanded, header, toggleIcon, content, collapsedPreview, iconColor });
+  applyExpansionDisplay({ expanded, header, toggleIcon, content, collapsedPreview, iconColor, config });
 
   bubble.append(header, collapsedPreview, content);
   return applyActivityRow(bubble, message, config, "tool");

@@ -4,6 +4,15 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: {
+      "@runtypelabs/persona/preferences-runtime": fileURLToPath(new URL("./src/preferences-runtime.ts", import.meta.url)),
+      "@runtypelabs/persona/turn-activity-ui": fileURLToPath(new URL("./src/turn-activity-ui.ts", import.meta.url)),
+      "@runtypelabs/persona/activity-ui": fileURLToPath(new URL("./src/activity-ui.ts", import.meta.url)),
+      "@runtypelabs/persona/loading-label-runtime": fileURLToPath(new URL("./src/loading-label-runtime.ts", import.meta.url)),
+      "@runtypelabs/persona/composer-actions-runtime": fileURLToPath(new URL("./src/composer-actions-runtime.ts", import.meta.url)),
+      "@runtypelabs/persona/dictation-runtime": fileURLToPath(new URL("./src/dictation-runtime.ts", import.meta.url)),
+      "@runtypelabs/persona/background-runtime": fileURLToPath(new URL("./src/background-runtime.ts", import.meta.url)),
+      "@runtypelabs/persona/config-diagnostics": fileURLToPath(new URL("./src/config-diagnostics.ts", import.meta.url)),
+      "@runtypelabs/persona/history-shell": fileURLToPath(new URL("./src/history-shell.ts", import.meta.url)),
       // The context-mentions loader self-references the package's `./context-mentions`
       // subpath (external in the published build). In tests, resolve it to source so
       // the lazy-load fallback exercises the real runtime without a dist build.
@@ -39,6 +48,10 @@ export default defineConfig({
       // Same for the lazy webmcp-runtime chunk subpath.
       '@runtypelabs/persona/webmcp-runtime': fileURLToPath(
         new URL('./src/webmcp-runtime.ts', import.meta.url)
+      ),
+      // Same for the lazy voice-client-tools chunk subpath.
+      '@runtypelabs/persona/voice-client-tools': fileURLToPath(
+        new URL('./src/voice-client-tools.ts', import.meta.url)
       ),
       // Same for the lazy icons-extra chunk subpath.
       '@runtypelabs/persona/icons-extra': fileURLToPath(

@@ -1,0 +1,38 @@
+{
+  "name": "flue-next",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3300",
+    "dev:agent": "vite --config agent/vite.config.ts --port 3301",
+    "build": "pnpm --filter @runtypelabs/persona build && next build",
+    "build:agent": "vite build --config agent/vite.config.ts",
+    "start": "next start -p 3300",
+    "start:agent": "node agent/dist/server.mjs",
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@flue/runtime": "2.3.0",
+    "@flue/sdk": "2.3.0",
+    "@runtypelabs/persona": "workspace:^",
+    "hono": "^4.13.13",
+    "next": "^16.4.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "valibot": "^1.5.0"
+  },
+  "devDependencies": {
+    "@flue/vite": "2.3.0",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
+}

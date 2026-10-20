@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 
 const proxyPort = Number(process.env.PROXY_PORT ?? 43111);
 const PREVIEW_EMBED_CHECK_TIMEOUT_MS = 5000;
@@ -327,6 +328,54 @@ function resolveJsPaint(): { dir: string; base: string } {
 
 const JSPAINT = resolveJsPaint();
 
+// /bento/ is Bento Slides (examples/bento-slides), a separate app the site
+// build writes into dist/bento as one self-contained file. In dev, build that
+// file on the first visit (once per server start) and serve it, so the gallery
+// link works without a second dev server. For HMR on Bento itself, run
+// `pnpm --filter bento-slides dev`.
+function serveBento(): Plugin {
+  const file = path.resolve(__dirname, "dist/bento/index.html");
+  let build: Promise<boolean> | null = null;
+  const root = path.resolve(__dirname, "../..");
+  const run = (filter: string, script: string) =>
+    new Promise<boolean>((resolve) => {
+      const child = spawn("pnpm", ["--filter", filter, script], { cwd: root, stdio: "inherit" });
+      child.on("error", () => resolve(false));
+      child.on("exit", (code) => resolve(code === 0));
+    });
+  // Bento imports the widget's built dist, which `pnpm dev` doesn't produce
+  const widgetBuilt = () => fs.existsSync(path.join(root, "packages/widget/dist/index.js"));
+  const ensureBuilt = () =>
+    (build ??= (async () =>
+      (widgetBuilt() || (await run("@runtypelabs/persona", "build"))) &&
+      run("bento-slides", "build:web"))());
+  return {
+    name: "serve-bento",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+        if (pathname === "/bento") {
+          res.statusCode = 302;
+          res.setHeader("Location", "/bento/");
+          res.end();
+          return;
+        }
+        if (pathname !== "/bento/" && pathname !== "/bento/index.html") return next();
+        void ensureBuilt().then((ok) => {
+          if (!ok || !fs.existsSync(file)) {
+            build = null; // retry on the next visit
+            res.statusCode = 500;
+            res.end("Bento Slides failed to build: run `pnpm --filter bento-slides build:web`.");
+            return;
+          }
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          res.end(fs.readFileSync(file));
+        });
+      });
+    },
+  };
+}
+
 function serveJsPaint(): Plugin {
   const { dir: jspaintDir, base } = JSPAINT;
   const MIME: Record<string, string> = {
@@ -424,6 +473,7 @@ function llmsTxt(): Plugin {
     "THEME-CONFIG.md",
   ].map((p) => path.resolve(widgetDir, p));
   const integrationDocPaths = [
+    "docs/webmcp-authoring.md",
     "docs/webmcp-without-runtype.md",
     "docs/durable-reconnect.md",
   ].map((p) => path.resolve(repoDir, p));
@@ -670,6 +720,7 @@ export default defineConfig({
     crossOriginIsolateLiteRt(),
     serveWidgetDist(),
     serveJsPaint(),
+    serveBento(),
     llmsTxt(),
     previewEmbedCheck(),
     demoSlowResource(),
@@ -711,6 +762,9 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         advanced: path.resolve(__dirname, 'advanced.html'),
         'v5-preview': path.resolve(__dirname, 'v5-preview.html'),
+        'style-migration': path.resolve(__dirname, 'style-migration.html'),
+        'assistant-composers': path.resolve(__dirname, 'assistant-composers.html'),
+        'embedded-host': path.resolve(__dirname, 'embedded-host.html'),
         'action-middleware': path.resolve(__dirname, 'action-middleware.html'),
         'dynamic-components': path.resolve(__dirname, 'dynamic-components.html'),
         'dynamic-form-fields': path.resolve(__dirname, 'dynamic-form-fields.html'),
@@ -725,6 +779,8 @@ export default defineConfig({
         'analytics-agent-demo': path.resolve(__dirname, 'analytics-agent-demo.html'),
         // Agent demo
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
+        // Phone agent: PhoneLLM Mini receptionist with a live weather tool
+        'phone-agent-demo': path.resolve(__dirname, 'phone-agent-demo.html'),
         // WebMCP: page-discovered tools
         'webmcp-demo': path.resolve(__dirname, 'webmcp-demo.html'),
         // WebMCP: calendar copilot (client-token mode)

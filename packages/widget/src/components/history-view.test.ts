@@ -399,7 +399,7 @@ describe("history view list styling", () => {
     // The glyph follows the header icon size, and touch keeps the header's
     // own 40px floor rather than a taller bar-only one.
     expect(css).toContain(
-      ".persona-history-topbar--shell button.persona-history-icon-button svg {\n  width: var(--persona-header-control-icon-size, 20px);"
+      ".persona-history-topbar--shell button.persona-history-icon-button svg {\n  width: var(--persona-header-control-icon-size, 16px);"
     );
     const shellCoarse = css.slice(
       css.indexOf("@media (pointer: coarse) {\n  .persona-history-topbar--shell")

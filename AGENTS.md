@@ -20,6 +20,7 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat UI l
 - **Host matrix** (`examples/echo-hono`, `examples/echo-script-tag`, `examples/echo-express`, `examples/echo-sveltekit`) - the same canonical echo adapter re-hosted four ways. `persona-wire.ts` + the adapter are exact copies across all four; only the host wrapper changes. Hono/SvelteKit return the Web `Response` directly; Express/bare-`node:http` bridge the `(req, res)` callback style. All run keyless (echo agent) with a documented one-line swap to a real model.
 - `examples/runtype-script-tag` - the no-backend path: a static `clientToken` embed talking directly to `api.runtype.com`. Mirrors `echo-script-tag` but swaps `apiUrl: "/dispatch"` for a `clientToken` (zero-dep static server; loads the published widget from jsDelivr, not the workspace build). The hosted counterpart to the BYO examples.
 - `examples/runtype-hono-proxy` - Runtype API proxy on Hono (Node/Vercel/Workers; powers `pnpm dev`)
+- `examples/bento-slides` - a vendored copy of [Bento Slides](https://github.com/nyblnet/bento) (`kernel/` + `slides/`, upstream 1.2.6) with Persona embedded as "Bento Copilot": `slides/src/ai/` registers 23 WebMCP page tools and mounts the widget headless in the editor's right rail, with a GPT-Live voice call (client delegation) that can edit the deck and drive a running slideshow. Hosted Runtype agent on `qwen3.8-27b`; see its README for the upstream-sync notes.
 
 ## Requirements
 
@@ -143,6 +144,10 @@ The widget uses a layered architecture:
 **Built-in LOCAL client tools:** `features.askUserQuestion.expose` and `features.suggestReplies.expose` append SDK-origin `ClientToolDefinition`s to `dispatch.clientTools[]`. `ask_user_question` pauses for a user answer sheet; `suggest_replies` renders quick-reply chips and auto-resumes. Leave `expose` false when the flow already declares the tool server-side.
 
 **WebMCP page tools:** `webmcp.enabled` snapshots tools from `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:<name>` calls in the browser with approval gating, and resumes via `${apiUrl}/resume`. `contextProviders` run on both agent and flow/proxy paths.
+
+For page-tool authoring or audits, read `docs/webmcp-authoring.md` and the typed
+example in `examples/webmcp-typed-tools`. Upstream skills supplement that guidance;
+they do not replace approval, authorization, or v5/v6 compatibility contracts.
 
 **Deferred Launcher Loading:** For the common floating-launcher case, `install.ts` paints the real launcher from the tiny `launcher.global.js` (< 20 KB brotli) at page load and defers the full `index.global.js` until the user's first click. `shouldDeferPanel()` gates this: floating launcher, not auto-expanded, no restored/`onStateLoaded` open state, derivable launcher URL , and everything else eager-loads unchanged. The critical launcher is mount-then-destroyed at handoff and renders pixel-identically to the full widget's, so the swap is invisible. Installer lifecycle hooks (`onScriptLoad` / `onLauncherShown` / `onChatReady` / `onError`) and matching `persona:*` DOM events expose each stage; `onChatReady` (which replaced the `onReady` alias removed in 4.0) fires after first open in a deferred install. See the header comment in `launcher-global.ts` and the gate/handoff comments in `install.ts` for the invariants.
 

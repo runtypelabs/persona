@@ -1,0 +1,470 @@
+/* --- Overflow `+` menu -------------------------------------------------
+ *
+ * The panel is mounted by createPopover next to the widget root (or inside the
+ * shadow root), so its rules are deliberately un-prefixed by
+ * `[data-persona-root]` and must stand on their own. It sits outside the themed
+ * mount, so the menu forwards its configured tokens onto the panel on open. */
+.persona-composer-overflow-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--persona-components-composer-overflowMenu-rowGap, 2px);
+  min-width: min(var(--persona-components-composer-overflowMenu-minWidth, 180px), calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  max-height: min(var(--persona-components-composer-overflowMenu-maxHeight, 320px), calc(100vh - 16px));
+  overflow-y: auto;
+  padding: var(--persona-components-composer-overflowMenu-padding, 4px);
+  border-radius: var(
+    --persona-components-composer-overflowMenu-borderRadius,
+    var(--persona-radius-lg, 0.5rem)
+  );
+  border: 1px solid
+    var(
+      --persona-components-composer-overflowMenu-borderColor,
+      var(--persona-border, #e5e7eb)
+    );
+  background: var(
+    --persona-components-composer-overflowMenu-background,
+    var(--persona-surface, #ffffff)
+  );
+  color: var(
+    --persona-components-composer-overflowMenu-foreground,
+    var(--persona-text, #111827)
+  );
+  box-shadow: var(
+    --persona-components-composer-overflowMenu-shadow,
+    var(--persona-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12))
+  );
+  font-family: var(--persona-font-family, inherit);
+  line-height: var(--persona-components-composer-overflowMenu-lineHeight, 1.35);
+}
+
+.persona-composer-overflow-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--persona-components-composer-overflowMenu-iconGap, 8px);
+  width: 100%;
+  padding: var(--persona-components-composer-overflowMenu-rowPadding, 6px 8px);
+  border: none;
+  border-radius: var(--persona-components-composer-overflowMenu-rowBorderRadius, var(--persona-radius-md, 0.375rem));
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--persona-components-composer-overflowMenu-fontSize, 13px);
+  text-align: start;
+  cursor: pointer;
+}
+
+.persona-composer-overflow-menu__item:hover:not(:disabled) {
+  background: var(--persona-components-composer-overflowMenu-hoverBackground, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
+}
+
+.persona-composer-overflow-menu__item:focus-visible {
+  background: var(--persona-components-composer-overflowMenu-focusBackground, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
+}
+
+.persona-composer-overflow-menu__item[aria-pressed="true"] {
+  background: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05));
+  font-weight: 600;
+}
+
+.persona-composer-overflow-menu__item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.persona-composer-overflow-menu__item[aria-busy="true"] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.persona-composer-overflow-menu__icon {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  height: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+}
+
+.persona-composer-overflow-menu__content { display: contents; }
+
+.persona-composer-overflow-menu__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.persona-composer-overflow-menu__icon > svg { width: 100%; height: 100%; }
+
+.persona-composer-overflow-menu__description {
+  display: block;
+  color: var(--persona-components-composer-overflowMenu-descriptionColor, var(--persona-text-muted, #6b7280));
+  font-size: var(--persona-components-composer-overflowMenu-descriptionFontSize, 12px);
+  line-height: var(--persona-components-composer-overflowMenu-lineHeight, 1.35);
+  white-space: normal;
+}
+
+.persona-composer-overflow-menu[data-persona-menu-description-layout="inline"] .persona-composer-overflow-menu__text,
+.persona-composer-overflow-menu[data-persona-menu-description-layout="inline"] .persona-composer-overflow-menu__slot > .persona-composer-overflow-menu__label {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 var(--persona-components-composer-overflowMenu-iconGap, 8px);
+}
+
+.persona-composer-overflow-menu__divider {
+  flex-shrink: 0;
+  border-top: 1px solid var(--persona-components-composer-overflowMenu-dividerColor, var(--persona-border, #e5e7eb));
+  margin: var(--persona-components-composer-overflowMenu-dividerSpacing, 4px 0);
+}
+
+.persona-composer-overflow-menu__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A folded built-in or custom control keeps its own markup; the slot only
+   gives it the menu's row padding. */
+/* A folded built-in keeps its live element, so the SLOT is the row: same
+   padding, radius, type, and hover treatment as `__item` above. The panel is
+   portaled outside `[data-persona-root]`, so the bar's prefixed ghost-button
+   rules do not reach in here and the control would otherwise fall back to the
+   browser's default button box. */
+.persona-composer-overflow-menu__slot {
+  display: flex;
+  align-items: center;
+  gap: var(--persona-components-composer-overflowMenu-iconGap, 8px);
+  width: 100%;
+  padding: var(--persona-components-composer-overflowMenu-rowPadding, 6px 8px);
+  border-radius: var(--persona-components-composer-overflowMenu-rowBorderRadius, var(--persona-radius-md, 0.375rem));
+  font-size: var(--persona-components-composer-overflowMenu-fontSize, 13px);
+  text-align: start;
+  cursor: pointer;
+}
+
+/* Modality-aware, matching the `:focus-visible` half of `__item` above. A bare
+   `:focus-within` would shade this row on every MOUSE open, because opening the
+   menu programmatically focuses the first row and this row sorts first. The
+   menu publishes the attribute only when that focus should be visible. */
+.persona-composer-overflow-menu__slot:hover {
+  background: var(--persona-components-composer-overflowMenu-hoverBackground, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
+}
+
+.persona-composer-overflow-menu__slot[data-persona-menu-focus] {
+  background: var(--persona-components-composer-overflowMenu-focusBackground, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
+}
+
+/* The bar wraps each control for tooltip hit area; in a row it must add no box. */
+.persona-composer-overflow-menu__slot .persona-send-button-wrapper {
+  display: contents;
+}
+
+/* Strip every bar affordance off the live control: it is now just the row's
+   icon column. Scoped to the shared composer-control class so a folded CUSTOM
+   action keeps whatever styling its renderer chose. */
+.persona-composer-overflow-menu__slot .persona-composer-control {
+  width: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  height: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  min-width: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  min-height: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  color: inherit;
+  line-height: 1;
+  cursor: inherit;
+  /* The bar sets font-size inline for the no-icon glyph fallback. */
+  overflow: hidden;
+}
+
+.persona-composer-overflow-menu__slot .persona-composer-control > svg {
+  width: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  height: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+}
+
+/* In a menu the ROW shading is the focus indicator, exactly as it is for a
+   contributed `__item`; a ring around the 16px icon would be a second one. */
+.persona-composer-overflow-menu__slot .persona-composer-control:focus-visible {
+  outline: none;
+}
+
+/* Belt and braces: a tooltip rendered inline rather than portaled must never
+   paint inside a menu row. The JS guard keeps it from opening at all. */
+.persona-composer-overflow-menu__slot .persona-control-tooltip {
+  display: none;
+}
+
+
+/* Composer controls share the action runtime. */
+
+.persona-composer-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--persona-components-composer-segmented-gap, 2px);
+  flex: 0 0 auto;
+  padding: var(--persona-components-composer-segmented-padding, 2px);
+  border-radius: var(--persona-components-composer-segmented-trackBorderRadius, 9999px);
+  background: var(
+    --persona-components-composer-segmented-trackBackground,
+    var(--persona-container, #f3f4f6)
+  );
+}
+
+.persona-composer-segmented-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  background: transparent;
+  box-shadow: none;
+  font-family: inherit;
+  font-size: var(--persona-components-composer-segmented-fontSize, var(--persona-composer-font-size, 0.875rem));
+  line-height: var(--persona-components-composer-segmented-lineHeight, var(--persona-composer-line-height, 1.25rem));
+  font-weight: var(--persona-components-composer-segmented-fontWeight, normal);
+  min-height: var(--persona-components-composer-segmented-minHeight, 0px);
+  padding: var(--persona-components-composer-segmented-itemPadding, 0.25rem 0.625rem);
+  border-radius: var(--persona-components-composer-segmented-trackBorderRadius, 9999px);
+  color: var(
+    --persona-components-composer-segmented-inactiveForeground,
+    var(--persona-muted, #6b7280)
+  );
+}
+
+.persona-composer-segmented-item[aria-pressed="true"] {
+  background: var(
+    --persona-components-composer-segmented-activeBackground,
+    var(--persona-surface, #ffffff)
+  );
+  color: var(--persona-components-composer-segmented-activeForeground, var(--persona-text, #111827));
+  box-shadow: var(
+    --persona-components-composer-segmented-activeShadow,
+    0 1px 2px 0 rgba(15, 23, 42, 0.12)
+  );
+}
+
+.persona-composer-segmented-item svg {
+  flex: 0 0 auto;
+}
+@media (pointer: coarse) {
+  .persona-composer-segmented-item {
+    min-height: 36px;
+  }
+}
+.persona-composer-model-picker-wrapper {
+  display: inline-grid;
+  align-items: center;
+}
+.persona-composer-model-picker-wrapper > * {
+  grid-area: 1 / 1;
+}
+[data-persona-root] .persona-composer-model-picker {
+  max-width: 10rem;
+  /* Same rule a `shortLabel` action button follows: the token owns the height,
+     the label and its padding own the width. */
+  height: var(--persona-components-composer-modelPicker-height, var(--persona-composer-control-size, 40px));
+  min-height: var(--persona-components-composer-modelPicker-height, var(--persona-composer-control-size, 40px));
+  width: auto;
+  min-width: var(--persona-components-composer-modelPicker-minWidth, 0px);
+  /* Zero, so the token alone decides the box; a full-height line box centers
+     the label instead of padding math that fights the token. */
+  padding-block: 0;
+  line-height: var(--persona-components-composer-modelPicker-height, var(--persona-composer-control-size, 40px));
+  /* Logical, so the reserved chevron gutter follows the writing direction.
+     The trailing gutter clears the chevron's box plus its inset. */
+  padding-inline-start: 0.625rem;
+  padding-inline-end: 1.75rem;
+  padding-inline: var(--persona-components-composer-modelPicker-paddingInline, 0.625rem 1.75rem);
+  border: none;
+  border-radius: var(
+    --persona-components-composer-modelPicker-borderRadius,
+    var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem))
+  );
+  background-color: var(
+    --persona-components-composer-modelPicker-background,
+    var(--persona-button-ghost-bg, transparent)
+  );
+  color: var(
+    --persona-components-composer-modelPicker-labelColor,
+    var(--persona-button-ghost-fg, var(--persona-text, #111827))
+  );
+  /* A ring, not a border: `border-box` sizing would pull the label in by 1px on
+     every theme that never sets the token. */
+  box-shadow: inset 0 0 0 1px
+    var(--persona-components-composer-modelPicker-borderColor, transparent);
+  font-family: inherit;
+  font-size: var(--persona-components-composer-modelPicker-fontSize, 0.8125rem);
+  font-weight: var(--persona-components-composer-modelPicker-fontWeight, normal);
+  cursor: pointer;
+  /* Drops the platform chevron. Chrome draws it hard against the trailing edge
+     and ignores padding-inline-end, so no padding alone could clear it. */
+  -webkit-appearance: none;
+  appearance: none;
+  /* Long model labels ellipsize inside the reserved gutter rather than running
+     under the chevron. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+}
+.persona-composer-model-picker-chevron {
+  justify-self: end;
+  margin-inline-end: 0.625rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  pointer-events: none;
+  background-color: var(
+    --persona-components-composer-modelPicker-labelColor,
+    var(--persona-button-ghost-fg, var(--persona-text, #111827))
+  );
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+[data-persona-root] .persona-composer-model-picker option {
+  line-height: normal;
+}
+@media (pointer: coarse) {
+  [data-persona-root] .persona-composer-model-picker {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}
+[data-persona-root] .persona-composer-model-picker:hover:not(:disabled) {
+  background-color: var(
+    --persona-components-composer-modelPicker-hoverBackground,
+    var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05))
+  );
+}
+[data-persona-root] .persona-composer-model-picker:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+[data-persona-root] .persona-composer-model-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.persona-composer-model-picker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--persona-components-composer-modelPicker-labelColor, inherit);
+}
+.persona-composer-model-picker-suffix {
+  flex: 0 0 auto;
+  color: var(
+    --persona-components-composer-modelPicker-suffixColor,
+    var(--persona-muted, #6b7280)
+  );
+}
+.persona-composer-model-picker-suffix:empty {
+  display: none;
+}
+.persona-composer-model-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: var(
+    --persona-components-composer-modelPicker-menuBorderRadius,
+    var(--persona-radius-lg, 0.5rem)
+  );
+  border: 1px solid var(--persona-border, #e5e7eb);
+  background: var(
+    --persona-components-composer-modelPicker-menuBackground,
+    var(--persona-surface, #ffffff)
+  );
+  color: var(--persona-text, #111827);
+  box-shadow: var(--persona-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
+  font-family: var(--persona-font-family, inherit);
+}
+.persona-composer-model-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--persona-radius-md, 0.375rem);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.persona-composer-model-option:hover,
+.persona-composer-model-option:focus {
+  background: var(
+    --persona-components-composer-modelPicker-rowHoverBackground,
+    var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05))
+  );
+  outline: none;
+}
+.persona-composer-model-option-icon,
+.persona-composer-model-option-check {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.persona-composer-model-option-check {
+  visibility: hidden;
+}
+.persona-composer-model-option[aria-selected="true"]
+  .persona-composer-model-option-check {
+  visibility: visible;
+}
+.persona-composer-model-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.persona-composer-model-option-label {
+  color: var(--persona-components-composer-modelPicker-labelColor, inherit);
+}
+.persona-composer-model-option-description {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(
+    --persona-components-composer-modelPicker-descriptionColor,
+    var(--persona-muted, #6b7280)
+  );
+}
+.persona-composer-mode-chip {
+  background: var(--persona-mode-chip-bg, var(--persona-container, #f3f4f6));
+  border-color: var(--persona-mode-chip-border, var(--persona-border, #e5e7eb));
+  color: var(--persona-mode-chip-fg, var(--persona-text, #111827));
+}
+[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer) :is(.persona-widget-composer__actions, .persona-widget-composer__left-actions, .persona-widget-composer__right-actions, .persona-composer-segmented) {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer) :is(.persona-composer-control, .persona-composer-model-picker, .persona-composer-segmented-item) {
+  max-width: 100%;
+}
+[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer) :is(.persona-composer-action-button, .persona-composer-model-picker, .persona-composer-segmented-item) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-persona-composer-crowded] .persona-widget-composer:not(.persona-pill-composer) .persona-composer-model-picker-wrapper {
+  max-width: min(100%, 16rem);
+}

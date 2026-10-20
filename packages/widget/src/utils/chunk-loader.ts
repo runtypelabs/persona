@@ -66,16 +66,22 @@ export const createChunkLoader = <T>(
     if (moduleCache) return Promise.resolve(moduleCache);
     if (loadPromise) return loadPromise;
     const importChunk = loader ?? fallbackImport;
-    loadPromise = importChunk()
-      .then((mod) => {
-        moduleCache = mod;
-        return mod;
-      })
-      .catch((err) => {
-        loadPromise = null;
-        throw err;
-      });
-    return loadPromise;
+    try {
+      loadPromise = importChunk()
+        .then((mod) => {
+          moduleCache = mod;
+          return mod;
+        })
+        .catch((err) => {
+          loadPromise = null;
+          throw err;
+        });
+      return loadPromise;
+    } catch (error) {
+      // Custom loaders may throw before returning a promise. Readiness must
+      // observe the same rejection/retry contract as a failed dynamic import.
+      return Promise.reject(error);
+    }
   };
 
   const provide = (mod: T): void => {

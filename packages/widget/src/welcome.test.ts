@@ -237,11 +237,12 @@ describe("isWelcomeVisible", () => {
   it("shows a never-dismissing card regardless of transcript content", () => {
     expect(isWelcomeVisible(card, [])).toBe(true);
     expect(isWelcomeVisible(card, [userMessage])).toBe(true);
+    expect(isWelcomeVisible(card, [assistantMessage])).toBe(true);
   });
 
-  it("hides an on-first-message surface once a user message exists", () => {
+  it("hides an on-first-message surface once transcript activity exists", () => {
     expect(isWelcomeVisible(hero, [])).toBe(true);
-    expect(isWelcomeVisible(hero, [assistantMessage])).toBe(true);
+    expect(isWelcomeVisible(hero, [assistantMessage])).toBe(false);
     expect(isWelcomeVisible(hero, [userMessage, assistantMessage])).toBe(false);
   });
 
@@ -255,10 +256,27 @@ describe("isWelcomeVisible", () => {
 });
 
 describe("resolveConversationState", () => {
-  it("stays empty until a user message exists", () => {
+  it("keeps blank placeholders and hidden model context empty", () => {
     expect(resolveConversationState([])).toBe("empty");
     expect(resolveConversationState(undefined)).toBe("empty");
-    expect(resolveConversationState([assistantMessage])).toBe("empty");
+    expect(resolveConversationState([
+      { ...assistantMessage, content: "  ", streaming: true, llmContent: "Hidden model context", rawContent: "Hidden raw context" },
+      { ...assistantMessage, role: "system", content: "System instructions" },
+      { ...assistantMessage, content: "", contentParts: [{ type: "text", text: "  " }] },
+    ])).toBe("empty");
+  });
+
+  it.each([
+    { ...assistantMessage },
+    { ...assistantMessage, content: "", toolCall: { id: "tool", name: "Read", status: "complete" as const } },
+    { ...assistantMessage, content: "", tools: [{ id: "tool", name: "Read", status: "complete" as const }] },
+    { ...assistantMessage, content: "", approval: { id: "approval", status: "pending" as const, agentId: "agent", executionId: "execution", toolName: "Edit", description: "Update the source" } },
+    { ...assistantMessage, content: "", reasoning: { id: "reasoning", status: "streaming" as const, chunks: [] } },
+    { ...assistantMessage, content: "", contentParts: [{ type: "text" as const, text: "An assistant update" }] },
+    { ...assistantMessage, content: "", contentParts: [{ type: "image" as const, image: "https://example.com/image.png" }] },
+  ])("activates for visible assistant transcript activity %#", (message) => {
+    expect(resolveConversationState([message])).toBe("active");
+    expect(isWelcomeVisible(resolveWelcomeConfig(config({ welcome: { dismiss: "on-first-message" } })), [message])).toBe(false);
   });
 
   it("flips to active on the first user message", () => {
@@ -295,5 +313,15 @@ describe("V5 welcome layout defaults", () => {
       expect(resolved.anchor).toBe("center");
       expect(resolveWelcomeConfig(config({ future: { v5Defaults }, welcome: { layout: "centered", anchor: "bottom" } }), true).anchor).toBe("bottom");
     }
+  });
+});
+
+describe("disabled welcome anchoring", () => {
+  it("keeps disabled fullscreen welcomes at the bottom unless explicitly anchored", () => {
+    for (const welcome of [{ variant: "none" as const }, { variant: "none" as const, layout: "centered" as const }]) {
+      expect(resolveWelcomeConfig(config({ future: { v5Defaults: true }, welcome }), true).anchor).toBe("bottom");
+    }
+    expect(resolveWelcomeConfig(config({ future: { v5Defaults: true }, copy: { showWelcomeCard: false } }), true).anchor).toBe("bottom");
+    expect(resolveWelcomeConfig(config({ welcome: { variant: "none", anchor: "center" } }), true).anchor).toBe("center");
   });
 });

@@ -5,6 +5,7 @@ import {
   markdownPostprocessor,
   type AgentWidgetConfig,
   type AgentWidgetController,
+  type AgentWidgetMessage,
   type AgentWidgetRequestPayload,
 } from "@runtypelabs/persona";
 import {
@@ -13,6 +14,7 @@ import {
   createMockSSEStream,
   type MockSSEFrame,
 } from "@runtypelabs/persona/testing";
+import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-history-provider";
 
 /**
  * Internal, keyless fixture for the agent verification skill
@@ -26,8 +28,8 @@ import {
  * effects alongside screenshots. Not registered in examples-nav.
  */
 
-type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error";
-const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error"];
+type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "browser-history" | "turn-activity";
+const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "browser-history", "turn-activity"];
 
 const params = new URLSearchParams(window.location.search);
 const scenarioParam = params.get("scenario") ?? "echo";
@@ -48,6 +50,45 @@ const requests: Array<{ at: number; url: string; body: unknown }> = [];
 const events: Array<{ at: number; type: string; detail: unknown }> = [];
 const t0 = performance.now();
 const now = () => Math.round(performance.now() - t0);
+
+// A custom history backend can return the exact snapshot saved before a browser
+// closed, including local approvals whose callbacks no longer exist. Only the
+// provider boundary is scripted: opening history and prepending use the real UI.
+function browserHistoryProvider() {
+  const summary = {
+    id: "interrupted-browser-history", title: "Interrupted browser proposal", targetId: null,
+    preview: "A saved proposal is on the earlier page.", createdAt: "2026-01-01T10:00:00Z",
+    updatedAt: "2026-01-02T10:00:00Z", messageCount: 3,
+  };
+  const latest: AgentWidgetMessage = {
+    id: "newer-reply", role: "assistant", content: summary.preview,
+    createdAt: summary.updatedAt,
+  };
+  const older: AgentWidgetMessage[] = [
+    {
+      id: "saved-browser-tool", role: "assistant", content: "", variant: "tool",
+      streaming: true, createdAt: summary.createdAt,
+      agentMetadata: { executionId: "saved-execution", awaitingLocalTool: true, webMcpToolCallId: "saved-call" },
+      toolCall: { id: "saved-call", name: "webmcp:purchase", args: { quantity: 2 }, status: "running", startedAt: 1000, approvalStatus: "pending" },
+    },
+    {
+      id: "saved-browser-approval", role: "assistant", content: "", variant: "approval",
+      createdAt: "2026-01-01T10:00:01Z",
+      approval: { id: "saved-gate", status: "pending", executionId: "", agentId: "", toolName: "purchase", toolType: "webmcp", description: "Purchase two items", parameters: { quantity: 2 } },
+    },
+  ];
+  const provider = createDemoHistoryProvider({ conversations: [{ ...summary, messages: [latest] }] });
+  provider.getPage = async (id, options) => {
+    requests.push({ at: now(), url: "history:getPage", body: { id, cursor: options?.cursor ?? null } });
+    return {
+      summary,
+      conversationRevision: "r1",
+      messages: structuredClone(options?.cursor ? older : [latest]),
+      nextCursor: options?.cursor ? null : "older-browser-proposal",
+    };
+  };
+  return provider;
+}
 
 const MARKDOWN_REPLY = [
   "## Release checklist",
@@ -137,6 +178,21 @@ function scenarioFrames(kind: Scenario, userText: string, executionId: string): 
           text: "It's **22°C and sunny** in Lisbon right now.",
           chunkSize: 8,
         }),
+        complete(executionId),
+      ];
+    case "turn-activity":
+      return [
+        start(executionId),
+        ...buildAssistantTurnFrames({ executionId, turnId: `${executionId}-progress-1`, text: "I will inspect the files and check the result.", chunkSize: 20 }),
+        { type: "tool_start", executionId, toolCallId: `${executionId}-read`, toolName: "Read", parameters: { path: "example.ts" }, iteration: 1 },
+        { type: "tool_output_delta", executionId, toolCallId: `${executionId}-read`, delta: "Reading the example…" },
+        { type: "tool_complete", executionId, toolCallId: `${executionId}-read`, success: true, result: "Found the relevant function", executionTime: 840 },
+        { type: "tool_start", executionId, toolCallId: `${executionId}-read-docs`, toolName: "Read", parameters: { path: "README.md" }, iteration: 1 },
+        { type: "tool_complete", executionId, toolCallId: `${executionId}-read-docs`, success: true, result: "Confirmed the documented behavior", executionTime: 480 },
+        ...buildAssistantTurnFrames({ executionId, turnId: `${executionId}-progress-2`, text: "The implementation is consistent. I am checking the final output.", chunkSize: 20 }),
+        { type: "tool_start", executionId, toolCallId: `${executionId}-check`, toolName: "Bash", parameters: { command: "check" }, iteration: 2 },
+        { type: "tool_complete", executionId, toolCallId: `${executionId}-check`, success: true, result: "All checks passed", executionTime: 620 },
+        ...buildAssistantTurnFrames({ executionId, turnId: `${executionId}-final`, text: "The example works. The final answer stays outside the activity disclosure.", chunkSize: 20 }),
         complete(executionId),
       ];
     case "reasoning":
@@ -235,6 +291,14 @@ const baseConfig: AgentWidgetConfig = {
   },
   suggestionChips: [],
   features: { showToolCalls: true, showReasoning: true },
+  ...(scenario === "browser-history" ? {
+    features: { showToolCalls: true, history: { enabled: true, provider: browserHistoryProvider(), presentation: "panel" as const } },
+  } : {}),
+  ...(scenario === "turn-activity" ? {
+    future: { v5Defaults: true },
+    expansion: { animation: "height" as const, duration: 160 },
+    turnActivity: { enabled: true },
+  } : {}),
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
   customFetch: async (url, init, payload) => {
     requests.push({ at: now(), url: String(url), body: payload });
@@ -246,7 +310,11 @@ const baseConfig: AgentWidgetConfig = {
     }
     turn += 1;
     const executionId = `exec_verify_${turn}`;
-    const frames = scenarioFrames(scenario, latestUserText(payload), executionId);
+    const frames = scenarioFrames(scenario, latestUserText(payload), executionId).map(frame =>
+      scenario === "turn-activity" && frame.type === "text_start"
+        ? { ...frame, phase: frame.id === `${executionId}-final-text` ? "final_answer" : "commentary" }
+        : frame,
+    );
     return createMockSSEResponse(sequenced(frames), { delayMs, signal: init?.signal });
   },
   approval: {
@@ -313,6 +381,8 @@ const controller: AgentWidgetController = initAgentWidget({
 });
 
 const RECORDED_EVENTS = [
+  "run:started",
+  "run:finished",
   "user:message",
   "assistant:complete",
   "approval:requested",

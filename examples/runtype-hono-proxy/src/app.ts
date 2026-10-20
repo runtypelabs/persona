@@ -17,6 +17,7 @@ import {
   DOCS_ASSISTANT_AGENT,
   CHAT_ASSISTANT_AGENT,
   ANALYTICS_ASSISTANT_AGENT,
+  PHONE_RECEPTIONIST_AGENT,
   createCheckoutSession,
   type CheckoutItem,
 } from "@runtypelabs/persona-proxy";
@@ -240,6 +241,22 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
     upstreamUrl,
   });
 
+  // The activity tester requests three sequential tools plus a final answer.
+  // Give that investigation room to finish without changing the docs demo.
+  const activityAssistantApp = createChatProxyApp({
+    ...proxyProtection,
+    path: "/api/chat/dispatch-activity",
+    apiKey,
+    allowedOrigins,
+    agentId: env.AGENT_ID_ACTIVITY || undefined,
+    agentConfig: env.AGENT_ID_ACTIVITY ? undefined : {
+      ...DOCS_ASSISTANT_AGENT,
+      tools: { ...DOCS_ASSISTANT_AGENT.tools, maxToolCalls: 6 },
+      loopConfig: { ...DOCS_ASSISTANT_AGENT.loopConfig, maxTurns: 6 },
+    },
+    upstreamUrl,
+  });
+
   const chatAssistantApp = createChatProxyApp({
     ...proxyProtection,
     path: "/api/chat/dispatch-assistant",
@@ -260,6 +277,16 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
     upstreamUrl,
   });
 
+  const phoneAgentApp = createChatProxyApp({
+    ...proxyProtection,
+    path: "/api/chat/dispatch-phone-agent",
+    apiKey,
+    allowedOrigins,
+    agentId: env.AGENT_ID_PHONE_AGENT || undefined,
+    agentConfig: env.AGENT_ID_PHONE_AGENT ? undefined : PHONE_RECEPTIONIST_AGENT,
+    upstreamUrl,
+  });
+
   app.route("/", directiveApp);
   app.route("/", actionApp);
   app.route("/", metadataApp);
@@ -275,8 +302,10 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   app.route("/", themeAssistantApp);
   app.route("/", agentLoopApp);
   app.route("/", docsAssistantApp);
+  app.route("/", activityAssistantApp);
   app.route("/", chatAssistantApp);
   app.route("/", analyticsAssistantApp);
+  app.route("/", phoneAgentApp);
 
   app.post("/api/tts", async (c) => {
     const origin = c.req.header("origin");

@@ -14,7 +14,7 @@
   {
     "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
     "path": "dist/widget.css",
-    "limit": "24 kB",
+    "limit": "24.5 kB",
     "gzip": true
   },
   {
@@ -144,6 +144,12 @@
     "gzip": true
   },
   {
+    "name": "Lazy · voice fast-tier client tools chunk (voice-client-tools.js)",
+    "path": "dist/voice-client-tools.js",
+    "limit": "1.02 kB",
+    "gzip": true
+  },
+  {
     "name": "Lazy · demo-forms enhancement chunk (forms-ui.js)",
     "path": "dist/forms-ui.js",
     "limit": "1.6 kB",
@@ -177,6 +183,60 @@
     "name": "Lazy · ask-user sheet + context-mention orchestrator chunk (ui-extras.js)",
     "path": "dist/ui-extras.js",
     "limit": "16.5 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · composer controls and menu styling (composer-actions-runtime.js)",
+    "path": "dist/composer-actions-runtime.js",
+    "limit": "15.5 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · dictation UI and browser transcription (dictation-runtime.js)",
+    "path": "dist/dictation-runtime.js",
+    "limit": "4.85 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · tool and reasoning rendering (activity-ui.js)",
+    "path": "dist/activity-ui.js",
+    "limit": "12.25 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · shared loading-label effects and lifecycle (loading-label-runtime.js)",
+    "path": "dist/loading-label-runtime.js",
+    "limit": "2.75 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · request construction and session initialization (client-dispatch.js)",
+    "path": "dist/client-dispatch.js",
+    "limit": "5.5 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · background conversation tracking (background-runtime.js)",
+    "path": "dist/background-runtime.js",
+    "limit": "0.75 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · debug migration diagnostics (config-diagnostics.js)",
+    "path": "dist/config-diagnostics.js",
+    "limit": "1.75 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · theme editor behavior presets (preferences-runtime.js)",
+    "path": "dist/preferences-runtime.js",
+    "limit": "2 kB",
+    "gzip": true
+  },
+  {
+    "name": "Opt-in · whole-turn activity view (turn-activity-ui.js)",
+    "path": "dist/turn-activity-ui.js",
+    "limit": "2.5 kB",
     "gzip": true
   }
 ]

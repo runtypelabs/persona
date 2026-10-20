@@ -1,0 +1,17 @@
+{
+  "name": "webmcp-typed-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsc --noEmit && vitest run",
+    "typecheck": "tsc --noEmit",
+    "schema": "tsx export-schema.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.20.6",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3",
+    "webmcp-types": "0.1.10"
+  }
+}

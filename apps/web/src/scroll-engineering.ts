@@ -84,7 +84,15 @@ function buildConfig(inline: boolean): AgentWidgetConfig {
       position: "bottom-right",
       title: inline ? undefined : "Scroll Engineering",
     },
-    suggestionChips: [],
+    suggestions: {
+      starters: {
+        items: [],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     persistState: false,
     components: tweetEmbed.components,
     wrapComponentDirectiveInBubble: false,
@@ -102,11 +110,14 @@ function buildConfig(inline: boolean): AgentWidgetConfig {
         restorePosition: options.restoreLastUserTurn ? "last-user-turn" : "bottom",
       },
     },
+    welcome: {
+      title: "Scroll Engineering",
+      subtitle:
+        "Run a scenario from the rail, or type here. Try scrolling up, selecting text, or pressing PageUp while a reply streams.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Scroll Engineering",
-      welcomeSubtitle:
-        "Run a scenario from the rail, or type here. Try scrolling up, selecting text, or pressing PageUp while a reply streams.",
     },
   };
   return inline ? squareInlinePanel(base) : base;

@@ -1,0 +1,43 @@
+/* Showcase treatment of Persona's real research mode, shared by the Claude demos. */
+[data-persona-root] [data-persona-composer-action="core:mode:research"] > button[aria-pressed="true"] {
+  --persona-button-ghost-hover-bg: #cce1ff;
+  position: relative;
+  background: #cce1ff;
+  color: #19589b;
+  border-radius: 9px;
+}
+
+[data-persona-composer-action="core:mode:research"] > button::before,
+[data-persona-composer-action="core:mode:research"] > button::after {
+  content: "";
+  position: absolute;
+  width: 17px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+  transform: rotate(45deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-persona-composer-action="core:mode:research"] > button::after {
+  transform: rotate(-45deg);
+}
+
+[data-persona-composer-action="core:mode:research"] > button:focus-visible > svg {
+  opacity: 0;
+}
+[data-persona-composer-action="core:mode:research"] > button:focus-visible::before,
+[data-persona-composer-action="core:mode:research"] > button:focus-visible::after {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  [data-persona-composer-action="core:mode:research"] > button:hover > svg {
+    opacity: 0;
+  }
+  [data-persona-composer-action="core:mode:research"] > button:hover::before,
+  [data-persona-composer-action="core:mode:research"] > button:hover::after {
+    opacity: 1;
+  }
+}

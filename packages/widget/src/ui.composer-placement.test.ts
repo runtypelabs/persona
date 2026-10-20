@@ -131,12 +131,12 @@ describe("conversation state", () => {
     expect(mount.getAttribute("data-persona-conversation-state")).toBe("empty");
   });
 
-  it("stays empty for an assistant-only transcript", () => {
-    const { mount } = makeController();
+  it("activates an assistant-only transcript and restores empty on clearChat", () => {
+    const { mount, controller } = makeController();
     expect(mount.getAttribute("data-persona-conversation-state")).toBe("empty");
-    controllers[controllers.length - 1]!.injectAssistantMessage({
-      content: "hi there",
-    });
+    controller.injectAssistantMessage({ content: "hi there" });
+    expect(mount.getAttribute("data-persona-conversation-state")).toBe("active");
+    controller.clearChat();
     expect(mount.getAttribute("data-persona-conversation-state")).toBe("empty");
   });
 

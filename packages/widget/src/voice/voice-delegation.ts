@@ -4,6 +4,8 @@ import type {
   VoiceDelegationFollowUp,
   VoiceDelegationRequest,
   VoiceDelegationResult,
+  VoiceClientTools,
+  VoiceDirectTurn,
   VoiceSessionBridge,
 } from "../types";
 
@@ -43,14 +45,21 @@ export interface VoiceDelegationHost {
   parked(): boolean;
   /** The transcript bubble the request came from (see KeyedVoiceTranscript.claimUserTurn). */
   claim(userText: string, userUtteranceIds: string[]): string | null;
-  /** sendMessage as a voice turn, submitting `userMessageId`'s bubble when given. */
-  send(userText: string, userMessageId: string | undefined): Promise<void>;
+  /**
+   * sendMessage as a voice turn, submitting `userMessageId`'s bubble when
+   * given and recording `priorToolResults` as already-run tool calls.
+   */
+  send(userText: string, voiceTurn: { userMessageId?: string | null; priorToolResults?: unknown }): Promise<void>;
   /** Route the chat stream's assistant messages and failures into `capture` (or stop). */
   track(capture: VoiceDelegationCapture | null): void;
   /** Deny a pending approval (server gate or WebMCP) by its message id. */
   decide(approvalMessageId: string): void;
   /** Let browser TTS read these messages after all (their spoken result was dropped). */
   unspoken(messageIds: string[]): void;
+  /** WebMCP access for the voice fast tier; `null` when WebMCP is off. */
+  clientTools?(): VoiceClientTools | null;
+  /** Write a server-answered (`route: 'direct'`) turn into the chat. */
+  recordDirect?(turn: VoiceDirectTurn): void;
 }
 
 const SETTLE_POLL_MS = 50;
@@ -185,6 +194,9 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   };
 
   return {
+    clientTools: host.clientTools,
+    recordDirectTurn: host.recordDirect,
+
     // Read once at call start, before this call has any captions, so the
     // captions here are earlier calls' (e.g. on the previous page of a
     // multi-page site): spoken conversation the new voice session never heard.
@@ -231,6 +243,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       userText,
       userUtteranceIds,
       stream,
+      priorToolResults,
     }: VoiceDelegationRequest): Promise<VoiceDelegationResult> {
       const live = parks.filter((park) => pendingOf(park).length);
       const pendingIds = live.flatMap(pendingOf);
@@ -297,7 +310,10 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       active = capture;
       retrack();
       try {
-        await host.send(userText, host.claim(userText, userUtteranceIds) ?? undefined);
+        await host.send(userText, {
+          userMessageId: host.claim(userText, userUtteranceIds),
+          priorToolResults,
+        });
         // Local tools and approvals may continue the turn past the first stream.
         await settled(capture);
       } catch {

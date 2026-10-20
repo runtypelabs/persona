@@ -2,6 +2,7 @@ import { createElement, createNode, cx } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 import { attachTooltip } from "../utils/tooltip";
+import { applyControlPadding, applyControlSize, controlToken, legacyControlValue } from "./control-styles";
 import { HEADER_THEME_CSS } from "./header-builder";
 
 /**
@@ -17,7 +18,7 @@ export const HEADER_CONTROL_SPARSE_CLASS = "persona-header-control--sparse";
  * Icon-size token default in CSS pixels. Only derives the SVG attributes when a
  * per-control size is unset; the box itself is owned by the stylesheet.
  */
-const ICON_FALLBACK_PX = 20;
+const ICON_FALLBACK_PX = 16;
 
 /**
  * Icons whose Lucide paths occupy only the middle of the 24x24 viewBox (X spans
@@ -227,6 +228,55 @@ export const createHeaderIconButton = (
   return { button, wrapper };
 };
 
+/** Shared close/clear recipe used at construction and after config updates. */
+export const applyHeaderControlStyle = (
+  button: HTMLButtonElement,
+  config: AgentWidgetConfig | undefined,
+  role: "close" | "clear",
+  options: { buttonSize?: string; iconSize?: string } = {},
+): void => {
+  const launcher = config?.launcher;
+  const clear = launcher?.clearChat;
+  const path = (key: string) => role === "close"
+    ? `launcher.closeButton${key[0].toUpperCase()}${key.slice(1)}`
+    : `launcher.clearChat.${key === "color" ? "iconColor" : key}`;
+  const legacy = (key: string) => legacyControlValue(config, path(key));
+  const token = (key: string, fallback: string) => controlToken(config, `header.${role}`, key, fallback);
+  const value = (key: string, leaf: string, fallback: string) => legacy(key) || token(leaf, fallback);
+  const size = options.buttonSize || legacy("size");
+  applyControlSize(button, size || token("size", "var(--persona-header-control-size, 32px)"), size);
+  // Keep the stylesheet-owned unconfigured box (including its touch floor).
+  if (!size && token("size", "") === "") button.style.width = button.style.height = "";
+  const background = role === "close" ? launcher?.closeButtonBackgroundColor : clear?.backgroundColor;
+  button.style.color = value("color", "foreground", HEADER_THEME_CSS.actionIconColor);
+  button.style.backgroundColor = legacy("backgroundColor") || (token("background", "") ? token("background", background || "transparent") : background || "");
+  button.classList.toggle("hover:persona-bg-gray-100", !background && !legacy("backgroundColor") && token("background", "") === "");
+  const borderWidth = role === "close" ? launcher?.closeButtonBorderWidth : clear?.borderWidth;
+  const borderColor = role === "close" ? launcher?.closeButtonBorderColor : clear?.borderColor;
+  const hasBorder = Boolean(borderWidth || borderColor || token("borderWidth", "") || token("borderColor", ""));
+  button.style.border = hasBorder
+    ? `${value("borderWidth", "borderWidth", borderWidth || "0px")} solid ${value("borderColor", "borderColor", borderColor || "transparent")}` : "";
+  button.classList.toggle("persona-border-none", !hasBorder);
+  const radius = role === "close" ? launcher?.closeButtonBorderRadius : clear?.borderRadius;
+  button.style.borderRadius = legacy("borderRadius") || (token("borderRadius", "") ? token("borderRadius", "var(--persona-components-header-controlBorderRadius, 9999px)") : radius || "");
+  button.classList.toggle("persona-rounded-full", !button.style.borderRadius);
+  const x = role === "close" ? launcher?.closeButtonPaddingX : clear?.paddingX;
+  const y = role === "close" ? launcher?.closeButtonPaddingY : clear?.paddingY;
+  const padding = token("padding", "0px");
+  applyControlPadding(button, padding, legacy("paddingX") || (padding === "0px" ? x : undefined), legacy("paddingY") || (padding === "0px" ? y : undefined));
+  const iconName = role === "close" ? launcher?.closeButtonIconName ?? "x" : clear?.iconName ?? "refresh-cw";
+  applyHeaderControlGlyph(button, iconName, { iconSize: options.iconSize, iconText: role === "close" ? launcher?.closeButtonIconText ?? "×" : undefined });
+  const svg = button.querySelector("svg");
+  if (svg) {
+    const scale = SPARSE_GLYPHS[iconName]?.[0] ?? 1;
+    const iconSize = token("iconSize", "");
+    if (!options.iconSize && iconSize) {
+      svg.style.width = svg.style.height = `calc(${token("iconSize", "var(--persona-header-control-icon-size, 16px)")} * ${scale})`;
+    }
+    if (token("iconStrokeWidth", "")) svg.style.strokeWidth = `calc(${token("iconStrokeWidth", "var(--persona-components-header-controlStrokeWidth, 1.5)")} * ${scale === 1 ? 1 : 0.7})`;
+  }
+};
+
 export interface CloseButtonParts {
   button: HTMLButtonElement;
   wrapper: HTMLElement;
@@ -316,6 +366,7 @@ export const createCloseButton = (
     hidden: !showClose,
   });
 
+  applyHeaderControlStyle(button, config, "close", { buttonSize, iconSize });
   return { button, wrapper };
 };
 
@@ -359,5 +410,6 @@ export const createClearChatButton = (
     paddingY: clearChatConfig.paddingY,
   });
 
+  applyHeaderControlStyle(button, config, "clear", { buttonSize, iconSize });
   return { button, wrapper };
 };

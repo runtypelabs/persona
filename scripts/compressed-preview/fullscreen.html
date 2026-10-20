@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Persona full-screen loading benchmark</title>
+<style>html,body,#app{height:100%;width:100%;margin:0}body{background:#fff}</style>
+</head><body><div id="app"></div>
+<script>
+window.siteAgentConfig = {
+  target: "#app", cssUrl: "/dist/widget.css", jsUrl: "/dist/index.global.js",
+  config: { apiUrl: "/api/chat", persistState: false, future: { v5Defaults: true }, launcher: { enabled: false, fullHeight: true } },
+  onChatReady(handle) { window.__handle = handle; window.__readyMs = performance.now(); },
+  onError({phase,error}) { window.__loadError = `${phase}: ${error?.message ?? error}`; }
+};
+</script><script src="/dist/install.global.js"></script></body></html>

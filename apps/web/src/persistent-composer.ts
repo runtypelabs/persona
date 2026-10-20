@@ -455,8 +455,8 @@ const renderStorefrontHeader: SlotRenderer = () => {
   header.className = "persona-storefront-header";
   header.setAttribute("aria-label", "Everspun storefront");
   // Intentionally NOT setting `data-persona-intro-card`: the widget's
-  // `updateCopy()` queries that attribute and toggles `display: none` based
-  // on `copy.showWelcomeCard`. Since we set `showWelcomeCard: false` to
+  // Welcome visibility updates query that attribute and hide the built-in
+  // card. Since we set `welcome.variant: "none"` to
   // suppress the default card, the slot replacement (this element) must not
   // carry that marker or it will be hidden along with the original card.
 
@@ -909,15 +909,16 @@ const config: AgentWidgetConfig = {
   },
   voiceRecognition: { enabled: true },
   attachments: { enabled: true },
+  welcome: {
+    // Replace the built-in card with the storefront header rendered via
+    // `layout.slots["body-top"]` below, without a flash before the slot runs.
+    variant: "none",
+    title: "Hi 👋",
+    subtitle:
+      "Ask about fit, fabric, or care, or browse the catalog (\"show me cashmere essentials\", \"what pants would go with this?\").",
+  },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    // The default welcome card is replaced by the storefront header rendered
-    // via `layout.slots["body-top"]` below. Hide the built-in card so it
-    // doesn't briefly flash before the slot renderer runs.
-    showWelcomeCard: false,
-    welcomeTitle: "Hi 👋",
-    welcomeSubtitle:
-      "Ask about fit, fabric, or care, or browse the catalog (\"show me cashmere essentials\", \"what pants would go with this?\").",
     inputPlaceholder: "Ask about this product or browse the catalog...",
   },
   layout: {
@@ -927,11 +928,19 @@ const config: AgentWidgetConfig = {
       "body-top": renderStorefrontHeader,
     },
   },
-  suggestionChips: [
-    "Show me cashmere essentials",
-    "What pants would go with this?",
-    "Show me everything under $200",
-  ],
+  suggestions: {
+    starters: {
+      items: [
+        "Show me cashmere essentials",
+        "What pants would go with this?",
+        "Show me everything under $200",
+      ],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
 };
 

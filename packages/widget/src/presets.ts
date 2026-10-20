@@ -68,17 +68,27 @@ export const PRESET_SHOP: WidgetPreset = {
       position: "bottom-right",
       width: DEFAULT_FLOATING_LAUNCHER_WIDTH,
     },
+    welcome: {
+      title: "Welcome to our shop!",
+      subtitle: "I can help you find products and answer questions",
+    },
     copy: {
-      welcomeTitle: "Welcome to our shop!",
-      welcomeSubtitle: "I can help you find products and answer questions",
       inputPlaceholder: "Ask me anything...",
       sendButtonLabel: "Send",
     },
-    suggestionChips: [
-      "Show me what you can help with",
-      "Walk me through getting started",
-      "Answer a question about this page",
-    ],
+    suggestions: {
+      starters: {
+        items: [
+          "Show me what you can help with",
+          "Walk me through getting started",
+          "Answer a question about this page",
+        ],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
   },
 };
 

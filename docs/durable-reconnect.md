@@ -38,8 +38,10 @@ Reconnecting needs three pieces of addressing:
 | `after=<lastEventId>` | the replay cursor | the highest SSE `id:` seq the widget has applied |
 
 The widget tracks `executionId` and `lastEventId` for you. `agentId` /
-`conversationId` are **host owned**: the widget never sees the `conversationId`, it
-lives only in the closure you give to `reconnectStream` (and to `customFetch`).
+`conversationId` are **host owned** on the legacy reconnect API: they live in
+the closure you give to `reconnectStream` (and to `customFetch`). The optional
+conversation history API also exposes the active conversation ID. Background
+switching below passes that ID explicitly to its own adapter.
 
 Those coordinates address a replay-from-cursor endpoint. The Runtype API provides
 one; a self-hosted async-agent backend exposes an equivalent of the same shape:
@@ -226,10 +228,118 @@ which also short-circuits the current backoff if one is already running.
   agent dispatched with a stable `conversationId`; a different backend (an
   async/background agent runner of your own) just needs to emit the same cursor and
   expose a replay-from-cursor endpoint.
-- **`conversationId` is host owned.** The widget never receives it; it lives in
-  your `reconnectStream` / `customFetch` closure and in your own persistence next
-  to the resume handle.
+- **Legacy reconnect coordinates remain host owned.** Keep the conversation ID
+  in your `reconnectStream` / `customFetch` closure and persist it next to the
+  handle. These closures alone do not enable background conversation switching.
 - **The cursor is per durable row.** A single row that expands into several frames
   (some media or artifact rows) could in principle split on a TCP boundary; the
   widget advances the cursor only on fully-parsed frames to bound this. Plain text
   deltas, the common case, are one frame per row.
+
+
+## Opt-in background conversation switching
+
+With an authorized `features.history.provider`, a durable backend can allow the
+user to open B while A continues on the server:
+
+```ts
+const controller = createAgentExperience(el, {
+  apiUrl: "/api/chat/dispatch",
+  features: { history: { enabled: true, provider: historyProvider } },
+  backgroundConversations: {
+    capabilities: { durableExecution: true, readOnlyReplay: true },
+    reconnectStream: ({ conversationId, executionId, after, signal }) =>
+      fetch(`/api/conversations/${encodeURIComponent(conversationId)}` +
+        `/executions/${encodeURIComponent(executionId)}/events?after=${encodeURIComponent(after)}`,
+        { signal }),
+    // Optional. This endpoint/subscription reports actual server state.
+    subscribeStatus: ({ conversationId, executionId }, callback) =>
+      subscribeToExecution(conversationId, executionId, callback),
+  },
+  onConversationExecutionState: (state) => updateConversationBadge(state),
+});
+
+await controller.openConversation("conversation-b", { busy: "background" });
+// Returning restores A's matching partial transcript and catches up read-only.
+await controller.openConversation("conversation-a");
+
+controller.on("conversation:executionState", (state) => {
+  // conversationId, executionId, status, detached (plus normal instance metadata)
+});
+```
+
+`busy` still defaults to `"reject"`. `"stop"` retains the existing local Stop
+behavior. `"background"` requires the explicit adapter above; a legacy
+`reconnectStream` closure, SSE IDs, or a client token alone never opts a backend
+in. Ordinary client-token installations keep their current behavior.
+
+The two capability declarations are backend promises, not automatic detection:
+
+- Closing or aborting the browser response must leave the server execution
+  running. Dispatch must persist its execution identity and ordered event log.
+- Reconnect must authorize the exact conversation/execution pair, replay strictly
+  after the applied cursor, and then tail the same execution. It must never start
+  another execution, run a tool, or submit an approval.
+- Conversation activation is prepared and committed through the history provider.
+  A failed preparation, rejected commit, or superseded selection preserves the
+  original stream. The provider must honor its existing transactional contract:
+  a rejected commit leaves the active binding unchanged.
+
+Persona stores an in-memory checkpoint containing A's partial transcript, applied
+cursor, active text block and native parser state, tool/reasoning messages, and
+artifact state. It closes the local transport only after B's activation succeeds.
+On return, history authorization runs again, then Persona restores the saved
+checkpoint and replays events after its cursor. A newer fetched history page may
+already contain A's finished answer; it is never used as the append base for that
+older cursor. This prevents duplicated text and tools. Failed authorization keeps
+the checkpoint available for a later retry.
+
+The native event parser preserves text block boundaries, accumulated raw text for
+structured `streamParser` factories, nested block attribution, media buffers, and
+artifact accumulation. A custom `parseSSEEvent` closure has its own hidden parser
+state and currently rejects background switching. The backend must retain replay
+for the execution being attached and must reject deleted or unauthorized pairs.
+A history provider must report identity changes through its subscription and must
+be replaced when its authorization context is replaced.
+
+A turn still preparing locally, one without a durable cursor/execution/active
+conversation, or one already awaiting browser tools or approval rejects unsafe
+detachment. Native replay displays newly encountered browser-tool waits and
+approvals and reports `needs-attention`; it does not automatically execute browser
+tools from the replay. User decisions use the existing explicit resolution paths.
+
+`ConversationExecutionState` contains:
+
+```ts
+{
+  conversationId: string;
+  executionId: string;
+  status: "running" | "needs-attention" | "completed" | "failed";
+  detached: boolean;
+}
+```
+
+Without `subscribeStatus`, a detached badge is **last observed state**. Persona
+learns completion or failure when the conversation reconnects; it has no live
+completion awareness while detached. With a status source, it observes that
+execution until return, a terminal status, or cleanup. `completed` and `failed`
+mean observed server outcomes. Reconnect exhaustion is a local attachment failure
+and does not prove that server execution failed. Status observer exceptions do not
+interrupt navigation.
+
+Stop and `run:finished` with `outcome: "cancel"` describe the **local** session.
+Aborting a durable response is not a server cancellation request. This adapter
+adds no server cancel endpoint; a host that needs server cancellation must perform
+an explicitly authorized backend operation and observe its result separately.
+The existing `reconnectStream`, `resume`, and `onExecutionState` contracts remain
+available. `onExecutionState(null)` still clears the active local handle when a
+conversation detaches; it is not a signal that server work ended. When the new
+adapter is configured, conversation-aware native reattachments use it and suppress
+automatic browser tool execution during replay.
+
+Checkpoints and subscriptions are released on identity/provider changes, deletion
+of the saved conversation, clearing/resetting chat history, device reset, and
+widget destruction. Late callbacks from released subscriptions are ignored.
+These checkpoints belong to the current widget instance; they do not add reload
+persistence, cross-device synchronization, push notifications, or a scheduler.
+The existing reload handshake above remains a separate host-owned API.
