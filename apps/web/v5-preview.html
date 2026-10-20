@@ -18,46 +18,49 @@
         <div class="v5-eyebrow">EARLY PREVIEW</div>
         <p><a href="/embedded-host.html">Try two widgets and the embedded host APIs</a> · <a href="/assistant-composers.html">Compare five assistant configurations</a></p>
         <p>Runs entirely in your browser with sample data. No API key needed. These defaults are still evolving.</p>
-        <label>Scenario<select id="v5-scene">
-          <option value="activity">Reasoning &amp; tools</option>
-          <option value="details">Request &amp; Response</option>
-          <option value="welcome">Welcome &amp; composer</option>
-          <option value="states">Running &amp; failed tools</option>
-          <option value="streaming">Loading &amp; follow-ups</option>
-          <option value="errors">Errors &amp; retry</option>
-          <option value="actions">Message actions</option>
-          <option value="artifacts">Artifacts</option>
-          <option value="approval">Approval decisions &amp; outcomes</option>
-          <option value="approval-custom">Approval · custom renderer</option>
-          <option value="embedded">Embedded · transparent flex host</option>
-          <option value="scroll-control">Scroll control · live activity</option>
-          <option value="long">Long conversation &amp; scroll</option>
-        </select></label>
-        <div class="v5-control-pair">
-          <label>Defaults<select id="v5-version"><option value="v5">V5 preview</option><option value="v4">V4 current</option></select></label>
-          <label>Theme<select id="v5-theme"><option value="dark">Dark</option><option value="light">Light</option></select></label>
-        </div>
-        <label>Brand<select id="v5-brand"><option value="default">Persona default</option><option value="editorial">Editorial · warm neutral</option><option value="studio">Studio · violet</option><option value="terminal">Terminal · green</option></select></label>
-        <label>Header icon<select id="v5-header-icon"><option value="default">Default</option><option value="bot">Bot</option><option value="sparkles">Sparkles</option><option value="image">Custom image · sample logo</option><option value="hidden">Hidden</option></select></label>
-        <div class="v5-control-pair">
-          <label>Icon background<select id="v5-icon-background"><option value="default">Default</option><option value="transparent">Transparent</option><option value="filled">Filled</option></select></label>
-          <label>Icon padding<select id="v5-icon-padding"><option value="default">Default</option><option value="0">None</option><option value="4px">4px</option><option value="6px">6px</option><option value="10px">10px</option></select></label>
-        </div>
-        <div id="v5-brand-summary" class="v5-config" hidden><p>Six fields set the brand. Theme above explicitly chooses light or dark; omit <code>colorScheme</code> to infer it from the neutral color.</p><pre id="v5-brand-config"></pre></div>
-        <label>Activity style<select id="v5-variant"><option value="default">Default</option><option value="row">Compact rows</option><option value="card">Cards</option></select></label>
-        <label>Resolved approvals<select id="v5-approval-display"><option value="default">Default</option><option value="row">Compact activity</option><option value="status-line">Retained card</option><option value="trace">Legacy trace</option></select></label>
-        <label>Tool grouping<select id="v5-group"><option value="default">Default</option><option value="separate">Separate calls</option><option value="descriptive">Descriptive labels · custom hook</option></select></label>
-        <label>Tool details<select id="v5-details"><option value="default">Default</option><option value="auto">Auto-expand while streaming</option><option value="summary">Summary only</option></select></label>
-        <label>Status icons<select id="v5-icons"><option value="default">Default</option><option value="always">Always</option><option value="active">Active / attention only</option><option value="never">Never</option></select></label>
-        <label>Suggestion edges<select id="v5-suggestion-edges"><option value="default">Default</option><option value="clip">Clip</option><option value="fade">Fade</option></select></label>
-        <label>Error display<select id="v5-error-display"><option value="default">Default</option><option value="block">Alert block</option><option value="bubble">Message bubble</option></select></label>
-        <label>Artifacts<select id="v5-artifacts"><option value="default">Default</option><option value="on">Enabled</option><option value="off">Disabled</option></select></label>
-        <label>Top fade<select id="v5-fade"><option value="default">Default</option><option value="on">On</option><option value="off">Off</option></select></label>
-        <div class="v5-control-pair">
-          <label>Scroll glyph<select id="v5-scroll-glyph"><option value="default">Default</option><option value="arrow">Arrow</option><option value="dots">Dots</option><option value="custom">Custom animation</option></select></label>
-          <label>Jump motion<select id="v5-scroll-behavior"><option value="default">Default</option><option value="smooth">Smooth</option><option value="instant">Instant</option></select></label>
-          <label>Jump duration<select id="v5-scroll-duration"><option value="default">Default (220 ms)</option><option value="0">0 ms (instant)</option><option value="150">150 ms</option><option value="350">350 ms</option><option value="600">600 ms</option><option value="1000">1000 ms</option></select></label>
-          <label>Scroll transition<select id="v5-scroll-transition"><option value="default">Default</option><option value="fade">Fade</option><option value="none">Instant</option></select></label>
+        <button type="button" id="v5-settings-toggle" class="controls-toggle" aria-expanded="false" aria-controls="v5-settings">Preview settings</button>
+        <div id="v5-settings" class="v5-settings">
+          <label>Scenario<select id="v5-scene">
+            <option value="activity">Reasoning &amp; tools</option>
+            <option value="details">Request &amp; Response</option>
+            <option value="welcome">Welcome &amp; composer</option>
+            <option value="states">Running &amp; failed tools</option>
+            <option value="streaming">Loading &amp; follow-ups</option>
+            <option value="errors">Errors &amp; retry</option>
+            <option value="actions">Message actions</option>
+            <option value="artifacts">Artifacts</option>
+            <option value="approval">Approval decisions &amp; outcomes</option>
+            <option value="approval-custom">Approval · custom renderer</option>
+            <option value="embedded">Embedded · transparent flex host</option>
+            <option value="scroll-control">Scroll control · live activity</option>
+            <option value="long">Long conversation &amp; scroll</option>
+          </select></label>
+          <div class="v5-control-pair">
+            <label>Defaults<select id="v5-version"><option value="v5">V5 preview</option><option value="v4">V4 current</option></select></label>
+            <label>Theme<select id="v5-theme"><option value="dark">Dark</option><option value="light">Light</option></select></label>
+          </div>
+          <label>Brand<select id="v5-brand"><option value="default">Persona default</option><option value="editorial">Editorial · warm neutral</option><option value="studio">Studio · violet</option><option value="terminal">Terminal · green</option></select></label>
+          <label>Header icon<select id="v5-header-icon"><option value="default">Default</option><option value="bot">Bot</option><option value="sparkles">Sparkles</option><option value="image">Custom image · sample logo</option><option value="hidden">Hidden</option></select></label>
+          <div class="v5-control-pair">
+            <label>Icon background<select id="v5-icon-background"><option value="default">Default</option><option value="transparent">Transparent</option><option value="filled">Filled</option></select></label>
+            <label>Icon padding<select id="v5-icon-padding"><option value="default">Default</option><option value="0">None</option><option value="4px">4px</option><option value="6px">6px</option><option value="10px">10px</option></select></label>
+          </div>
+          <div id="v5-brand-summary" class="v5-config" hidden><p>Six fields set the brand. Theme above explicitly chooses light or dark; omit <code>colorScheme</code> to infer it from the neutral color.</p><pre id="v5-brand-config"></pre></div>
+          <label>Activity style<select id="v5-variant"><option value="default">Default</option><option value="row">Compact rows</option><option value="card">Cards</option></select></label>
+          <label>Resolved approvals<select id="v5-approval-display"><option value="default">Default</option><option value="row">Compact activity</option><option value="status-line">Retained card</option><option value="trace">Legacy trace</option></select></label>
+          <label>Tool grouping<select id="v5-group"><option value="default">Default</option><option value="separate">Separate calls</option><option value="descriptive">Descriptive labels · custom hook</option></select></label>
+          <label>Tool details<select id="v5-details"><option value="default">Default</option><option value="auto">Auto-expand while streaming</option><option value="summary">Summary only</option></select></label>
+          <label>Status icons<select id="v5-icons"><option value="default">Default</option><option value="always">Always</option><option value="active">Active / attention only</option><option value="never">Never</option></select></label>
+          <label>Suggestion edges<select id="v5-suggestion-edges"><option value="default">Default</option><option value="clip">Clip</option><option value="fade">Fade</option></select></label>
+          <label>Error display<select id="v5-error-display"><option value="default">Default</option><option value="block">Alert block</option><option value="bubble">Message bubble</option></select></label>
+          <label>Artifacts<select id="v5-artifacts"><option value="default">Default</option><option value="on">Enabled</option><option value="off">Disabled</option></select></label>
+          <label>Top fade<select id="v5-fade"><option value="default">Default</option><option value="on">On</option><option value="off">Off</option></select></label>
+          <div class="v5-control-pair">
+            <label>Scroll glyph<select id="v5-scroll-glyph"><option value="default">Default</option><option value="arrow">Arrow</option><option value="dots">Dots</option><option value="custom">Custom animation</option></select></label>
+            <label>Jump motion<select id="v5-scroll-behavior"><option value="default">Default</option><option value="smooth">Smooth</option><option value="instant">Instant</option></select></label>
+            <label>Jump duration<select id="v5-scroll-duration"><option value="default">Default (220 ms)</option><option value="0">0 ms (instant)</option><option value="150">150 ms</option><option value="350">350 ms</option><option value="600">600 ms</option><option value="1000">1000 ms</option></select></label>
+            <label>Scroll transition<select id="v5-scroll-transition"><option value="default">Default</option><option value="fade">Fade</option><option value="none">Instant</option></select></label>
+          </div>
         </div>
         <div class="v5-actions"><button type="button" id="v5-stream">Run stream</button><button type="button" id="v5-reset">Reset scene</button></div>
         <p id="v5-status" role="status" aria-live="polite"></p>

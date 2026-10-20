@@ -1,6 +1,6 @@
 .v5-preview-page { max-width: 1440px; }
 .v5-playground { display:grid; grid-template-columns:280px minmax(0,1fr); gap:28px; align-items:start; margin-top:24px; }
-.v5-controls { display:flex; flex-direction:column; gap:14px; }
+.v5-controls,.v5-settings { display:flex; flex-direction:column; gap:14px; }
 .v5-controls p,.v5-preview-tip { font-size:13px; line-height:1.6; color:var(--muted); margin:0; }
 .v5-eyebrow { font-size:11px; font-weight:600; letter-spacing:.12em; color:var(--muted); }
 .v5-controls label { display:flex; flex-direction:column; gap:6px; font-size:12px; font-weight:500; }
@@ -20,9 +20,10 @@
 .v5-config pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; line-height:1.6; max-height:320px; overflow:auto; }
 @media(max-width:800px) {
   .v5-playground { grid-template-columns:minmax(0,1fr); gap:22px; }
-  .v5-controls { display:grid; grid-template-columns:1fr 1fr; }
-  .v5-controls > p,.v5-eyebrow,.v5-config,.v5-actions { grid-column:1/-1; }
-  .v5-control-pair { grid-column:1/-1; }
+  .v5-controls .controls-toggle { display:flex; }
+  .controls-toggle[aria-expanded="false"] + .v5-settings { display:none; }
+  .v5-settings { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .v5-control-pair,.v5-settings .v5-config { grid-column:1/-1; }
   .v5-widget-frame { height:640px; max-height:85dvh; }
 }
 
@@ -58,3 +59,4 @@
 .v5-scroll-custom-icon { display: inline-block; font-size: 18px; line-height: 1; }
 
 @media (min-width: 801px) { .v5-preview-pane { position: sticky; top: 88px; } }
+@media (max-width: 480px) { .v5-settings { grid-template-columns:minmax(0,1fr); } }

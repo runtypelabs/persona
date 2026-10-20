@@ -1885,3 +1885,33 @@ body.is-fullscreen .fullscreen-exit { display: inline-flex !important; }
   }
   .shell-picker-menu { min-width: calc(100vw - 1.5rem); }
 }
+
+/* ─── Collapsible preview settings (bindControlsToggle) ─── */
+
+.controls-toggle {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: inherit;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 9px;
+  cursor: pointer;
+}
+.controls-toggle::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.controls-toggle[aria-expanded="true"]::after { transform: translateY(2px) rotate(-135deg); }
+.controls-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

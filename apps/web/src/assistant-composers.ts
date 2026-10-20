@@ -3,6 +3,7 @@ import "@runtypelabs/persona/widget.css";
 import "./assistant-composers.css";
 import { initAgentWidget, registerIcons, markdownPostprocessor, preprocessStreamingMarkdown } from "@runtypelabs/persona";
 import { renderExamplesShell } from "./examples-nav";
+import { bindControlsToggle } from "./controls-toggle";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { createDemoVoiceProvider } from "./demo-voice-provider";
 import { createDemoDictationProvider } from "./demo-dictation-provider";
@@ -11,6 +12,7 @@ import { assistantIcons, assistantPresets, createAssistantPreset } from "./assis
 registerIcons(assistantIcons);
 renderExamplesShell();
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+bindControlsToggle(element("lab-controls-toggle"));
 const markdownReply = "## Get started with Persona\n\nPersona is a **customizable chat UI** built with *plain JavaScript*. The Runtype CLI provides a guided setup with `persona init`.\n\n| Feature | What you can build |\n| --- | --- |\n| Streaming Markdown | Replies with formatted text, tables, and code |\n| Themes and layouts | Floating, embedded, or fullscreen chat |\n| Tools and voice | Tool activity, approval prompts, and voice conversations |\n\nTo connect Persona to Runtype, run:\n\n```sh\nnpx @runtypelabs/cli@latest persona init\n```\n\nSign in when prompted. The CLI creates an agent and client token, then provides an embed snippet. Paste that snippet into your site to add the widget.\n\nExplore more options in [the Persona docs](https://persona-chat.dev).";
 
 let selected = "claude";

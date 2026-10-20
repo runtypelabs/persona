@@ -3,12 +3,14 @@ import "@runtypelabs/persona/widget.css";
 import "./v5-preview.css";
 import { initAgentWidget, type AgentWidgetConfig, type AgentWidgetMessage, type AgentWidgetPlugin } from "@runtypelabs/persona";
 import { renderExamplesShell } from "./examples-nav";
+import { bindControlsToggle } from "./controls-toggle";
 import { renderScrollToBottomIcon } from "./scroll-to-bottom-icon";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 // Reuse the documented application-level hook; this is not a library default.
 import { renderToolActivitySummary } from "../../../examples/ai-sdk-next/app/lib/tool-activity-summary";
 
 renderExamplesShell();
+bindControlsToggle(document.querySelector<HTMLButtonElement>("#v5-settings-toggle")!);
 const host = document.querySelector<HTMLElement>("#v5-host")!;
 const select = (name: string) => document.querySelector<HTMLSelectElement>(`#v5-${name}`)!;
 // Each preset uses the same six public fields. The theme selector remains an
