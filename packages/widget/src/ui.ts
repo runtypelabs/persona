@@ -1519,6 +1519,10 @@ export const createAgentExperience = (
   const scrollToBottomControl = createScrollToBottomControl(renderLucideIcon, "transcript", body);
   const scrollToBottomButton = scrollToBottomControl.element;
   container.appendChild(scrollToBottomButton);
+  // The docked history rail gives the transcript its own positioned column.
+  // Follow that live parent so 50% stays centered over the conversation through
+  // rail mounting, resizing, and restoration to the full-width container.
+  const scrollToBottomHost = () => body.parentElement ?? container;
   // Persistent-composer follow-ups stay on the panel surface, outside the
   // scrolling transcript, rather than floating over the host page.
   const panelSuggestions = createElement("div", "persona-panel-suggestions");
@@ -1623,14 +1627,15 @@ export const createAgentExperience = (
 
   const updateScrollToBottomButtonOffset = () => {
     const footerHidden = footer.style.display === "none";
+    const host = scrollToBottomHost();
     if (isComposerBar()) {
       // The fixed composer is a sibling of the transcript. Anchored panels
       // already clear it; only reserve space when it overlaps the panel
       // (for example in fullscreen mode).
       const overlap = footerHidden || !footer.offsetHeight ? 0 :
-        Math.max(0, container.getBoundingClientRect().bottom - footer.getBoundingClientRect().top);
+        Math.max(0, host.getBoundingClientRect().bottom - footer.getBoundingClientRect().top);
       const suggestionOverlap = panelSuggestions.hidden ? 0 :
-        Math.max(0, container.getBoundingClientRect().bottom - panelSuggestions.getBoundingClientRect().top);
+        Math.max(0, host.getBoundingClientRect().bottom - panelSuggestions.getBoundingClientRect().top);
       scrollToBottomButton.style.bottom = `${Math.max(overlap, suggestionOverlap) + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
       return;
     }
@@ -1641,9 +1646,9 @@ export const createAgentExperience = (
       // Header children also cover the pill's display:contents attachment row.
       for (const child of footer.querySelectorAll<HTMLElement>(":scope > *, [data-persona-composer-header] > *")) {
         if (child.hidden || !child.offsetHeight || getComputedStyle(child).visibility === "hidden") continue;
-        contentTop = Math.min(contentTop, offsetTopWithinBody(child, container));
+        contentTop = Math.min(contentTop, offsetTopWithinBody(child, host));
       }
-      if (contentTop < Infinity) footerHeight -= contentTop - offsetTopWithinBody(footer, container);
+      if (contentTop < Infinity) footerHeight -= contentTop - offsetTopWithinBody(footer, host);
     }
     scrollToBottomButton.style.bottom = `${footerHeight + (footerHidden ? 0 : readLiftPx()) + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
   };
@@ -5454,8 +5459,9 @@ export const createAgentExperience = (
       }
       return;
     }
-    if (scrollToBottomButton.parentNode !== container) {
-      container.appendChild(scrollToBottomButton);
+    const host = scrollToBottomHost();
+    if (scrollToBottomButton.parentNode !== host) {
+      host.insertBefore(scrollToBottomButton, host === container ? panelSuggestions : null);
     }
     updateScrollToBottomButtonOffset();
     const hasOverflow = getScrollBottomOffset(body) > 0;
@@ -9332,6 +9338,7 @@ export const createAgentExperience = (
     get suppressScrollSend() { return suppressScrollSend; },
     set suppressScrollSend(value) { suppressScrollSend = value; },
     syncScrollToBottomButton,
+    scrollToBottomButton,
     updateWelcome,
     getHistoryProviderFactory,
     historyErrors: { HistoryClientError, HistoryProviderError },
