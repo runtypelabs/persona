@@ -9314,6 +9314,8 @@ export const createAgentExperience = (
     get open() { return open; },
     panel,
     panelElements,
+    panelSuggestions,
+    panelSuggestionsFade,
     get persistentMetadata() { return persistentMetadata; },
     set persistentMetadata(value) { persistentMetadata = value; },
     plugins,

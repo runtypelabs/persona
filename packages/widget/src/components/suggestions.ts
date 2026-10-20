@@ -185,7 +185,7 @@ export const createSuggestionElement = (
   const itemBehavior = item.behavior;
 
   const select = () => {
-    if (session.isStreaming()) return;
+    if (session.isStreaming() || eventTarget.closest("[inert]")) return;
     const detail = {
       instanceId: getInstanceId(eventTarget),
       suggestion: { ...item },

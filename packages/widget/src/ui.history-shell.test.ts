@@ -10,6 +10,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { createAgentExperience } from "./ui";
 import { createHistoryView } from "./components/history-view";
@@ -113,6 +115,10 @@ const messagesOf = (mount: HTMLElement) =>
 const footerOf = (mount: HTMLElement) =>
   mount.querySelector<HTMLElement>(".persona-widget-footer") ??
   mount.querySelector<HTMLElement>("[data-test-gate]")!;
+const panelSuggestionsOf = (mount: HTMLElement) =>
+  mount.querySelector<HTMLElement>("[data-persona-panel-suggestions]")!;
+const panelSuggestionsFadeOf = (mount: HTMLElement) =>
+  mount.querySelector<HTMLElement>(".persona-panel-suggestions-fade")!;
 /** Every header builder (default, minimal, composer-bar placeholder) marks it. */
 const headerOf = (mount: HTMLElement) =>
   mount.querySelector<HTMLElement>('[data-persona-theme-zone="header"]')!;
@@ -281,6 +287,155 @@ describe("history shell", () => {
   });
 
   describe("panel host", () => {
+    it("removes the pill footer from layout while history is open and restores it on close", async () => {
+      const stylesheet = document.createElement("style");
+      stylesheet.textContent = readFileSync(resolve(__dirname, "styles/widget.css"), "utf8");
+      document.head.appendChild(stylesheet);
+      try {
+        const { mount, controller } = setup({
+          config: { launcher: { mountMode: "composer-bar" } },
+        });
+        controller.open();
+        const footer = footerOf(mount);
+        expect(getComputedStyle(footer).display).toBe("flex");
+        await openHistoryUI(mount);
+        expect(footer.hidden).toBe(true);
+        expect(getComputedStyle(footer).display).toBe("none");
+        await closeHistoryUI(controller);
+        expect(footer.hidden).toBe(false);
+        expect(getComputedStyle(footer).display).toBe("flex");
+      } finally {
+        stylesheet.remove();
+      }
+    });
+
+    it("mounts composer-bar history inside the conversation panel through close, reopen, and destroy", async () => {
+      const { mount, controller } = setup({
+        config: { launcher: { mountMode: "composer-bar" } },
+      });
+      controller.open();
+      const container = mount.querySelector<HTMLElement>(".persona-widget-container")!;
+      const footer = footerOf(mount);
+      expect(footer.parentElement).not.toBe(container);
+
+      await openHistoryUI(mount);
+      const first = historyRoot(mount)!;
+      expect(first.parentElement).toBe(container);
+      expect(bodyOf(mount).compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(first.nextElementSibling).toBe(panelSuggestionsOf(mount));
+      expect(footer.parentElement!.contains(first)).toBe(false);
+      first.querySelector<HTMLButtonElement>(".persona-history-new")!.click();
+      await flush(20);
+      expect(first.isConnected).toBe(false);
+      expect(historyRoot(mount)).toBeNull();
+
+      await openHistoryUI(mount);
+      expect(historyRoot(mount)!.parentElement).toBe(container);
+      expect(historyRoot(mount)).not.toBe(first);
+      controller.destroy();
+      expect(historyRoot(mount)).toBeNull();
+      expect(panelSuggestionsOf(mount)).toBeNull();
+    });
+
+    it.each(["send", "fill"] as const)(
+      "blocks composer-bar follow-up %s while history covers the conversation and preserves the draft",
+      async (behavior) => {
+        const customFetch = vi.fn(async () =>
+          new Response('data: {"type":"done"}\n\n', {
+            headers: { "Content-Type": "text/event-stream" },
+          })
+        );
+        const { mount, controller } = setup({
+          config: {
+            launcher: { mountMode: "composer-bar" },
+            customFetch,
+            suggestions: { followUps: { placement: "composer", behavior } },
+          },
+        });
+        controller.open();
+        controller.setFollowUpSuggestions(["Continue the conversation"]);
+        const suggestions = panelSuggestionsOf(mount);
+        const input = mount.querySelector<HTMLTextAreaElement>("textarea")!;
+        input.value = "My unfinished draft";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        const selected = vi.fn();
+        suggestions.addEventListener("persona:suggestion:selected", selected);
+        expect(suggestions.hidden).toBe(false);
+
+        await openHistoryUI(mount);
+        expect(suggestions.style.display).toBe("none");
+        expect(suggestions.getAttribute("aria-hidden")).toBe("true");
+        expect(suggestions.hasAttribute("inert")).toBe(true);
+        // Dispatched clicks also respect inertness, before hooks or draft edits.
+        suggestions.querySelector<HTMLButtonElement>("button")!.click();
+        await flush();
+        expect(input.value).toBe("My unfinished draft");
+        expect(customFetch).not.toHaveBeenCalled();
+        expect(controller.getMessages()).toHaveLength(0);
+        expect(selected).not.toHaveBeenCalled();
+
+        await closeHistoryUI(controller);
+        expect(suggestions.style.display).toBe("");
+        expect(suggestions.hasAttribute("aria-hidden")).toBe(false);
+        expect(suggestions.hasAttribute("inert")).toBe(false);
+        expect(input.value).toBe("My unfinished draft");
+        suggestions.querySelector<HTMLButtonElement>("button")!.click();
+        await flush(30);
+        expect(selected).toHaveBeenCalledTimes(1);
+        if (behavior === "fill") {
+          expect(input.value).toBe("Continue the conversation");
+          expect(customFetch).not.toHaveBeenCalled();
+        } else {
+          await vi.waitFor(() => expect(customFetch).toHaveBeenCalledTimes(1));
+          expect(controller.getMessages().some((message) =>
+            message.role === "user" && message.content === "Continue the conversation"
+          )).toBe(true);
+        }
+      }
+    );
+
+    it("keeps live follow-up updates and their fade suppressed, then restores the current state", async () => {
+      const { mount, controller } = setup({
+        config: { launcher: { mountMode: "composer-bar" } },
+      });
+      controller.open();
+      controller.setFollowUpSuggestions(["Original follow-up"]);
+      const suggestions = panelSuggestionsOf(mount);
+      const fade = panelSuggestionsFadeOf(mount);
+      const body = bodyOf(mount);
+      Object.defineProperty(body, "scrollHeight", { configurable: true, value: 600 });
+      Object.defineProperty(body, "clientHeight", { configurable: true, value: 200 });
+      body.dispatchEvent(new Event("scroll"));
+      expect(fade.hidden).toBe(false);
+
+      await openHistoryUI(mount);
+      controller.setFollowUpSuggestions(["Updated follow-up"]);
+      controller.update({});
+      body.dispatchEvent(new Event("scroll"));
+      window.dispatchEvent(new Event("resize"));
+      await flush();
+      expect(suggestions.style.display).toBe("none");
+      expect(suggestions.hasAttribute("inert")).toBe(true);
+      expect(fade.style.display).toBe("none");
+
+      await closeHistoryUI(controller);
+      expect(suggestions.style.display).toBe("");
+      expect(suggestions.hidden).toBe(false);
+      expect(suggestions.textContent).toContain("Updated follow-up");
+      expect(suggestions.textContent).not.toContain("Original follow-up");
+      expect(fade.style.display).toBe("");
+      expect(fade.getAttribute("aria-hidden")).toBe("true");
+
+      await openHistoryUI(mount);
+      controller.clearFollowUpSuggestions();
+      body.dispatchEvent(new Event("scroll"));
+      await closeHistoryUI(controller);
+      expect(suggestions.style.display).toBe("");
+      expect(suggestions.hidden).toBe(true);
+      expect(suggestions.querySelector("button")).toBeNull();
+      expect(fade.hidden).toBe(true);
+    });
+
     it("swaps the header's contents, hides transcript and composer, then restores them", async () => {
       const { mount } = setup();
       const body = bodyOf(mount);
@@ -290,6 +445,8 @@ describe("history shell", () => {
 
       await openHistoryUI(mount);
       expect(historyRoot(mount)).not.toBeNull();
+      expect(historyRoot(mount)!.parentElement).toBe(footer.parentElement);
+      expect(historyRoot(mount)!.nextElementSibling).toBe(footer);
       expect(body.style.display).toBe("none");
       expect(body.getAttribute("aria-hidden")).toBe("true");
       expect(body.hasAttribute("inert")).toBe(true);
@@ -459,6 +616,38 @@ describe("history shell", () => {
   });
 
   describe("rail host", () => {
+    it("keeps composer-bar follow-ups available beside a rail and restores them after a panel transition", async () => {
+      const { mount, controller } = setup({
+        historyFeature: { enabled: true, presentation: "rail" },
+        config: {
+          launcher: { mountMode: "composer-bar" },
+          suggestions: { followUps: { behavior: "fill" } },
+        },
+      });
+      controller.open();
+      controller.setFollowUpSuggestions(["Continue beside the rail"]);
+      setContainerWidth(mount, 900);
+      await openHistoryUI(mount);
+      const suggestions = panelSuggestionsOf(mount);
+      const input = mount.querySelector<HTMLTextAreaElement>("textarea")!;
+      expect(suggestions.style.display).not.toBe("none");
+      expect(suggestions.closest("[inert]")).toBeNull();
+      suggestions.querySelector<HTMLButtonElement>("button")!.click();
+      expect(input.value).toBe("Continue beside the rail");
+
+      controller.update({ features: { history: { presentation: "panel" } } });
+      await flush();
+      expect(suggestions.style.display).toBe("none");
+      expect(suggestions.hasAttribute("inert")).toBe(true);
+      expect(historyRoot(mount)!.parentElement).toBe(suggestions.parentElement);
+      controller.update({ features: { history: { presentation: "rail" } } });
+      await flush();
+      expect(historyRoot(mount)!.parentElement?.classList.contains("persona-history-rail-host")).toBe(true);
+      expect(suggestions.style.display).not.toBe("none");
+      expect(suggestions.closest("[inert]")).toBeNull();
+      expect(input.value).toBe("Continue beside the rail");
+    });
+
     const railSetup = async (rail?: Record<string, unknown>) => {
       const result = setup({
         historyFeature: { enabled: true, presentation: "rail", ...(rail ? { rail } : {}) },
@@ -1693,6 +1882,46 @@ describe("history shell", () => {
         expect(body.style.display).not.toBe("none");
         // Chrome first, focus second: the invoker lives in that header.
         expect(document.activeElement).toBe(historyButton(mount));
+      } finally {
+        waapi.restore();
+      }
+    });
+
+    it("keeps composer-bar follow-ups inert through the history exit animation", async () => {
+      const waapi = installWaapi();
+      try {
+        const { mount, controller } = setup({
+          config: {
+            launcher: { mountMode: "composer-bar" },
+            suggestions: { followUps: { behavior: "fill" } },
+          },
+        });
+        controller.open();
+        controller.setFollowUpSuggestions(["Continue after history"]);
+        const suggestions = panelSuggestionsOf(mount);
+        const fade = panelSuggestionsFadeOf(mount);
+        const input = mount.querySelector<HTMLTextAreaElement>("textarea")!;
+        input.value = "Draft before history";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await openHistoryUI(mount);
+
+        back(mount).click();
+        await flush();
+        expect(historyRoot(mount)).not.toBeNull();
+        expect(suggestions.style.display).toBe("none");
+        expect(suggestions.hasAttribute("inert")).toBe(true);
+        expect(fade.style.display).toBe("none");
+        suggestions.querySelector<HTMLButtonElement>("button")!.click();
+        expect(input.value).toBe("Draft before history");
+
+        waapi.settleAll();
+        await flush();
+        expect(historyRoot(mount)).toBeNull();
+        expect(suggestions.style.display).toBe("");
+        expect(suggestions.hasAttribute("inert")).toBe(false);
+        expect(fade.style.display).toBe("");
+        suggestions.querySelector<HTMLButtonElement>("button")!.click();
+        expect(input.value).toBe("Continue after history");
       } finally {
         waapi.restore();
       }

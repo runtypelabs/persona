@@ -5959,6 +5959,9 @@
   flex-direction: column;
   gap: 8px;
 }
+.persona-widget-footer--pill[hidden] {
+  display: none;
+}
 
 /* Configured / agent-pushed suggestion chips belong to the expanded
  * conversation surface, not the always-on collapsed composer. Keeping the

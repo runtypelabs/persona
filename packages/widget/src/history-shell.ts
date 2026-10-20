@@ -110,6 +110,8 @@ export type HistoryShellContext = {
   readonly open: boolean;
   readonly panel: HTMLElement;
   readonly panelElements: import("./components/panel").PanelElements;
+  readonly panelSuggestions: HTMLElement;
+  readonly panelSuggestionsFade: HTMLElement;
   persistentMetadata: Record<string, unknown>;
   readonly plugins: import("./plugins/types").AgentWidgetPlugin[];
   reapplyHistoryHostChrome: () => void;
@@ -417,6 +419,12 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     // header-layout rebuild swaps them and re-enters here for the replacement.
     ctx.footer.hidden = true;
     setHistoryHostInert(ctx.footer, true);
+    // Composer-bar follow-ups live outside the transcript and footer. Keep
+    // suppression separate from `hidden`, which their renderer owns and may
+    // update while history is open.
+    ctx.panelSuggestions.style.display = "none";
+    setHistoryHostInert(ctx.panelSuggestions, true);
+    ctx.panelSuggestionsFade.style.display = "none";
     if (historyHeaderExternal()) {
       hostHistoryHeaderContent();
       ctx.header.style.display = shownHeaderDisplay();
@@ -433,6 +441,8 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
   const mountPanelHost = (element: HTMLElement): void => {
     const previousDisplay = ctx.body.style.display;
     const previousFooterHidden = ctx.footer.hidden;
+    const previousSuggestionsDisplay = ctx.panelSuggestions.style.display;
+    const previousSuggestionsFadeDisplay = ctx.panelSuggestionsFade.style.display;
     const capturedFooter = ctx.footer;
     const capturedHeader = ctx.header;
     const previousHeaderDisplay = ctx.header.style.display;
@@ -444,6 +454,9 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       capturedPanelHeader = null;
       ctx.body.style.display = previousDisplay;
       setHistoryHostInert(ctx.body, false);
+      ctx.panelSuggestions.style.display = previousSuggestionsDisplay;
+      setHistoryHostInert(ctx.panelSuggestions, false);
+      ctx.panelSuggestionsFade.style.display = previousSuggestionsFadeDisplay;
       capturedFooter.hidden = previousFooterHidden;
       setHistoryHostInert(capturedFooter, false);
       if (ctx.footer !== capturedFooter) {
@@ -458,7 +471,12 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
         setHistoryHostInert(ctx.header, false);
       }
     };
-    ctx.footer.parentNode?.insertBefore(element, ctx.footer);
+    // Composer-bar footers live in a viewport-fixed pill host outside the
+    // panel. History belongs in the panel's flex column in either layout.
+    ctx.container.insertBefore(
+      element,
+      ctx.footer.parentNode === ctx.container ? ctx.footer : ctx.panelSuggestions
+    );
     enforcePanelHost();
   };
 
