@@ -125,6 +125,7 @@ export type HistoryShellContext = {
   readonly storageAdapter: import("./types").AgentWidgetStorageAdapter | null;
   suppressScrollSend: boolean;
   readonly syncScrollToBottomButton: () => void;
+  readonly scrollToBottomButton: HTMLElement;
   readonly updateWelcome: (messages?: import("./types").AgentWidgetMessage[] | undefined) => void;
   readonly getHistoryProviderFactory: typeof getHistoryProviderFactory;
   /** Core's error classes, so the chunk's provider throws what core checks. */
@@ -494,6 +495,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     // Composer-bar mode keeps the footer outside the container; the parent
     // checks below then never adopt it.
     ctx.footer,
+    ctx.scrollToBottomButton,
   ];
 
   /** Collapsed icon rail, measured from the reference sidebar. */
@@ -1288,7 +1290,12 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       // restored first also takes its inline action wrappers back with it, so
       // the `contains` check skips them.
       for (const node of railBorrowed()) {
-        if (node && shell.contains(node)) ctx.container.insertBefore(node, shell);
+        if (node && shell.contains(node)) {
+          // The jump originally follows the composer overlay, outside the
+          // header/body/footer slot; preserve that order when handing it back.
+          const before = node === ctx.scrollToBottomButton ? ctx.panelSuggestions : shell;
+          ctx.container.insertBefore(node, before);
+        }
       }
       shell.remove();
       railShell = null;

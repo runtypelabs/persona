@@ -84,6 +84,10 @@ describe("rail trigger during a docking open", () => {
     const open = ctl.showHistory();
     expect(triggerWrapper().style.display).toBe("none");
     expect(mount!.querySelector(".persona-history-rail-shell")).not.toBeNull();
+    const jump = mount!.querySelector<HTMLElement>("[data-persona-scroll-to-bottom]")!;
+    expect(jump.parentElement).toBe(
+      mount!.querySelector(".persona-history-rail-conversation")
+    );
 
     await open;
     await flush();
@@ -97,6 +101,7 @@ describe("rail trigger during a docking open", () => {
       header.parentElement!.classList.contains("persona-widget-container")
     ).toBe(true);
     expect(triggerWrapper().style.display).toBe("");
+    expect(jump.parentElement).toBe(header.parentElement);
   });
 
   it("reserves the docked geometry from the moment the open starts", async () => {
@@ -134,6 +139,11 @@ describe("rail trigger during a docking open", () => {
         .querySelector(".persona-history-rail-conversation")!
         .contains(header)
     ).toBe(true);
+    const jump = mount!.querySelector<HTMLElement>("[data-persona-scroll-to-bottom]")!;
+    expect(jump.parentElement).toBe(header.parentElement);
+    ctl.update({ features: { scrollToBottom: { enabled: false } } });
+    ctl.update({ features: { scrollToBottom: { enabled: true } } });
+    expect(jump.parentElement).toBe(header.parentElement);
 
     release();
     await open;
@@ -146,5 +156,6 @@ describe("rail trigger during a docking open", () => {
       true
     );
     expect(triggerWrapper().style.display).toBe("none");
+    expect(jump.parentElement).toBe(header.parentElement);
   });
 });
