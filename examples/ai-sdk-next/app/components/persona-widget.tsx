@@ -1,71 +1,49 @@
 "use client";
 
-import { useEffect } from "react";
-import {
-  createAgentExperience,
-  markdownPostprocessor,
-} from "@runtypelabs/persona";
+import { useEffect, useRef, useState } from "react";
+import { createAgentExperience, markdownPostprocessor, type AgentWidgetSuggestion } from "@runtypelabs/persona";
 
-type PersonaWidgetProps = {
-  apiUrl: string;
-  title: string;
-  subtitle: string;
-  accent?: string;
-  suggestionChips?: string[];
-};
+const starters: AgentWidgetSuggestion[] = [
+  { label: "Research a thoughtful product launch", icon: "search" },
+  { label: "Compare three launch strategies", icon: "chart-column" },
+  { label: "Build a launch checklist", icon: "clipboard" },
+];
+type PersonaWidgetProps = { apiUrl: string; conversationId: number; preview: boolean; onTitle: (id: number, title: string) => void };
 
-export function PersonaWidget({
-  apiUrl,
-  title,
-  subtitle,
-  accent = "#157f8f",
-  suggestionChips,
-}: PersonaWidgetProps) {
+export function PersonaWidget({ apiUrl, conversationId, preview, onTitle }: PersonaWidgetProps) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const host = document.getElementById("persona-root");
+    const host = hostRef.current;
     if (!host) return;
-
-    let handle: ReturnType<typeof createAgentExperience> | null = createAgentExperience(host, {
+    const handle = createAgentExperience(host, {
       apiUrl,
-      // The adapters emit Persona's SSE event vocabulary, which the widget
-      // consumes natively (the same wire the Runtype API emits).
+      persistState: false,
+      future: { v5Defaults: true },
+      turnActivity: { enabled: true },
       launcher: { enabled: false, width: "100%" },
-      copy: {
-        welcomeTitle: title,
-        welcomeSubtitle: subtitle,
-        inputPlaceholder: "Ask anything...",
-      },
+      layout: { embedded: true, showHeader: false },
+      welcome: { title: "What can I help with?", subtitle: "", variant: "card", layout: "centered", anchor: "center" },
+      copy: { inputPlaceholder: preview ? "Ask about a product launch…" : "Ask anything…" },
       theme: {
-        semantic: {
-          colors: {
-            accent,
-            surface: "#ffffff",
-            background: "#f7f8fb",
-            primary: "#121826",
-          },
-        },
-        components: {
-          introCard: {
-            background: "transparent",
-            shadow: "none",
-          },
-          panel: {
-            border: "1px solid #e0e0e0",
-            borderRadius: "8px",
-            shadow: "0 12px 32px rgb(18 24 38 / 8%)",
-          },
-        },
+        semantic: { colors: { accent: "#202020", surface: "#ffffff", background: "#ffffff", primary: "#202020" } },
+        components: { introCard: { background: "transparent", shadow: "none", padding: "0" }, panel: { border: "none", borderRadius: "0", shadow: "none" } },
       },
-      suggestionChips,
+      suggestions: { starters: { items: starters, variant: "card", placement: "welcome", maxItems: 3 } },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     });
-
-    return () => {
-      handle?.destroy();
-      handle = null;
-      host.replaceChildren();
-    };
-  }, [apiUrl, title, subtitle, accent, suggestionChips]);
-
-  return <div id="persona-root" />;
+    const clearError = handle.on("run:started", () => setError(null));
+    let titled = false;
+    const updateTitle = handle.on("user:message", message => {
+      if (!titled && message.content) {
+        titled = true;
+        onTitle(conversationId, message.content.slice(0, 54));
+      }
+    });
+    const showError = handle.on("run:finished", ({ outcome }) => {
+      if (outcome === "error") setError("This request could not finish. Try again, or check your server’s provider credentials and model settings.");
+    });
+    return () => { clearError(); updateTitle(); showError(); handle.destroy(); host.replaceChildren(); };
+  }, [apiUrl, conversationId, onTitle, preview]);
+  return <>{error && <p className="providerError" role="alert">{error}</p>}<div className="personaHost" ref={hostRef} /></>;
 }

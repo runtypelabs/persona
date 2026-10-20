@@ -52,18 +52,28 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     theme: {
       ...DEFAULT_WIDGET_CONFIG.theme,
     },
+    welcome: {
+      title: "Agent Loop Demo",
+      subtitle: "This agent runs a 3-turn loop for non-technical travel planning. Ask for an itinerary to see the iteration flow.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Agent Loop Demo",
-      welcomeSubtitle:
-        "This agent runs a 3-turn loop for non-technical travel planning. Ask for an itinerary to see the iteration flow.",
       inputPlaceholder: "Ask for a travel itinerary...",
     },
-    suggestionChips: [
-      "Plan a 2-day weekend itinerary for Kyoto for a first-time visitor who likes food, gardens, and quiet neighborhoods. Use exactly 3 iterations: Discovery, Structuring, and Final.",
-      "Plan a rainy-day weekend in Lisbon for a couple focused on food and bookstores.",
-      "Create a one-day family-friendly itinerary in Chicago with indoor backup options.",
-    ],
+    suggestions: {
+      starters: {
+        items: [
+          "Plan a 2-day weekend itinerary for Kyoto for a first-time visitor who likes food, gardens, and quiet neighborhoods. Use exactly 3 iterations: Discovery, Structuring, and Final.",
+          "Plan a rainy-day weekend in Lisbon for a couple focused on food and bookstores.",
+          "Create a one-day family-friendly itinerary in Chicago with indoor backup options.",
+        ],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   };
 };

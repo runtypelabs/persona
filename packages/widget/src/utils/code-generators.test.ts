@@ -1,4 +1,9 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+import type { AgentWidgetConfig } from "../types";
+import { DEFAULT_WIDGET_CONFIG } from "../defaults";
+import { createTheme, themeToCssVariables } from "./tokens";
 import { generateCodeSnippet, type CodeFormat, type CodeGeneratorHooks, type CodeGeneratorOptions as _CodeGeneratorOptions } from "./code-generators";
 import { VERSION } from "../version";
 
@@ -604,6 +609,18 @@ describe("Suggestions Serialization", () => {
 });
 
 describe("Backward Compatibility", () => {
+  it.each<CodeFormat>(["esm", "react-component", "react-advanced", "script-installer", "script-manual", "script-advanced"])("preserves brand and explicit dark overrides in %s", (format) => {
+    const code = generateCodeSnippet({
+      ...minimalConfig,
+      brand: { accent: "#4361ee", neutral: "#18181b", font: "Georgia, serif", radius: "md", density: "compact", elevation: "flat" },
+      colorScheme: "auto",
+      darkTheme: { semantic: { colors: { text: "#eeeeee" } } },
+    }, format);
+    for (const value of ["brand", "#4361ee", "#18181b", "Georgia, serif", "compact", "flat", "colorScheme", "auto", "darkTheme", "#eeeeee"]) {
+      expect(code).toContain(value);
+    }
+  });
+
   it("should work without options parameter", () => {
     const code = generateCodeSnippet(minimalConfig, "esm");
 
@@ -716,4 +733,212 @@ describe("windowKey option", () => {
 
     expect(code).not.toContain("windowKey");
   });
+});
+
+
+// Evaluate the actual emitted object instead of only looking for text matches.
+function evaluateConfigObject(source: string, bindings: Record<string, unknown> = {}): AgentWidgetConfig {
+  const parsed = ts.createSourceFile("snippet.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let initializer: ts.Expression | undefined;
+  const visit = (node: ts.Node): void => {
+    if (initializer) return;
+    if (ts.isPropertyAssignment(node) && node.name.getText(parsed) === "config" && ts.isObjectLiteralExpression(node.initializer)) {
+      initializer = node.initializer;
+    } else if (ts.isVariableDeclaration(node) && ["CONFIG", "config"].includes(node.name.getText(parsed)) && node.initializer) {
+      initializer = node.initializer;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(parsed);
+  if (!initializer) throw new Error("Snippet has no configuration object");
+  const javascript = ts.transpileModule(`const result = ${initializer.getText(parsed)};`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const dependencies = {
+    loadSavedMessages: () => [],
+    defaultJsonActionParser: () => null,
+    defaultActionHandlers: [],
+    collectDOMContext: () => ({}),
+    ...bindings,
+  };
+  return new Function(...Object.keys(dependencies), `${javascript}\nreturn result;`)(...Object.values(dependencies));
+}
+
+function readGeneratedConfig(code: string, format: CodeFormat): AgentWidgetConfig {
+  if (format === "script-installer") {
+    const attribute = code.match(/data-config='([^']*)'/)?.[1];
+    if (!attribute) throw new Error("Missing installer configuration");
+    const decoded = attribute
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
+    return JSON.parse(decoded);
+  }
+  const javascript = format.startsWith("script-") ? code.match(/<script>([\s\S]*?)<\/script>/)?.[1] : code;
+  if (!javascript) throw new Error("Missing inline initialization script");
+  return evaluateConfigObject(javascript);
+}
+
+const allFormats: CodeFormat[] = [
+  "esm", "react-component", "react-advanced", "script-installer", "script-manual", "script-advanced",
+];
+
+describe("Welcome and approval export parity", () => {
+  const escapedText = `Quotes " and ', backslash \\, newline\n, \u2028, \u2029, </script>, &amp; &#39;`;
+  const presentation = {
+    copy: { showWelcomeCard: false, welcomeTitle: "", inputPlaceholder: escapedText },
+    welcome: {
+      title: escapedText,
+      subtitle: "",
+      icon: { type: "image", url: "https://example.com/logo?a=1&b=2", alt: "", placement: "inline" },
+      message: "Hello",
+      anchor: "center",
+      composerGap: "0px",
+    },
+    approval: {
+      keyboardShortcuts: false,
+      enableAlwaysAllow: false,
+      reasonLabel: "",
+      approveLabel: escapedText,
+      detailsDisplay: "hidden",
+      shadow: "none",
+    },
+    suggestions: { starters: { items: [] } },
+    theme: { components: { approval: { requested: { background: "transparent" } } } },
+  };
+
+  it.each(allFormats)("round-trips welcome, approval, copy, and empty starters in %s", (format) => {
+    const snippet = generateCodeSnippet({ ...minimalConfig, ...presentation }, format);
+    const exported = readGeneratedConfig(snippet, format);
+    expect(exported.copy).toEqual(presentation.copy);
+    expect(exported.welcome).toEqual(presentation.welcome);
+    expect(exported.approval).toEqual(presentation.approval);
+    expect(exported.suggestions).toEqual(presentation.suggestions);
+    expect(exported.theme).toEqual(presentation.theme);
+    if (format !== "script-installer") {
+      expect(snippet).not.toContain("</script>,");
+    }
+  });
+
+  it.each(allFormats)("preserves scoped approval and question appearance tokens in %s", (format) => {
+    const theme = { components: {
+      approval: { requested: { titleColor: "red", descriptionColor: "green", reasonColor: "blue", parameters: { background: "transparent", foreground: "purple" } }, approve: { foreground: "yellow" }, deny: { foreground: "orange" } },
+      askUserQuestion: { sheet: { background: "pink", border: "red", shadow: "none" }, pill: { background: "white", foreground: "black", borderRadius: "0", selectedBackground: "blue", selectedForeground: "white" }, customInput: { background: "transparent" } },
+    } };
+    expect(readGeneratedConfig(generateCodeSnippet({ ...minimalConfig, theme }, format), format).theme).toEqual(theme);
+  });
+
+  it.each(allFormats)("preserves approval:false and primitive numeric values in %s", (format) => {
+    const exported = readGeneratedConfig(generateCodeSnippet({
+      ...minimalConfig,
+      approval: false,
+      copy: { showWelcomeCard: false },
+      theme: { components: { composer: { submit: { iconSize: 0 } } } },
+    }, format), format);
+    expect(exported.approval).toBe(false);
+    expect(exported.copy?.showWelcomeCard).toBe(false);
+    expect(exported.theme).toEqual({ components: { composer: { submit: { iconSize: 0 } } } });
+  });
+
+  it.each(allFormats)("identifies unsupported functions without changing serializable siblings in %s", (format) => {
+    const icon = () => document.createElement("div");
+    const formatDescription = () => "Custom summary";
+    const onDecision = async () => undefined;
+    const input = { ...minimalConfig, welcome: { title: "Hello", icon }, approval: { title: "Permission", formatDescription, onDecision } };
+    const snippet = generateCodeSnippet(input, format);
+    expect(snippet).toContain("Function-valued welcome.icon, approval.formatDescription, approval.onDecision omitted; reattach in host JavaScript.");
+    const exported = readGeneratedConfig(snippet, format);
+    expect(exported.welcome).toEqual({ title: "Hello" });
+    expect(exported.approval).toEqual({ title: "Permission" });
+    expect(input.welcome.icon).toBe(icon);
+    expect(input.approval.onDecision).toBe(onDecision);
+  });
+
+  it.each(allFormats)("preserves text and Lucide icon objects in %s", (format) => {
+    for (const icon of [{ type: "text", text: "👋" }, { type: "lucide", name: "sparkles", placement: "inline" }]) {
+      const exported = readGeneratedConfig(generateCodeSnippet({ ...minimalConfig, welcome: { icon } }, format), format);
+      expect(exported.welcome?.icon).toEqual(icon);
+    }
+  });
+});
+
+describe("Client-token demo presentation", () => {
+  it("uses semantic colors that reach CSS and preserves welcome/starter content", () => {
+    const source = readFileSync(new URL("../../../../apps/web/src/client-token-demo.ts", import.meta.url), "utf8");
+    const config = evaluateConfigObject(source, {
+      DEFAULT_WIDGET_CONFIG,
+      clientToken: "ct_test",
+      createLocalStorageAdapter: () => ({}),
+    });
+    const css = themeToCssVariables(createTheme(config.theme));
+    expect(css).toMatchObject({
+      "--persona-primary": "#090E34",
+      "--persona-accent": "#3056D3",
+      "--persona-surface": "#ffffff",
+      "--persona-text-muted": "#637381",
+      "--persona-container": "#f3f4f6",
+      "--persona-border": "#e7e7e7",
+    });
+    expect(config.welcome).toEqual({ title: "Welcome! 👋", subtitle: "Connected via client token. Ask me anything!" });
+    expect(config.suggestions?.starters?.items).toEqual(["Hello!", "What can you help with?", "Tell me a joke"]);
+    expect(source).not.toContain("config as any");
+  });
+});
+
+
+describe('authored input code generation', () => {
+  const supplied = {
+    apiUrl: '/chat', parserType: 'plain', future: { v5Defaults: false },
+    brand: { accent: '#7c3aed' }, colorScheme: 'light', debug: false,
+    welcome: { variant: 'none', title: 'Quotes " and \' newline\n</script> &amp;' },
+    suggestionChips: [], suggestions: { starters: { items: [], placement: 'composer' } },
+    theme: { components: { header: { controlSize: '32px' } } },
+    darkTheme: { components: { header: { controlSize: '32px' } } },
+    preferences: { history: { enabled: false } },
+  };
+
+  it.each(allFormats)('evaluates all supplied serializable values without adding defaults in %s', format => {
+    const code = generateCodeSnippet(supplied, format, { authoredOverrides: true });
+    expect(readGeneratedConfig(code, format)).toEqual(supplied);
+    if (format.startsWith('script-') && format !== 'script-installer') {
+      expect((code.match(/<\/script>/g) ?? []).length).toBe(2);
+    }
+  });
+
+  it.each(allFormats)('reports function omissions and omits incomplete implementations in %s', format => {
+    const code = generateCodeSnippet({
+      ...supplied, getHeaders: () => ({}), welcome: { icon: () => 'icon' },
+      storageAdapter: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+      voiceRecognition: { provider: { custom: { start: () => {}, stop: () => {} } } },
+      actionHandlers: [() => {}],
+    }, format, { authoredOverrides: true });
+    const config = readGeneratedConfig(code, format);
+    expect(config).not.toHaveProperty('storageAdapter');
+    expect(config).not.toHaveProperty('voiceRecognition.provider');
+    expect(config).not.toHaveProperty('actionHandlers');
+    expect(code).toContain('getHeaders');
+    expect(code).toContain('welcome.icon');
+    expect(code).toContain('closures cannot be reconstructed');
+  });
+
+  it.each(allFormats.filter(format => format !== 'script-installer'))('retains an explicitly supplied self-contained hook in %s', format => {
+    const code = generateCodeSnippet(supplied, format, { authoredOverrides: true, hooks: { getHeaders: () => ({ 'X-Test': 'yes' }) } });
+    expect(readGeneratedConfig(code, format).getHeaders?.()).toEqual({ 'X-Test': 'yes' });
+  });
+  it.each(allFormats)('honors target and windowKey in authored %s generation', format => {
+    const code = generateCodeSnippet(supplied, format, { authoredOverrides: true, target: '#chat', windowKey: 'myWidget' });
+    if (format === 'script-installer') {
+      expect(readGeneratedConfig(code, format)).toMatchObject({ target: '#chat', windowKey: 'myWidget', config: supplied });
+      return;
+    }
+    let javascript = format.startsWith('script-') ? code.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '' : code;
+    javascript = javascript.replace(/^import .*;$/gm, '').replace(/^export /gm, '');
+    if (format.startsWith('react-')) javascript += '\nChatWidget();';
+    let options: unknown;
+    const init = (value: unknown) => { options = value; return { destroy() {} }; };
+    new Function('initAgentWidget', 'window', 'useEffect', javascript)(init, { AgentWidget: { initAgentWidget: init } }, (effect: () => void) => effect());
+    expect(options).toEqual({ target: '#chat', windowKey: 'myWidget', config: supplied });
+  });
+
 });

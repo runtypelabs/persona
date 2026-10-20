@@ -31,7 +31,7 @@ export interface HistoryOperationContext {
 export interface PreparedHistoryActivation {
   conversationId: string;
   conversationRevision: string;
-  /** Apply the already-authorized provider-specific transport/session binding. */
+  /** Apply the already-authorized binding. If commit rejects, leave the binding unchanged. */
   commit(): void | Promise<void>;
   /** Idempotently abandon a stale/superseded activation without changing chat. */
   discard(): void;

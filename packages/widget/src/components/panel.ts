@@ -19,7 +19,7 @@ import {
 } from "./welcome";
 import { isWelcomeVisible, resolveWelcomeConfig } from "../welcome";
 import { resolveContentMaxWidth } from "../utils/content-width";
-import { getPanelAliasProvenance, PANEL_WIDTH_VAR } from "../utils/panel-config";
+import { getPanelAliasProvenance, isHeaderVisible, PANEL_WIDTH_VAR } from "../utils/panel-config";
 
 const PANEL_MAX_WIDTH_VAR = "var(--persona-components-panel-maxWidth)";
 const PANEL_HEIGHT_VAR = "var(--persona-components-panel-height)";
@@ -54,6 +54,14 @@ export const resolvePanelGeometry = (config?: AgentWidgetConfig): PanelGeometry 
     height,
     maxHeight: PANEL_MAX_HEIGHT_VAR,
   };
+};
+
+/** Inline embeds fill their host unless the caller explicitly supplied a width. */
+export const resolveInlinePanelWidth = (config?: AgentWidgetConfig): string => {
+  const aliases = getPanelAliasProvenance(config);
+  const hasWidth = aliases.launcherWidth || aliases.legacyLauncherWidth ||
+    config?.theme?.components?.panel?.width !== undefined;
+  return hasWidth ? resolvePanelGeometry(config).width : "100%";
 };
 
 /**
@@ -151,11 +159,7 @@ export const createWrapper = (config?: AgentWidgetConfig): PanelWrapper => {
     );
     
     // Apply width from config, defaulting to 100% for inline embed mode
-    const aliases = getPanelAliasProvenance(config);
-    const hasWidth = aliases.launcherWidth || aliases.legacyLauncherWidth ||
-      config?.theme?.components?.panel?.width !== undefined;
-    const inlineWidth = hasWidth ? resolvePanelGeometry(config).width : "100%";
-    wrapper.style.width = inlineWidth;
+    wrapper.style.width = resolveInlinePanelWidth(config);
     panel.style.width = "100%";
     
     wrapper.appendChild(panel);
@@ -487,7 +491,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
 
   // Build header using layout config if available, otherwise use standard builder
   const headerLayoutConfig = config?.layout?.header;
-  const showHeader = config?.layout?.showHeader !== false; // default to true
+  const showHeader = isHeaderVisible(config);
   const headerElements: HeaderElements = headerLayoutConfig
     ? buildHeaderWithLayout(config!, headerLayoutConfig, { showClose })
     : buildHeader({ config, showClose });

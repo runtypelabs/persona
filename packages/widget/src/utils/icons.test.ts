@@ -5,7 +5,18 @@ import { describe, expect, it, vi } from "vitest";
 import { renderLucideIcon } from "./icons";
 
 describe("renderLucideIcon", () => {
-  it.each(["bot", "send", "chevron-down", "panel-left"] as const)(
+  it("renders square-text as a rounded square with horizontal text lines", () => {
+    const svg = renderLucideIcon("square-text", 16)!;
+    expect(svg.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(svg.getAttribute("stroke-width")).toBe("2");
+    expect(svg.getAttribute("stroke-linecap")).toBe("round");
+    expect(svg.hasAttribute("data-persona-icon-pending")).toBe(false);
+    const square = svg.querySelector("rect")!;
+    expect(["x", "y", "width", "height", "rx"].map(attr => square.getAttribute(attr))).toEqual(["3", "3", "18", "18", "2"]);
+    expect(svg.querySelector("path")?.getAttribute("d")).toBe("M7 8h10M7 12h10M7 16h6");
+  });
+
+  it.each(["bot", "send", "chevron-down", "panel-left", "square-text"] as const)(
     "renders core-tier %s as an inline svg synchronously",
     (name) => {
       const svg = renderLucideIcon(name);
@@ -17,7 +28,7 @@ describe("renderLucideIcon", () => {
     }
   );
 
-  it.each(["lightbulb", "chart-column", "image", "pen-line"] as const)(
+  it.each(["lightbulb", "chart-column", "image", "pen-line", "brain", "toolbox", "wrench"] as const)(
     "renders extra-tier %s as a sized placeholder that fills once the chunk lands",
     async (name) => {
       const svg = renderLucideIcon(name);

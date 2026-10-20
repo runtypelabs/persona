@@ -61,19 +61,29 @@ function renderDropdownContent(container: HTMLElement): void {
   const codeSection = document.createElement('div');
   codeSection.className = 'export-dropdown-section';
   codeSection.innerHTML = `
-    <h4 class="export-dropdown-title">Code Export</h4>
+    <h4 class="export-dropdown-title">Copy configuration</h4>
+    <p id="export-origin-note" class="control-description"></p>
     <div class="export-format-row">
-      <select id="code-format-select" class="control-select">
-        <option value="script-installer">Script Tag (Installer)</option>
+      <select id="code-format-select" class="control-select" aria-label="Code format">
+        <option value="script-installer">Script tag</option>
         <option value="script-manual">Script Tag (Manual)</option>
         <option value="script-advanced">Script Tag (Advanced)</option>
-        <option value="esm">ESM Module</option>
-        <option value="react-component">React Component</option>
+        <option value="esm">JavaScript (module)</option>
+        <option value="react-component">React</option>
         <option value="react-advanced">React Advanced</option>
       </select>
       <button type="button" id="copy-code-btn" class="btn btn-primary btn-sm">Copy</button>
     </div>
     <pre id="code-preview" class="code-preview"><code></code></pre>
+    <p id="export-warning" class="control-description hidden" role="status"></p>
+    <details class="export-advanced">
+      <summary>Advanced</summary>
+      <label class="export-defaults-option"><input id="export-include-defaults" type="checkbox" /> Include default settings</label>
+      <p class="control-description">Copies Persona’s defaults along with your settings.</p>
+      <button type="button" id="copy-authored-json-btn" class="btn btn-sm">Copy settings as JSON</button>
+      <a href="https://github.com/runtypelabs/persona/blob/main/docs/configuration.md" target="_blank" rel="noopener noreferrer">Configuration guide</a>
+      <p><a href="https://github.com/runtypelabs/persona/blob/main/docs/configuration.md#mounted-updates-and-clearing-an-old-style" target="_blank" rel="noopener noreferrer">Updating an existing widget?</a></p>
+    </details>
   `;
   container.appendChild(codeSection);
 
@@ -81,11 +91,16 @@ function renderDropdownContent(container: HTMLElement): void {
   const jsonSection = document.createElement('div');
   jsonSection.className = 'export-dropdown-section';
   jsonSection.innerHTML = `
-    <h4 class="export-dropdown-title">Config JSON</h4>
+    <h4 class="export-dropdown-title">Editor backup</h4>
+    <p class="control-description">Keep a copy to restore your editor settings later.</p>
     <div class="export-button-row">
-      <button type="button" id="copy-json-btn" class="btn btn-sm">Copy JSON</button>
-      <button type="button" id="load-json-btn" class="btn btn-sm">Load JSON</button>
+      <button type="button" id="copy-json-btn" class="btn btn-sm">Copy editor backup</button>
+      <button type="button" id="load-json-btn" class="btn btn-sm">Import JSON</button>
     </div>
+    <select id="json-import-kind" class="control-select hidden" aria-label="JSON import kind">
+      <option value="backup">Editor backup / raw theme</option>
+      <option value="config">Widget configuration</option>
+    </select>
     <textarea id="json-import-area" class="json-textarea hidden" placeholder="Paste JSON here…" rows="6"></textarea>
     <button type="button" id="apply-json-btn" class="btn btn-primary btn-sm hidden">Apply JSON</button>
   `;
@@ -133,6 +148,9 @@ export function render(
 
 function setupCodeExport(): void {
   const formatSelect = document.getElementById('code-format-select') as HTMLSelectElement;
+  const includeDefaults = document.getElementById('export-include-defaults') as HTMLInputElement;
+  const warning = document.getElementById('export-warning');
+  const originNote = document.getElementById('export-origin-note');
   const copyBtn = document.getElementById('copy-code-btn');
   const preview = document.getElementById('code-preview');
 
@@ -140,17 +158,27 @@ function setupCodeExport(): void {
 
   const updatePreview = () => {
     const format = formatSelect.value as CodeFormat;
-    const config = state.getConfigForOutput();
-    const configWithTheme = {
-      ...config,
-      theme: state.getTheme() as any,
-    };
-    const code = generateCodeSnippet(configWithTheme, format);
+    const authored = state.exportAuthoredConfig();
+    const useAuthored = !includeDefaults.checked;
+    const config = useAuthored ? authored.config : state.getConfigForOutput();
+    if (originNote) originNote.textContent = useAuthored
+      ? (authored.origin === 'imported'
+          ? 'Copies your imported settings and any changes you’ve made.'
+          : 'Copy your settings into your app or website.')
+      : 'Copies your settings and Persona’s default settings.';
+    const code = generateCodeSnippet(config, format, { authoredOverrides: useAuthored });
     const codeEl = preview.querySelector('code');
     if (codeEl) codeEl.textContent = code;
+    if (warning) {
+      const hasOmissions = /Omitted non-serializable inputs:|Function-valued .* omitted;/.test(code);
+      warning.classList.toggle('hidden', !hasOmissions);
+      warning.textContent = hasOmissions
+        ? 'Some custom settings need to be added in your app. See the comments in the copied code.' : '';
+    }
   };
 
   formatSelect.addEventListener('change', updatePreview);
+  includeDefaults.addEventListener('change', updatePreview);
   state.onChange(() => updatePreview());
   updatePreview();
 
@@ -186,17 +214,36 @@ function setupJsonExport(): void {
   const loadJsonBtn = document.getElementById('load-json-btn');
   const jsonArea = document.getElementById('json-import-area') as HTMLTextAreaElement;
   const applyJsonBtn = document.getElementById('apply-json-btn');
+  const importKind = document.getElementById('json-import-kind') as HTMLSelectElement;
 
   if (!copyJsonBtn || !loadJsonBtn || !jsonArea || !applyJsonBtn) return;
 
+  const copyAuthoredBtn = document.getElementById('copy-authored-json-btn');
+  copyAuthoredBtn?.addEventListener('click', async () => {
+    if (importKind) importKind.value = 'config';
+    const includeDefaults = document.getElementById('export-include-defaults') as HTMLInputElement;
+    const config = includeDefaults.checked ? state.getConfigForOutput() : state.exportAuthoredConfig().config;
+    const json = JSON.stringify(config, null, 2);
+    try {
+      await navigator.clipboard.writeText(json);
+      copyAuthoredBtn.textContent = 'Copied!';
+      setTimeout(() => { copyAuthoredBtn.textContent = 'Copy settings as JSON'; }, 2000);
+    } catch {
+      jsonArea.value = json;
+      jsonArea.classList.remove('hidden');
+      jsonArea.select();
+    }
+  });
+
   copyJsonBtn.addEventListener('click', async () => {
+    if (importKind) importKind.value = 'backup';
     const snapshot = state.exportSnapshot();
     const json = JSON.stringify(snapshot, null, 2);
     try {
       await navigator.clipboard.writeText(json);
       copyJsonBtn.textContent = 'Copied!';
       setTimeout(() => {
-        copyJsonBtn.textContent = 'Copy JSON';
+        copyJsonBtn.textContent = 'Copy editor backup';
       }, 2000);
     } catch {
       jsonArea.value = json;
@@ -208,6 +255,7 @@ function setupJsonExport(): void {
   loadJsonBtn.addEventListener('click', () => {
     jsonArea.classList.toggle('hidden');
     applyJsonBtn.classList.toggle('hidden');
+    importKind?.classList.toggle('hidden');
     jsonArea.value = '';
     jsonArea.focus();
   });
@@ -218,7 +266,9 @@ function setupJsonExport(): void {
 
     try {
       const parsed = JSON.parse(json);
-      state.importSnapshot(parsed);
+      if (importKind?.value === 'config') state.importAuthoredConfig(parsed);
+      else state.importSnapshot(parsed);
+      importKind?.classList.add('hidden');
       jsonArea.classList.add('hidden');
       applyJsonBtn.classList.add('hidden');
       jsonArea.value = '';

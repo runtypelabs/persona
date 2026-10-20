@@ -1,6 +1,8 @@
+import type { AgentWidgetConfig } from "../types";
+import { animateDisclosure, disclosureSettings } from "./disclosure-animation";
+import { parseFormattedTemplate } from "../utils/activity-formatting";
 import { createElement } from "../utils/dom";
-import { ChevronDown, ChevronUp } from "lucide";
-import { renderIconNode } from "../utils/icon-node";
+import { renderLucideIcon } from "./activity-deps";
 
 // Shared chrome for the two expandable transcript bubbles (tool + reasoning).
 // ui.ts drives both by delegation with DOM queries ('button[data-expand-header]',
@@ -50,6 +52,7 @@ export const createExpandableBubbleShell = (
   // Set id for idiomorph matching
   bubble.id = `bubble-${messageId}`;
   bubble.setAttribute("data-message-id", messageId);
+  bubble.setAttribute("data-persona-disclosure", "");
   return bubble;
 };
 
@@ -74,15 +77,25 @@ export const createExpandableHeader = (params: {
 export const renderToggleChevron = (
   toggleIcon: HTMLElement,
   expanded: boolean,
-  iconColor: string
+  iconColor: string,
+  config?: AgentWidgetConfig
 ): void => {
-  toggleIcon.innerHTML = "";
-  const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
-  if (chevronIcon) {
-    toggleIcon.appendChild(chevronIcon);
-  } else {
-    toggleIcon.textContent = expanded ? "Hide" : "Show";
+  const direction = config?.expansion?.chevron?.[expanded ? "expanded" : "collapsed"] ??
+    (config?.future?.v5Defaults ? expanded ? "down" : "right" : expanded ? "up" : "down");
+  const settings = disclosureSettings(config);
+  // Keep the same glyph through manual toggles and transcript morphs so the
+  // browser can interpolate from the currently displayed angle on reversal.
+  let chevron: SVGElement | null = toggleIcon.querySelector("svg");
+  if (!chevron) {
+    chevron = renderLucideIcon("chevron-right", 16, iconColor, 1.5);
+    if (!chevron) return;
+    toggleIcon.replaceChildren(chevron);
   }
+  chevron.setAttribute("stroke", iconColor);
+  toggleIcon.classList.add("persona-disclosure-chevron");
+  toggleIcon.style.transform = `rotate(${{ right: 0, down: 90, left: 180, up: -90 }[direction]}deg)`;
+  toggleIcon.style.transitionDuration = `${settings.animation === "height" ? settings.duration : 0}ms`;
+  toggleIcon.style.transitionTimingFunction = settings.easing;
 };
 
 // Builds the chevron affordance and appends header children. Returns the toggle
@@ -90,14 +103,14 @@ export const renderToggleChevron = (
 export const appendHeaderToggle = (
   header: HTMLElement,
   headerContent: HTMLElement,
-  params: { expandable: boolean; expanded: boolean; iconColor: string; metaGap: boolean }
+  params: { expandable: boolean; expanded: boolean; iconColor: string; metaGap: boolean; config?: AgentWidgetConfig }
 ): HTMLElement | null => {
   if (!params.expandable) {
     header.append(headerContent);
     return null;
   }
   const toggleIcon = createElement("div", "persona-flex persona-items-center");
-  renderToggleChevron(toggleIcon, params.expanded, params.iconColor);
+  renderToggleChevron(toggleIcon, params.expanded, params.iconColor, params.config);
 
   const headerMeta = createElement(
     "div",
@@ -153,12 +166,14 @@ export const applyExpansionDisplay = (params: {
   content: HTMLElement;
   collapsedPreview: HTMLElement;
   iconColor: string;
+  config?: AgentWidgetConfig;
 }): void => {
   params.header.setAttribute("aria-expanded", params.expanded ? "true" : "false");
   if (params.toggleIcon) {
-    renderToggleChevron(params.toggleIcon, params.expanded, params.iconColor);
+    renderToggleChevron(params.toggleIcon, params.expanded, params.iconColor, params.config);
   }
   params.content.style.display = params.expanded ? "" : "none";
+  params.content.inert = !params.expanded;
   params.collapsedPreview.style.display = params.expanded
     ? "none"
     : ((params.collapsedPreview.textContent || params.collapsedPreview.childNodes.length) ? "" : "none");
@@ -169,14 +184,11 @@ export const applyExpansionDisplay = (params: {
 export const updateExpandableBubbleUI = (
   messageId: string,
   bubble: HTMLElement,
-  options: { stateSet: Set<string>; previewKind: string; iconColor: string }
+  options: { stateSet: Set<string>; iconColor: string; config?: AgentWidgetConfig }
 ): void => {
   const expanded = options.stateSet.has(messageId);
   const header = bubble.querySelector('button[data-expand-header="true"]') as HTMLElement;
   const content = bubble.querySelector('.persona-border-t') as HTMLElement;
-  const preview = bubble.querySelector(
-    `[data-persona-collapsed-preview="${options.previewKind}"]`
-  ) as HTMLElement | null;
 
   if (!header || !content) return;
 
@@ -186,13 +198,35 @@ export const updateExpandableBubbleUI = (
   const headerMeta = header.querySelector('.persona-ml-auto') as HTMLElement;
   const toggleIcon = headerMeta?.querySelector(':scope > .persona-flex.persona-items-center') as HTMLElement;
   if (toggleIcon) {
-    renderToggleChevron(toggleIcon, expanded, options.iconColor);
+    renderToggleChevron(toggleIcon, expanded, options.iconColor, options.config);
   }
 
-  content.style.display = expanded ? "" : "none";
-  if (preview) {
-    preview.style.display = expanded
-      ? "none"
-      : ((preview.textContent || preview.childNodes.length) ? "" : "none");
+  animateDisclosure(bubble, expanded, options.config);
+};
+
+/** Shared activity templates preserve authored formatting and live elapsed spans. */
+export const renderActivityTitle = (
+  title: HTMLElement, template: string, toolName: string, active: boolean,
+  elapsed: string, createElapsed: () => HTMLElement
+): void => {
+  title.textContent = "";
+  for (const segment of parseFormattedTemplate(template, toolName)) {
+    const parent = segment.styles.length
+      ? title.appendChild(createElement("span", segment.styles.map(style => `persona-tool-text-${style}`).join(" ")))
+      : title;
+    parent.append(segment.isDuration ? active ? createElapsed() : elapsed : segment.text);
   }
 };
+
+export const appendActivitySummary = (
+  container: HTMLElement, title: HTMLElement, value: HTMLElement | string | null | undefined, fallback: string
+): boolean => {
+  const customElement = value instanceof HTMLElement;
+  title.textContent = typeof value === "string" && value.trim() ? value : fallback;
+  container.appendChild(customElement ? value : title);
+  return customElement;
+};
+
+/** Shared plain-text preview normalization; callers choose head or tail lines. */
+export const activityPreview = (text: string, start: number, end?: number): string =>
+  text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).slice(start, end).join("\n");

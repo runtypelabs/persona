@@ -75,7 +75,15 @@ const base: AgentWidgetConfig = {
         : {}),
     },
   },
-  suggestionChips: [],
+  suggestions: {
+    starters: {
+      items: [],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
   plugins,
   launcher: { ...DEFAULT_WIDGET_CONFIG.launcher, enabled: false, width: "100%" },
   // A welcome hero would sit between the tests and the transcript.

@@ -467,17 +467,28 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     theme: {
       ...DEFAULT_WIDGET_CONFIG.theme,
     },
+    welcome: {
+      title: "Custom Loading Demo",
+      subtitle: "Send a message to see the custom loading indicator!",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Custom Loading Demo",
-      welcomeSubtitle: "Send a message to see the custom loading indicator!",
       inputPlaceholder: "Type a message...",
     },
-    suggestionChips: [
-      "Tell me a story",
-      "What's the weather like?",
-      "Help me plan a trip",
-    ],
+    suggestions: {
+      starters: {
+        items: [
+          "Tell me a story",
+          "What's the weather like?",
+          "Help me plan a trip",
+        ],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     loadingIndicator: buildLoadingIndicatorConfig(),
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   };

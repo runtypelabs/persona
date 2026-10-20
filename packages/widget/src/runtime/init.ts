@@ -1,8 +1,10 @@
 import { createAgentExperience, AgentWidgetController } from "../ui";
-import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetConfigPatch, AgentWidgetInitOptions, AgentWidgetEvent as _AgentWidgetEvent } from "../types";
+import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetConfigPatch, AgentWidgetInitOptions, AgentWidgetControllerEventMap, AgentWidgetEventContext, AgentWidgetEvent as _AgentWidgetEvent } from "../types";
 import { isComposerBarMountMode, isDockedMountMode } from "../utils/dock";
 import { mergeConfigUpdate } from "../utils/config-merge";
 import { createWidgetHostLayout } from "./host-layout";
+import { moveWidgetHost } from "./move-host";
+import { createLegacyDiagnosticContext, updateLegacyDiagnostics } from "../utils/legacy-diagnostics";
 
 const ensureTarget = (target: string | HTMLElement): HTMLElement => {
   if (typeof window === "undefined" || typeof document === "undefined") {
@@ -41,10 +43,19 @@ const mountStyles = (root: ShadowRoot | HTMLElement, ownerDocument: Document) =>
   }
 
   const clonedLink = globalLink.cloneNode(true) as HTMLLinkElement;
+  const ready = new Promise<void>((resolve, reject) => {
+    clonedLink.onload = () => resolve();
+    clonedLink.onerror = () => reject(new Error("Unable to load the widget stylesheet"));
+  });
   root.insertBefore(clonedLink, root.firstChild);
+  return ready;
 };
 
-export type AgentWidgetInitHandle = AgentWidgetController & { host: HTMLElement };
+export type AgentWidgetInitHandle = AgentWidgetController & {
+  host: HTMLElement;
+  /** Move a live direct-layout widget to a connected container in the same document. */
+  moveTo: (target: string | HTMLElement, options?: { preserveFocus?: boolean }) => void;
+};
 
 // Live handles for every mounted initAgentWidget() instance, oldest first.
 // `persona:chat-ready` is a one-shot broadcast and `windowKey` is opt-in, so
@@ -62,15 +73,34 @@ export const getAgentWidgetHandles = (): AgentWidgetInitHandle[] => [
 export const initAgentWidget = (
   options: AgentWidgetInitOptions
 ): AgentWidgetInitHandle => {
-  const target = ensureTarget(options.target);
+  let target = ensureTarget(options.target);
   const useShadow = options.useShadowDom === true;
   const ownerDocument = target.ownerDocument;
+  const instanceId = target.id || `persona-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   let config = options.config;
+  const diagnostics = createLegacyDiagnosticContext(config);
   let hostLayout = createWidgetHostLayout(target, config);
-  let controller: AgentWidgetController;
+  let controller!: AgentWidgetController;
   let stateUnsubs: Array<() => void> = [];
+  let destroyed = false;
+  let readyNotified = false;
+  const notifyReady = () => {
+    const mounted = controller;
+    void mounted.ready.then(() => {
+      if (destroyed || readyNotified || mounted !== controller) return;
+      readyNotified = true;
+      options.onChatReady?.();
+    }, () => {});
+  };
+  let relocate = (move: () => void) => move();
+  const hostListeners = new Set<{
+    event: keyof AgentWidgetControllerEventMap;
+    handler: unknown;
+    bind: () => void;
+    unsubscribe: () => void;
+  }>();
 
-  const createMount = (host: HTMLElement, nextConfig?: _AgentWidgetConfig): HTMLElement => {
+  const createMount = (host: HTMLElement, nextConfig?: _AgentWidgetConfig) => {
     const launcherEnabled = nextConfig?.launcher?.enabled ?? true;
     const shouldFillHost = !launcherEnabled || isDockedMountMode(nextConfig);
     const mount = ownerDocument.createElement("div");
@@ -88,20 +118,19 @@ export const initAgentWidget = (
       mount.style.minWidth = "0";
     }
 
+    let stylesReady: Promise<void> | undefined;
     if (useShadow) {
       const shadowRoot = host.attachShadow({ mode: "open" });
       shadowRoot.appendChild(mount);
-      mountStyles(shadowRoot, ownerDocument);
+      stylesReady = mountStyles(shadowRoot, ownerDocument);
     } else {
       host.appendChild(mount);
       mountStyles(host, ownerDocument);
     }
 
-    if (target.id) {
-      mount.setAttribute("data-persona-instance", target.id);
-    }
+    mount.setAttribute("data-persona-instance", instanceId);
 
-    return mount;
+    return { mount, stylesReady };
   };
 
   const syncHostState = () => {
@@ -118,11 +147,16 @@ export const initAgentWidget = (
   };
 
   const mountController = () => {
-    const mount = createMount(hostLayout.host, config);
+    const { mount, stylesReady } = createMount(hostLayout.host, config);
     controller = createAgentExperience(mount, config, {
-      debugTools: options.debugTools
+      debugTools: options.debugTools,
+      registerHostMove: (move) => { relocate = move; },
+      diagnostics,
+      preparation: stylesReady ? [stylesReady] : [],
     });
+    hostListeners.forEach((listener) => listener.bind());
     bindHostState();
+    notifyReady();
   };
 
   const destroyCurrentController = () => {
@@ -132,8 +166,6 @@ export const initAgentWidget = (
   };
 
   mountController();
-  // Fired when the controller is mounted and its API is callable.
-  options.onChatReady?.();
 
   const rebuildLayout = (nextConfig?: _AgentWidgetConfig) => {
     destroyCurrentController();
@@ -144,7 +176,46 @@ export const initAgentWidget = (
   };
 
   const handleBase = {
+    moveTo(nextTarget: string | HTMLElement, moveOptions?: { preserveFocus?: boolean }) {
+      if (destroyed) throw new Error("Cannot move a destroyed widget");
+      if (hostLayout.mode !== "direct") throw new Error("Docked widgets cannot be moved");
+      const destination = typeof nextTarget === "string" ? ownerDocument.querySelector(nextTarget) : nextTarget;
+      if (!(destination instanceof HTMLElement) || destination.ownerDocument !== ownerDocument ||
+        destination.getRootNode() !== ownerDocument || hostLayout.host.getRootNode() !== ownerDocument ||
+        hostLayout.host.contains(destination)) {
+        throw new Error("Invalid widget move target: expected a connected light-DOM container in the same document");
+      }
+      if (destination === target) return;
+      relocate(() => moveWidgetHost(hostLayout.host, destination, moveOptions?.preserveFocus !== false));
+      target = destination;
+    },
+    on<K extends keyof AgentWidgetControllerEventMap>(
+      event: K,
+      handler: (payload: AgentWidgetControllerEventMap[K], context: AgentWidgetEventContext) => void
+    ) {
+      if (destroyed) return () => {};
+      const existing = [...hostListeners].find((listener) => listener.event === event && listener.handler === handler);
+      if (existing) return existing.unsubscribe;
+      let unbind = () => {};
+      const listener = {
+        event, handler,
+        bind: () => { unbind = controller.on(event, handler); },
+        unsubscribe: () => { unbind(); hostListeners.delete(listener); },
+      };
+      hostListeners.add(listener);
+      listener.bind();
+      return listener.unsubscribe;
+    },
+    off<K extends keyof AgentWidgetControllerEventMap>(
+      event: K,
+      handler: (payload: AgentWidgetControllerEventMap[K], context: AgentWidgetEventContext) => void
+    ) {
+      for (const listener of hostListeners) {
+        if (listener.event === event && listener.handler === handler) listener.unsubscribe();
+      }
+    },
     update(nextConfig: AgentWidgetConfigPatch) {
+      updateLegacyDiagnostics(diagnostics, nextConfig);
       const mergedConfig = mergeConfigUpdate(config ?? ({} as _AgentWidgetConfig), nextConfig);
       const previousDocked = isDockedMountMode(config);
       const nextDocked = isDockedMountMode(mergedConfig);
@@ -162,10 +233,14 @@ export const initAgentWidget = (
       // as absent keys, which the controller's patch merge would preserve
       // instead of clearing. Both layers share mergeConfigUpdate, so they converge.
       controller.update(nextConfig);
+      notifyReady();
       syncHostState();
     },
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       destroyCurrentController();
+      hostListeners.forEach((listener) => listener.unsubscribe());
       hostLayout.destroy();
       const index = activeHandles.indexOf(handle);
       if (index !== -1) activeHandles.splice(index, 1);

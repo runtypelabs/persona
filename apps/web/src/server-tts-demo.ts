@@ -82,17 +82,28 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       title: "Server TTS",
       subtitle: "Streaming OpenAI voices",
     },
+    welcome: {
+      title: "Streaming server TTS",
+      subtitle:
+        "Ask anything, then press “Read aloud” to hear the reply in an OpenAI voice — streamed as PCM through the proxy.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Streaming server TTS",
-      welcomeSubtitle:
-        "Ask anything, then press “Read aloud” to hear the reply in an OpenAI voice — streamed as PCM through the proxy.",
       inputPlaceholder: "Ask a question, then read the reply aloud…",
     },
-    suggestionChips: [
-      "Explain streaming TTS in one sentence",
-      "Tell me a two-sentence story",
-    ],
+    suggestions: {
+      starters: {
+        items: [
+          "Explain streaming TTS in one sentence",
+          "Tell me a two-sentence story",
+        ],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   };
 };

@@ -23,6 +23,7 @@ import {
 } from "./components/ask-user-question-bubble";
 
 export type AskUserSheetContext = {
+  instanceId: string;
   mount: HTMLElement;
   overlay: HTMLElement;
   sessionRef: { current: AgentWidgetSession | null };
@@ -56,6 +57,7 @@ export const createAskUserSheetHandlers = (ctx: AskUserSheetContext): AskUserShe
     mount.dispatchEvent(
       new CustomEvent("persona:askUserQuestion:answered", {
         detail: {
+          instanceId: ctx.instanceId,
           toolUseId: toolCallId,
           answer: trimmed,
           answers: meta.structured,
@@ -141,7 +143,8 @@ export const createAskUserSheetHandlers = (ctx: AskUserSheetContext): AskUserShe
       const toolCallId = sheet.getAttribute("data-tool-call-id") ?? "";
       mount.dispatchEvent(
         new CustomEvent("persona:askUserQuestion:dismissed", {
-          detail: { toolUseId: toolCallId },
+          detail: {
+          instanceId: ctx.instanceId, toolUseId: toolCallId },
           bubbles: true,
           composed: true,
         })
@@ -318,7 +321,8 @@ export const createAskUserSheetHandlers = (ctx: AskUserSheetContext): AskUserShe
       if (!grouped) {
         mount.dispatchEvent(
           new CustomEvent("persona:askUserQuestion:dismissed", {
-            detail: { toolUseId: toolCallId },
+            detail: {
+          instanceId: ctx.instanceId, toolUseId: toolCallId },
             bubbles: true,
             composed: true,
           })

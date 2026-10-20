@@ -1,13 +1,17 @@
 import { CIRCLE_LAUNCHER_TOKENS, resolveLauncherVariant } from "./launcher-variant";
-import type { CreateThemeOptions, DeepPartial, PersonaTheme } from '../types/theme';
+import type { BrandConfig, CreateThemeOptions, DeepPartial, PersonaTheme } from '../types/theme';
 import type { AgentWidgetConfig } from '../types';
 import { resolveDefaultsVersion } from '../defaults';
-import { createTheme, resolveTokens, themeToCssVariables, DEFAULT_COMPONENTS_V4 } from './tokens';
+import { createTheme, resolveTokens, themeToCssVariables, launcherThemeToCssVariables, resolveThemeDefaults, DEFAULT_COMPONENTS_V4 } from './tokens';
+import { isEmbeddedLayout } from "./panel-config";
+import { deriveBrandTheme, inferBrandColorScheme } from './brand';
 import { deepMerge } from './deep-merge';
+import { hasExplicitThemeStyle, OPT_IN_THEME_STYLE_PATHS } from './style-provenance';
 
 export type ColorScheme = 'light' | 'dark' | 'auto';
 
 export interface PersonaWidgetConfig {
+  brand?: BrandConfig;
   theme?: DeepPartial<PersonaTheme>;
   darkTheme?: DeepPartial<PersonaTheme>;
   colorScheme?: ColorScheme;
@@ -279,7 +283,7 @@ export const detectColorScheme = (): 'light' | 'dark' => {
 };
 
 const getColorSchemeFromConfig = (config?: WidgetConfig): 'light' | 'dark' => {
-  const colorScheme = config?.colorScheme ?? 'light';
+  const colorScheme = config?.colorScheme ?? inferBrandColorScheme(config?.brand) ?? 'light';
 
   if (colorScheme === 'light') return 'light';
   if (colorScheme === 'dark') return 'dark';
@@ -335,40 +339,75 @@ export const createDarkTheme = (
 
 export const getActiveTheme = (config?: WidgetConfig): PersonaTheme => {
   const scheme = getColorScheme(config);
-  const explicitTheme = normalizeThemeConfig(config?.theme);
+  const explicitTheme = deepMerge(deriveBrandTheme(config?.brand, scheme, resolveThemeDefaults(config?.future).components, config?.future?.v5Defaults), normalizeThemeConfig(config?.theme)) as DeepPartial<PersonaTheme>;
   // Variant defaults sit under explicit theme tokens in either defaults state.
   const launcherDefaults = resolveLauncherVariant(config) === 'circle'
     ? CIRCLE_LAUNCHER_TOKENS
     : { ...DEFAULT_COMPONENTS_V4.launcher, ...(config?.future?.v5Defaults ? { offset: '1.5rem' } : {}) };
+  // Scope presentation defaults below caller tokens, including dark overrides.
+  const embedded = isEmbeddedLayout(config as Partial<AgentWidgetConfig>);
   const lightThemeConfig = deepMerge(
-    { components: { launcher: launcherDefaults } }, explicitTheme
+    { components: {
+      launcher: launcherDefaults,
+      ...(embedded ? {
+        panel: { background: 'transparent', modes: { inline: { border: 'none', shadow: 'none', borderRadius: '0' } } },
+        header: { background: 'transparent' },
+        message: { background: 'transparent' },
+        composer: { footerBackground: 'transparent', footerBorder: 'none', overlayBand: 'transparent' },
+      } : {}),
+    } }, explicitTheme
   ) as DeepPartial<PersonaTheme>;
   const darkThemeConfig = normalizeThemeConfig(config?.darkTheme);
 
-  if (scheme === 'dark') {
-    return applyPanelModeWidth(createDarkTheme(
+  const theme = scheme === 'dark'
+    ? applyPanelModeWidth(createDarkTheme(
       deepMerge(
         (lightThemeConfig ?? {}) as Record<string, unknown>,
         (darkThemeConfig ?? {}) as Record<string, unknown>
       ) as DeepPartial<PersonaTheme>,
       { future: config?.future }
-    ), config);
-  }
-
-  return applyPanelModeWidth(createLightTheme(lightThemeConfig, { future: config?.future }), config);
+    ), config)
+    : applyPanelModeWidth(createLightTheme(lightThemeConfig, { future: config?.future }), config);
+  Object.defineProperty(theme, CONSUMER_PATHS, {
+    value: [...OPT_IN_THEME_STYLE_PATHS, 'suggestion.chip.padding', 'suggestion.chip.fontWeight']
+      .filter((path) => hasExplicitThemeStyle(config, path, scheme)),
+  });
+  return theme;
 };
 
+const CONSUMER_PATHS = Symbol('persona.themeConsumerPaths');
 export const getCssVariables = (theme: PersonaTheme): Record<string, string> => {
-  return themeToCssVariables(theme);
+  const variables = themeToCssVariables(theme);
+  // Legacy chip defaults differ from the public token defaults. Keep them
+  // available beneath host theme intent, including observer-only scheme changes.
+  variables['--persona-suggestion-compat-padding'] = '6px 12px';
+  variables['--persona-suggestion-compat-weight'] = '500';
+  for (const path of (theme as PersonaTheme & { [CONSUMER_PATHS]?: readonly string[] })[CONSUMER_PATHS] ?? []) {
+    const suffix = path.split('.').join('-');
+    const value = variables[`--persona-components-${suffix}`];
+    if (value !== undefined) variables[path === 'suggestion.chip.padding'
+      ? '--persona-suggestion-compat-padding' : path === 'suggestion.chip.fontWeight'
+        ? '--persona-suggestion-compat-weight' : `--persona-consumer-${suffix}`] = value;
+  }
+  return variables;
 };
 
-export const applyThemeVariables = (
-  element: HTMLElement,
-  config?: WidgetConfig
-): void => {
-  const theme = getActiveTheme(config);
-  const cssVars = getCssVariables(theme);
+const appliedVariables = new WeakMap<HTMLElement, string[]>();
 
+export const applyThemeVariables = (element: HTMLElement, config?: WidgetConfig): void => {
+  applyVariables(element, getCssVariables(getActiveTheme(config)), config);
+};
+
+/** Same resolved theme, with only aliases used by the collapsed launcher. */
+export const applyLauncherThemeVariables = (element: HTMLElement, config?: WidgetConfig): void => {
+  applyVariables(element, launcherThemeToCssVariables(getActiveTheme(config)), config);
+};
+
+const applyVariables = (element: HTMLElement, cssVars: Record<string, string>, config?: WidgetConfig): void => {
+  for (const name of appliedVariables.get(element) ?? []) {
+    if (!(name in cssVars)) element.style.removeProperty(name);
+  }
+  appliedVariables.set(element, Object.keys(cssVars));
   for (const [name, value] of Object.entries(cssVars)) {
     element.style.setProperty(name, value);
   }

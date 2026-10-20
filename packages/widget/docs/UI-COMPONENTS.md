@@ -214,7 +214,7 @@ initAgentWidget({
 type LoadingIndicatorRenderContext = {
   config: AgentWidgetConfig;
   streaming: boolean;
-  location: 'inline' | 'standalone';
+  location: 'inline' | 'standalone' | 'conversation-open';
   defaultRenderer: () => HTMLElement;
 };
 
@@ -227,6 +227,7 @@ type IdleIndicatorRenderContext = {
 
 // Configuration
 type AgentWidgetLoadingIndicatorConfig = {
+  conversationOpenVariant?: 'spinner' | 'skeleton';
   showBubble?: boolean;
   render?: (context: LoadingIndicatorRenderContext) => HTMLElement | null;
   renderIdle?: (context: IdleIndicatorRenderContext) => HTMLElement | null;
@@ -234,6 +235,20 @@ type AgentWidgetLoadingIndicatorConfig = {
 ```
 
 ### Priority Chain
+
+Conversation opening uses a centered spinner after a 250 ms delay and fades
+the loaded transcript in over 150 ms. Reduced-motion preferences disable the
+rotation and fade. To use the alternative placeholder bubbles, set
+`loadingIndicator: { conversationOpenVariant: "skeleton" }`; `"spinner"` is the
+default in both V4 and V5. This setting is independent of the reply waiting
+indicator's `variant`. The existing `render` hook receives
+`location: "conversation-open"` and a `defaultRenderer` for the selected treatment.
+
+The skeleton uses the transcript's spacing and role sizing, with text lines
+inside the configured user and assistant message styles. V5's unboxed assistant
+messages show lines without a surrounding bubble; V4 and custom bubble themes
+retain their configured backgrounds, padding, and corner radii. Placeholder
+lengths are illustrative, not a prediction of the incoming conversation.
 
 Indicators are resolved in this order:
 1. **Plugin hook** (`renderLoadingIndicator` / `renderIdleIndicator`)

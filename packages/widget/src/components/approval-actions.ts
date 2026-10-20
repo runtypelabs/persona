@@ -1,41 +1,31 @@
 /**
  * Built-in default approval renderer.
  *
- * Renders the neutral "permission card": a tool icon, a "The assistant wants to
- * use <tool>" title, the call arguments collapsed behind a "show more" header
- * chevron, and an action row. By default the row is a single "Allow" (allow
- * once) + "Deny". When `config.approval.enableAlwaysAllow` is true it becomes a
- * split "Always allow ⏎" primary with an "Allow once ⌘⏎" dropdown plus
- * "Deny Esc", with keyboard shortcuts — that affordance is opt-in because
- * "Always allow" only means anything if the integrator persists the policy via
- * `onDecision`'s `remember` flag (needs a backend).
- *
- * Installed as an internal `renderApproval` plugin (see ui.ts) so it rides the
- * existing plugin stub-and-hydrate + teardown path and survives idiomorph
- * re-renders. A user-supplied `renderApproval` plugin still fully overrides it.
- *
- * Resolved states mirror the example plugin: approved → render nothing (the
- * tool call takes over the transcript); denied/timeout → a subtle one-line
- * trace.
+ * Renders a permission card with per-instance disclosure and shortcut state.
+ * V4 preserves the legacy opt-in remembered-permission split button and trace.
+ * V5 keeps one-time permission primary, scopes keys to the focused card, and
+ * retains decisions as compact, inspectable rows. Each behavior is configurable.
+ * Installed through renderApproval so user plugins can replace or decorate it.
  */
 import { createElement, createNode } from "../utils/dom";
 import { BROWSER_TOOL_INTERRUPTION } from "../utils/restored-browser-state";
 // The webmcp-title lookup is injected by ui.ts at chunk adoption (see
 // approval-deps): this module ships in the lazy approval-ui chunk. Icons are
 // direct lucide data imports.
-import { getWebMcpToolDisplayTitle } from "./approval-deps";
-import { Ban, ChevronDown, ShieldCheck } from "lucide";
-import { renderIconNode } from "../utils/icon-node";
-import { formatUnknownValue } from "../utils/formatting";
+import { getWebMcpToolDisplayTitle, getApprovalPopoverDeps } from "./approval-deps";
+import { Ban } from "lucide";
+import { renderApprovalIcon, renderApprovalIconNode as renderIconNode } from "./approval-deps";
+import { formatUnknownValue } from "../utils/format-value";
 import { WEBMCP_TOOL_PREFIX } from "../webmcp-bridge";
-import { createPopover, isEditableEventTarget, type PopoverHandle } from "../plugin-kit";
+import type { PopoverHandle } from "../plugin-kit";
 import type {
   AgentWidgetMessage,
-  AgentWidgetConfig,
   AgentWidgetApprovalConfig,
 } from "../types";
 import type { AgentWidgetPlugin } from "../plugins/types";
-import { humanizeToolName } from "./approval-bubble";
+import { humanizeToolName } from "../utils/humanize-tool-name";
+import { resolveApprovalConfig } from "../utils/approval-config";
+import { resolveApprovalStyles } from "../utils/approval-styles";
 
 type Approval = NonNullable<AgentWidgetMessage["approval"]>;
 type Decide = (options?: { remember?: boolean }) => void;
@@ -48,7 +38,10 @@ type Decide = (options?: { remember?: boolean }) => void;
  * tearing down one widget never clears listeners/popovers another widget on the
  * same page still owns.
  */
+let nextInstanceId = 0;
+
 interface InstanceState {
+  disclosurePrefix: string;
   keyHandlers: Map<string, (e: KeyboardEvent) => void>;
   popovers: Map<string, PopoverHandle>;
   // Order in which approvals FIRST became pending — not re-render order. The
@@ -60,6 +53,7 @@ interface InstanceState {
 }
 
 const createInstanceState = (): InstanceState => ({
+  disclosurePrefix: `approval-${++nextInstanceId}`,
   keyHandlers: new Map(),
   popovers: new Map(),
   pendingOrder: [],
@@ -96,11 +90,6 @@ const teardownMessage = (state: InstanceState, messageId: string): void => {
       : null;
   }
 };
-
-const resolveApprovalConfig = (
-  config?: AgentWidgetConfig
-): AgentWidgetApprovalConfig | undefined =>
-  config?.approval !== false ? config?.approval : undefined;
 
 const isDetailsExpanded = (
   messageId: string,
@@ -185,9 +174,11 @@ const buildPending = (
   approve: Decide,
   deny: Decide,
   enableAlways: boolean,
-  showRawCall = false
+  showRawCall = false,
+  resolvedLabel?: string
 ): HTMLElement => {
-  const card = createElement("div", "persona-approval-card persona-shadow-sm");
+  const compact = resolvedLabel !== undefined;
+  const card = createElement("div", compact ? "persona-approval-row persona-activity-row" : "persona-approval-card persona-shadow-sm");
   card.id = `bubble-${message.id}`;
   card.setAttribute("data-message-id", message.id);
   card.setAttribute("data-bubble-type", "approval");
@@ -204,9 +195,9 @@ const buildPending = (
   // name), so the description is only ever visible here. Mirrors the legacy
   // bubble, which also opened a disclosure when only a description was present.
   const hasDescription = Boolean(approval.description) && detailsMode !== "hidden";
-  // `showRawCall` lifts the parameters out of the disclosure (see below).
   const hasParams = approval.parameters != null && detailsMode !== "hidden" && !showRawCall;
-  const hasDetails = hasDescription || hasParams;
+  const hasReason = Boolean(approval.reason) && detailsMode !== "hidden";
+  const hasDetails = hasDescription || hasParams || (compact && hasReason);
   const expanded = hasDetails && isDetailsExpanded(message.id, expansionState, approvalConfig);
 
   // The card uses the whole header as the disclosure toggle (chevron-only, no
@@ -217,8 +208,8 @@ const buildPending = (
   const hideDetailsLabel = approvalConfig?.hideDetailsLabel ?? "Hide details";
 
   // Header. When a disclosure exists, the whole header toggles its visibility.
-  const head = createElement("button", "persona-approval-head") as HTMLButtonElement;
-  head.type = "button";
+  const head = createElement(compact && !hasDetails ? "div" : "button", "persona-approval-head");
+  if (head instanceof HTMLButtonElement) head.type = "button";
   if (hasDetails) {
     head.setAttribute("data-action", "toggle-params");
     head.setAttribute("aria-expanded", expanded ? "true" : "false");
@@ -228,15 +219,27 @@ const buildPending = (
   }
 
   const logo = createElement("span", "persona-approval-logo");
-  const glyph = renderIconNode(ShieldCheck, 16, "currentColor", 2);
+  const glyph = renderApprovalIcon("shield-check", 16, "currentColor", 2);
   if (glyph) logo.appendChild(glyph);
-  head.appendChild(logo);
+  if (!compact) head.appendChild(logo);
 
-  const title = buildTitle(approval, approvalConfig);
+  const title = compact ? createElement("span", "persona-approval-title") : buildTitle(approval, approvalConfig);
+  let accessibleSummary = "";
+  if (compact) {
+    const name = (approval.toolType === "webmcp" || approval.toolName.startsWith(WEBMCP_TOOL_PREFIX))
+      ? getWebMcpToolDisplayTitle(approval.toolName) : undefined;
+    const toolName = name ?? humanizeToolName(approval.toolName);
+    const status = createElement("span", "persona-approval-status");
+    status.setAttribute("role", "status");
+    status.textContent = resolvedLabel;
+    title.append(toolName, " · ", status);
+    if (approvalConfig?.titleColor) title.style.color = approvalConfig.titleColor;
+    accessibleSummary = `${toolName} · ${resolvedLabel}`;
+  }
   if (hasDetails) {
     const toggle = createElement("span", "persona-approval-toggle");
     toggle.setAttribute("aria-hidden", "true");
-    const chevron = renderIconNode(ChevronDown, 14, "currentColor", 2);
+    const chevron = renderApprovalIcon("chevron-down", 14, "currentColor", 2);
     if (chevron) toggle.appendChild(chevron);
     title.append(" ");
     title.appendChild(toggle);
@@ -246,24 +249,36 @@ const buildPending = (
 
   const body = createElement("div", "persona-approval-body");
 
+  let contextBlock: HTMLElement | undefined;
   if (hasDetails) {
     const details = createElement("div", "persona-approval-details");
     details.setAttribute("data-role", "params");
     details.hidden = !expanded;
 
+    const section = (label: string): HTMLElement => {
+      const block = createElement("div", "persona-tool-detail");
+      const heading = createElement("div", "persona-tool-detail-label");
+      heading.textContent = label;
+      block.appendChild(heading);
+      details.appendChild(block);
+      return block;
+    };
+    const requestBlock = compact && hasParams ? section("Request") : details;
+    if (compact && (hasDescription || hasReason)) contextBlock = section("Context");
+
     if (hasDescription) {
       const desc = createElement("p", "persona-approval-desc");
       if (approvalConfig?.descriptionColor) desc.style.color = approvalConfig.descriptionColor;
       desc.textContent = approval.description as string;
-      details.appendChild(desc);
+      (contextBlock ?? details).appendChild(desc);
     }
 
     if (hasParams) {
-      const pre = createElement("pre", "persona-approval-params");
+      const pre = createElement("pre", compact ? "persona-approval-params persona-tool-detail-value persona-tool-detail-code" : "persona-approval-params");
       if (approvalConfig?.parameterBackgroundColor) pre.style.background = approvalConfig.parameterBackgroundColor;
       if (approvalConfig?.parameterTextColor) pre.style.color = approvalConfig.parameterTextColor;
       pre.textContent = formatUnknownValue(approval.parameters);
-      details.appendChild(pre);
+      requestBlock.appendChild(pre);
     }
 
     body.appendChild(details);
@@ -295,10 +310,40 @@ const buildPending = (
     const label = createElement("span", "persona-approval-reason-label");
     label.textContent = `${approvalConfig?.reasonLabel ?? "Agent's stated reason:"} `;
     reasonLine.append(label, document.createTextNode(approval.reason));
-    body.appendChild(reasonLine);
+    if (compact) contextBlock?.appendChild(reasonLine);
+    else body.appendChild(reasonLine);
+  }
+
+  const updateDisclosureLabel = (open: boolean): void => {
+    head.setAttribute("aria-expanded", String(open));
+    const label = open ? hideDetailsLabel : showDetailsLabel;
+    head.setAttribute("aria-label", compact ? `${accessibleSummary}. ${label}` : label);
+  };
+  const toggleDetails = (): void => {
+    const details = card.querySelector<HTMLElement>('[data-role="params"]');
+    if (!details) return;
+    const willOpen = details.hidden !== false;
+    details.hidden = !willOpen;
+    if (compact) body.hidden = !willOpen;
+    updateDisclosureLabel(willOpen);
+    expansionState.set(message.id, willOpen);
+  };
+  if (compact) {
+    if (hasDetails) {
+      const details = body.querySelector<HTMLElement>('[data-role="params"]')!;
+      details.id = `${state.disclosurePrefix}-details-${message.id}`;
+      head.setAttribute("aria-controls", details.id);
+      updateDisclosureLabel(expanded);
+      body.hidden = !expanded;
+      card.appendChild(body);
+      head.addEventListener("click", toggleDetails);
+    }
+    return card;
   }
 
   const actions = createElement("div", "persona-approval-actions");
+  const oncePrimary = approvalConfig?.primaryAction === "allow-once";
+  const legacyKeys = approvalConfig?.keyboardShortcuts !== false && approvalConfig?.keyboardShortcuts !== "focused";
   let popover: PopoverHandle | null = null;
 
   const applyPrimaryColors = (el: HTMLElement): void => {
@@ -316,30 +361,32 @@ const buildPending = (
     const split = createElement("div", "persona-approval-split");
     const primary = createElement("button", "persona-approval-primary") as HTMLButtonElement;
     primary.type = "button";
-    primary.setAttribute("data-action", "always");
+    primary.setAttribute("data-action", oncePrimary ? "allow" : "always");
     applyPrimaryColors(primary);
-    primary.append(approvalConfig?.approveLabel ?? "Always allow", kbd("⏎"));
+    primary.append(approvalConfig?.approveLabel ?? (oncePrimary ? "Allow once" : "Always allow"));
+    if (legacyKeys) primary.append(kbd("⏎"));
 
     const caret = createElement("button", "persona-approval-caret") as HTMLButtonElement;
     caret.type = "button";
     caret.setAttribute("data-action", "toggle-menu");
     caret.setAttribute("aria-label", "More options");
     applyPrimaryColors(caret);
-    const caretIcon = renderIconNode(ChevronDown, 15, "currentColor", 2);
+    const caretIcon = renderApprovalIcon("chevron-down", 15, "currentColor", 2);
     if (caretIcon) caret.appendChild(caretIcon);
 
     split.append(primary, caret);
     actions.append(split, denyBtn);
-    denyBtn.append(kbd("Esc"));
+    if (legacyKeys) denyBtn.append(kbd("Esc"));
 
     // "Allow once" menu, portaled out of the transcript by createPopover so it
     // overlays the rest of the UI and isn't clipped by the scroll container.
     const menu = createElement("div", "persona-approval-menu");
     const once = createElement("button", "persona-approval-menu-item") as HTMLButtonElement;
     once.type = "button";
-    once.append("Allow once", kbd("⌘⏎"));
+    once.append(oncePrimary ? (approvalConfig?.alwaysAllowLabel ?? "Always allow") : "Allow once");
+    if (!oncePrimary && legacyKeys) once.append(kbd("⌘⏎"));
     menu.appendChild(once);
-    popover = createPopover({
+    popover = getApprovalPopoverDeps().createPopover({
       anchor: split,
       content: menu,
       placement: "bottom-start",
@@ -348,7 +395,8 @@ const buildPending = (
     state.popovers.set(message.id, popover);
     once.addEventListener("click", () => {
       teardownMessage(state, message.id);
-      approve(); // Allow once
+      if (oncePrimary) approve({ remember: true });
+      else approve();
     });
   } else {
     const allow = createElement(
@@ -358,7 +406,7 @@ const buildPending = (
     allow.type = "button";
     allow.setAttribute("data-action", "allow");
     applyPrimaryColors(allow);
-    allow.append(approvalConfig?.approveLabel ?? "Allow");
+    allow.append(approvalConfig?.approveLabel ?? (oncePrimary ? "Allow once" : "Allow"));
     actions.append(allow, denyBtn);
   }
 
@@ -371,14 +419,7 @@ const buildPending = (
     if (!target) return;
     const action = target.getAttribute("data-action");
     if (action === "toggle-params") {
-      const pre = card.querySelector<HTMLElement>('[data-role="params"]');
-      if (pre) {
-        const willOpen = Boolean(pre.hidden);
-        pre.hidden = !willOpen;
-        head.setAttribute("aria-expanded", willOpen ? "true" : "false");
-        head.setAttribute("aria-label", willOpen ? hideDetailsLabel : showDetailsLabel);
-        expansionState.set(message.id, willOpen);
-      }
+      toggleDetails();
       return;
     }
     if (action === "toggle-menu") {
@@ -425,13 +466,46 @@ export const createBuiltInApprovalPlugin = (
 
   const plugin: AgentWidgetPlugin = {
     id: "persona-built-in-approval",
-    renderApproval: ({ message, approve, deny, config }) => {
+    renderApproval: ({ message, approve, deny, config, execution, signal }) => {
       const approval = message?.approval;
       if (!approval) return null;
-      const approvalConfig = resolveApprovalConfig(config);
+      const approvalConfig = { ...resolveApprovalConfig(config), ...resolveApprovalStyles(config, "plugin") };
+      // A card can remain mounted while the host processes a decision. Retire
+      // both action paths immediately, including click after native key events.
+      let decided = false;
+      const requestApprove = approve;
+      const requestDeny = deny;
+      approve = (options) => {
+        if (decided || signal?.aborted || approval.status !== "pending") return;
+        decided = true;
+        if (options === undefined) requestApprove();
+        else requestApprove(options);
+      };
+      deny = (options) => {
+        if (decided || signal?.aborted || approval.status !== "pending") return;
+        decided = true;
+        if (options === undefined) requestDeny();
+        else requestDeny(options);
+      };
 
       if (approval.status !== "pending") {
         teardownMessage(state, message.id);
+        const resolvedLabel = approval.status === "denied" ? "Denied"
+          : approval.status === "timeout" ? "Timed out"
+          : execution?.status === "running" ? "Allowed · running"
+          : execution?.status === "completed" ? "Completed"
+          : execution?.status === "failed" ? "Failed" : "Allowed";
+        if (approvalConfig?.resolvedDisplay === "row") {
+          return buildPending(state, expansionState, message, approval, approvalConfig, approve, deny, false, false, resolvedLabel);
+        }
+        if (approvalConfig?.resolvedDisplay === "status-line") {
+          const card = buildPending(state, expansionState, message, approval, approvalConfig, approve, deny, false);
+          const status = createElement("div", "persona-approval-status");
+          status.setAttribute("role", "status");
+          status.textContent = resolvedLabel;
+          card.querySelector(".persona-approval-actions")?.replaceWith(status);
+          return card;
+        }
         // Approved → render nothing; the tool call takes over the transcript.
         // (An empty hidden element, not null, suppresses the legacy fallback.)
         if (approval.status === "approved") {
@@ -462,14 +536,24 @@ export const createBuiltInApprovalPlugin = (
         visitorGate
       );
 
-      if (enableAlways) {
+      const keyboardMode = approvalConfig?.keyboardShortcuts ?? "legacy";
+      if (keyboardMode === "focused" || (keyboardMode === "legacy" && enableAlways)) {
         if (!state.pendingOrder.includes(message.id)) state.pendingOrder.push(message.id);
         // The newest first-seen pending approval owns the shortcuts, regardless
         // of which card happens to be re-rendering right now.
         state.latestPendingApprovalId = state.pendingOrder[state.pendingOrder.length - 1];
         const onKeydown = (e: KeyboardEvent): void => {
-          if (isEditableEventTarget(e)) return;
-          if (message.id !== state.latestPendingApprovalId) return;
+          if (e.defaultPrevented || e.isComposing || getApprovalPopoverDeps().isEditableEventTarget(e)) return;
+          if (keyboardMode === "focused") {
+            // A document listener also receives host-page keys and retargeted
+            // Shadow DOM events. Only the focused approval's composed path owns them.
+            if (!e.composedPath().includes(card)) return;
+            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+            const target = e.composedPath()[0];
+            if (e.key === "Enter" && target instanceof Element &&
+                target.closest("[data-action]")?.getAttribute("data-action") !== "allow") return;
+          }
+          if (keyboardMode === "legacy" && message.id !== state.latestPendingApprovalId) return;
           if (e.key !== "Escape" && e.key !== "Enter") return;
           e.preventDefault();
           // Resolving here promotes the next-newest pending approval to owner.
@@ -481,8 +565,8 @@ export const createBuiltInApprovalPlugin = (
           teardownMessage(state, message.id);
           if (e.key === "Escape") {
             deny();
-          } else if (e.metaKey || e.ctrlKey) {
-            approve(); // Allow once
+          } else if (keyboardMode === "focused" || approvalConfig?.primaryAction === "allow-once" || e.metaKey || e.ctrlKey) {
+            approve();
           } else {
             approve({ remember: true }); // Always allow
           }
@@ -491,6 +575,7 @@ export const createBuiltInApprovalPlugin = (
         document.addEventListener("keydown", onKeydown);
       }
 
+      signal?.addEventListener("abort", () => teardownMessage(state, message.id), { once: true });
       return card;
     },
   };

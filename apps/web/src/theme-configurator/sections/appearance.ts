@@ -20,6 +20,7 @@ import {
   STATUS_COLORS_SECTION,
   ADVANCED_TOKENS_SECTION,
   findSection,
+  resolveEditorFieldDefault,
 } from '@runtypelabs/persona/theme-editor';
 
 export const TAB_ID = 'style';
@@ -174,7 +175,7 @@ function renderSectionHeaderMetadata(container: HTMLElement): void {
   // Theme mode
   const themeHeader = ensureHeaderMeta(container, THEME_SECTION.id);
   if (themeHeader) {
-    const value = String(state.get('colorScheme') ?? 'auto');
+    const value = String(state.get('colorScheme') ?? resolveEditorFieldDefault(THEME_SECTION.fields[0], state.getConfig().future) ?? 'light');
     themeHeader.summary.replaceChildren(
       createSummaryPill(
         value === 'auto' ? 'Auto' : value === 'dark' ? 'Dark' : 'Light'
@@ -259,7 +260,10 @@ export function render(
   const allControls: ControlResult[] = [];
 
   // Theme mode
-  allControls.push(...renderSections(container, onChange, [THEME_SECTION as SectionDef]));
+  allControls.push(...renderSections(container, onChange, [{
+    ...THEME_SECTION,
+    fields: THEME_SECTION.fields.map(field => ({ ...field, defaultValue: resolveEditorFieldDefault(field, state.getConfig().future) ?? field.defaultValue })),
+  }]));
 
   // Brand Palette (uses compound onChange for auto-generating scales)
   const brandOnChange = createBrandColorOnChange(onChange);

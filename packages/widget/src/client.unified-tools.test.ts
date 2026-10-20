@@ -15,7 +15,7 @@ async function consume(frames: Frame[]) {
       `event: ${frame.type}\ndata: ${JSON.stringify({ executionId: "exec_test", seq, ...frame })}\n\n`
     ).join(""), { headers: { "Content-Type": "text/event-stream" } }),
   });
-  await client.dispatch({ messages: [] }, event => events.push(event));
+  await client.dispatch({ messages: [] }, event => events.push(structuredClone(event)));
   const messages = new Map<string, AgentWidgetMessage>();
   for (const event of events) if (event.type === "message") messages.set(event.message.id, event.message);
   return { events, messages: [...messages.values()] };
@@ -73,4 +73,42 @@ describe("canonical unified tool channels", () => {
     expect(messages.at(-1)?.content).toBe("I can try another search.");
     expect(events.filter(e => e.type === "error")).toEqual([]);
   });
+});
+
+it.each(['tool_start', 'tool_output_delta', 'tool_complete'] as const)('stamps metadata on the first pending %s emission', async type => {
+  const frame: Frame = type === 'tool_start' ? { ...start('call_b'), iteration: 2 }
+    : type === 'tool_complete' ? { type, toolCallId: 'call_b', success: true, iteration: 2 }
+    : { type, toolCallId: 'call_b', delta: 'output' };
+  const { events } = await consume([{ ...start('call_a'), iteration: 2 }, frame]);
+  const first = events.find((event): event is Extract<AgentWidgetEvent, { type: 'message' }> => event.type === 'message' && event.message.id === 'tool-call_b');
+  expect(first?.message.toolCall?.status).toBe('pending');
+  expect(first?.message.agentMetadata).toMatchObject({ executionId: 'exec_test', iteration: 2 });
+});
+it('keeps start iteration metadata when executionId is absent', async () => {
+  const messages: AgentWidgetMessage[] = [];
+  const client = new AgentWidgetClient({ apiUrl: '/chat' });
+  const stream = new ReadableStream<Uint8Array>({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('data: {"type":"tool_start","toolCallId":"a","toolName":"Search","iteration":3}\n\n'));
+    controller.close();
+  } });
+  await client.processStream(stream, event => { if (event.type === 'message') messages.push(structuredClone(event.message)); });
+  expect(messages.filter(message => message.variant === 'tool').every(message => message.agentMetadata?.iteration === 3)).toBe(true);
+});
+
+it('enriches an existing tool with execution and explicit iteration metadata', async () => {
+  const messages: AgentWidgetMessage[] = [];
+  const frames = [
+    { type: 'tool_input_complete', toolCallId: 'a', toolName: 'Search', parameters: {} },
+    { type: 'tool_start', toolCallId: 'a', toolName: 'Search', executionId: 'e1', iteration: 3 },
+    { type: 'tool_start', toolCallId: 'b', toolName: 'Other', executionId: 'e1', iteration: 4 },
+    { type: 'tool_output_delta', toolCallId: 'a', executionId: 'e1', delta: 'late output' },
+  ];
+  const client = new AgentWidgetClient({ apiUrl: '/chat' });
+  const stream = new ReadableStream<Uint8Array>({ start(controller) {
+    controller.enqueue(new TextEncoder().encode(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join('')));
+    controller.close();
+  } });
+  await client.processStream(stream, event => { if (event.type === 'message' && event.message.id === 'tool-a') messages.push(structuredClone(event.message)); });
+  expect(messages[0].agentMetadata?.executionId).toBeUndefined();
+  expect(messages.at(-1)?.agentMetadata).toMatchObject({ executionId: 'e1', iteration: 3 });
 });

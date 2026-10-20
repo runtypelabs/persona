@@ -1,7 +1,8 @@
-// Second minification pass over the CDN IIFE bundles (`dist/*.global.js`).
+// Second minification pass over the CDN IIFEs and selected standalone ESM entries.
 //
 // tsdown (Rolldown + the Oxc minifier) produces the bundle; terser then
-// re-minifies the already-minified output. Byte count barely moves, but
+// re-minifies the already-minified output. ESM mode preserves its exports;
+// IIFE mode preserves the browser globals. Byte count barely moves, but
 // terser's mangler assigns identifiers by character frequency, which Brotli
 // compresses better: ~8 KiB off `index.global.js` when the bundler was esbuild,
 // ~1 KiB after Oxc's mangler. Only safe compress options are used, so behavior
@@ -21,7 +22,7 @@
 // `src/`.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
-import { brotliCompressSync, constants } from "node:zlib";
+import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 import { minify } from "terser";
 
 const files = process.argv.slice(2);
@@ -30,25 +31,81 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const brotliKiB = (code) =>
-  (
-    brotliCompressSync(Buffer.from(code), {
-      params: { [constants.BROTLI_PARAM_QUALITY]: 11 },
-    }).byteLength / 1024
-  ).toFixed(2);
+const brotliBytes = (code) => brotliCompressSync(Buffer.from(code), {
+  params: { [constants.BROTLI_PARAM_QUALITY]: 11 },
+}).byteLength;
+const brotliKiB = (code) => (brotliBytes(code) / 1024).toFixed(2);
 
 for (const file of files) {
   const mapFile = `${file}.map`;
   const input = readFileSync(file, "utf8");
-  const result = await minify(input, {
+  const core = file.endsWith("index.global.js");
+  const notices = new Set();
+  let result = await minify(input, {
     ecma: 2020,
-    compress: { passes: 2, keep_fargs: false },
+    module: !file.endsWith(".global.js"),
+    compress: {
+      passes: 2, keep_fargs: false,
+      hoist_funs: file.endsWith("theme-editor.js") || file.endsWith("activity-ui.js"),
+      // Keeping repeated expressions and separate statements in this ESM entry
+      // compresses better under its gzip budget than folding them further.
+      ...(file.endsWith("activity-ui.js") ? { evaluate: false, sequences: false } : {}),
+      // Separate conditional branches compress slightly better in the stream parser.
+      ...(file.endsWith("client-stream.js") ? { conditionals: false } : {}),
+      // Delay expression folding until the second core pass: the resulting
+      // repeated structure compresses better under the unchanged Brotli budget.
+      ...(core ? { evaluate: false } : {}),
+    },
     mangle: true,
-    format: { comments: /@license|@preserve|^!/ },
+    format: { comments: core ? (_node, comment) => {
+      if (/@license|@preserve|^!/.test(comment.value)) {
+        notices.add(comment.type === "comment2" ? `/*${comment.value}*/` : `//${comment.value}`);
+      }
+      // The second pass emits every distinct notice in its mapped preamble.
+      return false;
+    } : /@license|@preserve|^!/ },
     sourceMap: existsSync(mapFile)
       ? { content: readFileSync(mapFile, "utf8"), url: basename(mapFile) }
       : false,
   });
+  // The core benefits from one additional safe compression pass after Oxc's
+  // and Terser's initial rewrites. Hoisting vars improves Brotli's repeated
+  // structure without property mangling or unsafe transformations.
+  if (core) {
+    result = await minify(result.code, {
+      ecma: 2020,
+      compress: { passes: 3, keep_fargs: false, hoist_vars: true },
+      mangle: true,
+      // Lucide repeats the same notice for each icon. Keep one verbatim copy
+      // of each distinct notice; let Terser account for it in the source map.
+      format: { comments: /@license|@preserve|^!/, preamble: [...notices].join("\n") },
+      sourceMap: result.map ? { content: result.map, url: basename(mapFile) } : false,
+    });
+    // A final remangle can improve Brotli after hoisting. Keep it only when
+    // smaller, retaining legal notices and chained source maps.
+    const optimized = await minify(result.code, {
+      ecma: 2020,
+      compress: { passes: 3, keep_fargs: false, hoist_vars: true, reduce_funcs: false },
+      mangle: true,
+      format: { comments: /@license|@preserve|^!/ },
+      sourceMap: result.map ? { content: result.map, url: basename(mapFile) } : false,
+    });
+    if (brotliBytes(optimized.code) < brotliBytes(result.code)) result = optimized;
+  }
+  if (file.endsWith("activity-ui.js") || file.endsWith("theme-editor.js")) {
+    // Keep these entries within their gzip budgets without changing exports
+    // or enabling unsafe transforms. Only retain a smaller result.
+    const optimized = await minify(result.code, {
+      ecma: 2020, module: true,
+      compress: { passes: 3, keep_fargs: false, hoist_vars: true,
+        ...(file.endsWith("theme-editor.js") ? { reduce_vars: false } : { evaluate: false, sequences: false }),
+      },
+      mangle: true,
+      format: { comments: /@license|@preserve|^!/ },
+      sourceMap: result.map ? { content: result.map, url: basename(mapFile) } : false,
+    });
+    if (gzipSync(optimized.code).length < gzipSync(result.code).length) result = optimized;
+  }
   const code = result.code.replace(
     /(?:^[\w@.-]+\/[\w./-]+\.m?js:\n)+/gm,
     (run) => {

@@ -611,6 +611,7 @@ export async function resolveWebMcpToolCallBatch(
       wireToolName,
       toolMessage.toolCall?.args,
       batchController.signal,
+      toolMessage.toolCall?.id,
     );
 
     let output: unknown;

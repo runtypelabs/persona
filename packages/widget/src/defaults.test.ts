@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { disclosureSettings } from "./components/disclosure-animation";
 import {
   DEFAULT_WIDGET_CONFIG,
   mergeWithDefaults,
@@ -8,6 +9,33 @@ import {
 
 describe.each([false, true])("defaults resolver (v5Defaults: %s)", (v5Defaults) => {
   const future = { v5Defaults };
+
+  it("enables artifacts only by default in V5 and preserves explicit choices", () => {
+    expect(mergeWithDefaults({ future }).features?.artifacts?.enabled === true).toBe(v5Defaults);
+    expect(mergeWithDefaults({ future, features: { artifacts: { display: "collapsed" } } })
+      .features?.artifacts?.enabled === true).toBe(v5Defaults);
+    for (const enabled of [false, true]) {
+      expect(mergeWithDefaults({ future, features: { artifacts: { enabled } } })
+        .features?.artifacts?.enabled).toBe(enabled);
+    }
+  });
+
+  it("selects disclosure motion and preserves partial and explicit overrides", () => {
+    const animation = v5Defaults ? "height" : "instant";
+    expect(disclosureSettings(mergeWithDefaults({ future })).animation).toBe(animation);
+    expect(disclosureSettings(mergeWithDefaults({ future, expansion: { duration: 300, chevron: { collapsed: "left" } } })))
+      .toEqual({ animation, duration: 300, easing: "ease-out" });
+    for (const animation of ["instant", "height"] as const) {
+      expect(disclosureSettings(mergeWithDefaults({ future, expansion: { animation } })).animation).toBe(animation);
+    }
+  });
+
+  it("leaves V5 suggestion weight to theme tokens and preserves explicit legacy overrides", () => {
+    expect(mergeWithDefaults({ future }).suggestionChipsConfig?.fontWeight)
+      .toBe(v5Defaults ? undefined : "500");
+    expect(mergeWithDefaults({ future, suggestionChipsConfig: { fontWeight: "600" } })
+      .suggestionChipsConfig?.fontWeight).toBe("600");
+  });
 
   it("selects the requested version and its documented defaults", () => {
     expect(resolveDefaultsVersion({ future })).toBe(v5Defaults ? "v5" : "v4");
@@ -54,7 +82,7 @@ describe.each([false, true])("defaults resolver (v5Defaults: %s)", (v5Defaults) 
     expect(result.launcher?.title).toBe("Custom title");
     expect(result.features?.reasoningDisplay).toEqual({
       ...DEFAULT_WIDGET_CONFIG.features?.reasoningDisplay,
-      ...(v5Defaults ? { variant: "row", iconVisibility: "active", autoExpand: false, loadingAnimation: "shimmer" } : {}),
+      ...(v5Defaults ? { layout: "row", variant: "row", appearance: "inset", iconVisibility: "active", autoExpand: false, loadingAnimation: "shimmer" } : {}),
       expandable: false,
     });
     expect(result.theme?.components?.header).toEqual(config.theme.components.header);
@@ -66,4 +94,14 @@ it("keeps the legacy defaults when the opt-in is missing", () => {
   expect(resolveDefaultsVersion()).toBe("v4");
   expect(resolveDefaultsVersion({ future: {} })).toBe("v4");
   expect(JSON.stringify(mergeWithDefaults())).toBe(JSON.stringify(DEFAULT_WIDGET_CONFIG));
+});
+
+
+it("merges approval options independently and preserves disabling", () => {
+  const future = { v5Defaults: true };
+  const partial = mergeWithDefaults({ future, approval: { approveLabel: "Proceed" } });
+  expect(partial.approval).toMatchObject({ resolvedDisplay: "row", primaryAction: "allow-once", keyboardShortcuts: "focused", approveLabel: "Proceed" });
+  expect(mergeWithDefaults({ future, approval: false }).approval).toBe(false);
+  expect(mergeWithDefaults({ future, approval: { resolvedDisplay: "trace", primaryAction: "always-allow", keyboardShortcuts: false } }).approval).toEqual({ resolvedDisplay: "trace", primaryAction: "always-allow", keyboardShortcuts: false });
+  expect(mergeWithDefaults({}).approval).toBeUndefined();
 });

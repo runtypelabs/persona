@@ -1072,6 +1072,48 @@ describe("artifact-preview component body", () => {
     expect(seen).toEqual([{ series: [1, 2, 3] }]);
   });
 
+  it("supports managed results and retires each preview lifetime on replacement and destroy", () => {
+    const signals: AbortSignal[] = [];
+    const destroy = vi.fn(() => expect(signals.at(-1)?.aborted).toBe(true));
+    const handle = renderArtifactPreviewBody(componentRecord(), {
+      config: makeConfig(),
+      registry: { get: () => (_props, context) => {
+        signals.push(context.signal!);
+        const element = document.createElement("div");
+        element.className = "managed-chart";
+        return { element, destroy };
+      } },
+    });
+    expect(handle.el.querySelector(".managed-chart")).not.toBeNull();
+    handle.update(componentRecord({ props: { series: [4] } }));
+    expect(signals[0].aborted).toBe(true);
+    expect(signals[1].aborted).toBe(false);
+    expect(destroy).toHaveBeenCalledTimes(1);
+    handle.destroy();
+    handle.destroy();
+    expect(destroy).toHaveBeenCalledTimes(2);
+  });
+
+  it("prefers instance-configured components over the preview's registry", () => {
+    const local = document.createElement("div");
+    local.textContent = "local chart";
+    const global = vi.fn(() => document.createElement("div"));
+    const handle = renderArtifactPreviewBody(componentRecord(), {
+      config: { ...makeConfig(), components: { MyChart: () => local } },
+      registry: { get: () => global },
+    });
+    expect(handle.el.contains(local)).toBe(true);
+    expect(global).not.toHaveBeenCalled();
+  });
+
+  it("does not resolve Object prototype properties as instance components", () => {
+    const handle = renderArtifactPreviewBody(componentRecord({ component: "constructor" }), {
+      config: { ...makeConfig(), components: {} },
+      registry: { get: () => undefined },
+    });
+    expect(handle.el.textContent).toContain("Component: constructor");
+  });
+
   it("falls back to the inspector card for unknown components", () => {
     const handle = renderArtifactPreviewBody(componentRecord({ component: "Nope" }), {
       config: makeConfig(),

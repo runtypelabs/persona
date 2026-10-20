@@ -364,6 +364,19 @@ describe("resolveFollowUpsFeature conflict warnings", () => {
 });
 
 describe("builtInClientToolsForDispatch - suggest_replies gating", () => {
+  it.each([[undefined, 5], [7, 7]])("uses the V5 schema limit with override %s", (maxItems, expected) => {
+    const [tool] = builtInClientToolsForDispatch({
+      future: { v5Defaults: true },
+      suggestions: { followUps: { expose: true, maxItems } },
+    } as AgentWidgetConfig);
+    expect(tool.parametersSchema).toMatchObject({
+      properties: { suggestions: { maxItems: expected } },
+    });
+    expect(SUGGEST_REPLIES_CLIENT_TOOL.parametersSchema).toMatchObject({
+      properties: { suggestions: { maxItems: 4 } },
+    });
+  });
+
   it("returns nothing by default (expose is opt-in)", () => {
     expect(builtInClientToolsForDispatch(undefined)).toEqual([]);
     expect(

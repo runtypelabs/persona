@@ -314,10 +314,12 @@ export function createToggleControl(
   toggle.appendChild(checkbox);
   toggle.appendChild(slider);
 
-  wrapper.appendChild(label);
+  const copy = el('div', { className: 'control-toggle-copy' });
+  copy.appendChild(label);
   if (field.description) {
-    wrapper.appendChild(el('span', { className: 'control-description' }, [field.description]));
+    copy.appendChild(el('span', { className: 'control-description' }, [field.description]));
   }
+  wrapper.appendChild(copy);
   wrapper.appendChild(toggle);
 
   // Initialize

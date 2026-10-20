@@ -517,7 +517,7 @@ describe("centered welcome", () => {
     expect(host.querySelector("h2")?.textContent).toBe("What can I help with?");
     expect(host.querySelectorAll(".persona-suggestion")).toHaveLength(3);
     expect(host.querySelector(".persona-suggestions")?.getAttribute("data-variant")).toBe("chip");
-    controller.injectTestMessage({ type: "message", message: assistantMessage() });
+    controller.injectTestMessage({ type: "message", message: { ...assistantMessage(), content: "", streaming: true } });
     expect(isVisible(host)).toBe(true);
     sendUserMessage(controller);
     expect(isVisible(host)).toBe(false);
@@ -574,7 +574,7 @@ describe.each([false, true])("explicit welcome layout (V5 defaults: %s)", (v5Def
     expect(mount.getAttribute("data-persona-welcome-anchor")).toBe("bottom");
     expect(welcomeHost(mount).querySelector("h2")?.textContent).toBe("Custom");
     expect(welcomeHost(mount).querySelectorAll(".persona-suggestion")).toHaveLength(2);
-    controller.injectTestMessage({ type: "message", message: assistantMessage() });
+    controller.injectTestMessage({ type: "message", message: { ...assistantMessage(), content: "", streaming: true } });
     expect(isVisible(welcomeHost(mount))).toBe(true);
     sendUserMessage(controller);
     expect(isVisible(welcomeHost(mount))).toBe(false);
@@ -594,6 +594,66 @@ describe.each([false, true])("explicit welcome layout (V5 defaults: %s)", (v5Def
     // (800 - 200 - 100) / 2 rather than the old 44%-top anchoring.
     expect(mount.style.getPropertyValue("--persona-composer-lift")).toBe("250px");
     controller.update({ welcome: { layout: "centered", anchorComposerTop: "40%" } });
+    expect(mount.style.getPropertyValue("--persona-composer-lift")).toBe("380px");
+  });
+});
+
+describe("composer anchoring with transcript activity", () => {
+  const setGeometry = (mount: HTMLElement) => {
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    Object.defineProperty(footer.parentElement!, "clientHeight", { configurable: true, value: 800 });
+    Object.defineProperty(footer, "offsetHeight", { configurable: true, value: 100 });
+    Object.defineProperty(welcomeHost(mount), "offsetHeight", { configurable: true, value: 200 });
+    window.dispatchEvent(new Event("resize"));
+    return footer;
+  };
+
+  it.each(["overlay", "block"] as const)("drops a %s composer for proactive assistant activity and restores the greeting after clear", (placement) => {
+    const { mount, controller } = makeController({
+      future: { v5Defaults: true }, launcher: { enabled: false, fullHeight: true },
+      composer: { placement }, welcome: { message: "An intentional greeting" },
+    });
+    const footer = setGeometry(mount);
+    expect(mount.getAttribute("data-persona-conversation-state")).toBe("empty");
+    expect(isVisible(greetingHost(mount))).toBe(true);
+    expect(placement === "overlay" ? mount.style.getPropertyValue("--persona-composer-lift") : footer.style.marginBottom).toBe("250px");
+    controller.injectTestMessage({ type: "message", message: assistantMessage() });
+    expect(mount.getAttribute("data-persona-conversation-state")).toBe("active");
+    expect(isVisible(welcomeHost(mount))).toBe(false);
+    expect(mount.style.getPropertyValue("--persona-composer-lift")).toBe("0px");
+    expect(footer.style.marginBottom).toBe("");
+    controller.clearChat();
+    expect(mount.getAttribute("data-persona-conversation-state")).toBe("empty");
+    expect(isVisible(welcomeHost(mount))).toBe(true);
+    expect(isVisible(greetingHost(mount))).toBe(true);
+  });
+
+  it.each(["tool", "reasoning"] as const)("pins the composer below a restored %s-only transcript with a disabled welcome", (variant) => {
+    const activity: AgentWidgetMessage = {
+      ...assistantMessage("restored-activity"), content: "", variant,
+      ...(variant === "tool" ? { toolCall: { id: "restored-tool", name: "Read", status: "complete" as const, args: { path: "example.ts" }, result: "Restored output" } }
+        : { reasoning: { id: "restored-reasoning", status: "complete" as const, chunks: ["Review the source"] } }),
+    };
+    const { mount } = makeController({
+      future: { v5Defaults: true }, launcher: { enabled: false, fullHeight: true },
+      composer: { placement: "overlay" }, welcome: { variant: "none", anchor: "center" }, initialMessages: [activity],
+    });
+    setGeometry(mount);
+    expect(mount.getAttribute("data-persona-conversation-state")).toBe("active");
+    expect(mount.style.getPropertyValue("--persona-composer-lift")).toBe("0px");
+    expect(isVisible(welcomeHost(mount))).toBe(false);
+  });
+
+  it("keeps a disabled empty welcome at the bottom and honors explicit center anchoring", () => {
+    const { mount, controller } = makeController({
+      future: { v5Defaults: true }, launcher: { enabled: false, fullHeight: true },
+      composer: { placement: "overlay" }, welcome: { variant: "none" },
+    });
+    setGeometry(mount);
+    expect(mount.getAttribute("data-persona-conversation-state")).toBe("empty");
+    expect(mount.getAttribute("data-persona-welcome-anchor")).toBe("bottom");
+    expect(mount.style.getPropertyValue("--persona-composer-lift")).toBe("0px");
+    controller.update({ welcome: { anchor: "center", anchorComposerTop: "40%" } });
     expect(mount.style.getPropertyValue("--persona-composer-lift")).toBe("380px");
   });
 });

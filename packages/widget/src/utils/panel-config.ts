@@ -95,3 +95,13 @@ export const updatePanelAliasProvenance = (
   }
   return next;
 };
+
+/** Embedded presentation applies only to an inline mount, never a launcher host. */
+export const isEmbeddedLayout = (config?: Partial<AgentWidgetConfig>): boolean =>
+  config?.layout?.embedded === true &&
+  config.launcher?.enabled === false &&
+  !config.launcher.sidebarMode &&
+  (config.launcher.mountMode ?? "floating") === "floating";
+
+export const isHeaderVisible = (config?: Partial<AgentWidgetConfig>): boolean =>
+  config?.layout?.showHeader ?? !isEmbeddedLayout(config);

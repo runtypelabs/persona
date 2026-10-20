@@ -308,19 +308,30 @@ export function buildWidgetConfig(): AgentWidgetConfig {
     theme: shopTheme,
     darkTheme: shopDarkTheme,
     colorScheme: "auto",
+    welcome: {
+      title: "Switchback Assistant",
+      subtitle:
+        "I can search the catalog, pull up a product, and manage your cart: using this page's own tools. Try one of the prompts below.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Switchback Assistant",
-      welcomeSubtitle:
-        "I can search the catalog, pull up a product, and manage your cart: using this page's own tools. Try one of the prompts below.",
       inputPlaceholder: "Find me a trail shoe…",
     },
-    suggestionChips: [
-      "Find a waterproof trail shoe under $170",
-      "Tell me about SHOE-005",
-      "Add SHOE-001 and SHOE-007 at the same time",
-      "Apply code TRAIL10 and show my cart total",
-    ],
+    suggestions: {
+      starters: {
+        items: [
+          "Find a waterproof trail shoe under $170",
+          "Tell me about SHOE-005",
+          "Add SHOE-001 and SHOE-007 at the same time",
+          "Apply code TRAIL10 and show my cart total",
+        ],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     webmcp: {
       enabled: true,
       // Auto-approve the storefront's read-only tools; route mutating calls to

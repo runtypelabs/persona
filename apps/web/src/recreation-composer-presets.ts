@@ -1,3 +1,5 @@
+import { createAssistantMenuPreset } from "./assistant-menu-presets";
+import { createAssistantPreset } from "./assistant-presets";
 import { createSlashCommandsSource } from "@runtypelabs/persona";
 import type {
   AgentWidgetConfig,
@@ -172,6 +174,11 @@ const inertAction = (
   onSelect: () => {},
 });
 
+// Keep explicit send sizes below 40px: component size tokens enforce the
+// coarse-pointer floor, which would change these measured recreations.
+// Personal Copilot shares the measured reference with the assistant lab.
+// Other recreations retain their deliberately different tool/model variants.
+const currentCopilot = createAssistantPreset("copilot", () => {});
 const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
   chatgpt: {
     colorScheme: "dark",
@@ -179,11 +186,13 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     // Their "/" tool menu, carrying the same labels and glyphs as the "+" modes.
     contextMentions: slashOnlyMentions("tools", "Tools", CHATGPT_TOOL_COMMANDS),
     attachments: {
+      preview: createAssistantPreset("chatgpt", () => {}).attachments?.preview,
       enabled: true,
       buttonIconName: "image",
       buttonTooltipText: "Add photos & files",
     },
     composer: {
+      attachmentLayout: "stacked",
       layout: "single-row",
       actionOverflow: { enabled: true, includeBuiltIns: ["attachments"] },
       models: [
@@ -219,16 +228,12 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
     voiceRecognition: {
       enabled: true,
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#ececec",
       showTooltip: false,
     },
     sendButton: {
       useIcon: true,
       iconName: "arrow-up",
       size: "36px",
-      iconSize: "20px",
       showTooltip: false,
       visibility: "when-text",
     },
@@ -246,6 +251,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         },
       },
       components: {
+        attachment: createAssistantPreset("chatgpt", () => {}).theme?.components?.attachment,
         panel: { borderRadius: "0" },
         introCard: {
           background: "transparent",
@@ -253,9 +259,12 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
           title: { fontSize: "24px", fontWeight: "400", lineHeight: "28px", color: "#ffffff" },
         },
         input: { background: "#212121", borderRadius: "28px" },
+        voice: { control: { background: "transparent", borderWidth: "0", foreground: "#ececec" } },
         composer: {
+          send: { iconSize: "20px" },
           shadow: "rgba(255, 255, 255, 0.2) 0 0 1px inset",
           padding: "8px",
+          expandedPadding: "12px 16px",
           gap: "8px",
           fontSize: "16px",
           lineHeight: "24px",
@@ -303,11 +312,13 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     // The placeholder promises a skills menu, so "/" opens one.
     contextMentions: slashOnlyMentions("skills", "Skills", CLAUDE_SKILL_COMMANDS),
     attachments: {
+      preview: createAssistantPreset("claude", () => {}).attachments?.preview,
       enabled: true,
       buttonIconName: "paperclip",
       buttonTooltipText: "Upload a file",
     },
     composer: {
+      attachmentLayout: "stacked",
       actionOverflow: { enabled: true, includeBuiltIns: ["attachments"], order: 0 },
       models: [
         { id: "opus-5", label: "Opus 5", description: "Powerful model for complex challenges" },
@@ -362,16 +373,12 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
     voiceRecognition: {
       enabled: true,
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#87867f",
-      showTooltip: false,
+      tooltipText: "Dictate",
+      showTooltip: true,
     },
     sendButton: {
       useIcon: true,
       iconName: "arrow-up",
-      iconSize: "18px",
-      iconStrokeWidth: 1.5,
       showTooltip: false,
       visibility: "when-text",
     },
@@ -390,6 +397,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         },
       },
       components: {
+        attachment: createAssistantPreset("claude", () => {}).theme?.components?.attachment,
         panel: { borderRadius: "0" },
         introCard: {
           title: {
@@ -401,7 +409,9 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
           },
         },
         input: { background: "rgba(255, 255, 255, 0.8)", borderRadius: "20px", backdropFilter: "blur(8px)" },
+        voice: { control: { background: "transparent", borderWidth: "0", foreground: "#20201f", borderRadius: "8px" } },
         composer: {
+          send: { iconSize: "18px", iconStrokeWidth: "1.5" },
           shadow: "0 4px 20px rgba(0, 0, 0, 0.035), 0 0 0 0.5px rgba(32, 32, 31, 0.15)",
           padding: "14px",
           gap: "12px",
@@ -427,11 +437,13 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     colorScheme: "dark",
     copy: { inputPlaceholder: "Ask Gemini" },
     attachments: {
+      preview: createAssistantPreset("gemini", () => {}).attachments?.preview,
       enabled: true,
       buttonIconName: "upload",
       buttonTooltipText: "Upload files",
     },
     composer: {
+      attachmentLayout: "stacked",
       layout: "single-row",
       actionOverflow: { enabled: true, includeBuiltIns: ["attachments"] },
       models: [
@@ -449,16 +461,11 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
     voiceRecognition: {
       enabled: true,
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#e3e3e3",
       showTooltip: false,
     },
     sendButton: {
       useIcon: true,
       iconName: "arrow-up",
-      size: "40px",
-      iconSize: "20px",
       showTooltip: false,
       visibility: "when-text",
     },
@@ -477,6 +484,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         },
       },
       components: {
+        attachment: createAssistantPreset("gemini", () => {}).theme?.components?.attachment,
         // The backdrop behind the flush chat surface (see the panel's
         // `features.artifacts.layout`): the pill reads as a pill only when the
         // footer band is not its own #1e1f20.
@@ -494,7 +502,9 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
           },
         },
         input: { background: "#1e1f20", borderRadius: "32px" },
+        voice: { control: { background: "transparent", borderWidth: "0", foreground: "#e3e3e3" } },
         composer: {
+          send: { size: "40px", iconSize: "20px" },
           shadow: "0 2px 8px -2px rgba(0, 0, 0, 0.16)",
           padding: "12px 16px",
           gap: "8px",
@@ -533,103 +543,25 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
   },
   copilot: {
-    colorScheme: "dark",
-    copy: { inputPlaceholder: "Message Copilot" },
-    attachments: {
-      enabled: true,
-      buttonIconName: "plus",
-      buttonTooltipText: "Add files and more",
-    },
-    composer: {
-      models: [
-        { id: "smart", label: "Smart", icon: "sparkles", description: "Picks the right response style" },
-        { id: "think-deeper", label: "Think deeper", icon: "lightbulb", description: "Takes longer on hard problems" },
-        { id: "study-and-learn", label: "Study and learn", icon: "bookmark", description: "Works through topics with you" },
-        { id: "search", label: "Search", icon: "search", description: "Looks things up on the web" },
-      ],
-      selectedModelId: "smart",
-      modelPicker: { presentation: "popover" },
-    },
-    voiceRecognition: {
-      enabled: true,
-      iconName: "activity",
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#8791b0",
-      showTooltip: false,
-    },
-    sendButton: {
-      useIcon: true,
-      iconName: "arrow-up",
-      size: "36px",
-      iconSize: "20px",
-      showTooltip: false,
-    },
-    theme: {
-      semantic: {
-        colors: {
-          background: "#0e111b",
-          container: "#0e111b",
-          surface: "#0e111b",
-          text: "#e5ebfa",
-          textMuted: "#8791b0",
-          border: "rgba(255, 255, 255, 0.08)",
-          divider: "transparent",
-          primary: "#dbe4fd",
-          accent: "#dbe4fd",
-        },
-      },
-      components: {
-        panel: { borderRadius: "0", border: "none" },
-        introCard: {
-          title: { fontSize: "1.75rem", lineHeight: "2rem", fontWeight: "600", color: "#e5ebfa" },
-        },
-        input: { background: "rgba(25, 31, 50, 0.75)", borderRadius: "26px" },
-        composer: {
-          shadow: "0 12px 36px rgba(3, 6, 16, 0.5)",
-          padding: "16px 16px 12px",
-          gap: "14px",
-          fontSize: "16px",
-          lineHeight: "22px",
-          controlSize: "36px",
-          controlIconSize: "18px",
-          modelPicker: {
-            menuBackground: "#1c2338",
-            labelColor: "#e5ebfa",
-            descriptionColor: "#8791b0",
-            rowHoverBackground: "rgba(255, 255, 255, 0.06)",
-          },
-        },
-        button: {
-          primary: { background: "#dbe4fd", foreground: "#0e111b", borderRadius: "9999px" },
-          ghost: {
-            background: "rgba(255, 255, 255, 0.05)",
-            foreground: "#aeb8d6",
-            hoverBackground: "rgba(255, 255, 255, 0.1)",
-            borderRadius: "9999px",
-          },
-        },
-        suggestion: {
-          card: {
-            background: "rgba(25, 31, 50, 0.75)",
-            foreground: "#e5ebfa",
-            border: "rgba(255, 255, 255, 0.08)",
-            hoverBackground: "#242b40",
-            hoverBorder: "rgba(255, 255, 255, 0.14)",
-          },
-        },
-      },
-    },
+    colorScheme: currentCopilot.colorScheme,
+    copy: currentCopilot.copy,
+    attachments: currentCopilot.attachments,
+    composer: currentCopilot.composer,
+    voiceRecognition: currentCopilot.voiceRecognition,
+    sendButton: currentCopilot.sendButton,
+    theme: currentCopilot.theme!,
   },
   perplexity: {
     colorScheme: "dark",
     copy: { inputPlaceholder: "Ask anything..." },
     attachments: {
+      preview: createAssistantPreset("perplexity", () => {}).attachments?.preview,
       enabled: true,
       buttonIconName: "paperclip",
       buttonTooltipText: "Attach files",
     },
     composer: {
+      attachmentLayout: "stacked",
       actionOverflow: { enabled: true, includeBuiltIns: ["attachments"], order: 0 },
       // Chips off: an active mode's removable chip has no product equivalent.
       modeGroups: [{ id: "surface", selection: "single", chipVisibility: "hidden" }],
@@ -667,17 +599,12 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
     voiceRecognition: {
       enabled: true,
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#8f8d89",
       showTooltip: false,
     },
     sendButton: {
       useIcon: true,
       iconName: "arrow-right",
       size: "36px",
-      iconSize: "18px",
-      iconStrokeWidth: 1.5,
       showTooltip: false,
     },
     theme: {
@@ -695,6 +622,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         },
       },
       components: {
+        attachment: createAssistantPreset("perplexity", () => {}).theme?.components?.attachment,
         panel: { borderRadius: "0" },
         introCard: {
           background: "transparent",
@@ -709,7 +637,9 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
           },
         },
         input: { background: "#1e1d1c", borderRadius: "16px" },
+        voice: { control: { background: "transparent", borderWidth: "0", foreground: "#8f8d89" } },
         composer: {
+          send: { iconSize: "18px", iconStrokeWidth: "1.5" },
           shadow: "none",
           padding: "14px 12px 10px",
           gap: "12px",
@@ -759,17 +689,20 @@ export function applyCurrentProductComposer(
   config: AgentWidgetConfig
 ): AgentWidgetConfig {
   const patch = patches[product];
+  const menu = createAssistantMenuPreset(product, message => console.info(message));
+  const theme = mergeTheme(config.theme, patch.theme);
   return {
     ...config,
     colorScheme: patch.colorScheme,
     copy: { ...config.copy, ...patch.copy },
     attachments: patch.attachments,
-    composer: patch.composer,
+    composer: { ...patch.composer, ...(menu.modes.length ? { modes: [...menu.modes, ...(patch.composer?.modes ?? [])], modeGroups: [...(patch.composer?.modeGroups ?? []), ...menu.modeGroups] } : {}), actionOverflow: { ...patch.composer?.actionOverflow, menu: menu.menu }, actions: [...(patch.composer?.actions ?? []).filter(action => action.presentation !== "overflow"), ...menu.actions] },
+    plugins: [...(config.plugins ?? []), ...menu.plugins],
     // Only the two products with a live slash menu carry one; the rest keep
     // whatever the page passed in (nothing today).
     contextMentions: patch.contextMentions ?? config.contextMentions,
     voiceRecognition: patch.voiceRecognition,
     sendButton: patch.sendButton,
-    theme: mergeTheme(config.theme, patch.theme),
+    theme: { ...theme, components: { ...theme.components, composer: { ...theme.components?.composer, overflowMenu: menu.theme } } },
   };
 }

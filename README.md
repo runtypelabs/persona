@@ -48,8 +48,10 @@ That said, if you really don't like the idea of building AI without JSX... you p
 | Example | Platform | Description |
 |---------|----------|-------------|
 | [`examples/ai-sdk-webmcp`](./examples/ai-sdk-webmcp) | Next.js | WebMCP page tools using Vercel AI SDK ([live](https://ai-sdk-webmcp.persona-chat.dev)) |
-| [`examples/ai-sdk-next`](./examples/ai-sdk-next) | Next.js | Minimal SSE adapters for AI SDK and OpenAI Responses |
-| [`examples/eve-next`](./examples/eve-next) | Next.js | Vercel [eve](https://github.com/vercel/eve) agent backend (beta; needs Node 24 + a running eve server) |
+| [`examples/ai-sdk-next`](./examples/ai-sdk-next) | Next.js | Persona V5 chat workspace with AI SDK and OpenAI Responses; keyless preview included |
+| [`examples/eve-next`](./examples/eve-next) | Next.js | Persona V5 document copilot powered by Vercel [eve](https://github.com/vercel/eve); keyless preview included |
+| [`examples/flue-next`](./examples/flue-next) | Next.js | Persona V5 floating assistant powered by [Flue](https://flueframework.com); keyless preview included |
+| [`examples/cloudflare-agents`](./examples/cloudflare-agents) | Cloudflare Workers + Vite | Persona V5 docked support copilot powered by the [Agents SDK](https://developers.cloudflare.com/agents/); keyless local preview included |
 | [`examples/openai-agents-next`](./examples/openai-agents-next) | Next.js | OpenAI Agents SDK (`@openai/agents`) backend |
 | [`examples/langgraph-next`](./examples/langgraph-next) | Next.js | LangGraph.js (`@langchain/langgraph`) backend |
 | [`examples/echo-hono`](./examples/echo-hono) | Hono | Host matrix: same adapter on Hono (Node/Bun/Deno/Workers) |
@@ -70,7 +72,9 @@ Prefer not to run a backend at all? [`examples/runtype-script-tag`](./examples/r
 
 Backend adapters in this repo, each emitting Persona's SSE wire from a different SDK:
 
-- [**Vercel Eve**](./examples/eve-next): Vercel's filesystem-first agent framework (beta; Node 24 + a running eve server).
+- [**Vercel Eve**](./examples/eve-next): A document workspace with a Persona V5 copilot. Preview without credentials or connect a live Eve agent (Node 24).
+- [**Flue**](./examples/flue-next): A product workspace with a floating Persona V5 assistant. Preview without credentials or connect a live Flue agent.
+- [**Cloudflare Agents**](./examples/cloudflare-agents): A support inbox with a docked Persona V5 copilot, running inside a Durable Object. Preview locally without credentials or connect a live model.
 - [**OpenAI Agents**](./examples/openai-agents-next): Official OpenAI Agents SDK integration.
 - [**LangGraph.js**](./examples/langgraph-next): LangChain's orchestration framework.
 - [**AI SDK & OpenAI Responses**](./examples/ai-sdk-next): Minimal stream adapters, plus [choosing a model/assistant with `target`](./examples/ai-sdk-next#choosing-a-modelassistant-with-target).
@@ -171,6 +175,8 @@ Text, images (PNG, JPEG, GIF, WebP, SVG), and documents (PDF, DOCX, TXT, CSV, JS
 ### Voice Input & Output
 Optional speech-to-text via the Web Speech API or Runtype's WebSocket voice service with barge-in interruption and voice activity detection. Text-to-speech playback for assistant responses: auto-speak via `textToSpeech`, or a per-message "Read aloud" button with play/pause/resume via `messageActions.showReadAloud`. TTS is backed by a pluggable `SpeechEngine` (browser Web Speech API by default, or a hosted engine via `textToSpeech.createEngine`). Enable via `voiceRecognition` and `textToSpeech`.
 
+Opt into a dedicated transcript or waveform capture surface with `voiceRecognition.dictation` and keep speech in the composer with `completionBehavior: "review"`. Dictation supports custom STT, cancel/finish/send controls, instance-scoped lifecycle events, and a `renderDictation` plugin hook in both V4 and V5. See [Dictation](docs/dictation.md).
+
 Custom voice providers use the same microphone controls. Updating or disabling `voiceRecognition.provider` disconnects the old provider before installing its replacement. A provider's `disconnect()` must release its resources and callbacks. For concurrent turns, pass `{ turnId }` as the fourth `onTranscript` callback argument, using the same ID on each turn's user and assistant transcripts. Persona rejects replies belonging to cancelled or superseded identified turns. Providers that omit IDs must discard cancelled output before emitting the next user final; untagged overlapping replies cannot be correlated by the widget.
 
 ### Shared text and voice conversations
@@ -222,10 +228,10 @@ Optional side-panel for rendering markdown and component content. Desktop split 
 Optional real-time event capture with search/filter, badge coloring, timestamps, expandable payloads, and output-throughput diagnostics. Enable via `features.showEventStreamToggle`. Customize rows, toolbar, and payload rendering through plugin hooks.
 
 ### Composer, Scrolling & Keyboard Shortcuts
-`Enter` sends a message (`Shift+Enter` for a newline) and is inert while a response is streaming: it never interrupts generation. Press `Esc` within the widget to stop an in-flight response (the visible Stop button does the same). `Up`/`Down` navigate previously sent messages for quick re-entry or editing: entered only when the caret is at the start of the input, so multi-line editing is preserved, and your in-progress draft is restored when you page back to the present. History navigation is on by default; disable via `features.composerHistory: false`. Streaming scroll behavior is configurable with `features.scrollBehavior` (`follow`, `anchor-top`, or `none`), and the shared scroll-to-bottom affordance shows a new-message count while you're scrolled away.
+`Enter` sends a message (`Shift+Enter` for a newline) and is inert while a response is streaming: it never interrupts generation. Press `Esc` within the widget to stop an in-flight response (the visible Stop button does the same). `Up`/`Down` navigate previously sent messages for quick re-entry or editing: entered only when the caret is at the start of the input, so multi-line editing is preserved, and your in-progress draft is restored when you page back to the present. History navigation is on by default; disable via `features.composerHistory: false`. Streaming scroll behavior is configurable with `features.scrollBehavior` (`follow`, `anchor-top`, or `none`), and the shared scroll-to-bottom affordance shows a new-message count while you're scrolled away. Configure its live activity glyph (`streamingIndicator: "dots" | "arrow"`) and visibility (`transition: "fade" | "none"`), or supply a managed `renderIcon` hook for your own animation. V5 defaults to dots and fade; V4 keeps arrow and instant visibility. See the [scroll-control configuration and renderer example](packages/widget/THEME-CONFIG.md#scroll-to-bottom-componentsscrolltobottom).
 
 ### Themes & Styling
-Light and dark themes included. Full design token system (palette, semantic, component-level) with CSS variable support. Extend with built-in plugins for accessibility, reduced motion, high contrast, and branding, or create your own.
+Start with the [configuration guide](docs/configuration.md) for changing brand, styling send/stop, hiding welcome, moving starters, and clearing old styles. Light and dark themes included. Full design token system (palette, semantic, component-level) with CSS variable support. Extend with built-in plugins for accessibility, reduced motion, high contrast, and branding, or create your own. New integrations use `welcome`, `suggestions.starters`, and `theme.components` for content and scoped appearance. See the [style migration guide](docs/style-migrations.md) for equivalent legacy mappings, live updates, and resets, or open `/style-migration.html` in the showcase for real V4/V5, light/dark, and narrow comparisons.
 
 ### Layout, Docking & Fast Script Installs
 Start from a built-in preset (shop, minimal, fullscreen) or configure from scratch. Header layouts, message layouts, avatars, timestamps, and slot-based rendering are all customizable. Dock as a floating widget, wrap a page region with a side panel (`resize`, `emerge`, `overlay`, or `push` reveals with a `dock.maxHeight` viewport guard), or embed inline. Script-tag installs paint a tiny real launcher first and defer the full panel bundle until first open when the config allows it.

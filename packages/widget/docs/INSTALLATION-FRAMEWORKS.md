@@ -54,6 +54,7 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 - `onLauncherShown` - Fired when the floating launcher is painted on the page (page-load time: for "widget appeared" analytics); signature: `({ deferred, element? }) => void`
 - `onChatReady` - Fired when the widget is initialized and its controller API is callable (after first open in a deferred install); signature: `(handle) => void`
 - `onError` - Fired when a load step fails (`css` / `bundle` / `init`), so ad-blocked / timed-out installs don't fail silently; signature: `({ phase, error }) => void`
+- `renderLoading` - Custom loading UI for embedded installs and deferred launcher opens. Called after 300ms only if still loading; signature: `({ container, target, kind }) => cleanup | void`.
 
 **Example with version pinning** (pin the installer script URL — sibling assets follow its directory, so no `version` key is needed):
 
@@ -69,6 +70,46 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 <script src="https://cdn.runtype.com/persona/4.13.0/install.global.js"></script>
 <!-- or from an npm CDN: https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4.13.0/dist/install.global.js -->
 ```
+
+### Custom loading indicator
+
+Set `renderLoading` on `window.siteAgentConfig`, outside the widget's `config`.
+Persona supplies a connected, absolutely positioned status container, manages
+the 300ms delay, and removes the container on success or failure. Fast loads never
+invoke the hook. The default ring is used when the hook is omitted or throws.
+
+```js
+window.siteAgentConfig = {
+  target: '#assistant',
+  config: { apiUrl: '/api/chat/dispatch', launcher: { enabled: false } },
+  renderLoading({ container, kind }) {
+    const label = document.createElement('span');
+    label.textContent = kind === 'launcher' ? '…' : 'Loading…';
+    label.style.cssText = 'font:14px system-ui;color:inherit';
+    container.append(label);
+    // Return cleanup if you start animations, listeners, or subscriptions.
+    // Persona removes this container automatically.
+  },
+};
+```
+
+`kind` is `"embedded"` or `"launcher"`. `target` is the embedded host or retained
+launcher button. The container initially covers that target and centers its
+contents; customize its styles as needed without replacing the target's content.
+The built-in ring's animation and styling do not apply to custom indicators.
+Supply any custom styles with your host page, since widget CSS may still be loading.
+Honor reduced-motion preferences for custom animations.
+
+The hook is synchronous. It may return a function to release resources; Persona
+calls it once when that loading attempt ends, even on failure. A retry creates a
+new container and invokes the hook again if it exceeds 300ms. Cleanup errors are
+logged and do not prevent removal or widget readiness. TypeScript consumers can
+import `InstallLoadingRenderer` and `InstallLoadingContext` from
+`@runtypelabs/persona`. Function-valued hooks require JavaScript configuration and
+cannot be supplied through JSON `data-config` attributes.
+
+Direct SDK initialization uses `controller.ready`; this hook belongs to the script
+installer so it can run before the main widget bundle arrives.
 
 ### Programmatic access with the installer
 

@@ -3,18 +3,21 @@ import type { AgentWidgetConfig } from "@runtypelabs/persona";
 type SummaryRenderer = NonNullable<
   NonNullable<AgentWidgetConfig["toolCall"]>["renderGroupedSummary"]
 >;
-type Category = "search" | "read" | "command";
+type Category = "search" | "read" | "command" | "check";
 type Label = string | ((callCount: number) => string);
 
 // Replace these illustrative names with the exact names emitted by your adapter.
 // This is application configuration, not a heuristic based on tool names.
 const categories = new Map<string, Category>([
   ["search_docs", "search"],
+  ["web_search", "search"],
+  ["check_readiness", "check"],
   ["read_file", "read"],
   ["read_document", "read"],
   ["run_command", "command"],
 ]);
 const labels: Record<Category, { running: Label; complete: Label }> = {
+  check: { running: "Checking readiness", complete: "Checked readiness" },
   search: { running: "Searching", complete: "Searched" },
   read: { running: "Reading files", complete: "Read files" },
   command: { running: "Running commands", complete: "Ran commands" },

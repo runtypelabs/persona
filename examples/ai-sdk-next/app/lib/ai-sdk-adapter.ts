@@ -6,6 +6,7 @@ import {
   type JSONSchema7,
   type LanguageModel,
   type ModelMessage,
+  type ToolSet,
 } from "ai";
 import { createPersonaSSEStream } from "./persona-wire";
 
@@ -13,6 +14,9 @@ type CreateAISDKPersonaHandlerOptions = {
   model: LanguageModel;
   system?: string;
   getMessages: (body: unknown) => ModelMessage[];
+  /** Additional server-owned tools, never browser-provided definitions. */
+  tools?: ToolSet;
+  maxSteps?: number;
 };
 
 // Copy of the widget's `suggest_replies` parameters schema. Examples carry no
@@ -75,20 +79,22 @@ export function createAISDKPersonaHandler({
   model,
   system,
   getMessages,
+  tools = {},
+  maxSteps = 1,
 }: CreateAISDKPersonaHandlerOptions) {
   return async function POST(req: Request): Promise<Response> {
     const body = await req.json();
     const messages = getMessages(body);
 
-    return createPersonaSSEStream(async ({ emit }) => {
+    return createPersonaSSEStream(async ({ emit, signal }) => {
       const result = streamText({
         model,
         system: system ? `${system}\n\n${FOLLOW_UP_STEERING}` : FOLLOW_UP_STEERING,
         messages,
-        tools: { suggest_replies: SUGGEST_REPLIES_TOOL },
-        // One model call only: the chips are fire-and-forget, so there is
-        // nothing to feed back for a second step.
-        stopWhen: stepCountIs(1),
+        tools: { ...tools, suggest_replies: SUGGEST_REPLIES_TOOL },
+        abortSignal: signal,
+        // Tools may opt into multiple model steps; suggestions stay fire-and-forget.
+        stopWhen: stepCountIs(maxSteps),
       });
 
       for await (const part of result.fullStream) {
@@ -101,6 +107,18 @@ export function createAISDKPersonaHandler({
             toolCallId: part.toolCallId,
             result: SUGGEST_REPLIES_RESULT,
           });
+        } else if (part.type === "reasoning-start") {
+          emit.reasoningStart(part.id);
+        } else if (part.type === "reasoning-delta") {
+          emit.reasoningDelta(part.id, part.text);
+        } else if (part.type === "reasoning-end") {
+          emit.reasoningComplete(part.id);
+        } else if (part.type === "tool-call") {
+          emit.toolStart(part.toolName, part.input, { toolCallId: part.toolCallId, toolType: "server" });
+        } else if (part.type === "tool-result" && part.toolName !== "suggest_replies") {
+          emit.toolComplete(part.toolCallId, part.output);
+        } else if (part.type === "tool-error") {
+          emit.toolComplete(part.toolCallId, { error: String(part.error) }, false);
         } else if (part.type === "error") {
           const message = part.error instanceof Error ? part.error.message : String(part.error);
           emit.error(message);
@@ -109,6 +127,6 @@ export function createAISDKPersonaHandler({
       }
 
       emit.complete();
-    });
+    }, { signal: req.signal });
   };
 }

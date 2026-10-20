@@ -1,3 +1,6 @@
+const getInstanceId = (element: HTMLElement): string | undefined =>
+  element.closest<HTMLElement>("[data-persona-instance]")?.dataset.personaInstance;
+
 import { createElement, createNode } from "../utils/dom";
 import { ArrowRight } from "lucide";
 import { renderLucideIcon } from "../utils/icons";
@@ -15,6 +18,7 @@ import {
   AgentWidgetSuggestionVariant,
 } from "../types";
 import type { AgentWidgetPlugin } from "../plugins/types";
+import { hasExplicitStylePath, hasExplicitThemeStyle } from "../utils/style-provenance";
 
 export type NormalizedSuggestion = Omit<
   AgentWidgetResolvedSuggestion,
@@ -181,8 +185,9 @@ export const createSuggestionElement = (
   const itemBehavior = item.behavior;
 
   const select = () => {
-    if (session.isStreaming()) return;
+    if (session.isStreaming() || eventTarget.closest("[inert]")) return;
     const detail = {
+      instanceId: getInstanceId(eventTarget),
       suggestion: { ...item },
       surface,
       source,
@@ -199,7 +204,7 @@ export const createSuggestionElement = (
     if (isFollowUp) {
       eventTarget.dispatchEvent(
         new CustomEvent("persona:suggestReplies:selected", {
-          detail: { suggestion: item.prompt },
+          detail: { instanceId: getInstanceId(eventTarget), suggestion: item.prompt },
           bubbles: true,
           composed: true,
         })
@@ -251,14 +256,29 @@ export const createSuggestionElement = (
     // Legacy `suggestionChipsConfig` compat is chip-only: its inline
     // styles would otherwise override the card/list padding tokens.
     if (variant === "chip") {
+      // Standalone callers may pass a separate raw chips object. Widget callers
+      // pass the resolved object, whose origin must survive default materialization.
+      const styleConfig = config.suggestionChipsConfig === chipsConfig
+        ? config : { suggestionChipsConfig: chipsConfig };
+      const explicit = (key: "fontWeight" | "paddingX" | "paddingY") =>
+        hasExplicitStylePath(styleConfig, `suggestionChipsConfig.${key}`);
+      const themed = (leaf: "fontWeight" | "padding") =>
+        hasExplicitThemeStyle(config, `suggestion.chip.${leaf}`, "light") ||
+        hasExplicitThemeStyle(config, `suggestion.chip.${leaf}`, "dark");
       if (chipsConfig?.fontWeight) {
-        button.style.fontWeight = chipsConfig.fontWeight;
+        button.style.fontWeight = !explicit("fontWeight") && themed("fontWeight")
+          ? "var(--persona-suggestion-compat-weight, 500)" : chipsConfig.fontWeight;
       }
-      if (chipsConfig?.paddingX) {
+      const themePadding = themed("padding");
+      if (themePadding) {
+        button.classList.add("persona-theme-padding");
+        button.style.setProperty("--persona-theme-padding", "var(--persona-suggestion-compat-padding, 6px 12px)");
+      }
+      if (chipsConfig?.paddingX && (explicit("paddingX") || !themePadding)) {
         button.style.paddingLeft = chipsConfig.paddingX;
         button.style.paddingRight = chipsConfig.paddingX;
       }
-      if (chipsConfig?.paddingY) {
+      if (chipsConfig?.paddingY && (explicit("paddingY") || !themePadding)) {
         button.style.paddingTop = chipsConfig.paddingY;
         button.style.paddingBottom = chipsConfig.paddingY;
       }
@@ -349,6 +369,20 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
 
   const syncOverflowAffordance = () => {
     overflowFrame = null;
+    container.toggleAttribute("data-edge-to-edge", container.hasAttribute("data-hide-scrollbar") && (container.hasAttribute("data-persona-composer-suggestions") || container.dataset.personaSuggestions === "follow-up") && container.dataset.variant === "chip" && container.dataset.overflow === "scroll");
+    if (container.hasAttribute("data-edge-to-edge") && container.parentElement) {
+      const parent = container.parentElement;
+      const style = getComputedStyle(parent);
+      const left = parseFloat(style.paddingLeft) || 0;
+      const right = parseFloat(style.paddingRight) || 0;
+      container.style.setProperty("--persona-suggestion-bleed-left", `${left}px`);
+      container.style.setProperty("--persona-suggestion-bleed-right", `${right}px`);
+      const form = parent.closest(".persona-widget-container")?.querySelector("form");
+      const bounds = parent.getBoundingClientRect();
+      const formBounds = form?.getBoundingClientRect();
+      container.style.setProperty("--persona-suggestion-inset-left", `${formBounds?.width ? formBounds.left - bounds.left : left}px`);
+      container.style.setProperty("--persona-suggestion-inset-right", `${formBounds?.width ? bounds.right - formBounds.right : right}px`);
+    }
     if (
       container.hidden ||
       container.dataset.variant !== "chip" ||
@@ -423,6 +457,8 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
     const overflow = opts?.overflow ?? "wrap";
     const widgetConfig = opts?.config ?? ({} as AgentWidgetConfig);
     const plugins = opts?.plugins ?? [];
+    container.toggleAttribute("data-hide-scrollbar", widgetConfig.future?.v5Defaults === true);
+    container.dataset.edgeStyle = widgetConfig.suggestions?.[isFollowUp ? "followUps" : "starters"]?.edgeStyle ?? "fade";
     const maxItems =
       typeof opts?.maxItems === "number"
         ? Math.max(0, Math.floor(opts.maxItems))
@@ -543,6 +579,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
       container.dispatchEvent(
         new CustomEvent("persona:suggestion:shown", {
           detail: {
+            instanceId: getInstanceId(container),
             suggestions: normalized.map((item) => ({ ...item })),
             surface,
             source,
@@ -556,7 +593,8 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
         container.dispatchEvent(
           new CustomEvent("persona:suggestReplies:shown", {
             detail: {
-              suggestions: normalized.map((item) => item.prompt),
+              instanceId: getInstanceId(container),
+            suggestions: normalized.map((item) => item.prompt),
             },
             bubbles: true,
             composed: true,

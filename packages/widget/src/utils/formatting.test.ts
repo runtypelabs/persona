@@ -1,5 +1,33 @@
 import { describe, it, expect } from "vitest";
-import { createJsonStreamParser, parseFormattedTemplate, computeReasoningElapsed, computeToolElapsed } from "./formatting";
+import { createJsonStreamParser, createRegexJsonParser, parseFormattedTemplate, computeReasoningElapsed, computeToolElapsed } from "./formatting";
+
+describe("regex JSON stream parser", () => {
+  it.each([true, false])("unescapes complete and streaming values (complete=%s)", async (complete) => {
+    const parser = createRegexJsonParser();
+    const text = "First\nSecond\tTab\rReturn\\Path";
+    const json = JSON.stringify({ text });
+    const input = complete ? json : json.slice(0, -2);
+    expect(await parser.processChunk(input)).toEqual({ text, raw: input });
+    expect(parser.getExtractedText?.()).toBe(text);
+  });
+
+  it("keeps cached progress without accepting a shorter non-JSON chunk", async () => {
+    const parser = createRegexJsonParser();
+    const input = '{"text":"Hello';
+    expect(await parser.processChunk(input)).toEqual({ text: "Hello", raw: input });
+    expect(await parser.processChunk(input)).toEqual({ text: "Hello", raw: input });
+    expect(await parser.processChunk("no")).toBeNull();
+    expect(parser.getExtractedText?.()).toBe("Hello");
+    expect(await parser.processChunk(input + ' world"}')).toMatchObject({ text: "Hello world" });
+    await parser.close?.();
+  });
+
+  it("does not invent text for empty or missing fields", async () => {
+    for (const input of ['{"text":""}', '{"text":"', '{}', 'plain text']) {
+      expect(await createRegexJsonParser().processChunk(input)).toBeNull();
+    }
+  });
+});
 
 describe("JSON Stream Parser", () => {
   it("should extract text field incrementally as JSON streams in", () => {

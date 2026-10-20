@@ -168,18 +168,29 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       showReasoning: true,
       showToolCalls: true,
     },
+    welcome: {
+      title: "Dynamic Components Demo",
+      subtitle:
+        "Ask for a form, product card, chart, status badge, or info card.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Dynamic Components Demo",
-      welcomeSubtitle:
-        "Ask for a form, product card, chart, status badge, or info card.",
     },
-    suggestionChips: [
-      "Can you schedule a demo for me?",
-      "Show me a product card",
-      "Display a chart with data",
-      "Create a status badge",
-    ],
+    suggestions: {
+      starters: {
+        items: [
+          "Can you schedule a demo for me?",
+          "Show me a product card",
+          "Display a chart with data",
+          "Create a status badge",
+        ],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     formStyles: {
       ...FORM_STYLE_RESET,
       ...selectedVariant.formStyles,

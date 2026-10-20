@@ -324,3 +324,50 @@ describe("resolveConfigPreferences", () => {
     expect(resolved.features?.artifacts?.display).toBe("inline");
   });
 });
+
+test('persists every group mode and iteration boundary while leaving header styling code-owned', () => {
+  for (const groupedMode of ['stack', 'summary', 'collapsible'] as const) {
+    const parsed = parseWidgetPreferenceSlice({ toolCallDisplay: { groupedMode, groupBoundary: 'iteration', groupIconVisibility: 'always' } });
+    expect(parsed.preferences.toolCallDisplay).toEqual({ groupedMode, groupBoundary: 'iteration' });
+    expect(parsed.issues).toEqual([expect.objectContaining({ path: 'toolCallDisplay.groupIconVisibility', code: 'unknown_key' })]);
+    expect(applyFeaturePreferences({ toolCallDisplay: { groupIconVisibility: 'always' } }, [parsed.preferences]).toolCallDisplay).toEqual({ groupedMode, groupBoundary: 'iteration', groupIconVisibility: 'always' });
+  }
+  expect(parseWidgetPreferenceSlice({ toolCallDisplay: { groupBoundary: 'turn' } }).issues).toEqual([expect.objectContaining({ path: 'toolCallDisplay.groupBoundary', code: 'invalid_value' })]);
+});
+
+test.each(['current-action', 'aggregate'] as const)('preserves %s tool group summaries in preferences', groupSummary => {
+  const parsed = parseWidgetPreferenceSlice({ toolCallDisplay: { groupSummary } });
+  expect(parsed.issues).toEqual([]);
+  expect(parsed.preferences.toolCallDisplay?.groupSummary).toBe(groupSummary);
+});
+
+
+test('persists activity layouts and reasoning appearances as independent choices', () => {
+  const preferences = { toolCallDisplay: { layout: 'card' as const }, reasoningDisplay: { layout: 'row' as const, appearance: 'inset' as const } };
+  expect(parseWidgetPreferenceSlice(preferences)).toEqual({ preferences, issues: [] });
+  expect(applyFeaturePreferences({}, [preferences])).toEqual(preferences);
+  expect(parseWidgetPreferenceSlice({ reasoningDisplay: { appearance: 'unknown' } }).issues).toEqual([expect.objectContaining({ path: 'reasoningDisplay.appearance', code: 'invalid_value' })]);
+});
+
+test.each(['plain', 'inset'] as const)('persists %s group appearance independently of layout and group mode', groupAppearance => {
+  const preferences = { toolCallDisplay: { groupAppearance, layout: 'card' as const, groupedMode: 'stack' as const } };
+  expect(parseWidgetPreferenceSlice(preferences).preferences).toEqual(preferences);
+  expect(applyFeaturePreferences({}, [preferences]).toolCallDisplay).toEqual(preferences.toolCallDisplay);
+  expect(parseWidgetPreferenceSlice({ toolCallDisplay: { groupAppearance: 'tree' } }).issues).toEqual([
+    expect.objectContaining({ path: 'toolCallDisplay.groupAppearance', code: 'invalid_value' }),
+  ]);
+});
+
+
+test.each([0, 1, 3, 100])('round trips numeric group summary cap %s through preference layers', groupSummaryMaxItems => {
+  const preference = { toolCallDisplay: { groupSummaryMaxItems } };
+  const parsed = parseWidgetPreferenceSlice(JSON.parse(JSON.stringify(preference)));
+  expect(parsed).toEqual({ preferences: preference, issues: [] });
+  expect(applyFeaturePreferences({ toolCallDisplay: { groupSummaryMaxItems: 2 } }, [parsed.preferences]).toolCallDisplay?.groupSummaryMaxItems).toBe(groupSummaryMaxItems);
+});
+
+test.each([-1, 1.5, NaN, Infinity, '0', null, true])('rejects invalid group summary cap %s in preferences', groupSummaryMaxItems => {
+  const parsed = parseWidgetPreferenceSlice({ toolCallDisplay: { groupSummaryMaxItems } });
+  expect(parsed.preferences).toEqual({});
+  expect(parsed.issues).toEqual([expect.objectContaining({ path: 'toolCallDisplay.groupSummaryMaxItems', code: 'invalid_value' })]);
+});

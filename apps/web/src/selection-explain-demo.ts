@@ -79,11 +79,14 @@ const config: AgentWidgetConfig = {
     subtitle: "Highlight anything to ask about it",
     agentIconText: "📖",
   },
+  welcome: {
+    title: "Select-to-Explain",
+    subtitle:
+      "Highlight a passage in the article and choose “Explain this”. This echo backend replies with what it received.",
+    variant: "card",
+  },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle: "Select-to-Explain",
-    welcomeSubtitle:
-      "Highlight a passage in the article and choose “Explain this”. This echo backend replies with what it received.",
     inputPlaceholder: "Or just type a question…",
   },
   postprocessMessage: ({ text }) => markdownPostprocessor(text),

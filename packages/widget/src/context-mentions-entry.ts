@@ -19,6 +19,7 @@ import {
 } from "./utils/composer-input";
 import { createLiveRegion } from "./utils/live-region";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
+import type { ContextMentionDraft } from "./utils/context-mention-manager";
 import type {
   AgentWidgetConfig,
   AgentWidgetContextMentionConfig,
@@ -71,6 +72,8 @@ export interface ContextMentionEngine {
   hasMentions(): boolean;
   /** Refs of the currently tracked mentions; never detaches them. */
   getMentionRefs(): AgentWidgetContextMentionRef[];
+  captureDraft(): ContextMentionDraft;
+  restoreDraft(draft: ContextMentionDraft): void;
   removeLastChip(): boolean;
   /**
    * Dispatch a leading inline slash command in the composer `text` at submit
@@ -164,6 +167,8 @@ export function mountContextMentions(
     handleKeydown: (event) => controller.handleKeydown(event),
     hasMentions: () => manager.hasMentions(),
     getMentionRefs: () => manager.getRefs(),
+    captureDraft: () => manager.captureDraft(),
+    restoreDraft: (draft) => { controller.close(false); manager.restoreDraft(draft, composerInput); },
     removeLastChip: () => manager.removeLast(),
     dispatchInlineCommand: (text) => controller.dispatchInlineCommand(text),
     collectForSubmit: () =>
@@ -179,7 +184,7 @@ export function mountContextMentions(
       composerInput = input;
       controller = buildController();
     },
-    clear: () => manager.clear(),
+    clear: () => { controller.close(false); manager.clear(); },
     destroy: () => {
       controller.destroy();
       manager.clear();

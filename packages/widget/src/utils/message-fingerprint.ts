@@ -12,6 +12,7 @@ export type FingerprintableMessage = {
   role: string;
   content: string;
   streaming?: boolean;
+  dispatchError?: boolean;
   voiceProcessing?: boolean;
   variant?: string;
   rawContent?: string;
@@ -72,6 +73,7 @@ export function computeMessageFingerprint(
     // thinking bubble (waveform/dots) for the finalized message.
     message.voiceProcessing ? "1" : "0",
     message.variant ?? "",
+    message.dispatchError ? "1" : "0",
     message.rawContent?.length ?? 0,
     message.llmContent?.length ?? 0,
     message.approval?.status ?? "",
@@ -85,6 +87,7 @@ export function computeMessageFingerprint(
     message.reasoning?.chunks?.[message.reasoning.chunks.length - 1]?.slice(-32) ?? "",
     message.contentParts?.length ?? 0,
     message.stopReason ?? "",
+    message.toolCall?.actionTitle ?? "",
     configVersion,
   ].join("\x00");
 }

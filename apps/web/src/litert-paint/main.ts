@@ -166,21 +166,32 @@ function mountWidget(): void {
       suggestionChipsConfig: {
         fontFamily: "sans-serif",
       },
+      welcome: {
+        title: "Ask Paint Pal",
+        subtitle:
+          "Gemma 4 runs in your browser and paints in this very real MS Paint with the same tools you'd click. Load a model from the toolbar first.",
+        variant: "card",
+      },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: "Ask Paint Pal",
-        welcomeSubtitle:
-          "Gemma 4 runs in your browser and paints in this very real MS Paint with the same tools you'd click. Load a model from the toolbar first.",
         inputPlaceholder: "Ask for a drawing…",
       },
       // Simple, bold subjects: a 2B model draws a fine house; the Mona Lisa
       // speedrun stays on the proxy-backed webmcp-paint page.
-      suggestionChips: [
-        "Draw a house with a sun in the sky",
-        "Draw a red heart",
-        "Draw a smiley face",
-        "Draw a green tree",
-      ],
+      suggestions: {
+        starters: {
+          items: [
+            "Draw a house with a sun in the sky",
+            "Draw a red heart",
+            "Draw a smiley face",
+            "Draw a green tree",
+          ],
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       launcher: {
         ...DEFAULT_WIDGET_CONFIG.launcher,
         mountMode: "docked",

@@ -61,12 +61,12 @@ For detailed theme styling properties, see [THEME-CONFIG.md](../THEME-CONFIG.md)
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `delayMs` | `number?` | Hover wait before the first tooltip. Default: `200` (ChatGPT / Claude). `0` opens instantly. |
+| `delayMs` | `number?` | Hover wait before the first tooltip. Default: `400`. `0` opens instantly. |
 | `skipDelayMs` | `number?` | After a tooltip closes, later hovers in this window skip `delayMs` so toolbar scanning stays fast. Default: `300`. |
 
 ```typescript
 config: {
-  tooltip: { delayMs: 200, skipDelayMs: 300 }  // default
+  tooltip: { delayMs: 400, skipDelayMs: 300 }  // default
   // tooltip: { delayMs: 0 }                   // previous instant-open
 }
 ```

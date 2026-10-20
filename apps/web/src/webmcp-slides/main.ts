@@ -225,19 +225,30 @@ if (dockTarget) {
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
       colorScheme: "light",
       theme: deckmateTheme,
+      welcome: {
+        title: "Ask Deck Copilot",
+        subtitle:
+          "I edit this deck live through the page's WebMCP tools: slides, elements, alignment, themes, even presenting.",
+        variant: "card",
+      },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: "Ask Deck Copilot",
-        welcomeSubtitle:
-          "I edit this deck live through the page's WebMCP tools: slides, elements, alignment, themes, even presenting.",
         inputPlaceholder: "Ask Copilot to build, restyle, or align slides…",
       },
-      suggestionChips: [
-        "What's in this deck?",
-        "Add a slide about pricing with three tiers",
-        "Make the title slide pop",
-        "Apply the Midnight theme",
-      ],
+      suggestions: {
+        starters: {
+          items: [
+            "What's in this deck?",
+            "Add a slide about pricing with three tiers",
+            "Make the title slide pop",
+            "Apply the Midnight theme",
+          ],
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       launcher: {
         ...DEFAULT_WIDGET_CONFIG.launcher,
         mountMode: "docked",

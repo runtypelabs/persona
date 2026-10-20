@@ -3,6 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
+import { provideApprovalUi } from "./approval-ui-loader";
+import * as approvalUiEntry from "./approval-ui-entry";
+
+provideApprovalUi(approvalUiEntry);
 
 type RafCallback = (time: number) => void;
 
@@ -22,6 +26,7 @@ const installRafMock = () => {
   let nextId = 1;
   let now = performance.now();
   const callbacks = new Map<number, RafCallback>();
+  vi.spyOn(performance, "now").mockImplementation(() => now);
 
   vi.stubGlobal("requestAnimationFrame", (callback: RafCallback) => {
     const id = nextId++;
@@ -710,6 +715,238 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
+  it("drives glyphs from live session activity and idles for reconnect, user waits, completion, errors, and cancellation", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat", persistState: false,
+      launcher: { enabled: false }, future: { v5Defaults: true },
+      features: { scrollBehavior: { mode: "none" } }
+    });
+    const transcript = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+    installScrollMetrics(transcript, { scrollHeight: 1200, clientHeight: 400 });
+    emitStreamingMessage(controller, "Historical streaming flag alone is idle");
+    raf.flush();
+    const button = getScrollToBottomButton(mount)!;
+    const dots = () => button.querySelector(".persona-scroll-to-bottom-dots");
+    expect(dots()).toBeNull();
+    emitStreamingStatus(controller);
+    expect(dots()).not.toBeNull();
+    for (const status of ["paused", "resuming"] as const) {
+      // Durable reconnect statuses originate internally; drive the same callback through the test harness.
+      controller.injectTestMessage({ type: "status", status } as unknown as Parameters<typeof controller.injectTestMessage>[0]);
+      expect(dots()).toBeNull();
+    }
+    controller.injectTestMessage({ type: "status", status: "connected" });
+    expect(dots()).not.toBeNull();
+    controller.injectTestMessage({ type: "message", message: {
+      id: "input-await", role: "assistant", content: "", createdAt: STREAM_CREATED_AT,
+      variant: "tool", toolCall: { id: "input-await", name: "manual_input", status: "running" },
+      agentMetadata: { awaitingLocalTool: true }
+    } });
+    expect(dots()).toBeNull();
+    controller.injectTestMessage({ type: "message", message: {
+      id: "input-await", role: "assistant", content: "", createdAt: STREAM_CREATED_AT,
+      variant: "tool", toolCall: { id: "input-await", name: "manual_input", status: "complete" },
+      agentMetadata: { awaitingLocalTool: false }
+    } });
+    raf.flush();
+    expect(dots()).not.toBeNull();
+    controller.update({ autoFocusInput: true });
+    expect(dots()).not.toBeNull();
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    expect(dots()).toBeNull();
+    emitStreamingStatus(controller);
+    controller.injectTestMessage({ type: "status", status: "error" });
+    expect(dots()).toBeNull();
+    emitStreamingStatus(controller);
+    transcript.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(dots()).toBeNull();
+    expect(button.getAttribute("data-persona-scroll-to-bottom-visible")).toBe("true");
+    controller.destroy();
+  });
+
+  it.each([undefined, "block"] as const)("positions the jump 16px above the full block footer as it grows (placement: %s)", placement => {
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", persistState: false, launcher: { enabled: false },
+      composer: { placement }
+    });
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const form = footer.querySelector<HTMLElement>("[data-persona-composer-form]")!;
+    const button = getScrollToBottomButton(mount)!;
+    let height = 120;
+    // Includes a divider and top padding before the visible composer form.
+    footer.style.borderTop = "1px solid black";
+    footer.style.paddingTop = "27px";
+    Object.defineProperty(footer, "offsetHeight", { configurable: true, get: () => height });
+    Object.defineProperties(form, {
+      offsetHeight: { configurable: true, get: () => height - 44 },
+      offsetTop: { configurable: true, value: 28 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    resize.trigger();
+    expect(button.style.bottom).toBe("136px");
+
+    height = 200; // Multiline text, attachments, or suggestions grow the footer.
+    resize.trigger();
+    expect(button.style.bottom).toBe("216px");
+
+    mount.style.setProperty("--persona-composer-lift", "80px");
+    controller.update({ layout: { showFooter: false } });
+    expect(button.style.bottom).toBe("16px");
+    controller.destroy();
+  });
+
+  it.each([false, true])("positions the jump 16px above overlay composer content as it grows (custom: %s)", custom => {
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", persistState: false, launcher: { enabled: false },
+      composer: { placement: "overlay" },
+      plugins: custom ? [{ id: "custom-composer", renderComposer: createCustomComposer }] : []
+    });
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const form = footer.querySelector<HTMLElement>("[data-persona-composer-form]")!;
+    const button = getScrollToBottomButton(mount)!;
+    let height = 120;
+    const scale = 0.8;
+    Object.defineProperty(footer, "offsetHeight", { configurable: true, get: () => height });
+    Object.defineProperties(form, {
+      offsetHeight: { configurable: true, get: () => height - 44 },
+      offsetTop: { configurable: true, value: 28 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    vi.spyOn(footer, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, 500, 400, height * scale));
+    vi.spyOn(form, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, 500 + 28 * scale, 400, (height - 44) * scale));
+    resize.trigger();
+    // The transparent 28px inset no longer makes the visible gap 40px.
+    expect(parseFloat(button.style.bottom)).toBeCloseTo(108);
+
+    height = 200; // Multiline text or previews inside the card grow its surface.
+    resize.trigger();
+    expect(parseFloat(button.style.bottom)).toBeCloseTo(188);
+
+    const row = document.createElement("div");
+    footer.prepend(row);
+    Object.defineProperties(row, {
+      offsetHeight: { configurable: true, value: 16 },
+      offsetTop: { configurable: true, value: 8 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    vi.spyOn(row, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, 500 + 8 * scale, 400, 16 * scale));
+    resize.trigger();
+    expect(parseFloat(button.style.bottom)).toBeCloseTo(208);
+    row.hidden = true; // Hidden suggestion hosts can retain CSS box spacing.
+    resize.trigger();
+    expect(parseFloat(button.style.bottom)).toBeCloseTo(188);
+
+    // A completely hidden footer also discards a formerly raised composer.
+    mount.style.setProperty("--persona-composer-lift", "80px");
+    controller.update({ layout: { showFooter: false } });
+    expect(button.style.bottom).toBe("16px");
+    controller.destroy();
+  });
+
+  it("clears attachment rows inside a display:contents composer header", () => {
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", persistState: false, launcher: { enabled: false },
+      composer: { placement: "overlay" }
+    });
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const form = footer.querySelector<HTMLElement>("[data-persona-composer-form]")!;
+    const header = document.createElement("div");
+    header.setAttribute("data-persona-composer-header", "");
+    header.style.display = "contents";
+    const attachments = document.createElement("div");
+    header.append(attachments);
+    footer.prepend(header);
+    Object.defineProperty(footer, "offsetHeight", { configurable: true, value: 200 });
+    Object.defineProperties(form, {
+      offsetHeight: { configurable: true, value: 100 },
+      offsetTop: { configurable: true, value: 80 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    Object.defineProperties(attachments, {
+      offsetHeight: { configurable: true, value: 56 },
+      offsetTop: { configurable: true, value: 16 },
+      offsetParent: { configurable: true, value: footer }
+    });
+    vi.spyOn(footer, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 400, 400, 200));
+    vi.spyOn(form, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 480, 400, 100));
+    vi.spyOn(attachments, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 416, 400, 56));
+    resize.trigger();
+    expect(getScrollToBottomButton(mount)!.style.bottom).toBe("200px");
+    attachments.style.visibility = "hidden";
+    resize.trigger();
+    expect(getScrollToBottomButton(mount)!.style.bottom).toBe("136px");
+    controller.destroy();
+  });
+
+  it.each(["anchor-top", "follow", "none"] as const)("ignores composer reserve after layout settles without changing %s reading intent", mode => {
+    const raf = installRafMock();
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", persistState: false, launcher: { enabled: false },
+      features: { scrollBehavior: { mode } }
+    });
+    const body = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+    const messages = mount.querySelector<HTMLElement>(".persona-widget-messages")!;
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const metrics = installScrollMetrics(body, { scrollHeight: 1138, clientHeight: 468 });
+    body.style.paddingBottom = "118px";
+    let contentBottom = 1020;
+    let footerTop = 525.2;
+    Object.defineProperty(messages, "offsetHeight", { configurable: true, get: () => contentBottom });
+    vi.spyOn(body, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, 151.2, 400, 468));
+    vi.spyOn(footer, "getBoundingClientRect").mockImplementation(() => new DOMRect(0, footerTop, 400, 94));
+
+    emitStreamingMessage(controller, "A final answer");
+    raf.flush();
+    body.dispatchEvent(new WheelEvent("wheel", { deltaY: -100 }));
+    metrics.setScrollTop(551.5);
+    body.dispatchEvent(new Event("scroll"));
+    const button = getScrollToBottomButton(mount)!;
+    expect(button.style.display).toBe("");
+
+    // Final actions/disclosure layout shrinks after the render. More than
+    // 24px of scroll range remains, but the whole answer is readable.
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    contentBottom = 937;
+    metrics.setScrollHeight(1055);
+    resize.trigger();
+    raf.flush();
+    expect(button.style.display).toBe("none");
+    expect(metrics.getScrollTop()).toBe(551.5);
+
+    metrics.setScrollTop(510);
+    body.dispatchEvent(new Event("scroll"));
+    expect(button.style.display).toBe("");
+    metrics.setScrollTop(551.5);
+    body.dispatchEvent(new Event("scroll"));
+    expect(button.style.display).toBe("none");
+
+    // A paused reader stays paused: newly hidden content brings the control
+    // back, including content behind the overlay but inside the body box.
+    contentBottom = 976;
+    metrics.setScrollHeight(1094);
+    resize.trigger();
+    raf.flush();
+    expect(button.style.display).toBe("");
+    expect(metrics.getScrollTop()).toBe(551.5);
+
+    // A block composer below the body does not obscure that same content.
+    footerTop = 619.2;
+    resize.trigger();
+    raf.flush();
+    expect(button.style.display).toBe("none");
+    controller.destroy();
+  });
+
   it("hides the transcript affordance when scroll-to-bottom is disabled", () => {
     const raf = installRafMock();
     const mount = createMount();
@@ -849,6 +1086,33 @@ describe("createAgentExperience streaming scroll", () => {
       expect(metrics.getScrollTop()).toBe(600);
       controller.destroy();
     });
+  });
+
+  it.each(["pending", "approved"] as const)("preserves the viewport when a %s approval disclosure grows", status => {
+    const raf = installRafMock();
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", future: { v5Defaults: true }, launcher: { enabled: false },
+    });
+    const body = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+    const metrics = installScrollMetrics(body, { scrollHeight: 1000, clientHeight: 400 });
+    controller.injectTestMessage({ type: "message", message: {
+      id: "approval-scroll", role: "assistant", content: "", createdAt: STREAM_CREATED_AT,
+      variant: "approval", approval: { id: "approval-scroll", agentId: "agent", executionId: "execution", status, toolName: "Search", description: "Search documentation", parameters: { query: "docs" } },
+    } });
+    raf.flush();
+    metrics.setScrollTop(600);
+    const header = mount.querySelector<HTMLButtonElement>(".persona-approval-head")!;
+    header.click();
+    expect(header.getAttribute("aria-expanded")).toBe("true");
+    metrics.setScrollHeight(1400);
+    resize.trigger(); raf.flush();
+    expect(metrics.getScrollTop()).toBe(600);
+    metrics.setScrollHeight(1600);
+    resize.trigger(); raf.flush();
+    expect(metrics.getScrollTop()).toBe(600);
+    controller.destroy();
   });
 
   it("does not yank a paused reader when content grows without a render event", () => {
@@ -1291,6 +1555,7 @@ describe("createAgentExperience streaming scroll", () => {
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",
       launcher: { enabled: false },
+      initialMessages: [{ id: "earlier-anchor-reply", role: "assistant", content: "Earlier reply", createdAt: STREAM_CREATED_AT }],
       features: {
         scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 }
       }
@@ -1298,7 +1563,7 @@ describe("createAgentExperience streaming scroll", () => {
 
     const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
     const metrics = installScrollMetrics(scrollContainer!, {
-      scrollHeight: 1000,
+      scrollHeight: 2000,
       clientHeight: 400
     });
 
@@ -1306,7 +1571,7 @@ describe("createAgentExperience streaming scroll", () => {
     emitUserMessage(controller, "user-anchor-cancel", "Question");
 
     // Anchor target (484) is reachable without a spacer, and differs from
-    // the bottom (600) so a stale animation is distinguishable.
+    // the bottom (1600) so a stale animation is distinguishable.
     const bubble = scrollContainer!.querySelector<HTMLElement>(
       '[data-message-id="user-anchor-cancel"]'
     );
@@ -1314,6 +1579,10 @@ describe("createAgentExperience streaming scroll", () => {
 
     raf.step(1); // anchor frame: starts the scroll animation
     raf.step(1); // first animation frame: animation now in flight
+
+    metrics.setScrollTop(0); // reader moves away while the anchor ease is in flight
+    scrollContainer!.dispatchEvent(new Event("scroll"));
+    expect((getScrollToBottomButton(mount) as HTMLButtonElement).disabled).toBe(false);
 
     // Jump to the latest mid-animation: the stale anchor animation must not
     // keep easing scrollTop back toward the old target.
@@ -1468,6 +1737,119 @@ describe("createAgentExperience streaming scroll", () => {
 
     controller.destroy();
     vi.useRealTimers();
+  });
+
+
+  describe("explicit jump motion", () => {
+    const setup = (features: import("./types").AgentWidgetConfig["features"] = { scrollBehavior: { mode: "none" } }, v5 = true) => {
+      const raf = installRafMock();
+      const mount = createMount();
+      const controller = createAgentExperience(mount, {
+        apiUrl: "/test", persistState: false, launcher: { enabled: false },
+        future: { v5Defaults: v5 }, features,
+      });
+      const transcript = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+      const metrics = installScrollMetrics(transcript, { scrollHeight: 10400, clientHeight: 400 });
+      emitStreamingStatus(controller);
+      emitStreamingMessage(controller, "Initial reply");
+      raf.flush();
+      transcript.dispatchEvent(new WheelEvent("wheel", { deltaY: -24 }));
+      metrics.setScrollTop(0);
+      transcript.dispatchEvent(new Event("scroll"));
+      return { raf, controller, transcript, metrics, button: getScrollToBottomButton(mount)! };
+    };
+
+    it.each(["none", "follow"] as const)("tracks a moving bottom without snapping or restarting in %s mode", mode => {
+      const { raf, controller, metrics, button } = setup({ scrollBehavior: { mode } });
+      button.click();
+      expect(metrics.getScrollTop()).toBe(0);
+      expect(button.getAttribute("data-persona-scroll-to-bottom-visible")).toBe("false");
+      raf.step(4);
+      expect(metrics.getScrollTop()).toBeGreaterThan(0);
+      expect(metrics.getScrollTop()).toBeLessThan(metrics.getBottomScrollTop());
+      metrics.setScrollHeight(12400);
+      emitStreamingMessage(controller, "Streaming growth during the jump");
+      const halfway = metrics.getScrollTop();
+      raf.step(1);
+      expect(metrics.getScrollTop()).toBeGreaterThan(halfway);
+      expect(metrics.getScrollTop()).toBeLessThan(metrics.getBottomScrollTop());
+      raf.step(9); // 224ms total; target growth cannot restart the duration.
+      expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+      metrics.setScrollHeight(13400);
+      emitStreamingMessage(controller, "Growth after landing");
+      raf.flush();
+      expect(metrics.getScrollTop()).toBe(mode === "none" ? 12000 : 13000);
+      controller.destroy();
+    });
+
+    it.each(["wheel", "touchstart", "pointerdown", "keydown"])("cancels on %s near the bottom and keeps streaming from resuming follow", input => {
+      const { raf, controller, transcript, metrics, button } = setup({ scrollBehavior: { mode: "follow" } });
+      button.click();
+      raf.step(12); // eased within 24px of the bottom
+      const stopped = metrics.getScrollTop();
+      expect(metrics.getBottomScrollTop() - stopped).toBeLessThan(24);
+      const event = input === "wheel" ? new WheelEvent(input, { deltaY: 24 })
+        : input === "keydown" ? new KeyboardEvent(input, { key: "PageDown", bubbles: true }) : new Event(input);
+      transcript.dispatchEvent(event);
+      metrics.setScrollTop(stopped + 8); // cancelling input emits a real scroll too
+      transcript.dispatchEvent(new Event("scroll"));
+      metrics.setScrollHeight(11400);
+      emitStreamingMessage(controller, "Keeps arriving after reader takes over");
+      raf.flush();
+      expect(metrics.getScrollTop()).toBe(stopped + 8);
+      controller.destroy();
+    });
+
+    it("reveals a cancelled completed-response jump after the cancelling scroll moves away", () => {
+      const { raf, controller, transcript, metrics, button } = setup({ scrollBehavior: { mode: "follow" } });
+      controller.injectTestMessage({ type: "status", status: "idle" });
+      button.click(); raf.step(12);
+      transcript.dispatchEvent(new WheelEvent("wheel", { deltaY: -24 }));
+      metrics.setScrollTop(0); transcript.dispatchEvent(new Event("scroll"));
+      expect(button.getAttribute("data-persona-scroll-to-bottom-visible")).toBe("true");
+      raf.flush(); expect(metrics.getScrollTop()).toBe(0);
+      controller.destroy();
+    });
+
+    it.each([350, 600])("honors a custom %sms duration", scrollDurationMs => {
+      const { raf, controller, metrics, button } = setup({ scrollBehavior: { mode: "none" }, scrollToBottom: { scrollDurationMs } });
+      button.click();
+      raf.step(14); // 224ms: the old fixed duration has elapsed.
+      expect(metrics.getScrollTop()).toBeGreaterThan(0);
+      expect(metrics.getScrollTop()).toBeLessThan(metrics.getBottomScrollTop());
+      raf.step(Math.ceil(scrollDurationMs / 16) - 14);
+      expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+      controller.destroy();
+    });
+
+    it.each([-1, NaN, Infinity])("falls back to 220ms for invalid duration %s", scrollDurationMs => {
+      const { raf, controller, metrics, button } = setup({ scrollBehavior: { mode: "none" }, scrollToBottom: { scrollDurationMs } });
+      button.click(); raf.step(7);
+      expect(metrics.getScrollTop()).toBeGreaterThan(0);
+      expect(metrics.getScrollTop()).toBeLessThan(metrics.getBottomScrollTop());
+      raf.step(7);
+      expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+      controller.destroy();
+    });
+
+    it.each(["v4", "instant", "reduced", "zero"])("jumps immediately with %s", variant => {
+      if (variant === "reduced") vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
+      const { controller, metrics, button } = setup({ scrollBehavior: { mode: "none" }, scrollToBottom: { scrollDurationMs: variant === "zero" ? 0 : 600, ...(variant === "instant" ? { scrollBehavior: "instant" } : {}) } }, variant !== "v4");
+      button.click();
+      expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+      controller.destroy();
+    });
+
+    it.each(["update", "destroy"])("cancels pending frames on %s", action => {
+      const { raf, controller, metrics, button } = setup();
+      button.click(); raf.step(3);
+      const stopped = metrics.getScrollTop();
+      if (action === "update") controller.update({ features: { scrollToBottom: { scrollBehavior: "instant" } } });
+      else controller.destroy();
+      raf.flush();
+      expect(metrics.getScrollTop()).toBe(stopped);
+      if (action === "update") controller.destroy();
+    });
   });
 
 });

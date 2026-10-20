@@ -5,7 +5,18 @@ import {
 } from "./runtime/init";
 
 export type {
+  AgentWidgetDictationConfig,
+  DictationProviderConfig,
+  DictationPhase,
+  DictationState,
+  DictationStateEvent,
+  DictationRenderContext,
+  DictationRenderHandle,
   AgentWidgetConfig,
+  AgentWidgetLoadingLabelConfig,
+  AgentWidgetExpansionConfig,
+  LoadingLabelAnimationContext,
+  LoadingLabelAnimationHandle,
   AgentWidgetStorageAdapter,
   AgentWidgetStoredState,
   AgentWidgetConfigPatch,
@@ -35,6 +46,8 @@ export type {
   ArtifactConfigPayload,
   AgentWidgetInitOptions,
   AgentWidgetMessage,
+  AgentWidgetTurnActivity,
+  AgentWidgetTurnActivityConfig,
   AgentWidgetLauncherConfig,
   AgentWidgetLauncherTeaserConfig,
   AgentWidgetTooltipConfig,
@@ -76,6 +89,11 @@ export type {
   MessageContent,
   // Attachment config type
   AgentWidgetAttachmentsConfig,
+  AgentWidgetAttachmentPreviewConfig,
+  AttachmentPreviewRemoveConfig,
+  AttachmentPreviewState,
+  AttachmentPreviewRenderContext,
+  AttachmentPreviewRenderHandle,
   AgentWidgetComposerConfig,
   // Composer state + submission snapshot (controller.getComposerState,
   // persona:composer:state, composer.onBeforeSend)
@@ -103,6 +121,10 @@ export type {
   ComposerActionRenderContext,
   ComposerActionContributionContext,
   ComposerActionOverflowConfig,
+  ComposerOverflowMenuConfig,
+  ComposerMenuItem,
+  ComposerMenuRenderContext,
+  ComposerMenuRenderHandle,
   // Model picker (composer.models, composer.modelPicker)
   ComposerModel,
   ComposerModelPickerConfig,
@@ -129,6 +151,8 @@ export type {
   AgentWidgetTimestampConfig,
   WidgetLayoutSlot,
   SlotRenderer,
+  SlotRenderResult,
+  AgentWidgetLinkClickContext,
   SlotRenderContext,
   HeaderRenderContext,
   MessageRenderContext,
@@ -166,6 +190,7 @@ export type {
   AgentRequestOptions,
   AgentExecutionState,
   AgentMessageMetadata,
+  AgentMessagePhase,
   AgentWidgetAgentRequestPayload,
   // Approval types
   AgentWidgetApproval,
@@ -188,6 +213,9 @@ export type {
   EventStreamPayloadRenderContext,
   // Controller event map
   AgentWidgetControllerEventMap,
+  AgentWidgetEventContext,
+  AgentWidgetRunStartedEvent,
+  AgentWidgetRunFinishedEvent,
   AgentWidgetReadAloudEvent,
   // Ask-user-question (built-in answer-pill sheet) types
   AskUserQuestionPayload,
@@ -197,6 +225,9 @@ export type {
   AgentWidgetAskUserQuestionStyles,
   // Visitor conversation history (client-token mode) types
   AgentWidgetHistoryFeature,
+  AgentWidgetOpenConversationOptions,
+  BackgroundConversationAdapter,
+  ConversationExecutionState,
   AgentWidgetHistoryListAction,
   AgentWidgetHistoryCopy,
   HistoryScope,
@@ -478,7 +509,12 @@ export type {
   AgentWidgetScrollRestorePosition,
   AgentWidgetScrollBehaviorFeature,
   AgentWidgetScrollToBottomFeature,
+  AgentWidgetScrollToBottomIconState,
+  AgentWidgetScrollToBottomIconContext,
+  AgentWidgetScrollToBottomIconHandle,
   AgentWidgetComponentRenderer,
+  AgentWidgetComponentRenderContext,
+  AgentWidgetComponentRenderHandle,
 } from "./types";
 
 // Action system types: needed to type the `actionHandlers` / `actionParsers`
@@ -540,6 +576,7 @@ export type { ThemeZone } from "./utils/tokens";
 // them, so exporting here would ship all of utils/plugins.ts in the CDN IIFE.
 export type {
   DeepPartial,
+  BrandConfig,
   PersonaTheme,
   PersonaThemePlugin,
   CreateThemeOptions,
@@ -555,7 +592,10 @@ export type {
   SemanticSpacing,
   SemanticTypography,
   ComponentTokens,
+  ComposerOverflowMenuTokens,
   TextStyleTokens,
+  AttachmentTokens,
+  AttachmentRemoveTokens,
   ArtifactToolbarTokens,
   ArtifactTabTokens,
   ArtifactPaneTokens,

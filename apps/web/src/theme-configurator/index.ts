@@ -39,7 +39,7 @@ import {
   type PreviewManager,
   normalizePreviewBackgroundUrl,
 } from './preview-manager';
-import { ZOOM_MIN, ZOOM_MAX, COMPONENT_SHAPE_SECTIONS, STYLE_SECTIONS } from '@runtypelabs/persona/theme-editor';
+import { ZOOM_MIN, ZOOM_MAX, COMPONENT_SHAPE_SECTIONS, COMPONENT_COLOR_SECTIONS, PALETTE_SECTION, SEMANTIC_COLORS_SECTION, scopeSection, STYLE_SECTIONS } from '@runtypelabs/persona/theme-editor';
 
 // Re-export test helpers from preview manager
 export {
@@ -825,6 +825,15 @@ const ADVANCED_TOKENS_STATIC_SECTION_IDS = ['chat-colors', 'typography', 'launch
 function buildSearchCatalog(): void {
   // "Component shapes" drill-down: includes the Component Shadows section.
   registerCatalogSections('style', COMPONENT_SHAPE_SECTIONS);
+  for (const section of COMPONENT_SHAPE_SECTIONS) SECTION_TO_DRILLDOWN[section.id] = 'component-shapes';
+  for (const [scope, variant] of [['theme', 'light'], ['darkTheme', 'dark']] as const) {
+    const colorSections = COMPONENT_COLOR_SECTIONS.map(section => scopeSection(section, scope, variant));
+    registerCatalogSections('style', colorSections);
+    for (const section of colorSections) SECTION_TO_DRILLDOWN[section.id] = 'component-colors';
+    const paletteSections = [PALETTE_SECTION, SEMANTIC_COLORS_SECTION].map(section => scopeSection(section, scope, variant));
+    registerCatalogSections('style', paletteSections);
+    for (const section of paletteSections) SECTION_TO_DRILLDOWN[section.id] = 'palette';
+  }
   // "Advanced Tokens" drill-down: palette shadow scale, widget surface, etc.
   registerCatalogSections(
     'style',

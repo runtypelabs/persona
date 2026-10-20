@@ -22,3 +22,5 @@ export {
   __setIconsExtraLoader,
 } from "./artifacts-ui-entry";
 export type { ArtifactPaneApi, ArtifactsUiDeps } from "./artifacts-ui-entry";
+export { createArtifactResizer } from "./artifact-resizer";
+export { ensureArtifactStyles } from "./components/artifact-styles";

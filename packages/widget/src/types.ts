@@ -1,5 +1,5 @@
 import type { AgentWidgetPlugin } from "./plugins/types";
-import type { DeepPartial, PersonaTheme } from "./types/theme";
+import type { BrandConfig, DeepPartial, PersonaTheme } from "./types/theme";
 import type {
   RuntypeClientChatRequest,
   RuntypeClientFeedbackRequest,
@@ -619,6 +619,8 @@ export type AgentWidgetRequestPayloadMessage = {
   role: AgentWidgetMessageRole | "tool";
   content: MessageContent;
   createdAt: string;
+  /** Optional assistant phase for backend adapters that replay provider history. */
+  phase?: AgentMessagePhase;
   toolCalls?: AgentWidgetReplayedToolCall[];
   toolResults?: AgentWidgetReplayedToolResult[];
 };
@@ -865,6 +867,8 @@ export type ClientToolDefinition = {
  * call executes. Every WebMCP tool routes through this single gate.
  */
 export type WebMcpConfirmInfo = {
+  /** Stable tool-call identifier when confirmation originates from a dispatched call. */
+  toolCallId?: string;
   /** Bare tool name (no `webmcp:` prefix). */
   toolName: string;
   args: unknown;
@@ -997,10 +1001,51 @@ export type ResumableHandle = {
   status: 'running';
 };
 
+/** Last observed durable server state, scoped to one conversation and execution. */
+export type ConversationExecutionState = {
+  conversationId: string;
+  executionId: string;
+  status: "running" | "needs-attention" | "completed" | "failed";
+  /** Without subscribeStatus, detached state is last-known until reconnect. */
+  detached: boolean;
+};
+
+/** Explicit backend contract for switching away from durable server work. */
+export type BackgroundConversationAdapter = {
+  capabilities: {
+    /** Closing the browser response never cancels the server execution. */
+    durableExecution: true;
+    /** Events are authorized, ordered, strictly after the cursor, and read-only. */
+    readOnlyReplay: true;
+  };
+  reconnectStream(ctx: {
+    conversationId: string;
+    executionId: string;
+    after: string;
+    signal: AbortSignal;
+  }): Promise<Response>;
+  /** Optional server status source. Unsubscribe must release all listeners. */
+  subscribeStatus?(
+    ctx: { conversationId: string; executionId: string },
+    callback: (status: ConversationExecutionState["status"]) => void
+  ): () => void;
+};
+
+/** Explicit assistant text placement; answer phases do not imply run completion. */
+export type AgentMessagePhase = "commentary" | "partial_answer" | "final_answer";
+
 /**
  * Metadata attached to messages created during agent execution.
  */
 export type AgentMessageMetadata = {
+  /** Stable native text block identity, retained for durable replay segmentation. */
+  textBlockId?: string;
+  /** Optional Persona text_start extension, known before the block's first text.
+   * Unclassified text stays in the transcript; adapters must not guess a phase. */
+  phase?: AgentMessagePhase;
+  /** Authoritative text_complete phase for provider history replay only.
+   * May arrive late; never changes the placement selected by text_start.phase. */
+  providerPhase?: AgentMessagePhase;
   executionId?: string;
   iteration?: number;
   turnId?: string;
@@ -1300,8 +1345,9 @@ export type AgentWidgetMessageActionsConfig = {
    */
   showQuote?: boolean;
   /**
-   * Visibility mode: 'always' shows buttons always, 'hover' shows on hover only
-   * @default 'hover'
+   * Explicit visibility overrides the default behavior. V4 defaults to hover;
+   * V5 shows actions on the last assistant message, coarse pointers, and widths
+   * below 640px, and otherwise reveals them on hover or keyboard focus.
    */
   visibility?: "always" | "hover";
   /**
@@ -1377,12 +1423,27 @@ export type AgentWidgetStateSnapshot = {
   streaming: boolean;
 };
 
+export type AgentWidgetEventContext = Readonly<{ instanceId: string }>;
+
+export type AgentWidgetRunStartedEvent = { runId: string; timestamp: number };
+export type AgentWidgetRunFinishedEvent = AgentWidgetRunStartedEvent & {
+  outcome: "success" | "error" | "cancel";
+};
+
 export type AgentWidgetControllerEventMap = {
+  /** Latest transcript after structural changes; streaming text is coalesced per animation frame. */
+  "messages:changed": AgentWidgetMessage[];
+  /** A local session run starts, including retries and restored durable runs. */
+  "run:started": AgentWidgetRunStartedEvent;
+  /** Exactly once per run; tool/approval pauses and reconnects retain the same runId. */
+  "run:finished": AgentWidgetRunFinishedEvent;
   "user:message": AgentWidgetMessage;
   "assistant:message": AgentWidgetMessage;
   "assistant:complete": AgentWidgetMessage;
   "voice:state": AgentWidgetVoiceStateEvent;
   "voice:status": AgentWidgetVoiceStatusEvent;
+  /** Low-frequency dictation lifecycle/transcript events; audio samples stay instance-local. */
+  "dictation:state": DictationStateEvent;
   "action:detected": AgentWidgetActionEventPayload;
   "action:resubmit": AgentWidgetActionEventPayload;
   "widget:opened": AgentWidgetStateEvent;
@@ -1397,6 +1458,7 @@ export type AgentWidgetControllerEventMap = {
   "approval:resolved": { approval: AgentWidgetApproval; decision: string };
   /** A durable stream dropped; the widget is about to reconnect. */
   "stream:paused": { executionId: string; after: string };
+  "conversation:executionState": ConversationExecutionState;
   /** A reconnect attempt is in flight (`attempt` is 1-based). */
   "stream:resuming": { executionId: string; after: string; attempt: number };
   /** The durable turn resumed and reached its terminal after a reconnect. */
@@ -1520,13 +1582,18 @@ export type AgentWidgetArtifactsLayoutConfig = {
    * @default 'panel'
    */
   paneAppearance?: "panel" | "seamless" | "detached";
-  /** Border radius on the artifact pane (CSS length). Works with any `paneAppearance`. */
+  /** Border radius on the artifact pane (CSS length). Works with any `paneAppearance`.
+   * @deprecated Prefer `theme.components.artifact.pane.borderRadius`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   paneBorderRadius?: string;
-  /** CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow. */
+  /** CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow.
+   * @deprecated Prefer `theme.components.artifact.pane.shadow`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   paneShadow?: string;
   /**
    * CSS `box-shadow` for the chat column card in a detached split. Defaults to the same
    * elevation as the artifact pane; set to `"none"` to keep the chat flat while the pane stays raised.
+   * @deprecated Prefer `theme.components.artifact.chat.shadow`. Explicit legacy input remains supported and retains its historical precedence.
    */
   chatShadow?: string;
   /**
@@ -1541,11 +1608,13 @@ export type AgentWidgetArtifactsLayoutConfig = {
   /**
    * Full `border` shorthand for the artifact `<aside>` (all sides). Overrides default pane borders.
    * Example: `"1px solid #cccccc"`.
+   * @deprecated Prefer `theme.components.artifact.pane.border`. Explicit legacy input remains supported and retains its historical precedence.
    */
   paneBorder?: string;
   /**
    * `border-left` shorthand only: typical for split view next to chat (with or without resizer).
    * Ignored if `paneBorder` is set. Example: `"1px solid #cccccc"`.
+   * @deprecated Prefer `theme.components.artifact.pane.borderLeft`. Explicit legacy input remains supported and retains its historical precedence.
    */
   paneBorderLeft?: string;
   /**
@@ -1555,9 +1624,11 @@ export type AgentWidgetArtifactsLayoutConfig = {
   /**
    * Desktop welded split only: override the artifact pane's outer-right corner radius (CSS length).
    * @default matches the panel radius (`--persona-panel-radius`)
+   * @deprecated Prefer `theme.components.artifact.split.outerRadius`. Explicit legacy input remains supported and retains its historical precedence.
    */
   unifiedSplitOuterRadius?: string;
   /**
+   * @deprecated Prefer `theme.components.artifact.pane.background`; explicit legacy input still wins.
    * Strongest override: solid background for the artifact column (CSS color). Sets `--persona-artifact-pane-bg`
    * on the widget root. Leave unset to use theme `components.artifact.pane.background` (defaults to semantic
    * container) so light/dark stays consistent.
@@ -1565,6 +1636,7 @@ export type AgentWidgetArtifactsLayoutConfig = {
   paneBackground?: string;
   /**
    * Horizontal padding for artifact toolbar and content (CSS length), e.g. `24px`.
+   * @deprecated Prefer `theme.components.artifact.pane.padding`. Explicit legacy input remains supported and retains its historical precedence.
    */
   panePadding?: string;
   /**
@@ -1586,13 +1658,21 @@ export type AgentWidgetArtifactsLayoutConfig = {
    * When `toolbarPreset` is `document`, show a small chevron after the copy control (e.g. menu affordance).
    */
   documentToolbarShowCopyChevron?: boolean;
-  /** Document toolbar icon buttons (view, code, copy, refresh, close): CSS color. Sets `--persona-artifact-doc-toolbar-icon-color` on the widget root. */
+  /** Document toolbar icon buttons (view, code, copy, refresh, close): CSS color. Sets `--persona-artifact-doc-toolbar-icon-color` on the widget root.
+   * @deprecated Prefer `theme.components.artifact.toolbar.iconColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   documentToolbarIconColor?: string;
-  /** Active view/source toggle background. Sets `--persona-artifact-doc-toggle-active-bg`. */
+  /** Active view/source toggle background. Sets `--persona-artifact-doc-toggle-active-bg`.
+   * @deprecated Prefer `theme.components.artifact.toolbar.toggleActiveBackground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   documentToolbarToggleActiveBackground?: string;
-  /** Active view/source toggle border color. Sets `--persona-artifact-doc-toggle-active-border`. */
+  /** Active view/source toggle border color. Sets `--persona-artifact-doc-toggle-active-border`.
+   * @deprecated Prefer `theme.components.artifact.toolbar.toggleActiveBorderColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   documentToolbarToggleActiveBorderColor?: string;
-  /** Active view/source toggle icon color (defaults to `documentToolbarIconColor`). Sets `--persona-artifact-doc-toggle-active-color`. */
+  /** Active view/source toggle icon color (defaults to `documentToolbarIconColor`). Sets `--persona-artifact-doc-toggle-active-color`.
+   * @deprecated Prefer `theme.components.artifact.toolbar.toggleActiveColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   documentToolbarToggleActiveColor?: string;
   /** Show an expand/collapse toggle in the artifact toolbar (both presets). Expanded fills the widget with the pane and hides the chat column. Default: false. */
   showExpandToggle?: boolean;
@@ -1600,7 +1680,9 @@ export type AgentWidgetArtifactsLayoutConfig = {
   showCopyButton?: boolean;
   /** Edge fade on the scrollable tab strip. true = both ends (dynamic). @default true */
   tabFade?: boolean | { start?: boolean; end?: boolean };
-  /** Tab fade width (CSS length). @default 24px */
+  /** Tab fade width (CSS length). @default 24px
+   * @deprecated Prefer `theme.components.artifact.tab.fadeSize`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   tabFadeSize?: string;
   /**
    * Invoked when the document toolbar Refresh control is used (before the pane
@@ -1749,7 +1831,7 @@ export type PersonaArtifactCustomAction = {
 };
 
 export type AgentWidgetArtifactsFeature = {
-  /** When true, Persona shows the artifact pane and handles artifact_* SSE events */
+  /** Enables artifact UI. Defaults to true in V5; V4 requires explicit opt-in. */
   enabled?: boolean;
   /** If set, artifact events for other types are ignored */
   allowedTypes?: PersonaArtifactKind[];
@@ -1757,6 +1839,10 @@ export type AgentWidgetArtifactsFeature = {
    * Where artifact bodies render. A single mode applies to all artifacts;
    * the object form sets a default plus scoped overrides.
    * Defaults to "panel" (current behavior).
+   *
+   * `update({ features: { artifacts: { display } } })` replaces the entire
+   * rule object, including nested selector maps. Include every rule to retain;
+   * sibling artifact options merge. This differs from preference-layer resolution.
    */
   display?:
     | PersonaArtifactDisplayModeInput
@@ -2217,6 +2303,30 @@ export type AgentWidgetScrollBehaviorFeature = {
   scrollbar?: AgentWidgetScrollbarPolicy;
 };
 
+/** Decorative glyph state. Hidden glyphs should pause host-owned animation. */
+export type AgentWidgetScrollToBottomIconState = {
+  activity: "idle" | "generating-below";
+  visible: boolean;
+  hovered: boolean;
+  focused: boolean;
+  reducedMotion: boolean;
+};
+
+export type AgentWidgetScrollToBottomIconContext = {
+  config: AgentWidgetConfig;
+  state: Readonly<AgentWidgetScrollToBottomIconState>;
+  view: "transcript" | "event-stream";
+  /** Aborted before cleanup on replacement, disable, or destruction. */
+  signal: AbortSignal;
+};
+
+export type AgentWidgetScrollToBottomIconHandle = {
+  element: HTMLElement | null;
+  /** Called only when state or scroll-control configuration changes. */
+  update?: (context: AgentWidgetScrollToBottomIconContext) => void;
+  destroy?: () => void;
+};
+
 export type AgentWidgetScrollToBottomFeature = {
   /**
    * When true, Persona shows a scroll-to-bottom affordance when the user breaks
@@ -2235,6 +2345,29 @@ export type AgentWidgetScrollToBottomFeature = {
    * @default ""
    */
   label?: string;
+  /** Glyph while a live response is arriving below. V4 defaults to arrow; V5 to dots. */
+  streamingIndicator?: "dots" | "arrow";
+  /** Visibility transition. V4 defaults to none; V5 to fade. Honors reduced motion. */
+  transition?: "fade" | "none";
+  /** User-triggered jump behavior, separate from automatic follow and button fade.
+   * V4 defaults to instant; V5 to a smooth jump. Reduced motion
+   * jumps instantly. Manual scrolling cancels a smooth jump.
+   */
+  scrollBehavior?: "smooth" | "instant";
+  /** Smooth jump duration in milliseconds. 0 jumps instantly. Negative or
+   * non-finite values fall back to 220. Ignored for instant or reduced motion.
+   * @default 220
+   */
+  scrollDurationMs?: number;
+  /**
+   * Mount a decorative, noninteractive inner glyph once. Persona owns the button,
+   * accessible label, count, position, and click behavior. Return null to use the
+   * built-in glyph. A managed handle receives changes and cleanup; a plain element
+   * stays mounted until replacement, disable, or destruction. Honor reducedMotion
+   * and visible when animating. Exceptions fall back to the built-in glyph.
+   */
+  renderIcon?: (context: AgentWidgetScrollToBottomIconContext) => HTMLElement | AgentWidgetScrollToBottomIconHandle | null;
+
 };
 
 export type AgentWidgetToolCallCollapsedMode =
@@ -2255,20 +2388,60 @@ export type AgentWidgetToolCallLoadingAnimation =
   | "shimmer-color"
   | "rainbow";
 
+/** Live default-owned loading label. Stream animation plugins use a separate API. */
+export type LoadingLabelAnimationContext = {
+  element: HTMLElement;
+  /** Unanimated label text, including any live elapsed value at render time. */
+  text: string;
+  kind: "waiting" | "tool" | "tool-group" | "reasoning";
+  config: AgentWidgetConfig;
+  reducedMotion: boolean;
+};
+
+export type LoadingLabelAnimationHandle = {
+  /** Called after later committed renders, including label/config changes. */
+  update?: (context: LoadingLabelAnimationContext) => void;
+  /** Release animation resources on completion, removal, replacement or destroy. */
+  destroy: () => void;
+};
+
+/** Shared overrides for built-in waiting, tool, grouped-tool and reasoning labels. */
+export type AgentWidgetLoadingLabelConfig = {
+  /** Overrides per-feature animation settings when supplied. `none` also disables animate. */
+  animation?: AgentWidgetToolCallLoadingAnimation;
+  /** Cycle duration in milliseconds; overrides per-feature duration. */
+  duration?: number;
+  /** Primary shimmer-color color; overrides per-feature color. */
+  color?: string;
+  /** Secondary shimmer-color color; overrides per-feature color. */
+  secondaryColor?: string;
+  /**
+   * Starts on committed live DOM, replacing the built-in effect. Return a
+   * handle to receive updates and cleanup. Not started under reduced motion.
+   * Custom HTMLElement renderers retain ownership; defaultRenderer delegates
+   * participate. Clear with `animate: undefined` in update() to restore builtins.
+   */
+  animate?: (context: LoadingLabelAnimationContext) => LoadingLabelAnimationHandle | void;
+};
+
 export type AgentWidgetToolCallDisplayFeature = {
-  /** Activity chrome. Defaults to card in V4 and row with future.v5Defaults. */
+  /** Activity layout. Defaults to card in V4 and row with future.v5Defaults. */
+  layout?: "card" | "row";
+  /** @deprecated Use layout. An explicit layout takes precedence. */
   variant?: "card" | "row";
   /** Row status icons: always, active/attention-needed only, or never. V5 defaults to active; V4 to always. */
   iconVisibility?: "always" | "active" | "never";
-  /** Row variant: open when the first content chunk arrives. Default false in V5; true in V4. */
+  /** Row layout: open when the first content chunk arrives. Default false in V5; true in V4. */
   autoExpand?: boolean;
-  /** Row variant: collapse once after completion, in ms; false disables. Default 1000. */
+  /** Row layout: collapse once after completion, in ms; false disables. Default 1000. */
   autoCollapseDelay?: number | false;
   /**
    * Controls what collapsed tool call rows show in their header/summary area.
    * @default "tool-call"
    */
   collapsedMode?: AgentWidgetToolCallCollapsedMode;
+  /** Show the raw tool name above expanded details. Independent of header labels. @default false */
+  showToolName?: boolean;
   /**
    * When true, active collapsed tool calls can render a lightweight preview block.
    * @default false
@@ -2298,6 +2471,28 @@ export type AgentWidgetToolCallDisplayFeature = {
    * @default "stack"
    */
   groupedMode?: "stack" | "summary" | "collapsible";
+  /** Child treatment, independent of groupedMode: indentation alone or one subtle
+   * vertical line. V5 defaults to inset; unset V4 retains its legacy stack tree.
+   * Summary-only groups have no child treatment. */
+  groupAppearance?: "plain" | "inset";
+  /** Single active action or aggregate batch summary. Parallel work and attention remain
+   * aggregate. Defaults to current-action in classified turn progress, aggregate elsewhere;
+   * stack defaults to aggregate everywhere. Custom summary callbacks retain precedence. */
+  groupSummary?: "current-action" | "aggregate";
+  /** Maximum distinct categories in built-in aggregate row/group summaries. Nonnegative
+   * integer; 0 shows only the total activity count. Positive limits use action labels
+   * such as Read files; omitted categories become "and N more". Attention
+   * suffixes and current-action labels remain visible. Invalid values use 3. @default 3 */
+  groupSummaryMaxItems?: number;
+  /** Split adjacent tools at known iteration or execution changes. Missing metadata preserves adjacency. @default "adjacent" */
+  groupBoundary?: "adjacent" | "iteration";
+  /** Built-in collapsible header icon visibility. Inherits iconVisibility; child rows and custom summary content keep their own icons. */
+  groupIconVisibility?: "always" | "active" | "never";
+  /** Automatic elapsed timing in tool rows, V5 cards, and collapsible group headers. Whole seconds (2s),
+   * hidden below 1s or without known timing. Groups span earliest start to latest completion,
+   * including gaps/overlap, and tick only while a child runs. Authored templates/renderers
+   * retain timing metadata and elapsed helpers independently. @default "none" */
+  durationDisplay?: "none" | "tools" | "group" | "all";
   /**
    * What happens to a tool call row once it completes.
    *
@@ -2330,13 +2525,21 @@ export type AgentWidgetToolCallDisplayFeature = {
 export type AgentWidgetToolCallCompletedVisibility = "kept" | "removed";
 
 export type AgentWidgetReasoningDisplayFeature = {
-  /** Activity chrome. Defaults to card in V4 and row with future.v5Defaults. */
+  /** Explicit compatibility override for theme.components.reasoningBubble/activity.overflow.maxHeight.
+   * CSS length or "none"; unset inherits the theme (V5 240px, V4 uncapped). */
+  maxHeight?: string;
+  /** Expanded detail treatment, independent of layout: plain text, an inset trace,
+   * or a subtle panel. V5 defaults to inset; V4 keeps its legacy row/card treatment. */
+  appearance?: "plain" | "inset" | "panel";
+  /** Activity layout. Defaults to card in V4 and row with future.v5Defaults. */
+  layout?: "card" | "row";
+  /** @deprecated Use layout. An explicit layout takes precedence. */
   variant?: "card" | "row";
   /** Row status icons: always, active/attention-needed only, or never. V5 defaults to active; V4 to always. */
   iconVisibility?: "always" | "active" | "never";
-  /** Row variant: open when the first content chunk arrives. Default false in V5; true in V4. */
+  /** Row layout: open when the first content chunk arrives. Default false in V5; true in V4. */
   autoExpand?: boolean;
-  /** Row variant: collapse once after completion, in ms; false disables. Default 1000. */
+  /** Row layout: collapse once after completion, in ms; false disables. Default 1000. */
   autoCollapseDelay?: number | false;
   /**
    * When true, active collapsed reasoning rows can render a lightweight preview block.
@@ -2563,6 +2766,9 @@ export type AgentWidgetStreamAnimationFeature = {
    * Extra animation plugins available to this widget instance. Keys are
    * plugin names; the matching plugin activates when `type` is set to that
    * name. Built-in types (`typewriter`, `pop-bubble`) are always registered.
+   *
+   * `update({ features: { streamAnimation: { plugins } } })` replaces this
+   * entire map; include every plugin to retain. Sibling animation options merge.
    */
   plugins?: Record<string, StreamAnimationPlugin>;
 };
@@ -2654,15 +2860,20 @@ export type WidgetPreferenceSlice = {
   showReasoning?: boolean;
   toolCallDisplay?: Pick<
     AgentWidgetToolCallDisplayFeature,
+    | "layout"
     | "collapsedMode"
     | "expandable"
     | "grouped"
     | "groupedMode"
+    | "groupAppearance"
+    | "groupSummary"
+    | "groupSummaryMaxItems"
+    | "groupBoundary"
     | "loadingAnimation"
   >;
   reasoningDisplay?: Pick<
     AgentWidgetReasoningDisplayFeature,
-    "expandable" | "activePreview"
+    "layout" | "appearance" | "expandable" | "activePreview"
   >;
   artifacts?: {
     /**
@@ -2750,14 +2961,23 @@ export type AskUserQuestionPayload = {
  * and are plumbed through as CSS custom properties on the sheet root.
  */
 export type AgentWidgetAskUserQuestionStyles = {
+  /** @deprecated Prefer `theme.components.askUserQuestion.sheet.background`. Explicit legacy input remains supported and retains its historical precedence. */
   sheetBackground?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.sheet.border`. Explicit legacy input remains supported and retains its historical precedence. */
   sheetBorder?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.sheet.shadow`. Explicit legacy input remains supported and retains its historical precedence. */
   sheetShadow?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.background`. Explicit legacy input remains supported and retains its historical precedence. */
   pillBackground?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.selectedBackground`. Explicit legacy input remains supported and retains its historical precedence. */
   pillBackgroundSelected?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.foreground`. Explicit legacy input remains supported and retains its historical precedence. */
   pillTextColor?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.selectedForeground`. Explicit legacy input remains supported and retains its historical precedence. */
   pillTextColorSelected?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.borderRadius`. Explicit legacy input remains supported and retains its historical precedence. */
   pillBorderRadius?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.customInput.background`. Explicit legacy input remains supported and retains its historical precedence. */
   customInputBackground?: string;
 };
 
@@ -3340,6 +3560,14 @@ export type HistoryViewState =
   | { kind: "rate_limited"; retryAfterSeconds: number }
   | { kind: "new_conversation_required" };
 
+/** Reopen one conversation without remounting the widget. */
+export type AgentWidgetOpenConversationOptions = {
+  /** Move focus to the composer after opening. Default false. */
+  focus?: boolean;
+  /** Default "reject"; "stop" stops locally; "background" requires backgroundConversations. */
+  busy?: "reject" | "stop" | "background";
+};
+
 /** The single in-flight history operation, or `null` when idle. */
 export type HistoryPendingAction =
   | { kind: "refresh" | "load-more" | "start-new" | "clear" | "reset" }
@@ -3851,16 +4079,25 @@ export type AgentWidgetLauncherConfig = {
   callToActionIconPadding?: string;
   agentIconSize?: string;
   callToActionIconSize?: string;
+  /** Identity icon/image box size, excluding theme.components.header.iconPadding. */
   headerIconSize?: string;
   headerIconName?: string;
   headerIconHidden?: boolean;
+  /** @deprecated Prefer `theme.components.header.close.size`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonSize?: string;
+  /** @deprecated Prefer `theme.components.header.close.foreground`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonColor?: string;
+  /** @deprecated Prefer `theme.components.header.close.background`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonBackgroundColor?: string;
+  /** @deprecated Prefer `theme.components.header.close.borderWidth`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonBorderWidth?: string;
+  /** @deprecated Prefer `theme.components.header.close.borderColor`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonBorderColor?: string;
+  /** @deprecated Prefer `theme.components.header.close.borderRadius`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonBorderRadius?: string;
+  /** @deprecated Prefer `theme.components.header.close.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonPaddingX?: string;
+  /** @deprecated Prefer `theme.components.header.close.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonPaddingY?: string;
   closeButtonPlacement?: "inline" | "top-right";
   closeButtonIconName?: string;
@@ -3950,7 +4187,7 @@ export type AgentWidgetTooltipConfig = {
   /**
    * Milliseconds to wait on hover before the first tooltip appears.
    * `0` restores the previous instant-open behavior.
-   * @default 200
+   * @default 400
    */
   delayMs?: number;
   /**
@@ -3961,21 +4198,32 @@ export type AgentWidgetTooltipConfig = {
 };
 
 export type AgentWidgetSendButtonConfig = {
+  /** @deprecated Prefer `theme.components.composer.send.borderWidth`. Explicit legacy input remains supported and retains its historical precedence. */
   borderWidth?: string;
+  /** @deprecated Prefer `theme.components.composer.send.borderColor`. Explicit legacy input remains supported and retains its historical precedence. */
   borderColor?: string;
+  /** @deprecated Prefer `theme.components.composer.send.padding` (CSS Y X shorthand; legacy padding applied in text mode only). Explicit legacy input remains supported and retains its historical precedence. */
   paddingX?: string;
+  /** @deprecated Prefer `theme.components.composer.send.padding` (CSS Y X shorthand; legacy padding applied in text mode only). Explicit legacy input remains supported and retains its historical precedence. */
   paddingY?: string;
   iconText?: string;
   iconName?: string;
-  /** Icon glyph box in icon mode, e.g. "20px". Defaults to half of `size`. */
+  /** Icon glyph box in icon mode, e.g. "20px". Defaults to half of `size`.
+   * @deprecated Prefer `theme.components.composer.send.iconSize`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   iconSize?: string;
-  /** Stroke width for the icon glyph, in viewBox units. Default 2. */
+  /** Stroke width for the icon glyph, in viewBox units. Default 2.
+   * @deprecated Prefer `theme.components.composer.send.iconStrokeWidth`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   iconStrokeWidth?: number;
   useIcon?: boolean;
   tooltipText?: string;
   showTooltip?: boolean;
+  /** @deprecated Prefer `theme.components.composer.send.background` (icon mode); set voice.control.background too to preserve its idle microphone fallback. The legacy field was ignored in text mode. Explicit legacy input remains supported and retains its historical precedence. */
   backgroundColor?: string;
+  /** @deprecated Prefer `theme.components.composer.send.foreground`; set voice.control.foreground too to preserve its idle microphone fallback. Explicit legacy input remains supported and retains its historical precedence. */
   textColor?: string;
+  /** @deprecated Prefer `theme.components.composer.send.size`; preserve the legacy half-size glyph using composer.send.iconSize too. Explicit legacy input remains supported and retains its historical precedence. */
   size?: string;
   /** Lucide icon name shown while a response is streaming. Clicking the button in this state aborts the stream. Default: "square". */
   stopIconName?: string;
@@ -4155,6 +4403,10 @@ export type ComposerActionBase = {
    * @default "always"
    */
   visibility?: ComposerActionVisibility;
+  /** Optional secondary text in the overflow menu. */
+  description?: string;
+  /** Adjacent rows with different groups are separated in the default menu. */
+  group?: string;
   disabled?: boolean | ((state: Readonly<ComposerState>) => boolean);
   /** Disable while a response streams, through the composer's own mechanism. */
   disableWhenStreaming?: boolean;
@@ -4195,7 +4447,22 @@ export type ComposerButtonAction = ComposerActionBase & {
   /** Optional visible text. Without it the button renders icon-only. */
   shortLabel?: string;
   iconName?: string;
+  /**
+   * Opt-in motion for the built-in `voice-bars` icon in the action bar.
+   * `voice` animates only during this widget's live voice transcription,
+   * responding to available voice levels. Idle, reduced-motion, disabled, and
+   * menu icons stay static. Defaults to `none`; this does not start audio capture.
+   */
+  iconAnimation?: "none" | "voice";
+  /** Optional decorative icon after the visible label (for example a chevron). */
+  trailingIconName?: string;
+  /** Override the bar tooltip's text; defaults to `label` for icon-only actions. */
   tooltipText?: string;
+  /**
+   * Show a bar tooltip. Defaults to true for icon-only actions or when
+   * `tooltipText` is supplied. Set false to opt out without changing `label`.
+   */
+  showTooltip?: boolean;
   /**
    * Glyph and label color of the bar button, any CSS color. Ignored on the
    * overflow-menu row, which follows the menu's own palette.
@@ -4254,6 +4521,15 @@ export type ComposerActionOverflowConfig = {
    */
   collapseAutoActionsBelow?: number | string;
   /**
+   * Fold only the `auto` actions needed to fit the measured composer width,
+   * later display order first. Accounts for pinned controls, custom slots and
+   * the menu trigger. A compact single-row composer reserves 120px for input;
+   * an expanded/stacked composer uses the full toolbar width. Unfolding has
+   * 16px of slack. Hidden/unmeasured surfaces retain their current placement.
+   * When set, takes precedence over collapseAutoActionsBelow. Opt-in only.
+   */
+  collapseAutoActions?: "fit";
+  /**
    * Built-in controls that fold into the menu. Folding is always explicit:
    * enabling the menu never moves the attachment or mention affordances by
    * itself.
@@ -4266,6 +4542,66 @@ export type ComposerActionOverflowConfig = {
    * @default 900
    */
   order?: number;
+  /** Appearance and placement of the managed overflow popover. */
+  menu?: ComposerOverflowMenuConfig;
+};
+
+/** Appearance of the overflow popover; CSS lengths also accept custom properties. */
+export type ComposerOverflowMenuConfig = {
+  /** Content-sized by default; composer matches the composer form width. */
+  width?: "content" | "composer" | (string & {});
+  /** Preferred side; flips when the other side has more room. @default "above" */
+  placement?: "above" | "below";
+  /** Secondary text below the label or beside it with wrapping. @default "stacked" */
+  descriptionLayout?: "stacked" | "inline";
+  /** @default "plus" */
+  triggerIconName?: string;
+  /** Icon while open. Omit to retain the closed icon; use "x" for plus-to-X. */
+  openTriggerIconName?: string;
+  /** Menu-only overrides keyed by final action id, including core:attachment. */
+  items?: Record<string, { label?: string; description?: string; group?: string }>;
+};
+
+/** Safe action metadata; no callbacks or mutable action descriptors are exposed. */
+export type ComposerMenuItem = Readonly<{
+  id: string;
+  kind: "button" | "custom" | "builtin";
+  label: string;
+  description?: string;
+  group?: string;
+  iconName?: string;
+  disabled: boolean;
+  busy: boolean;
+  pressed?: boolean;
+}>;
+
+export type ComposerMenuRenderContext = {
+  /** Frozen copy of composer.actionOverflow.menu, rather than widget internals. */
+  config: Readonly<ComposerOverflowMenuConfig>;
+  state: Readonly<ComposerState>;
+  items: readonly ComposerMenuItem[];
+  /** Aborted on close, renderer replacement, plugin removal, or widget destroy. */
+  signal: AbortSignal;
+  actions: {
+    /** Activates a currently visible, enabled menu action. False if unavailable. */
+    invoke: (id: string) => boolean;
+    /** Opens the built-in attachment picker only when currently available. */
+    openAttachmentPicker: () => void;
+    close: () => void;
+    /** Coalesced refresh; reruns contributions and calls the current handle update. */
+    requestUpdate: () => void;
+  };
+  /** Builds the standard rows, preserving contributed controls and their behavior. */
+  defaultRenderer: () => ComposerMenuRenderHandle;
+};
+
+/** One instance per opening. Persona owns outer placement, dismissal, and focus restoration. */
+export type ComposerMenuRenderHandle = {
+  element: HTMLElement;
+  update?: (context: ComposerMenuRenderContext) => void;
+  destroy?: () => void;
+  /** Custom content defaults to dialog. Custom renderers own their internal keyboard model. */
+  role?: "dialog" | "menu";
 };
 
 /**
@@ -4285,6 +4621,8 @@ export type ComposerMode = {
   /** Shorter visible text for the bar button and the chip. */
   shortLabel?: string;
   iconName?: string;
+  /** Decorative icon after the label; selecting the mode still follows group policy. */
+  trailingIconName?: string;
   /**
    * Replaces the composer placeholder while active. With several active modes
    * the first one in `composer.modes` order wins.
@@ -4316,10 +4654,11 @@ export type ComposerModeGroupPresentation = "buttons" | "segmented";
 /**
  * Whether a group's active modes also render as removable chips.
  *
- * - `"auto"` (default): one chip per active mode, except under `"segmented"`
+ * - `"auto"`: one chip per active mode, except under `"segmented"`
  *   presentation, where the track already shows the state.
  * - `"hidden"`: no chips for this group under any presentation. The pressed bar
- *   button carries the state, and deselection stays on the button.
+ *   button carries a visible selected label and stays in the bar while active;
+ *   deselection stays on the button.
  */
 export type ComposerModeChipVisibility = "auto" | "hidden";
 
@@ -4335,7 +4674,9 @@ export type ComposerModeGroup = {
   /**
    * Chip row policy for this group's active modes. The chip row itself is
    * derived from its children, so a group with no other chips leaves no gap.
-   * @default "auto"
+   * V4 defaults to chips; V5 defaults to selected button labels. Explicit
+   * `"auto"` keeps chips in both versions. Explicit overflow modes retain a
+   * chip unless the group requests `"hidden"`.
    */
   chipVisibility?: ComposerModeChipVisibility;
   /**
@@ -4422,6 +4763,8 @@ export type ComposerModelPickerConfig = {
 
 /** Optional composer UI state for custom `renderComposer` implementations. */
 export type AgentWidgetComposerConfig = {
+  /** Editor/control arrangement below attachment previews. Omitted preserves the existing layout fallback. */
+  attachmentLayout?: "stacked" | "single-row";
   /**
    * Host-contributed composer controls. Merged with the core built-ins and
    * every plugin's `contributeComposerActions` into one ordered row, and
@@ -4539,8 +4882,7 @@ export type AgentWidgetComposerConfig = {
    *
    * - `"stacked"` (default): the card layout. Editor on its own row, the two
    *   action clusters on a row below it.
-   * - `"single-row"`: the one-row pill (the chatgpt.com / gemini.google.com
-   *   model). The start cluster leads the editor, the end cluster trails it,
+   * - `"single-row"`: a compact pill. The start cluster leads the editor, the end cluster trails it,
    *   and the editor absorbs the remaining width.
    *
    * `"single-row"` describes the IDLE composer only. It composes with the
@@ -4581,13 +4923,21 @@ export type AgentWidgetClearChatConfig = {
   enabled?: boolean;
   placement?: "inline" | "top-right";
   iconName?: string;
+  /** @deprecated Prefer `theme.components.header.clear.foreground`. Explicit legacy input remains supported and retains its historical precedence. */
   iconColor?: string;
+  /** @deprecated Prefer `theme.components.header.clear.background`. Explicit legacy input remains supported and retains its historical precedence. */
   backgroundColor?: string;
+  /** @deprecated Prefer `theme.components.header.clear.borderWidth`. Explicit legacy input remains supported and retains its historical precedence. */
   borderWidth?: string;
+  /** @deprecated Prefer `theme.components.header.clear.borderColor`. Explicit legacy input remains supported and retains its historical precedence. */
   borderColor?: string;
+  /** @deprecated Prefer `theme.components.header.clear.borderRadius`. Explicit legacy input remains supported and retains its historical precedence. */
   borderRadius?: string;
+  /** @deprecated Prefer `theme.components.header.clear.size`. Explicit legacy input remains supported and retains its historical precedence. */
   size?: string;
+  /** @deprecated Prefer `theme.components.header.clear.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   paddingX?: string;
+  /** @deprecated Prefer `theme.components.header.clear.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   paddingY?: string;
   tooltipText?: string;
   showTooltip?: boolean;
@@ -4616,6 +4966,57 @@ export type AgentWidgetStatusIndicatorConfig = {
   resumingText?: string;
 };
 
+/** Independent speech-to-text capture; realtime conversation providers remain separate. */
+export type DictationProviderConfig = {
+  type: "browser" | "custom";
+  browser?: { language?: string; continuous?: boolean };
+  /** Prefer a factory returning a fresh provider per recording. disconnect must cancel pending output. */
+  custom?: VoiceProvider | (() => VoiceProvider);
+};
+
+export type AgentWidgetDictationConfig = {
+  /** Defaults to transcript. inline mirrors capture into the existing editor. */
+  display?: "inline" | "transcript" | "waveform";
+  /** Separate STT provider, allowing dictation and a full-duplex voice provider in the same widget. */
+  provider?: DictationProviderConfig;
+  /** Show measured amplitude when available. Defaults to true for waveform display. */
+  waveform?: boolean;
+  interimText?: { fontStyle?: "normal" | "italic"; color?: string };
+  showCancel?: boolean;
+  showFinish?: boolean;
+  /** Enables finish-and-send during capture and Send during review. Defaults to false. */
+  showSend?: boolean;
+};
+
+export type DictationPhase = "idle" | "recording" | "processing" | "review" | "error";
+export type DictationState = Readonly<{
+  phase: DictationPhase;
+  /** Stable identity for one capture, including processing and review. */
+  recordingId: number;
+  transcript: string;
+  interimTranscript: string;
+  error: string | null;
+  /** Measured amplitude (0..1), or null when the provider has no audio graph. */
+  audioLevel: number | null;
+}>;
+
+export type DictationRenderContext = {
+  instanceId: string;
+  state: DictationState;
+  config: AgentWidgetConfig;
+  actions: { cancel: () => void; finish: () => void; send?: () => void };
+  defaultRenderer: () => DictationRenderHandle;
+};
+
+/** First non-null renderer wins. update receives instance-local audio samples as well as lifecycle changes. */
+export type DictationRenderHandle = {
+  element: HTMLElement;
+  update?: (context: DictationRenderContext) => void;
+  destroy?: () => void;
+};
+
+export type DictationStateEvent = Omit<DictationState, "audioLevel"> & { instanceId: string; timestamp: number };
+
 /** Built-in `voiceRecognition.prewarm` triggers. See {@link AgentWidgetVoiceRecognitionConfig.prewarm}. */
 export type AgentWidgetVoicePrewarmTrigger = 'hover';
 
@@ -4643,59 +5044,77 @@ export type AgentWidgetVoiceRecognitionConfig = {
    */
   enabled?: boolean;
   /**
-   * What happens when dictation finishes on the browser (Web Speech) path.
-   *
-   * - `"send"` (default, unchanged): the transcript submits automatically after
-   *   the pause timeout, on natural end of recognition, and when the user taps
-   *   the mic to stop.
-   * - `"review"`: recognition stops and the transcript stays in the composer
-   *   for editing; the user sends it.
-   *
-   * Only the browser path is governed. The realtime `runtype` provider is full
-   * duplex and the server owns turn taking; a bring-your-own `custom` STT
-   * provider delivers a finished transcript straight to the session rather than
-   * to the composer, so there is no draft to review.
+   * What happens when speech-to-text dictation finishes. "send" submits through
+   * the composer; "review" keeps the draft for editing. Also applies to custom
+   * STT providers when dictation is configured or completionBehavior is review.
+   * Realtime conversation providers retain server-owned turn taking.
    * @default "send"
    */
   completionBehavior?: "send" | "review";
+  /** Opt into the independent dictation surface in either V4 or V5. */
+  dictation?: AgentWidgetDictationConfig;
+  /** Hide the built-in mic while retaining programmatic voice/dictation controls. */
+  showButton?: boolean;
   pauseDuration?: number;
   /** Text shown in the user message placeholder while voice is being processed. Default: "Processing voice..." */
   processingText?: string;
   /** Text shown in the assistant message if voice processing fails. Default: "Voice processing failed. Please try again." */
   processingErrorText?: string;
   iconName?: string;
+  /** @deprecated Prefer `theme.components.voice.control.size` AND voice.control.iconSize to preserve both box and glyph sizing. Explicit legacy input remains supported and retains its historical precedence. */
   iconSize?: string;
+  /** @deprecated Prefer `theme.components.voice.control.foreground`. Explicit legacy input remains supported and retains its historical precedence. */
   iconColor?: string;
+  /** @deprecated Prefer `theme.components.voice.control.background`. Explicit legacy input remains supported and retains its historical precedence. */
   backgroundColor?: string;
+  /** @deprecated Prefer `theme.components.voice.control.borderColor`. Explicit legacy input remains supported and retains its historical precedence. */
   borderColor?: string;
+  /** @deprecated Prefer `theme.components.voice.control.borderWidth`. Explicit legacy input remains supported and retains its historical precedence. */
   borderWidth?: string;
+  /** @deprecated Prefer `theme.components.voice.control.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   paddingX?: string;
+  /** @deprecated Prefer `theme.components.voice.control.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   paddingY?: string;
   tooltipText?: string;
   showTooltip?: boolean;
+  /** @deprecated Prefer `theme.components.voice.recording.indicator`. Explicit legacy input remains supported and retains its historical precedence. */
   recordingIconColor?: string;
+  /** @deprecated Prefer `theme.components.voice.recording.background`. Explicit legacy input remains supported and retains its historical precedence. */
   recordingBackgroundColor?: string;
+  /** @deprecated Prefer `theme.components.voice.recording.border`. Explicit legacy input remains supported and retains its historical precedence. */
   recordingBorderColor?: string;
   showRecordingIndicator?: boolean;
 
   // Processing state (after recording stops, waiting for agent response)
   /** Icon name shown while processing voice input. Default: "loader" */
   processingIconName?: string;
-  /** Icon color during processing. Inherits idle iconColor if not set */
+  /** Icon color during processing. Inherits idle iconColor if not set
+   * @deprecated Prefer `theme.components.voice.processing.icon`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   processingIconColor?: string;
-  /** Button background color during processing. Inherits idle backgroundColor if not set */
+  /** Button background color during processing. Inherits idle backgroundColor if not set
+   * @deprecated Prefer `theme.components.voice.processing.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   processingBackgroundColor?: string;
-  /** Button border color during processing. Inherits idle borderColor if not set */
+  /** Button border color during processing. Inherits idle borderColor if not set
+   * @deprecated Prefer `theme.components.voice.processing.border`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   processingBorderColor?: string;
 
   // Speaking state (agent TTS audio is playing)
   /** Icon name shown while agent is speaking. Default: "volume-2" (or "square" in cancel mode) */
   speakingIconName?: string;
-  /** Icon color while speaking. Inherits idle iconColor if not set */
+  /** Icon color while speaking. Inherits idle iconColor if not set
+   * @deprecated Prefer `theme.components.voice.speaking.icon`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   speakingIconColor?: string;
-  /** Button background color while speaking. Inherits idle backgroundColor if not set */
+  /** Button background color while speaking. Inherits idle backgroundColor if not set
+   * @deprecated Prefer `theme.components.voice.speaking.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   speakingBackgroundColor?: string;
-  /** Button border color while speaking. Inherits idle borderColor if not set */
+  /** Button border color while speaking. Inherits idle borderColor if not set
+   * @deprecated Prefer `theme.components.voice.speaking.border`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   speakingBorderColor?: string;
   autoResume?: boolean | "assistant";
 
@@ -4819,6 +5238,11 @@ export type AgentWidgetVoiceRecognitionConfig = {
      * providers deliver a final transcript via `onResult` (sent as a user
      * message); full-duplex providers can drive `onTranscript`/`onMetrics` like
      * the realtime `runtype` provider.
+     *
+     * `update({ voiceRecognition: { provider: { custom } } })` replaces the
+     * entire implementation or factory. Supply a complete provider; omitted
+     * methods are not inherited. Sibling provider options merge. This policy
+     * applies specifically to `voiceRecognition.provider.custom`.
      */
     custom?: VoiceProvider | (() => VoiceProvider);
   };
@@ -5005,6 +5429,8 @@ export interface SpeechEngine {
  */
 export type VoiceResult = {
   text: string;
+  /** Dictation-only: false is interim; omitted preserves final-result semantics. */
+  isFinal?: boolean;
   transcript?: string;
   audio?: {
     base64: string;
@@ -5507,27 +5933,51 @@ export type AgentWidgetApprovalDecisionOptions = {
  * Controls styling, labels, and behavior of the approval UI.
  */
 export type AgentWidgetApprovalConfig = {
-  /** Background color of the approval bubble */
+  /** Resolved approvals: compact inspectable row (V5 default), retained card with status,
+   * or legacy trace with approved approvals hidden (V4 default). */
+  resolvedDisplay?: "row" | "status-line" | "trace";
+  /** Primary action when enableAlwaysAllow is enabled. V5 defaults to allow-once. */
+  primaryAction?: "allow-once" | "always-allow";
+  /** Focused: Enter allows once / Escape denies only inside the approval card.
+   * Legacy: opt-in always-allow shortcuts at document scope. False disables shortcuts. */
+  keyboardShortcuts?: "focused" | "legacy" | false;
+  /** Menu label for remembered permission in allow-once primary mode. */
+  alwaysAllowLabel?: string;
+  /** @deprecated Prefer `theme.components.approval.requested.background`. Explicit legacy input still wins. */
   backgroundColor?: string;
-  /** Border color of the approval bubble */
+  /** @deprecated Prefer `theme.components.approval.requested.border`. Explicit legacy input still wins. */
   borderColor?: string;
-  /** Box-shadow for the approval bubble; pass `"none"` to remove it. Overrides the default `persona-shadow-sm`. */
+  /** @deprecated Prefer `theme.components.approval.requested.shadow`. Explicit legacy input still wins; `"none"` removes the shadow. */
   shadow?: string;
-  /** Color for the title text */
+  /** Color for the title text
+   * @deprecated Prefer `theme.components.approval.requested.titleColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   titleColor?: string;
-  /** Color for the description text */
+  /** Color for the description text
+   * @deprecated Prefer `theme.components.approval.requested.descriptionColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   descriptionColor?: string;
-  /** Background color for the approve button */
+  /** @deprecated Prefer `theme.components.approval.approve.background`. Explicit legacy input still wins. */
   approveButtonColor?: string;
-  /** Text color for the approve button */
+  /** Text color for the approve button
+   * @deprecated Prefer `theme.components.approval.approve.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   approveButtonTextColor?: string;
-  /** Background color for the deny button */
+  /** Background color for the deny button
+   * @deprecated Prefer `theme.components.approval.deny.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   denyButtonColor?: string;
-  /** Text color for the deny button */
+  /** Text color for the deny button
+   * @deprecated Prefer `theme.components.approval.deny.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   denyButtonTextColor?: string;
-  /** Background color for the parameters block */
+  /** Background color for the parameters block
+   * @deprecated Prefer `theme.components.approval.requested.parameters.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   parameterBackgroundColor?: string;
-  /** Text color for the parameters block */
+  /** Text color for the parameters block
+   * @deprecated Prefer `theme.components.approval.requested.parameters.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   parameterTextColor?: string;
   /** Title text displayed above the description */
   title?: string;
@@ -5538,6 +5988,7 @@ export type AgentWidgetApprovalConfig = {
   /**
    * Color for the agent-authored reason line (the agent's per-call
    * justification, shown attributed below the summary when present).
+   * @deprecated Prefer `theme.components.approval.requested.reasonColor`. Explicit legacy input remains supported and retains its historical precedence.
    */
   reasonColor?: string;
   /**
@@ -5561,7 +6012,8 @@ export type AgentWidgetApprovalConfig = {
    * Offer an "Always allow" affordance in the default approval bubble.
    *
    * Default `false`. When `false`, the bubble shows a single "Allow" (allow
-   * once) plus "Deny". When `true`, the primary action becomes a split control:
+   * once) plus "Deny". V5 keeps Allow primary with remembered permission in
+   * the menu. In V4, when `true`, the primary action becomes a split control:
    * "Always allow" (resolves with `{ remember: true }`) with a dropdown for
    * "Allow once", plus "Deny", and keyboard shortcuts (Enter = Always allow,
    * Cmd/Ctrl+Enter = Allow once, Esc = Deny).
@@ -5610,41 +6062,87 @@ export type AgentWidgetApprovalConfig = {
 };
 
 export type AgentWidgetToolCallConfig = {
-  /** Box-shadow for tool-call bubbles; pass `"none"` to remove it. Overrides the `components.toolBubble.shadow` token / `--persona-tool-bubble-shadow`. */
+  /** Pure synchronous title adapter, keyed by the original tool/message (for example call id).
+   * A nonblank toolCall.actionTitle wins. Blank/null/undefined falls back to the safe tool
+   * label. Not persisted: reconstruct deterministically for replay, or inject/persist the
+   * title on toolCall. Does not alter wire events or inspect private tool arguments. */
+  resolveActionTitle?: (toolCall: AgentWidgetToolCall, message: AgentWidgetMessage) => string | null | undefined;
+  /** Completed row icon from the registry (including registerIcons), or a per-tool resolver.
+   * Undefined uses mapped tool icons, a wrench for unknown tools, and a toolbox for mixed groups.
+   * A string also overrides completed turn headers (square-text by default).
+   * Active/attention states and iconVisibility retain precedence. Cards are unchanged.
+   * The callback returns a registry name, never DOM. Explicit "check" retains success color.
+   */
+  iconName?: string | ((toolCall: AgentWidgetToolCall) => string | undefined);
+  /** @deprecated Prefer `theme.components.toolBubble.shadow`. Explicit legacy input still wins; `"none"` removes the shadow. */
   shadow?: string;
-  /** Background color of the tool call bubble container. */
+  /** Background color of the tool call bubble container.
+   * @deprecated Prefer `theme.components.toolBubble.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   backgroundColor?: string;
-  /** Border color of the tool call bubble container. */
+  /** Border color of the tool call bubble container.
+   * @deprecated Prefer `theme.components.toolBubble.borderColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   borderColor?: string;
-  /** Border width of the tool call bubble container (CSS value, e.g. `"1px"`). */
+  /** Border width of the tool call bubble container (CSS value, e.g. `"1px"`).
+   * @deprecated Prefer `theme.components.toolBubble.borderWidth`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   borderWidth?: string;
-  /** Border radius of the tool call bubble container (CSS value, e.g. `"12px"`). */
+  /** Border radius of the tool call bubble container (CSS value, e.g. `"12px"`).
+   * @deprecated Prefer `theme.components.toolBubble.borderRadius`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   borderRadius?: string;
-  /** Background color of the collapsed header row. */
+  /** Background color of the collapsed header row.
+   * @deprecated Prefer `theme.components.toolBubble.header.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   headerBackgroundColor?: string;
-  /** Text color of the collapsed header row (tool name / summary). */
+  /** Text color of the collapsed header row (tool name / summary).
+   * @deprecated Prefer `theme.components.toolBubble.header.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   headerTextColor?: string;
-  /** Horizontal padding of the collapsed header row (CSS value). */
+  /** Horizontal padding of the collapsed header row (CSS value).
+   * @deprecated Prefer `theme.components.toolBubble.header.padding`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   headerPaddingX?: string;
-  /** Vertical padding of the collapsed header row (CSS value). */
+  /** Vertical padding of the collapsed header row (CSS value).
+   * @deprecated Prefer `theme.components.toolBubble.header.padding`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   headerPaddingY?: string;
-  /** Background color of the expanded content area. */
+  /** Background color of the expanded content area.
+   * @deprecated Prefer `theme.components.toolBubble.content.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   contentBackgroundColor?: string;
-  /** Text color of the expanded content area. */
+  /** Text color of the expanded content area.
+   * @deprecated Prefer `theme.components.toolBubble.content.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   contentTextColor?: string;
-  /** Horizontal padding of the expanded content area (CSS value). */
+  /** Horizontal padding of the expanded content area (CSS value).
+   * @deprecated Prefer `theme.components.toolBubble.content.padding`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   contentPaddingX?: string;
-  /** Vertical padding of the expanded content area (CSS value). */
+  /** Vertical padding of the expanded content area (CSS value).
+   * @deprecated Prefer `theme.components.toolBubble.content.padding`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   contentPaddingY?: string;
-  /** Background color of code blocks (arguments / result) in the expanded area. */
+  /** Background color of code blocks (arguments / result) in the expanded area.
+   * @deprecated Prefer `theme.components.toolBubble.codeBlock.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   codeBlockBackgroundColor?: string;
-  /** Border color of code blocks in the expanded area. */
+  /** Border color of code blocks in the expanded area.
+   * @deprecated Prefer `theme.components.toolBubble.codeBlock.borderColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   codeBlockBorderColor?: string;
-  /** Text color of code blocks in the expanded area. */
+  /** Text color of code blocks in the expanded area.
+   * @deprecated Prefer `theme.components.toolBubble.codeBlock.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   codeBlockTextColor?: string;
-  /** Color of the expand/collapse toggle icon. */
+  /** Color of the expand/collapse toggle icon.
+   * @deprecated Prefer `theme.components.toolBubble.toggleForeground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   toggleTextColor?: string;
-  /** Color of section labels ("Arguments", "Result", "Activity") in the expanded area. */
+  /** Color of section labels ("Arguments", "Result", "Activity") in the expanded area.
+   * @deprecated Prefer `theme.components.toolBubble.labelForeground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   labelTextColor?: string;
   /**
    * Override the collapsed summary row content for a tool call bubble.
@@ -5654,6 +6152,10 @@ export type AgentWidgetToolCallConfig = {
     message: AgentWidgetMessage;
     toolCall: AgentWidgetToolCall;
     defaultSummary: string;
+    /** Resolved descriptive title, independent of turn classification and display variant.
+     * Undefined when neither direct metadata nor the host adapter supplies a title.
+     * Cards retain their default header; renderers may opt into this text. */
+    actionTitle?: string;
     previewText: string;
     collapsedMode: AgentWidgetToolCallCollapsedMode;
     isActive: boolean;
@@ -5682,12 +6184,22 @@ export type AgentWidgetToolCallConfig = {
    * Override the summary content for grouped consecutive tool-call containers.
    * In `groupedMode: "summary"`, the summary owns the visible row starting
    * with the first tool so its DOM stays stable as more calls arrive.
-   * Return `null` to fall back to the built-in `Called [x] tools` summary.
+   * Other modes call this only for multiple tools.
+   * Return `null` to use the built-in summary: capped descriptive action phrases
+   * for active and completed row groups, with attention suffixes, or a tool
+   * count for legacy card groups.
+   * groupSummaryMaxItems controls aggregate category caps; zero counts activities.
    */
   renderGroupedSummary?: (context: {
     messages: AgentWidgetMessage[];
     toolCalls: AgentWidgetToolCall[];
     defaultSummary: string;
+    /** Whether the session is currently streaming, including gaps between tool batches. */
+    streaming: boolean;
+    /** The final logical tool group, including unwrapped singletons; assistant prose does not affect this flag. */
+    isLatestGroup: boolean;
+    /** This group contains tools observed in the current session run. */
+    isCurrentRunGroup: boolean;
     config: AgentWidgetConfig;
   }) => HTMLElement | string | null;
   /**
@@ -5717,18 +6229,21 @@ export type AgentWidgetToolCallConfig = {
   /**
    * Primary color for shimmer-color animation mode.
    * Defaults to the current text color.
+   * @deprecated Prefer `theme.components.toolBubble.loading.primary`. Explicit legacy input remains supported and retains its historical precedence.
    */
   loadingAnimationColor?: string;
   /**
    * Secondary/end color for shimmer-color animation mode.
    * Creates a gradient sweep between `loadingAnimationColor` and this color.
    * @default "#3b82f6"
+   * @deprecated Prefer `theme.components.toolBubble.loading.secondary`. Explicit legacy input remains supported and retains its historical precedence.
    */
   loadingAnimationSecondaryColor?: string;
   /**
    * Duration of one full animation cycle in milliseconds.
    * Applies to pulse, shimmer, shimmer-color, and rainbow modes.
    * @default 2000
+   * @deprecated Prefer `theme.components.toolBubble.loading.duration` (convert numeric milliseconds to a CSS duration, e.g. 2000 to 2000ms). Explicit legacy input remains supported and retains its historical precedence.
    */
   loadingAnimationDuration?: number;
 };
@@ -5807,9 +6322,13 @@ export type AgentWidgetReasoningConfig = {
 };
 
 export type AgentWidgetSuggestionChipsConfig = {
+  /** Accepted compatibility no-op: the suggestion renderer does not apply this field. */
   fontFamily?: "sans-serif" | "serif" | "mono";
+  /** @deprecated Prefer `theme.components.suggestion.chip.fontWeight`; chip variant only. Explicit legacy input still wins. */
   fontWeight?: string;
+  /** @deprecated Prefer `theme.components.suggestion.chip.padding` (CSS Y X shorthand); chip variant only. Explicit legacy X overrides only its axis. */
   paddingX?: string;
+  /** @deprecated Prefer `theme.components.suggestion.chip.padding` (CSS Y X shorthand); chip variant only. Explicit legacy Y overrides only its axis. */
   paddingY?: string;
 };
 
@@ -5874,13 +6393,16 @@ export type AgentWidgetSuggestionSurfaceConfig = {
   /** Default click behavior, overridable per item. Defaults to `send`. */
   behavior?: AgentWidgetSuggestionBehavior;
   /**
-   * Layout for items past the surface width. Defaults to `wrap` on every
-   * surface; `scroll` opts into a horizontal strip for large sets. Applies
+   * Layout for items past the surface width. Defaults to `scroll` for V5
+   * follow-ups and `wrap` otherwise. Applies
    * to the `chip` variant only; the `card` and `list` layouts manage their
    * own stacking.
    */
   overflow?: "scroll" | "wrap";
-  /** Maximum visible items. Defaults to 4, or 3 for V5 non-fullscreen starters. */
+  /** Horizontal chip edges. Defaults to a fade. */
+  edgeStyle?: "clip" | "fade";
+  /** Maximum visible items. Defaults to 4. V5 follow-ups default to 3, or 5
+   * in fullscreen; V5 non-fullscreen starters default to 3. */
   maxItems?: number;
 };
 
@@ -5891,9 +6413,10 @@ export type AgentWidgetStarterSuggestionsConfig =
     /**
      * `auto` uses the welcome surface when the welcome card renders and the
      * composer otherwise. Explicit values are literal: `welcome` renders
-     * nothing when the welcome card is hidden. Defaults to `auto`.
+     * nothing when the welcome card is hidden. `below-composer` places starters
+     * after the input form, outside its border. Defaults to `auto`.
      */
-    placement?: "auto" | "welcome" | "composer";
+    placement?: "auto" | "welcome" | "composer" | "below-composer";
   };
 
 export type AgentWidgetFollowUpSuggestionsConfig =
@@ -5998,7 +6521,8 @@ export type AgentWidgetWelcomeAlign = "start" | "center";
  */
 export interface AgentWidgetWelcomeConfig {
   /** Vertical placement: V4 defaults to top; V5 to centered. Fullscreen centered
-   * welcomes also raise the empty composer unless `anchor` is explicitly set. */
+   * welcomes also raise the empty composer when the welcome is enabled, unless
+   * `anchor` is explicitly set. */
   layout?: "top" | "centered";
   /** Card or hero title. V4: "Hello 👋". V5: "What can I help with?". */
   title?: string;
@@ -6009,7 +6533,12 @@ export interface AgentWidgetWelcomeConfig {
   kicker?: string;
   /** Scope statement in the assistant's voice. Empty string omits it. */
   subtitle?: string;
-  /** Avatar or logo shown above the title, or beside it under `icon.placement`. */
+  /**
+   * Avatar or logo shown above the title, or beside it under `icon.placement`.
+   * `update({ welcome: { icon } })` replaces the entire icon. Supply a complete
+   * discriminated variant or renderer; old variant fields and placement are not
+   * inherited. Sibling welcome fields merge; own `undefined` clears the icon.
+   */
   icon?: AgentWidgetWelcomeIcon;
   /**
    * Horizontal alignment of the kicker, title, subtitle, and starter
@@ -6025,8 +6554,10 @@ export interface AgentWidgetWelcomeConfig {
   dismiss?: AgentWidgetWelcomeDismiss;
   /**
    * Vertical anchoring of the greeting-plus-composer pair in the EMPTY
-   * conversation only. On the first message the pair drops to the bottom
-   * (animated; see `data-persona-conversation-state`).
+   * conversation only. User messages or substantive assistant transcript activity
+   * (including tools and reasoning) drop the pair to the bottom. The configured
+   * `welcome.message` greeting keeps the empty layout.
+   * (Animated; see `data-persona-conversation-state`.)
    *
    * - `"bottom"`: the composer stays pinned at the bottom.
    * - `"center"`: greeting and composer float together so the composer's top
@@ -6036,8 +6567,8 @@ export interface AgentWidgetWelcomeConfig {
    * Composes with either `composer.placement`. Ignored in composer-bar mount
    * mode. `renderWelcome` plugin content inherits the anchor: the widget
    * positions the overlay host and reserves the composer zone.
-   * Defaults to bottom, except centered fullscreen layouts, which center the
-   * measured greeting/composer group when no anchor override is supplied.
+   * Defaults to bottom, except enabled centered fullscreen welcomes, which center
+   * the measured greeting/composer group when no anchor override is supplied.
    */
   anchor?: AgentWidgetWelcomeAnchor;
   /**
@@ -6058,10 +6589,12 @@ export interface AgentWidgetWelcomeConfig {
    * chrome derived from config, never a session message: it does not appear in
    * `getMessages()`, is never persisted or sent to the model, `onMessage` does
    * not fire for it, and it survives `clearChat()`. Use an assistant
-   * `initialMessages` entry instead when the model should see the greeting.
+   * `initialMessages` entry instead when the model should see the greeting;
+   * that real transcript entry activates the conversation layout.
    *
    * Ignored (with a debug-mode warning) when `variant` is `"hero"`: the hero
-   * is the greeting.
+   * is the greeting. Unlike real assistant transcript messages, this display-only
+   * greeting preserves the empty welcome layout and centered composer.
    */
   message?: string;
 }
@@ -6126,14 +6659,27 @@ export interface AgentWidgetStreamParser {
 /**
  * Component renderer function signature for custom components
  */
+export type AgentWidgetComponentRenderContext = {
+  message: AgentWidgetMessage;
+  config: AgentWidgetConfig;
+  /** Replaces the directive's props. Deferred until the current render finishes. */
+  updateProps: (newProps: Record<string, unknown>) => void;
+  /** Aborts on replacement, removal, clear or destroy, never temporary detach. */
+  signal?: AbortSignal;
+};
+
+export type AgentWidgetComponentRenderHandle = {
+  element: HTMLElement;
+  /** Updates a mounted component without replacing its element or lifetime. */
+  update?: (props: Record<string, unknown>, context: AgentWidgetComponentRenderContext) => void;
+  /** Called once when the component's lifetime ends, after its signal aborts. */
+  destroy?: () => void;
+};
+
 export type AgentWidgetComponentRenderer = (
   props: Record<string, unknown>,
-  context: {
-    message: AgentWidgetMessage;
-    config: AgentWidgetConfig;
-    updateProps: (newProps: Record<string, unknown>) => void;
-  }
-) => HTMLElement;
+  context: AgentWidgetComponentRenderContext
+) => HTMLElement | AgentWidgetComponentRenderHandle;
 
 /**
  * Result from custom SSE event parser
@@ -6514,7 +7060,19 @@ export type MessageRenderContext = {
 /**
  * Context provided to slot render functions
  */
+export type AgentWidgetLinkClickContext = {
+  /** Absolute URL resolved by the anchor. Only http(s), mailto and tel are routed. */
+  url: string;
+  anchor: HTMLAnchorElement;
+  originalEvent: MouseEvent;
+  preventDefault: () => void;
+};
+
 export type SlotRenderContext = {
+  /** Slot position for this renderer. */
+  slot: WidgetLayoutSlot;
+  /** Aborted on renderer replacement/removal or widget destruction, not temporary detach. */
+  signal: AbortSignal;
   config: AgentWidgetConfig;
   defaultContent: () => HTMLElement | null;
 };
@@ -6709,19 +7267,38 @@ export type WidgetLayoutSlot =
   | "header-center"
   | "header-right"
   | "body-top"
+  /** Above the messages in the scrolling transcript, constrained to contentMaxWidth. */
+  | "transcript-top"
   /** @deprecated Unsupported no-op. Use the message render hooks instead. */
   | "messages"
   | "body-bottom"
   | "footer-top"
   /** @deprecated Unsupported no-op. Use the `renderComposer` plugin hook instead. */
   | "composer"
-  | "footer-bottom";
+  | "footer-bottom"
+  /** In the composer action start/end clusters; absent in composers without those regions. */
+  | "composer-start"
+  | "composer-end"
+  /** Immediately before the send control in its action cluster. */
+  | "composer-before-send";
 
 /**
  * Slot renderer function signature
- * Returns HTMLElement to render in the slot, or null to use default content
+ * Returns an HTMLElement, a managed render result, or null to use default content.
+ * Legacy elements are retained until renderer removal/replacement; use a managed
+ * result for updates. Config updates refresh managed results once per update.
  */
-export type SlotRenderer = (context: SlotRenderContext) => HTMLElement | null;
+export type SlotRenderResult = {
+  /** Null leaves default content visible and adds no slot wrapper. */
+  element: HTMLElement | null;
+  /** Called on widget.update with the same renderer. Return void to keep the node,
+   * a node to replace it, or null to restore default content. */
+  update?: (context: SlotRenderContext) => HTMLElement | null | void;
+  /** Runs once after signal abortion when the renderer is removed/replaced or the widget is destroyed. */
+  destroy?: () => void;
+};
+
+export type SlotRenderer = (context: SlotRenderContext) => HTMLElement | SlotRenderResult | null;
 
 /**
  * Main layout configuration
@@ -6748,6 +7325,15 @@ export type SlotRenderer = (context: SlotRenderContext) => HTMLElement | null;
  * ```
  */
 export type AgentWidgetLayoutConfig = {
+  /**
+   * Frameless, transparent presentation filling a bounded inline host. Requires
+   * launcher.enabled: false; ignored in floating, sidebar, docked and composer-bar
+   * mounts. Enables the shrinkable full-height layout without launcher.fullHeight.
+   * Hides the header unless showHeader is explicitly true. Theme overrides win.
+   * The host must provide a definite height and min-height: 0 in flex layouts.
+   * @default false
+   */
+  embedded?: boolean;
   /** Header layout configuration */
   header?: AgentWidgetHeaderLayoutConfig;
   /** Message layout configuration */
@@ -6760,7 +7346,7 @@ export type AgentWidgetLayoutConfig = {
   /**
    * Show/hide the header section entirely.
    * When false, the header (including icon, title, buttons) is completely hidden.
-   * @default true
+   * @default true (false in embedded presentation)
    */
   showHeader?: boolean;
   /**
@@ -7006,7 +7592,7 @@ export type AgentWidgetMarkdownOptions = {
  * Markdown configuration for customizing how markdown is rendered in chat messages.
  * Provides three levels of control:
  * 
- * 1. **CSS Variables** - Override styles via `--cw-md-*` CSS custom properties
+ * 1. **CSS Variables** - Override styles via `--persona-md-*` CSS custom properties
  * 2. **Parsing Options** - Configure marked behavior via `options`
  * 3. **Custom Renderers** - Full control via `renderer` overrides
  * 
@@ -7110,7 +7696,62 @@ export type AgentWidgetAttachmentAdapter = {
   ) => void | Promise<void>;
 };
 
+/** Remove remains keyboard reachable in hover mode and visible on touch devices. */
+export type AttachmentPreviewRemoveConfig = {
+  visibility?: "always" | "hover";
+  placement?: "inside" | "overlap" | "inline";
+};
+
+export type AgentWidgetAttachmentPreviewConfig = {
+  image?: {
+    /** Image width and height tokens always size the thumbnail. @default "thumbnail" */
+    layout?: "thumbnail" | "chip";
+    /** @default "hidden" */
+    name?: "hidden" | "full" | "basename";
+    fit?: "cover" | "contain";
+    remove?: AttachmentPreviewRemoveConfig;
+  };
+  file?: {
+    layout?: "tile" | "horizontal" | "vertical";
+    /** Show the document icon. @default true */
+    icon?: boolean;
+    /** Optional Lucide or registered icon override; MIME-based icons are the default. */
+    iconName?: string;
+    /** Placement within vertical cards. @default "start" */
+    iconPlacement?: "start" | "center";
+    name?: "full" | "basename" | "hidden";
+    /** Line counts are read only for supported text files up to 1 MiB. */
+    metadata?: "none" | "size" | "line-count";
+    badge?: "none" | "extension" | "type";
+    remove?: AttachmentPreviewRemoveConfig;
+  };
+};
+
+/** Instance-local attachment preview state; object URLs live only until removal. */
+export type AttachmentPreviewState = ComposerAttachmentState & {
+  kind: "image" | "file";
+  previewUrl: string | null;
+  lineCount?: number;
+};
+
+export type AttachmentPreviewRenderContext = {
+  instanceId: string;
+  state: Readonly<AttachmentPreviewState>;
+  config: AgentWidgetConfig;
+  actions: { remove: () => void; retry: () => void };
+  defaultRenderer: () => AttachmentPreviewRenderHandle;
+};
+
+/** Plain elements are retained; use update for progress, metadata, and config changes. */
+export type AttachmentPreviewRenderHandle = {
+  element: HTMLElement;
+  update?: (context: AttachmentPreviewRenderContext) => void;
+  destroy?: () => void;
+};
+
 export type AgentWidgetAttachmentsConfig = {
+  /** Composer-only image and document presentation; outgoing content is unchanged. */
+  preview?: AgentWidgetAttachmentPreviewConfig;
   /**
    * Enable/disable file attachments.
    * @default false
@@ -7296,7 +7937,7 @@ export type LoadingIndicatorRenderContext = {
    */
   location: 'inline' | 'standalone' | 'conversation-open';
   /**
-   * Function to render the default 3-dot bouncing indicator.
+   * Function to render the configured built-in waiting indicator.
    * Call this if you want to use the default for certain cases.
    */
   defaultRenderer: () => HTMLElement;
@@ -7371,10 +8012,25 @@ export type IdleIndicatorRenderContext = {
  * ```
  */
 export type AgentWidgetLoadingIndicatorConfig = {
+  /** Conversation-opening placeholder, independent of the reply waiting indicator. @default "spinner" */
+  conversationOpenVariant?: "spinner" | "skeleton";
+  /** Built-in waiting indicator. Defaults to dots in V4 and label in V5. */
+  variant?: "dots" | "label";
+  /** Text for the label variant. @default "Thinking…" */
+  label?: string;
+  /** Label icon from the icon registry, including registerIcons(). @default "loader-circle" */
+  iconName?: string;
+  /** Label icon visibility. Waiting is always active. Inherits tool/group visibility in V5; V4 labels remain text-only unless iconName or iconVisibility is supplied. */
+  iconVisibility?: "always" | "active" | "never";
+  /** Label icon motion, independent of loadingLabel text effects. Defaults to spin for loader-circle, none for custom icons. Respects reduced motion. */
+  iconAnimation?: "none" | "spin";
+
   /**
    * Whether to show the bubble background and border around the standalone loading indicator.
    * Set to false to render the loading indicator without any bubble styling.
-   * @default true
+   * The built-in V5 label defaults to activity row geometry, including inline
+   * empty-message loading. Set true to keep assistant bubble styling instead.
+   * Dots and custom renderers retain bubble styling by default.
    */
   showBubble?: boolean;
 
@@ -7410,6 +8066,21 @@ export type AgentWidgetLoadingIndicatorConfig = {
    * ```
    */
   renderIdle?: (context: IdleIndicatorRenderContext) => HTMLElement | null;
+};
+
+/** Shared motion for tool, tool-group, and reasoning disclosure containers. */
+export type AgentWidgetExpansionConfig = {
+  /** Disclosure arrow directions. V5 defaults to right/down; V4 retains down/up. */
+  chevron?: {
+    collapsed?: "up" | "down" | "left" | "right";
+    expanded?: "up" | "down" | "left" | "right";
+  };
+  /** Disclosure motion. Defaults to height in V5 and instant in V4. Initial/restored state and reduced motion are always instant. */
+  animation?: "instant" | "height";
+  /** Transition duration in milliseconds; zero disables motion. @default 160 */
+  duration?: number;
+  /** CSS timing function. Invalid values fall back to instant disclosure. @default "ease-out" */
+  easing?: string;
 };
 
 /** Built-in `sessionInit` triggers. See {@link AgentWidgetConfig.sessionInit}. */
@@ -7484,12 +8155,14 @@ export type AgentWidgetConfig = {
    * fragment its backend expects. Register a `default` resolver to also accept
    * bare (unprefixed, non-TypeID) target names. The built-in `runtype` provider
    * is always available and does not need to be registered.
+   *
+   * `update({ targetProviders })` replaces the entire map. Include every
+   * resolver to retain; `{}` removes all host registrations.
    */
   targetProviders?: Record<string, TargetResolver>;
   /**
-   * Override the assistant-bubble copy shown when a dispatch fails before any
-   * response streams back (connection refused, CORS, 4xx/5xx, malformed
-   * stream). Provide a static string, or a function of the error so you can
+   * Override the detail shown when a dispatch fails, in either error display
+   * mode (connection refused, CORS, 4xx/5xx, malformed stream). Provide a static string, or a function of the error so you can
    * tailor the message per failure and decide whether to surface the raw
    * reason. When omitted, a default message is shown that includes the
    * underlying error detail.
@@ -7511,10 +8184,16 @@ export type AgentWidgetConfig = {
    * ```
    */
   errorMessage?: string | ((error: Error) => string);
+  /** Dispatch failure presentation. Defaults to "bubble" in V4, "block" in V5. */
+  errorDisplay?: "bubble" | "block";
   /**
    * Agent configuration for agent execution mode.
    * When provided, the widget uses agent loop execution instead of flow dispatch.
    * Mutually exclusive with `flowId`.
+   *
+   * `update({ agent })` replaces the entire definition. Supply a complete
+   * agent, including name, model and systemPrompt; omitted tools/loop options
+   * are not inherited. To edit one field, spread the current agent yourself.
    *
    * Note: `@runtypelabs/persona-proxy` rejects a client-supplied `agent` (it was
    * an open relay). This option is only for endpoints authorized to accept a
@@ -7695,6 +8374,8 @@ export type AgentWidgetConfig = {
   /**
    * Static headers to include with each request.
    * For dynamic headers (e.g., auth tokens), use `getHeaders` instead.
+   * `update({ headers })` replaces the entire map. Include every header to
+   * retain; `{}` removes all static headers. `getHeaders` is independent.
    */
   headers?: Record<string, string>;
   /**
@@ -7734,9 +8415,12 @@ export type AgentWidgetConfig = {
      */
     stopReasonNotice?: Partial<Record<StopReasonKind, string>>;
   };
+  /** Derive theme tokens from a small brand palette. Explicit theme tokens win. */
+  brand?: BrandConfig;
   /**
    * Semantic design tokens (`palette`, `semantic`, `components`).
-   * Omit for library defaults.
+   * Omit for library defaults. Mounted updates recursively merge token objects,
+   * including `theme.components`; omitted sibling tokens remain in place.
    */
   theme?: DeepPartial<PersonaTheme>;
   /**
@@ -7757,13 +8441,16 @@ export type AgentWidgetConfig = {
    */
   colorScheme?: 'auto' | 'light' | 'dark';
   features?: AgentWidgetFeatureFlags;
+  /** Optional whole-turn activity view; requires explicit progress/final metadata. */
+  turnActivity?: AgentWidgetTurnActivityConfig;
   /**
    * Per-instance display overrides, applied over `features` through the
    * preference allowlist (security/capability keys cannot pass). String
    * `display` values replace the base rule subtree; objects refine it per
    * key. Each `controller.update({ preferences })` replaces the previous
    * slice wholesale (dropped keys revert to the base `features`); an
-   * explicit-undefined patch clears it entirely.
+   * explicit-undefined patch clears it entirely. A sparse slice is the host's
+   * complete opinion, not a partial update to the previous slice.
    */
   preferences?: WidgetPreferenceSlice;
   /**
@@ -7775,8 +8462,8 @@ export type AgentWidgetConfig = {
   autoFocusInput?: boolean;
   /**
    * Hover timing for the portaled control tooltip. Keyboard focus is
-   * always immediate. Unset keys keep the ChatGPT/Claude defaults
-   * (`delayMs: 200`, `skipDelayMs: 300`).
+   * always immediate. Unset keys keep the defaults
+   * (`delayMs: 400`, `skipDelayMs: 300`).
    */
   tooltip?: AgentWidgetTooltipConfig;
   launcher?: AgentWidgetLauncherConfig;
@@ -7800,12 +8487,13 @@ export type AgentWidgetConfig = {
    * `copy.welcomeSubtitle`, and `copy.showWelcomeCard`.
    */
   welcome?: AgentWidgetWelcomeConfig;
-  /** @deprecated Prefer `suggestions.starters.items`. */
+  /** @deprecated Prefer `suggestions.starters.items` with `placement: "composer"` for the legacy placement. */
   suggestionChips?: string[];
-  /** @deprecated Prefer semantic tokens under `theme.components.suggestion`. */
+  /** Compatibility chip styles; only weight and padding apply. `fontFamily` remains an accepted no-op. */
   suggestionChipsConfig?: AgentWidgetSuggestionChipsConfig;
   debug?: boolean;
   formEndpoint?: string;
+  /** @deprecated Prefer `theme.components.panel.width` for the open panel. Explicit legacy input still wins. */
   launcherWidth?: string;
   sendButton?: AgentWidgetSendButtonConfig;
   statusIndicator?: AgentWidgetStatusIndicatorConfig;
@@ -7892,6 +8580,12 @@ export type AgentWidgetConfig = {
   requestMiddleware?: AgentWidgetRequestMiddleware;
   actionParsers?: AgentWidgetActionParser[];
   actionHandlers?: AgentWidgetActionHandler[];
+  /**
+   * Host persistence implementation. In the merged configuration,
+   * `update({ storageAdapter })` replaces the entire adapter; omitted optional
+   * methods are not inherited and own `undefined` clears it. Persistence
+   * captures its active adapter at mount time; remount to change that adapter.
+   */
   storageAdapter?: AgentWidgetStorageAdapter;
   /**
    * Called after state is loaded from the storage adapter, but before the widget
@@ -7957,6 +8651,11 @@ export type AgentWidgetConfig = {
    * Registry of custom components that can be rendered from JSON directives.
    * Components are registered by name and can be invoked via JSON responses
    * with the format: `{"component": "ComponentName", "props": {...}}`
+   *
+   * `update({ components })` replaces this entire renderer map; include every
+   * renderer to retain. `{}` removes all host-configured registrations; plugins
+   * may still provide components. This top-level registry differs from
+   * `theme.components`, whose token objects recursively merge.
    * 
    * @example
    * ```typescript
@@ -8076,6 +8775,10 @@ export type AgentWidgetConfig = {
    * ```
    */
   customFetch?: AgentWidgetCustomFetch;
+  /** Opt-in durable conversation switching; legacy reconnect closures do not enable it. */
+  backgroundConversations?: BackgroundConversationAdapter;
+  /** Conversation-scoped last observed server state; local Stop does not imply server cancellation. */
+  onConversationExecutionState?: (state: ConversationExecutionState) => void;
   /**
    * Durable-session reconnect transport (host-owned, symmetric to
    * {@link customFetch}). When a durable agent stream drops mid-turn (any
@@ -8189,7 +8892,7 @@ export type AgentWidgetConfig = {
    * Customize how markdown is parsed and rendered in chat messages.
    * 
    * Override methods:
-   * 1. **CSS Variables** - Override `--cw-md-*` variables in your stylesheet
+   * 1. **CSS Variables** - Override `--persona-md-*` variables in your stylesheet
    * 2. **Options** - Configure marked parser behavior
    * 3. **Renderers** - Custom rendering functions for specific elements
    * 4. **postprocessMessage** - Complete control over message transformation
@@ -8209,6 +8912,10 @@ export type AgentWidgetConfig = {
    * ```
    */
   markdown?: AgentWidgetMarkdownConfig;
+  /** Route ordinary primary clicks on safe widget links. Call preventDefault()
+   * to cancel browser navigation. Modified clicks, downloads and non-self targets
+   * retain browser behavior and do not invoke this hook. */
+  onLinkClick?: (context: AgentWidgetLinkClickContext) => void;
 
   /**
    * HTML sanitization for rendered message content.
@@ -8339,14 +9046,29 @@ export type AgentWidgetConfig = {
    * ```
    */
   loadingIndicator?: AgentWidgetLoadingIndicatorConfig;
+  /** Shared loading-label animation overrides and optional managed custom effect. */
+  loadingLabel?: AgentWidgetLoadingLabelConfig;
+  /** Shared tool/group/reasoning expansion motion, independent of loading-label effects. */
+  expansion?: AgentWidgetExpansionConfig;
 };
 
 /**
  * Patch-aware deep-partial of {@link AgentWidgetConfig} accepted by `update()`.
  * Function types and arrays are preserved whole (not mapped over); plain-object
- * leaves recurse so a partial patch merges into the live config. See the merge
- * policy in utils/config-merge.ts (some plain-object fields still replace
- * wholesale at runtime; that is not encoded at the type level).
+ * leaves recurse so ordinary partial objects merge into the live config.
+ *
+ * Whole-object replacements are `headers`, `agent`, `storageAdapter`, top-level
+ * `components`, `targetProviders`, `voiceRecognition.provider.custom`,
+ * `features.artifacts.display`, `features.streamAnimation.plugins`,
+ * `preferences`, and `welcome.icon`. Supply the complete desired value at each
+ * of these paths; omitted members of the previous object are removed. The
+ * recursive type remains permissive for compatibility and does not enforce
+ * completeness. Use the corresponding field type with `satisfies` to check an
+ * agent, provider or icon replacement.
+ *
+ * Omitted keys retain values; own `undefined` resets an override (including a
+ * parent and its descendants). Arrays/functions replace. See the mounted-update
+ * table in `docs/configuration.md` and runtime policy in `utils/config-merge.ts`.
  */
 export type AgentWidgetConfigPatch = ConfigPatch<AgentWidgetConfig>;
 
@@ -8376,6 +9098,10 @@ export type AgentWidgetReasoning = {
 };
 
 export type AgentWidgetToolCall = {
+  /** Plain-text description of this call's action. Supply through injection/history or
+   * toolCall.resolveActionTitle for transport adapters; never inferred from arguments.
+   * Active default tool-call rows use it; card headers keep their existing layout. */
+  actionTitle?: string;
   /** Optional approval state for activity-row status chrome. */
   approvalStatus?: "pending" | "approved" | "denied" | "timeout";
   /** Terminal browser work whose callback was lost when the chat restarted. */
@@ -8405,6 +9131,8 @@ export type AgentWidgetToolCall = {
  * Created when the agent requires human approval before executing a tool.
  */
 export type AgentWidgetApproval = {
+  /** Explicit stable id of the tool call this decision authorizes, when supplied by the backend. */
+  toolCallId?: string;
   id: string;
   status: "pending" | "approved" | "denied" | "timeout";
   /** A browser callback lost on restart. The approval expires with status `timeout`. */
@@ -8422,8 +9150,6 @@ export type AgentWidgetApproval = {
    */
   reason?: string;
   parameters?: unknown;
-  /** The paused tool call this approval gates (`approval_start.toolCallId`). */
-  toolCallId?: string;
   resolvedAt?: number;
 };
 
@@ -8445,6 +9171,38 @@ export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "ap
  */
 export type StopReasonKind = RuntypeStopReasonKind;
 
+/** Explicit presentation metadata; persist with history or reconstruct deterministically. */
+export type AgentWidgetTurnActivity = {
+  /** Stable identity for the whole response, across tool batches and reconnects. */
+  id: string;
+  /** Placement only: progress is disclosed; partial/final answers stay outside.
+   * "final" does not end the run; completion/outcome is separate. */
+  kind: "progress" | "final";
+  /** Measured Unix milliseconds. Missing timing never produces a fabricated duration. */
+  startedAt?: number;
+  completedAt?: number;
+  outcome?: "success" | "error" | "cancel";
+};
+
+export type AgentWidgetTurnActivityConfig = {
+  /** Opt-in whole-response disclosure. Default false. */
+  enabled?: boolean;
+  /** Pure synchronous adapter. Direct message metadata takes precedence; undefined
+   * falls back to native phase/execution metadata. Must be deterministic on history
+   * replay; results are not persisted. Never infer finality from completion or prose. */
+  resolveMessage?: (message: AgentWidgetMessage) => AgentWidgetTurnActivity | undefined;
+  /** Custom header content. Strings are plain text; HTMLElement content owns its loading effects. */
+  renderHeader?: (context: {
+    id: string;
+    messages: AgentWidgetMessage[];
+    active: boolean;
+    outcome?: "success" | "error" | "cancel";
+    elapsedMs?: number;
+    defaultSummary: string;
+    config: AgentWidgetConfig;
+  }) => HTMLElement | string | null | undefined;
+};
+
 /**
  * Represents a message in the chat conversation.
  *
@@ -8463,6 +9221,8 @@ export type StopReasonKind = RuntypeStopReasonKind;
  *                      Useful for implementing voice-specific behaviors like auto-reactivation.
  */
 export type AgentWidgetMessage = {
+  /** Opt-in whole-turn presentation metadata. Does not change model-visible content. */
+  turnActivity?: AgentWidgetTurnActivity;
   id: string;
   role: AgentWidgetMessageRole;
   content: string;
@@ -8505,6 +9265,8 @@ export type AgentWidgetMessage = {
    */
   composerOptions?: ComposerOptionsPayload;
   streaming?: boolean;
+  /** Dispatch failure detail; rendered according to `errorDisplay`. */
+  dispatchError?: boolean;
   variant?: AgentWidgetMessageVariant;
   sequence?: number;
   reasoning?: AgentWidgetReasoning;
@@ -8613,6 +9375,8 @@ export type AgentWidgetMessage = {
  * }
  */
 export type InjectMessageOptions = {
+  /** Mark assistant content as dispatch failure detail for `errorDisplay`. */
+  dispatchError?: boolean;
   /**
    * Message role: "assistant", "user", or "system"
    */
@@ -8820,18 +9584,39 @@ export type PersonaArtifactManualUpsert =
       transcript?: boolean;
     };
 
+/** @internal Native parser state paired with a background transcript/cursor. */
+export type AgentWidgetStreamCheckpoint = {
+  textBlockId: string | null;
+  openAssistant: boolean;
+  sealedFlowMessageId: string | null;
+  rawText: string;
+  executionKind: "agent" | "flow";
+  executionKindResolved: boolean;
+  turnId: string | null;
+  iteration: number;
+  /** Optional so checkpoints saved before native phases remain readable. */
+  textPhases?: Array<[string, AgentMessagePhase]>;
+  nestedParents: Array<[string, string]>;
+  nestedRaw: Array<[string, string]>;
+  media: Array<[string, { mediaType?: string; toolCallId?: string; parts: string[] }]>;
+  artifactContent: Array<[string, { markdown: string; title?: string; file?: PersonaArtifactFileMeta; props?: Record<string, unknown> }]>;
+  artifactTools: string[];
+};
+
 export type AgentWidgetEvent =
   | { type: "message"; message: AgentWidgetMessage }
   | {
       type: "status";
       status: "connecting" | "connected" | "error" | "idle";
       /**
-       * Set on the `idle` emitted from a graceful execution terminal
-       * (`execution_complete`). Distinguishes a real finish from the plain
+       * Set on the terminal status emitted from an execution completion
+       * (`execution_complete`; failed completions use `error`). Distinguishes a real finish from the plain
        * `idle` the dispatch wrappers emit in their `finally` on a dropped
        * connection. The durable-reconnect drop detection keys off this.
        */
       terminal?: boolean;
+      /** @internal Execution identity for background status before text appears. */
+      executionId?: string;
     }
   | { type: "error"; error: Error }
   /**
@@ -8841,7 +9626,7 @@ export type AgentWidgetEvent =
    * lane (any resumable execution that stamps `id:` lines, e.g. Claude Managed
    * agents or async/background runs).
    */
-  | { type: "cursor"; id: string }
+  | { type: "cursor"; id: string; /** @internal */ checkpoint?: AgentWidgetStreamCheckpoint }
   | {
       type: "artifact_start";
       id: string;
@@ -8864,8 +9649,11 @@ export type AgentWidgetInitOptions = {
   target: string | HTMLElement;
   config?: AgentWidgetConfig;
   useShadowDom?: boolean;
-  /** Fired when the widget controller is mounted and its API is callable. */
+  /** Fired when the configured renderers and styles are ready for display.
+   * The returned handle is callable immediately; handle.ready also exposes failures. */
   onChatReady?: () => void;
   windowKey?: string; // If provided, stores the controller on window[windowKey] for global access
   debugTools?: boolean;
 };
+
+export type { BrandConfig } from "./types/theme";

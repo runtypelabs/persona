@@ -1,112 +1,430 @@
 @import "@runtypelabs/persona/widget.css";
-
 :root {
-  color-scheme: light;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
-  background: #f7f8fb;
-  color: #121826;
+  color-scheme:light;
+  font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:#fff;
+  color:#202020;
+  font-synthesis:none;
 }
 
 * {
-  box-sizing: border-box;
+  box-sizing:border-box;
 }
 
 body {
-  margin: 0;
+  margin:0;
 }
 
-main {
-  min-height: 100dvh;
-  padding: 40px;
+button,select,a {
+  -webkit-tap-highlight-color:transparent;
 }
 
-.shell {
-  display: grid;
-  grid-template-columns: minmax(280px, 440px) minmax(360px, 1fr);
-  gap: 24px;
-  max-width: 1180px;
-  margin: 0 auto;
+button,select {
+  font:inherit;
 }
 
-/* Both sides are matching cards: same border, radius, background, and shadow. */
-.intro {
-  border: 1px solid #d9dee9;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 12px 32px rgb(18 24 38 / 8%);
+button,a,select {
+  outline-offset:4px;
 }
 
-.intro {
-  padding: 24px;
+button {
+  cursor:pointer;
 }
 
-.intro h1 {
-  margin: 0 0 12px;
-  font-size: 28px;
-  line-height: 1.1;
+a {
+  color:inherit;
+  text-decoration:none;
 }
 
-.intro p {
-  margin: 0 0 16px;
-  color: #526070;
-  line-height: 1.55;
+.workspace {
+  display:flex;
+  height:100dvh;
+  min-height:560px;
 }
 
-.intro code {
-  border-radius: 4px;
-  background: #eef2f7;
-  padding: 2px 5px;
+.sidebar {
+  width:264px;
+  flex-shrink:0;
+  background:#f8f8f7;
+  border-right:1px solid #e9e9e7;
+  display:flex;
+  flex-direction:column;
+  padding:28px 16px 16px;
 }
 
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 20px;
+.brand {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:18px;
+  font-weight:650;
+  letter-spacing:-.6px;
+  padding:0 10px;
 }
 
-.tabs button {
-  border: 1px solid #c7d0df;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #263243;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 650;
-  padding: 9px 12px;
+.brandLogo {
+  display:block;
+  width:112px;
+  height:auto;
+  min-width:0;
 }
 
-.tabs button[data-active="true"] {
-  border-color: #157f8f;
-  background: #e8f7f9;
-  color: #0d6370;
+.newChat {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin:36px 0 34px;
+  padding:10px 12px;
+  border:1px solid #dfdfdc;
+  border-radius:7px;
+  background:white;
+  font-size:12px;
+  color:#333;
+  box-shadow:0 1px 2px #00000004;
 }
 
-/* The widget panel fills this card (fullHeight) and is clipped to the 8px
-   radius, so its dark header rounds to match the left card. */
-.widgetHost {
-  min-height: 680px;
-  border: none;
+.newChat>span:first-child {
+  font-size:19px;
+  line-height:1;
 }
 
-#persona-root {
-  height: 680px;
+.shortcut {
+  margin-left:auto;
+  color:#969692;
 }
 
-@media (max-width: 860px) {
-  main {
-    padding: 20px;
+.navLabel {
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:1.5px;
+  color:#8a8a84;
+  padding:0 12px;
+  margin-bottom:13px;
+}
+
+.conversationList {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  overflow:auto;
+}
+
+.conversationLink {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  border:0;
+  background:transparent;
+  color:#73736e;
+  font-size:12px;
+  text-align:left;
+  padding:11px 12px;
+  border-radius:6px;
+  min-height:40px;
+}
+
+.conversationLink[aria-current] {
+  background:#eaeae7;
+  color:#282825;
+}
+
+.conversationLink span {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.conversationLink svg {
+  width:16px;
+  height:16px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.2;
+  flex-shrink:0;
+}
+
+.sidebarFoot {
+  margin: auto 0 0;
+  padding: 17px 9px 4px;
+  color: #70706a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mainPane {
+  flex:1;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  position:relative;
+}
+
+.workspaceHeader {
+  height:76px;
+  flex-shrink:0;
+  border-bottom:1px solid #efefed;
+  padding:0 34px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+
+.headerControls {
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+
+.adapterSelect select {
+  border:0;
+  background:transparent;
+  font-size:12px;
+  color:#66665f;
+  max-width:150px;
+  cursor:pointer;
+  padding:8px 2px;
+}
+
+.modeSwitch {
+  display:flex;
+  border:1px solid #e6e6e2;
+  border-radius:6px;
+  padding:3px;
+  background:#f7f7f5;
+  gap:2px;
+}
+
+.modeSwitch button {
+  border:0;
+  border-radius:4px;
+  background:transparent;
+  color:#898981;
+  font-size:12px;
+  padding:5px 10px;
+}
+
+.modeSwitch button[aria-pressed=true] {
+  background:white;
+  color:#333;
+  box-shadow:0 1px 3px #0000000c;
+}
+
+
+
+.conversationPane {
+  flex:1;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  width:min(100%,850px);
+  margin:0 auto;
+  padding:0 36px;
+}
+
+.conversationPane[hidden] {
+  display:none;
+}
+
+.personaHost {
+  height:100%;
+  min-height:0;
+  flex:1;
+}
+
+.workspaceFooter {
+  display:flex;
+  flex-wrap:wrap;
+  flex-shrink:0;
+  align-items:center;
+  justify-content:flex-end;
+  gap:12px;
+  font-size:11px;
+  color:#a0a099;
+  padding:12px 34px 18px;
+}
+
+.providerError {
+  border:1px solid #ead1ca;
+  border-radius:7px;
+  padding:12px;
+  color:#9a4b36;
+  background:#fff9f5;
+  font-size:12px;
+}
+
+.setupState {
+  margin:auto;
+  max-width:430px;
+  text-align:center;
+  padding:48px 0;
+}
+
+.setupState h1 {
+  font-size:29px;
+  line-height:1.2;
+  letter-spacing:-1px;
+  font-weight:500;
+}
+
+.setupState p {
+  font-size:13px;
+  line-height:1.8;
+  color:#83837b;
+}
+
+.setupState code {
+  font-size:11px;
+}
+
+.setupState a {
+  display:block;
+  font-size:11px;
+  color:#77776d;
+  margin-top:18px;
+}
+
+.primaryButton {
+  background:#252525;
+  color:white;
+  border:0;
+  border-radius:7px;
+  padding:11px 17px;
+  font-size:12px;
+  margin-top:18px;
+}
+
+.mobileMenu,.sidebarScrim,.sidebarClose {
+  display:none;
+}
+
+.srOnly {
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+
+.personaHost {
+  --persona-font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+
+@media(min-width:1500px) {
+  .conversationPane {
+    width:900px;
   }
-
-  .shell {
-    grid-template-columns: 1fr;
-  }
-
-  .widgetHost,
-  #persona-root {
-    min-height: 620px;
-    height: 620px;
+  .sidebar {
+    width:272px;
   }
 }
+
+@media(max-width:900px) {
+  .sidebar {
+    width:218px;
+  }
+  .workspaceHeader {
+    padding:0 22px;
+  }
+  .headerControls {
+    gap:8px;
+  }
+  .conversationPane {
+    padding:0 22px;
+  }
+  .workspaceFooter {
+    padding:12px 22px 18px;
+    font-size:11px;
+  }
+}
+
+@media(max-width:680px) {
+  .workspace {
+    min-height:420px;
+  }
+  .sidebar {
+    position:fixed;
+    inset:0 auto 0 0;
+    z-index:30;
+    transform:translateX(-100%);
+    transition:transform .2s;
+    width:260px;
+  }
+  .sidebarClose {
+    display:flex;
+    align-items:center;
+    align-self:flex-end;
+    gap:12px;
+    margin:-12px 0 20px;
+    padding:8px;
+    border:0;
+    background:transparent;
+    color:#66665f;
+    font-size:12px;
+  }
+  .sidebarClose span {
+    font-size:22px;
+    line-height:1;
+  }
+  .sidebar[data-open=true] {
+    transform:translateX(0);
+  }
+  .sidebarScrim {
+    display:block;
+    position:fixed;
+    inset:0;
+    background:#0004;
+    z-index:29;
+    border:0;
+  }
+  .mobileMenu {
+    display:block;
+    border:0;
+    background:none;
+    color:#777;
+    font-size:17px;
+    padding:5px;
+  }
+  .workspaceHeader {
+    height:64px;
+    padding:0 14px;
+    gap:8px;
+  }
+  .headerControls {
+    gap:8px;
+  }
+  .adapterSelect select {
+    font-size:12px;
+    max-width:126px;
+  }
+  .conversationPane {
+    padding:0 12px;
+  }
+  .workspaceFooter {
+    padding:10px 16px 12px;
+    justify-content:center;
+    text-align:center;
+    font-size:11px;
+  }
+  .setupState {
+    padding:32px 15px;
+  }
+  .setupState h1 {
+    font-size:25px;
+  }
+}
+
+
+/* A single sentence keeps every word on the same typographic baseline. */
+.persona-attribution { display: block; color: #666; font-size: 12px; font-weight: 400; line-height: 20px; text-align: center; }
+.persona-attribution a { display: inline; color: inherit; text-decoration: none; white-space: nowrap; }
+.persona-attribution img { display: inline-block; height: 14px; vertical-align: middle; }
+.persona-attribution .persona-attribution-icon { width: 14px; margin-right: 4px; }
+.persona-attribution .runtype-wordmark { width: auto; height: 1em; vertical-align: -0.3em; }
+.persona-attribution a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.persona-attribution a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 2px; }

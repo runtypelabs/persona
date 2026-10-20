@@ -27,3 +27,34 @@
 }
 
 #v5-host { height:100%; min-height:0; }
+
+.v5-custom-approval { border:1px solid var(--persona-border-color, currentColor); border-radius:12px; padding:16px; font-size:13px; line-height:1.5; }
+.v5-custom-approval p { margin:8px 0; opacity:.8; }
+.v5-custom-approval button { color:inherit; font:inherit; background:transparent; border:1px solid currentColor; border-radius:8px; padding:7px 12px; margin:4px 8px 0 0; cursor:pointer; }
+.v5-custom-approval button:focus-visible { outline:2px solid currentColor; outline-offset:3px; }
+.v5-custom-approval button:disabled { opacity:.5; cursor:default; }
+
+/* The application styles only its own bounded host; no Persona selectors. */
+.v5-embedded-frame {
+  height: 600px;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  background: repeating-linear-gradient(135deg, #e3f0f3 0 24px, #f1f7f8 24px 48px);
+  --demo-composer-surface: #ffffffde;
+  --demo-code-surface: #e4edf1;
+  --demo-code-text: #142026;
+}
+.v5-embedded-frame[data-scheme="dark"] {
+  background: repeating-linear-gradient(135deg, #19282d 0 24px, #213239 24px 48px);
+  --demo-composer-surface: #172226ee;
+  --demo-code-surface: #142026;
+  --demo-code-text: #e4edf1;
+}
+.v5-embedded-frame > #v5-host { flex: 1; min-height: 0; }
+
+.v5-controls [hidden] { display: none; }
+
+.v5-scroll-custom-icon { display: inline-block; font-size: 18px; line-height: 1; }
+
+@media (min-width: 801px) { .v5-preview-pane { position: sticky; top: 88px; } }

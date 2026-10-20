@@ -462,18 +462,29 @@ clearChatHistoryStorageKey: "persona-action-middleware",  // Automatically clear
     surface: "#ffffff",
     muted: "#64748b"
   },
+  welcome: {
+    title: welcomeTitle, // Dynamic based on order state
+    subtitle: welcomeSubtitle, // Dynamic based on order state
+    variant: "card",
+  },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle,  // Dynamic based on order state
-    welcomeSubtitle,  // Dynamic based on order state
     inputPlaceholder: "Type your message…",
     sendButtonLabel: "Send"
   },
-  suggestionChips: [
-    "I am looking for a black shirt in medium",
-    "Show me available products",
-    "Add an item to cart"
-  ],
+  suggestions: {
+    starters: {
+      items: [
+        "I am looking for a black shirt in medium",
+        "Show me available products",
+        "Add an item to cart"
+      ],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
   postprocessMessage: ({ text, streaming, message }) => {
     console.log("[Action Middleware] postprocessMessage called:", { 
       role: message.role, 

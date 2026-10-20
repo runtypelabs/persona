@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { activityDuration, createActivityLifecycle } from './activity-row';
+import { activityDuration, updateActivityElapsed, createActivityLifecycle } from './activity-row';
 import { createToolBubble } from './tool-bubble';
 import { createReasoningBubble } from './reasoning-bubble';
-import type { AgentWidgetMessage } from '../types';
+import { mergeWithDefaults } from '../defaults';
+import { mergeConfigUpdate } from '../utils/config-merge';
+import type { AgentWidgetConfig, AgentWidgetMessage } from '../types';
 const message = (status: 'pending' | 'running' | 'complete' = 'running', chunks: string[] = []): AgentWidgetMessage => ({ id: 'tool', role: 'assistant', content: '', createdAt: '2026-01-01', variant: 'tool', toolCall: { id: 'tool', name: 'Search', status, chunks, durationMs: 65000 } });
 afterEach(() => vi.useRealTimers());
 describe.each([false, true])('activity rows (V5 %s)', v5Defaults => {
@@ -13,7 +15,7 @@ describe.each([false, true])('activity rows (V5 %s)', v5Defaults => {
     for (const variant of ['card', 'row'] as const) {
       const node = createToolBubble(message('complete'), { ...config, features: { toolCallDisplay: { variant } } });
       expect(node.classList.contains('persona-activity-row')).toBe(variant === 'row');
-      if (variant === 'row') { expect(node.textContent).toContain('Used Search'); expect(node.textContent).toContain('1m 5s'); }
+      if (variant === 'row') { expect(node.textContent).toContain('Used Search'); expect(node.querySelector('.persona-activity-duration')).toBeNull(); }
     }
   });
   it('resolves icon visibility and removes the icon slot on successful completion', () => {
@@ -51,6 +53,13 @@ describe.each([false, true])('activity rows (V5 %s)', v5Defaults => {
     const m: AgentWidgetMessage = { ...message(), variant: 'reasoning', toolCall: undefined, reasoning: { id: 'r', status: 'complete', chunks: ['Details'], durationMs: 100 } };
     const node = createReasoningBubble(m, { future: { v5Defaults }, features: { reasoningDisplay: { variant: 'row' } } });
     expect(node.textContent).toContain('Thought for a moment');
+  });
+  it('keeps card headers without a leading completion icon', () => {
+    const m = message('complete'); m.toolCall!.name = 'Read';
+    for (const iconName of [undefined, 'check', 'file-text']) {
+      const node = createToolBubble(m, { future: { v5Defaults }, features: { toolCallDisplay: { layout: 'card', iconVisibility: 'always' } }, toolCall: { iconName } });
+      expect(node.querySelector('.persona-activity-icon')).toBeNull();
+    }
   });
 });
 it.each([['pending', 'pending'], ['running', 'running'], ['complete', 'done']] as const)('maps %s status to %s', (status, expected) => {
@@ -96,5 +105,108 @@ describe('activity lifecycle', () => {
       if (cleanup === 'clear') lifecycle.clear(); else lifecycle.prune(new Set());
       vi.advanceTimersByTime(2000); expect(changed).not.toHaveBeenCalled();
     }
+  });
+});
+
+it('cancels a completion timer on resumed activity, then rearms without reopening', () => {
+  vi.useFakeTimers(); const changed = vi.fn(); const lifecycle = createActivityLifecycle(changed); const expanded = new Set<string>();
+  lifecycle.observe(message('running', ['one']), 'tool', expanded);
+  lifecycle.observe(message('complete', ['one']), 'tool', expanded, { autoCollapseDelay: 100 });
+  vi.advanceTimersByTime(50);
+  lifecycle.observe(message('running', ['two']), 'tool', expanded);
+  vi.advanceTimersByTime(100); expect(expanded.has('tool')).toBe(true); expect(changed).not.toHaveBeenCalled();
+  lifecycle.observe(message('complete', ['two']), 'tool', expanded, { autoCollapseDelay: 100 });
+  vi.advanceTimersByTime(100); expect(expanded.size).toBe(0); expect(changed).toHaveBeenCalledTimes(1);
+  lifecycle.observe(message('running', ['three']), 'tool', expanded); expect(expanded.size).toBe(0);
+  lifecycle.manual('tool'); lifecycle.observe(message('complete', ['three']), 'tool', expanded);
+  vi.advanceTimersByTime(2000); expect(changed).toHaveBeenCalledTimes(1);
+});
+
+// Automatic timing never takes ownership of host-authored labels or elapsed elements.
+it('supports timing modes on live rerender without a detail duration footer', () => {
+  const m = message('complete'); m.toolCall!.duration = 12789;
+  for (const durationDisplay of ['none', 'tools', 'group', 'all', undefined] as const) {
+    const node = createToolBubble(m, { future: { v5Defaults: true }, features: { toolCallDisplay: { durationDisplay } } }, new Set(['tool']));
+    expect(node.querySelector('.persona-activity-duration')?.textContent ?? '').toBe(durationDisplay === 'tools' || durationDisplay === 'all' ? '12s' : '');
+    expect(node.textContent).not.toContain('Duration:');
+  }
+});
+it.each([undefined, 700, -1, NaN, Infinity])('omits automatic short/unknown/invalid timing (%s)', durationMs => {
+  const m = message('complete'); m.toolCall!.durationMs = durationMs;
+  expect(createToolBubble(m, { future: { v5Defaults: true }, features: { toolCallDisplay: { durationDisplay: 'tools' } } }).querySelector('.persona-activity-duration')?.textContent).toBe('');
+});
+it('ticks automatic whole seconds while preserving authored elapsed precision', () => {
+  const automatic = document.createElement('span'); automatic.className = 'persona-activity-duration'; automatic.dataset.toolElapsed = '1000';
+  expect(formatActivityElapsed(automatic, 1700)).toBe('');
+  expect(formatActivityElapsed(automatic, 13789)).toBe('12s');
+  expect(formatActivityElapsed(automatic, 66000)).toBe('1m 5s');
+  const authored = document.createElement('span'); authored.dataset.toolElapsed = '1000';
+  expect(formatActivityElapsed(authored, 3700)).toBe('2.7s');
+  authored.dataset.toolElapsed = '0'; authored.textContent = 'Host duration';
+  expect(formatActivityElapsed(authored, 3700)).toBe('Host duration');
+});
+it('retains authored duration placeholders and custom timer elements with automatic timing off', () => {
+  const m = message('running'); m.toolCall!.startedAt = Date.now() - 2500;
+  const node = createToolBubble(m, { future: { v5Defaults: true }, toolCall: { activeTextTemplate: 'Running {toolName} {duration}' } });
+  expect(node.querySelector('[data-tool-elapsed]')).not.toBeNull();
+  expect(node.querySelector('.persona-activity-duration')).toBeNull();
+  let authored: HTMLElement | undefined;
+  const custom = createToolBubble(m, { future: { v5Defaults: true }, toolCall: { renderCollapsedSummary: ({ createElapsedElement }) => authored = createElapsedElement() } });
+  expect(custom.contains(authored!)).toBe(true);
+  expect(formatActivityElapsed(authored!, Number(authored!.dataset.toolElapsed) + 2700)).toBe('2s');
+});
+
+it('does not create a live automatic timer for invalid or future starts', () => {
+  vi.useFakeTimers(); vi.setSystemTime(10000);
+  for (const startedAt of [0, -1, NaN, Infinity, 11000, undefined]) {
+    const m = message(); m.toolCall!.startedAt = startedAt; m.toolCall!.durationMs = undefined;
+    const node = createToolBubble(m, { future: { v5Defaults: true }, features: { toolCallDisplay: { durationDisplay: 'tools' } } });
+    expect(node.querySelector('[data-tool-elapsed]')).toBeNull();
+    expect(node.querySelector('.persona-activity-duration')?.textContent).toBe('');
+  }
+});
+
+function formatActivityElapsed(span: HTMLElement, now: number) {
+  updateActivityElapsed(span, now);
+  return span.textContent;
+}
+
+
+describe.each([false, true])('reasoning layout and appearance (V5 %s)', v5Defaults => {
+  const reasoning: AgentWidgetMessage = { id: 'reason', role: 'assistant', content: '', createdAt: '2026-01-01', variant: 'reasoning', reasoning: { id: 'reason', status: 'complete', chunks: ['Details'] }, turnActivity: { id: 'turn', kind: 'progress' } };
+  it.each(['plain', 'inset', 'panel'] as const)('renders %s on the existing disclosure body in both layouts', appearance => {
+    for (const layout of ['row', 'card'] as const) {
+      const node = createReasoningBubble(reasoning, { future: { v5Defaults }, features: { reasoningDisplay: { layout, appearance } } }, new Set(['reason']));
+      expect(node.dataset.appearance).toBe(appearance);
+      expect(node.classList.contains('persona-activity-row')).toBe(layout === 'row');
+      expect(node.querySelectorAll('button')).toHaveLength(1);
+      expect(node.querySelectorAll('.persona-border-t')).toHaveLength(1);
+      expect(node.querySelector(':scope > .persona-border-t')?.textContent).toBe('Details');
+      expect(node.querySelector('button')?.getAttribute('aria-expanded')).toBe('true');
+    }
+  });
+  it('preserves version defaults and explicit reasoning layout', () => {
+    expect(createReasoningBubble(reasoning, { future: { v5Defaults }, features: { reasoningDisplay: { appearance: undefined } } }).dataset.appearance).toBe(v5Defaults ? 'inset' : 'panel');
+    expect(createReasoningBubble(reasoning, { future: { v5Defaults }, features: { reasoningDisplay: { layout: 'row' } } }).dataset.appearance).toBe(v5Defaults ? 'inset' : 'plain');
+  });
+  it.each(['toolCallDisplay', 'reasoningDisplay'] as const)('preserves the shipped %s alias through defaults, turn scopes, and resets', key => {
+    const build = (config: AgentWidgetConfig) => key === 'toolCallDisplay' ? createToolBubble({ ...message(), turnActivity: { id: 'turn', kind: 'progress' } }, config) : createReasoningBubble(reasoning, config);
+    let config = mergeWithDefaults({ future: { v5Defaults }, turnActivity: { enabled: true }, features: { [key]: { variant: 'card' } } }) as AgentWidgetConfig;
+    expect(build(config).classList.contains('persona-activity-row')).toBe(false);
+    config = mergeConfigUpdate(config, { features: { [key]: { layout: 'row' } } });
+    expect(build(config).classList.contains('persona-activity-row')).toBe(true);
+    config = mergeConfigUpdate(config, { features: { [key]: { variant: 'row' } } });
+    config = mergeConfigUpdate(config, { features: { [key]: { variant: 'card' } } });
+    expect(build(config).classList.contains('persona-activity-row')).toBe(true);
+    config = mergeConfigUpdate(config, { features: { [key]: { layout: undefined } } });
+    expect(build(config).classList.contains('persona-activity-row')).toBe(false);
+    config = mergeConfigUpdate(config, { features: { [key]: { variant: undefined } } });
+    expect(build(config).classList.contains('persona-activity-row')).toBe(true);
+  });
+  it('lets authored choices override turn defaults for layout and reasoning appearance', () => {
+    const config = mergeWithDefaults({ future: { v5Defaults }, turnActivity: { enabled: true }, features: { reasoningDisplay: { layout: 'card', appearance: 'plain' } } }) as AgentWidgetConfig;
+    const node = createReasoningBubble(reasoning, config);
+    expect(node.classList.contains('persona-activity-row')).toBe(false);
+    expect(node.dataset.appearance).toBe('plain');
   });
 });

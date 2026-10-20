@@ -5,6 +5,9 @@
  * and theme tokens); the page stylesheet carries page chrome plus the heading
  * reset that undoes this site's own global heading font.
  *
+ * Explicit send sizes below 40px retain their touch-target sizing behavior;
+ * component size tokens would enlarge those controls on coarse pointers.
+ *
  * Each recreation is a separate widget instance
  * with its own theme, so the page also doubles as a multi-instance test.
  *
@@ -43,6 +46,7 @@ import {
 
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { renderExamplesShell } from "./examples-nav";
+import { createAssistantPreset } from "./assistant-presets";
 import { applyCurrentProductComposer } from "./recreation-composer-presets";
 
 renderExamplesShell("suggestion-recreations");
@@ -192,17 +196,12 @@ const chatgpt = (): AgentWidgetConfig => applyCurrentProductComposer("chatgpt", 
   // recognition. Enabled here for visual parity with ChatGPT's empty state.
   voiceRecognition: {
     enabled: true,
-    backgroundColor: "transparent",
-    borderWidth: "0",
-    iconColor: "#5d5d5d",
     showTooltip: false,
   },
   sendButton: {
     useIcon: true,
     iconName: "arrow-up",
     size: "36px",
-    // Sparse arrow glyph: the 50% default box reads lost; 25px matches the ref.
-    iconSize: "20px",
     showTooltip: false,
   },
   suggestions: {
@@ -242,18 +241,21 @@ const chatgpt = (): AgentWidgetConfig => applyCurrentProductComposer("chatgpt", 
       // 28px, not 9999px: the two-row bar in the May 2025 shot is a rounded
       // rectangle; a stadium only matches their old single-row state.
       input: { background: "#ffffff", borderRadius: "28px" },
+      voice: { control: { background: "transparent", borderWidth: "0", foreground: "#5d5d5d" } },
       // Measured off the ChatGPT composer: 16px type on a 24px line, the
       // textarea row sitting 16px above the action row. Keep lineHeight <= 24px
       // or it eats into the textarea's 60px max-height. The edge is drawn by
       // the soft shadow, not the hairline border.
       composer: {
+        // Preserve the custom arrow box independently of control height.
+        send: { iconSize: "20px" },
         shadow: "0 4px 24px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.03)",
         padding: "18px 16px 12px",
         gap: "16px",
         fontSize: "16px",
         lineHeight: "24px",
         // One token sizes the "+" trigger, the mic, and the voice-mode button
-        // together; `sendButton.size` still wins for send.
+        // together; the explicit send size still wins for send.
         controlSize: "36px",
         controlIconSize: "20px",
       },
@@ -362,10 +364,6 @@ const claude = (): AgentWidgetConfig => applyCurrentProductComposer("claude", {
   sendButton: {
     useIcon: true,
     iconName: "arrow-up",
-    // Sparse arrow glyph: the 50% default box reads lost; 20px matches the ref.
-    // Stroke is lighter for the icon
-    iconSize: "20px",
-    iconStrokeWidth: 1.25,
     showTooltip: false,
   },
   suggestions: {
@@ -411,6 +409,7 @@ const claude = (): AgentWidgetConfig => applyCurrentProductComposer("claude", {
       // deep top inset so the caret sits well below the card edge. The card
       // floats on a diffuse warm shadow; the hairline border barely registers.
       composer: {
+        send: { iconSize: "20px", iconStrokeWidth: "1.25" },
         shadow:
           "0 8px 24px rgba(61, 57, 41, 0.07), 0 1px 2px rgba(61, 57, 41, 0.05)",
         padding: "18px 16px 14px",
@@ -503,17 +502,12 @@ const gemini = (): AgentWidgetConfig => applyCurrentProductComposer("gemini", {
   // recognition. Enabled here for visual parity with Gemini's input bar.
   voiceRecognition: {
     enabled: true,
-    backgroundColor: "transparent",
-    borderWidth: "0",
-    iconColor: "#444746",
     showTooltip: false,
   },
   sendButton: {
     useIcon: true,
     iconName: "arrow-up",
     size: "36px",
-    // Sparse arrow glyph: the 50% default box reads lost; 25px matches the ref.
-    iconSize: "22px",
     showTooltip: false,
   },
   suggestions: {
@@ -549,9 +543,11 @@ const gemini = (): AgentWidgetConfig => applyCurrentProductComposer("gemini", {
       // 28px, not 9999px: with the two-row action layout Gemini's bar is a
       // rounded rectangle; a stadium shape only fits their single-row state.
       input: { background: "#f0f4f9", borderRadius: "28px" },
+      voice: { control: { background: "transparent", borderWidth: "0", foreground: "#444746" } },
       // The wider horizontal inset keeps the caret clear of the rounded ends;
       // 16px type on 24px matches Gemini's bar.
       composer: {
+        send: { iconSize: "22px" },
         shadow: "none",
         padding: "16px 20px 12px",
         gap: "14px",
@@ -595,181 +591,16 @@ const gemini = (): AgentWidgetConfig => applyCurrentProductComposer("gemini", {
 // ── 4. Microsoft Copilot ────────────────────────────────────────────────
 // The rich-card school: a 2x2 of icon plus short title plus muted description,
 // the two-line pattern M365 kept when everyone else dropped it. Click sends.
-const copilot = (): AgentWidgetConfig => applyCurrentProductComposer("copilot", {
-  ...base(),
-  welcome: {
-    variant: "hero",
-    title: "How can I help you today?",
-    subtitle: "I can work across your mail, meetings, and documents.",
-  },
-  copy: {
-    inputPlaceholder: "Message Copilot",
-  },
-  // Composer: the signature control is the response-mode selector, which is one
-  // single-select mode group rendered as three labeled bar toggles. Sticky
-  // persistence is the point: the choice survives every send, the way theirs
-  // survives a chat. Around it, the leading "+" is the attachment button (no
-  // menu here, so it keeps the bar position their box uses) and the end cluster
-  // is mic then send.
-  //
-  // Their selector opens as a dropdown with one option always chosen; config
-  // authors no initial `activeModeIds`, so the group starts empty and the first
-  // click is the user's.
-  attachments: {
-    enabled: true,
-    buttonIconName: "plus",
-    buttonTooltipText: "Add files",
-  },
-  composer: {
-    modeGroups: [{ id: "response-mode", selection: "single" }],
-    modes: [
-      {
-        id: "quick",
-        groupId: "response-mode",
-        label: "Quick response",
-        shortLabel: "Quick",
-        iconName: "zap",
-        presentation: "bar",
-        persistence: "sticky",
-        placeholder: "Ask for a quick answer",
-      },
-      {
-        id: "think-deeper",
-        groupId: "response-mode",
-        label: "Think deeper",
-        shortLabel: "Think deeper",
-        iconName: "lightbulb",
-        presentation: "bar",
-        persistence: "sticky",
-        placeholder: "Ask something worth thinking about",
-      },
-      {
-        id: "deep-research",
-        groupId: "response-mode",
-        label: "Deep research",
-        shortLabel: "Research",
-        iconName: "search",
-        presentation: "bar",
-        persistence: "sticky",
-        placeholder: "Give it a topic to research",
-      },
-    ],
-  },
-  // Live feature, not chrome: clicking the mic starts real browser speech
-  // recognition. Enabled here for visual parity with Copilot's input box.
-  voiceRecognition: {
-    enabled: true,
-    backgroundColor: "transparent",
-    borderWidth: "0",
-    iconColor: "#616161",
-    showTooltip: false,
-  },
-  sendButton: {
-    useIcon: true,
-    iconName: "arrow-up",
-    size: "32px",
-    // Sparse arrow glyph: the 50% default box reads lost; 22px matches the ref.
-    iconSize: "22px",
-    showTooltip: false,
-  },
-  suggestions: {
-    starters: {
-      variant: "card",
-      behavior: "send",
-      placement: "welcome",
-      maxItems: 4,
-      items: [
-        {
-          id: "catch-up",
-          label: "Catch me up on this week",
-          description: "Meetings, mentions, and unread mail",
-          icon: "mail",
-        },
-        {
-          id: "status",
-          label: "Draft a project status update",
-          description: "Pulls from your recent docs and chats",
-          icon: "file-text",
-        },
-        {
-          id: "meeting",
-          label: "Summarize my last meeting",
-          description: "Decisions, owners, and next steps",
-          icon: "calendar-days",
-        },
-        {
-          id: "find",
-          label: "Find files I worked on last month",
-          description: "Searches Word, Excel, and PowerPoint",
-          icon: "search",
-        },
-      ],
-    },
-  },
-  theme: {
-    semantic: {
-      colors: {
-        background: "#f7f7f9",
-        container: "#f7f7f9",
-        surface: "#ffffff",
-        text: "#242424",
-        textMuted: "#616161",
-        border: "#e1dfdd",
-        primary: "#0f6cbd",
-        accent: "#0f6cbd",
-      },
-    },
-    components: {
-      panel: { borderRadius: "0" },
-      // The greeting is neutral ink in M365; the title color otherwise
-      // defaults to `semantic.colors.primary`, which is the Copilot blue.
-      introCard: { title: { color: "#242424" } },
-      input: { background: "#ffffff", borderRadius: "0.75rem" },
-      // Roomier than the Persona default but tighter than Claude's card:
-      // Copilot's box is a soft rectangle with 16px type on 24px.
-      composer: {
-        shadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
-        padding: "16px 16px 12px",
-        gap: "12px",
-        fontSize: "16px",
-        lineHeight: "24px",
-        // Three labeled toggles plus "+" plus mic plus send is a full bar, so
-        // the controls run a size below the 40px default to keep it on one row.
-        controlSize: "32px",
-        controlIconSize: "18px",
-      },
-      button: {
-        primary: { background: "#0f6cbd", foreground: "#ffffff", borderRadius: "9999px" },
-        // Fluent's soft rectangles, and a blue-tinted active state: the pressed
-        // toggle paints with the ghost hover token.
-        ghost: {
-          foreground: "#616161",
-          hoverBackground: "#e8f1fa",
-          borderRadius: "6px",
-        },
-      },
-      suggestion: {
-        card: {
-          background: "#ffffff",
-          foreground: "#242424",
-          border: "#e1dfdd",
-          borderRadius: "0.75rem",
-          padding: "0.875rem",
-          gap: "0.625rem",
-          // Grid gutter between the four cards, matching M365's roomier 2x2.
-          itemGap: "12px",
-          minHeight: "84px",
-          fontSize: "0.875rem",
-          iconSize: "18px",
-          shadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
-          hoverBackground: "#f3f2f1",
-          hoverBorder: "#c7c5c3",
-          pressedBackground: "#ebe9e7",
-        },
-      },
-    },
-  },
-});
+const copilot = (): AgentWidgetConfig => {
+  const reference = createAssistantPreset("copilot", () => {});
+  return applyCurrentProductComposer("copilot", {
+    ...base(),
+    future: reference.future,
+    welcome: reference.welcome,
+    suggestions: reference.suggestions,
+    layout: { ...base().layout, contentMaxWidth: "768px" },
+  });
+};
 
 // ── 5. Perplexity ───────────────────────────────────────────────────────
 // Search-flavored: hairline rows of full questions that send on click, teal
@@ -850,9 +681,6 @@ const perplexity = (): AgentWidgetConfig => applyCurrentProductComposer("perplex
   sendButton: {
     useIcon: true,
     iconName: "arrow-right",
-    // Sparse arrow glyph: the 50% default box reads lost; 22px matches the ref.
-    iconSize: "22px",
-    iconStrokeWidth: 1.25,
     showTooltip: false,
   },
   suggestions: {
@@ -896,6 +724,7 @@ const perplexity = (): AgentWidgetConfig => applyCurrentProductComposer("perplex
       // Search-field proportions: a tall box with 16px type on 24px and the
       // submit control dropped onto its own row below the query.
       composer: {
+        send: { iconSize: "22px", iconStrokeWidth: "1.25" },
         shadow: "0 1px 2px rgba(19, 52, 59, 0.06)",
         padding: "16px 16px 12px",
         gap: "14px",

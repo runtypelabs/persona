@@ -1,3 +1,7 @@
+import { isHeaderVisible } from "./utils/panel-config";
+import type { getBubbleClasses, applyBubbleGeometry } from "./components/message-bubble";
+import type { resolveThemeDefaults } from "./utils/tokens";
+import type { usesSessionVoiceForConfig } from "./utils/voice-support";
 /**
  * Visitor conversation history shell (docs/visitor-history-implementation-plan.md
  * D6/D7/D8): placement, open/close, inertness of the obscured conversation,
@@ -18,7 +22,7 @@ import { type HistoryRenderSurface, createHistoryRenderSurface } from "./history
 import { type HistoryReturnSurface, type HistoryScope, type HistoryIdentityStatus, type WidgetHistoryInternals, type ResolvedHistoryPresentation, type LoadingIndicatorRenderContext, type AgentWidgetRenderHistoryOpenErrorContext, type HistoryConversationPatch, type HistoryConversationSummary } from "./types";
 import { type HistoryViewHandle, type HistoryRailSection, type HistoryHeaderPlacement, type HistoryViewOptions } from "./history-view-entry";
 import { createElement, createNode, cx } from "./utils/dom";
-import { parseCombo, formatCombo, ariaCombo } from "./utils/shortcuts";
+import type { parseCombo, formatCombo, ariaCombo } from "./utils/shortcuts";
 import { PORTALED_OVERLAY_Z_INDEX } from "./utils/constants";
 import { type HistoryConfirmOptions } from "./components/history-confirm-dialog";
 import type { getHistoryProviderFactory } from "./internal/history-provider-registry";
@@ -32,7 +36,47 @@ import type { createEventBus } from "./utils/events";
 import type { AgentWidgetControllerEventMap } from "./types";
 
 /** The widget closure state the shell reads and writes. */
+export type ConversationReadingState = {
+    top: number;
+    anchorId?: string;
+    anchorOffset: number;
+    following: boolean;
+    followFallback: boolean;
+    anchored: boolean;
+    anchoredId: string | null;
+    readerEngaged: boolean;
+    anchor: { initialSpacerHeight: number; contentHeightAtAnchor: number; spacerHeight: number } | null;
+    unread: number;
+  };
+
 export type HistoryShellContext = {
+  parseCombo: typeof parseCombo;
+  formatCombo: typeof formatCombo;
+  ariaCombo: typeof ariaCombo;
+  usesSessionVoiceForConfig: typeof usesSessionVoiceForConfig;
+  getBubbleClasses: typeof getBubbleClasses;
+  applyBubbleGeometry: typeof applyBubbleGeometry;
+  resolveThemeDefaults: typeof resolveThemeDefaults;
+  composerStore: ReturnType<typeof import("./utils/composer-store").createComposerStore>;
+  attachmentManager: import("./utils/attachment-manager").AttachmentManager | null;
+  composerConversationGeneration: number;
+  submissionAbort: AbortController | null;
+  persistState: () => void;
+  applyMessageRowLayout: (wrapper: HTMLElement, role: import("./types").AgentWidgetMessage["role"]) => void;
+  SessionHistoryError: typeof import("./session").SessionHistoryError;
+
+  instanceId: string;
+  discardConversationContinuity: (id?: string | null, restore?: boolean, persist?: boolean) => void;
+  clearPersistedDraft: () => void;
+  saveConversationContinuity: () => void;
+  restoreConversationContinuity: (fresh?: boolean, persist?: boolean) => void;
+  pendingConversationReading: { key: string; reading: ConversationReadingState } | null;
+  conversationStateKey: (id?: string | null, scope?: HistoryScope) => string;
+  captureConversationReading: () => ConversationReadingState;
+  restoreConversationReading: (reading: ConversationReadingState) => void;
+  conversationPersistenceOwner: number | null;
+  setComposerDisabled: (disabled: boolean) => void;
+
   readonly actionManager: { syncFromMetadata: () => void };
   readonly activeConversationTitle: string | null;
   readonly announceHistory: (message: string) => void;
@@ -66,6 +110,8 @@ export type HistoryShellContext = {
   readonly open: boolean;
   readonly panel: HTMLElement;
   readonly panelElements: import("./components/panel").PanelElements;
+  readonly panelSuggestions: HTMLElement;
+  readonly panelSuggestionsFade: HTMLElement;
   persistentMetadata: Record<string, unknown>;
   readonly plugins: import("./plugins/types").AgentWidgetPlugin[];
   reapplyHistoryHostChrome: () => void;
@@ -194,7 +240,9 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     unsubscribeHistoryIdentity?.();
     unsubscribeHistoryIdentity = null;
     historyUnavailable = false;
+    const previousProvider = historyProvider;
     historyProvider = buildHistoryProvider();
+    if (previousProvider && previousProvider !== historyProvider) ctx.discardConversationContinuity();
     const next: WidgetHistoryInternals = { ...ctx.historyInternals };
     if (historyProvider) next.historyProvider = historyProvider;
     else delete next.historyProvider;
@@ -263,7 +311,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
   const shownHeaderDisplay = (): string =>
     ctx.header === capturedPanelHeader
       ? capturedPanelHeaderDisplay
-      : ctx.config.layout?.showHeader === false
+      : !isHeaderVisible(ctx.config)
         ? "none"
         : "";
 
@@ -276,7 +324,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     ctx.historyPresentation === "panel" &&
     !!historyViewHandle &&
     historyMountedElement === historyViewHandle.element &&
-    ctx.config.layout?.showHeader !== false &&
+    isHeaderVisible(ctx.config) &&
     shownHeaderDisplay() !== "none";
 
   const suppressHeaderChildren = (): void => {
@@ -371,6 +419,12 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     // header-layout rebuild swaps them and re-enters here for the replacement.
     ctx.footer.hidden = true;
     setHistoryHostInert(ctx.footer, true);
+    // Composer-bar follow-ups live outside the transcript and footer. Keep
+    // suppression separate from `hidden`, which their renderer owns and may
+    // update while history is open.
+    ctx.panelSuggestions.style.display = "none";
+    setHistoryHostInert(ctx.panelSuggestions, true);
+    ctx.panelSuggestionsFade.style.display = "none";
     if (historyHeaderExternal()) {
       hostHistoryHeaderContent();
       ctx.header.style.display = shownHeaderDisplay();
@@ -387,6 +441,8 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
   const mountPanelHost = (element: HTMLElement): void => {
     const previousDisplay = ctx.body.style.display;
     const previousFooterHidden = ctx.footer.hidden;
+    const previousSuggestionsDisplay = ctx.panelSuggestions.style.display;
+    const previousSuggestionsFadeDisplay = ctx.panelSuggestionsFade.style.display;
     const capturedFooter = ctx.footer;
     const capturedHeader = ctx.header;
     const previousHeaderDisplay = ctx.header.style.display;
@@ -398,6 +454,9 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       capturedPanelHeader = null;
       ctx.body.style.display = previousDisplay;
       setHistoryHostInert(ctx.body, false);
+      ctx.panelSuggestions.style.display = previousSuggestionsDisplay;
+      setHistoryHostInert(ctx.panelSuggestions, false);
+      ctx.panelSuggestionsFade.style.display = previousSuggestionsFadeDisplay;
       capturedFooter.hidden = previousFooterHidden;
       setHistoryHostInert(capturedFooter, false);
       if (ctx.footer !== capturedFooter) {
@@ -408,11 +467,16 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       setHistoryHostInert(capturedHeader, false);
       if (ctx.header !== capturedHeader) {
         // A replacement carries no captured state; only config decides it.
-        ctx.header.style.display = ctx.config.layout?.showHeader === false ? "none" : "";
+        ctx.header.style.display = !isHeaderVisible(ctx.config) ? "none" : "";
         setHistoryHostInert(ctx.header, false);
       }
     };
-    ctx.footer.parentNode?.insertBefore(element, ctx.footer);
+    // Composer-bar footers live in a viewport-fixed pill host outside the
+    // panel. History belongs in the panel's flex column in either layout.
+    ctx.container.insertBefore(
+      element,
+      ctx.footer.parentNode === ctx.container ? ctx.footer : ctx.panelSuggestions
+    );
     enforcePanelHost();
   };
 
@@ -674,8 +738,8 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     aria: string;
   } | null => {
     const combo = ctx.config.features?.history?.rail?.collapseShortcut;
-    if (!combo || !parseCombo(combo)) return null;
-    return { combo, hint: formatCombo(combo), aria: ariaCombo(combo) };
+    if (!combo || !ctx.parseCombo(combo)) return null;
+    return { combo, hint: ctx.formatCombo(combo), aria: ctx.ariaCombo(combo) };
   };
 
   // --- collapsed rail as a floating overlay --------------------------------
@@ -801,7 +865,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
    * the expand label; docked, it says collapse again.
    */
   const syncRailToggleLabel = (): void => {
-    // The mounted element, not the surface: the first ctx.mount happens inside the
+    // The mounted element, not the surface: the first mount happens inside the
     // surface constructor, before `historySurface` is assigned.
     const toggle = historyMountedElement?.querySelector(
       '[data-persona-history-focus="collapse"]'
@@ -1075,7 +1139,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
 
   /**
    * Rail geometry is config-derived, so it must be re-derivable: a live
-   * `update()` of `rail.width` / `rail.side` lands here, not only at ctx.mount.
+   * `update()` of `rail.width` / `rail.side` lands here, not only at mount.
    */
   ctx.applyRailChrome = (): void => {
     // The bar mirrors the docked edge, so the view hears about a side flip even
@@ -1282,7 +1346,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     // Detach before re-hosting so a mid-move re-arbitration cannot re-insert
     // the surface into the host it is being moved out of.
     historySurface.element.remove();
-    // Rail is always inline; the panel host re-externalizes on ctx.mount.
+    // Rail is always inline; the panel host re-externalizes on mount.
     historySurface.view.setHeaderPlacement("inline");
     ctx.historyPresentation = next;
     historySurface.view.setPresentation(next);
@@ -1365,7 +1429,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       syncRailOverlayTrigger();
       mountRailPlaceholder();
     }
-    let module: Awaited<ReturnType<typeof loadHistoryView>>;
+    let module: Awaited<ReturnType<typeof ctx.loadHistoryView>>;
     try {
       module = await ctx.loadHistoryView();
     } catch {
@@ -1390,10 +1454,10 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     ctx.historyVisible = true;
 
     // Built externally when there is a shell header to host it in; the panel
-    // host re-decides on ctx.mount, so this only avoids a needless first insert.
+    // host re-decides on mount, so this only avoids a needless first insert.
     const initialHeaderPlacement: HistoryHeaderPlacement =
       ctx.historyPresentation === "panel" &&
-      ctx.config.layout?.showHeader !== false &&
+      isHeaderVisible(ctx.config) &&
       ctx.header.style.display !== "none"
         ? "external"
         : "inline";
@@ -1474,7 +1538,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       getReturnSurface: () => historyReturnSurface,
       close: () => closeHistory(),
       createView: ({ slots, renderDom, onModelChange, railSections }) => {
-        // Tracked before `historySurface` is assigned: the first ctx.mount happens
+        // Tracked before `historySurface` is assigned: the first mount happens
         // inside this constructor and already needs the handle.
         historyViewHandle = module.createHistoryView({
           ...baseViewOptions,
@@ -1625,6 +1689,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
   // resolution after a newer open, a new conversation, or a failure the visitor
   // navigated away from.
   let conversationOpenToken = 0;
+  let conversationOpenErrorEl: HTMLElement | null = null;
   // Show delay: opens that land inside it swap straight from the welcome or the
   // previous conversation to the loaded transcript, so no skeleton ever flashes.
   const CONVERSATION_OPEN_TAKEOVER_DELAY_MS = 250;
@@ -1652,6 +1717,8 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
   const clearConversationOpenPending = (): void => {
     conversationOpenToken += 1;
     cancelConversationOpenTakeover();
+    conversationOpenErrorEl?.remove();
+    conversationOpenErrorEl = null;
     if (!ctx.conversationOpenPendingEl) return;
     ctx.conversationOpenPendingEl.remove();
     ctx.conversationOpenPendingEl = null;
@@ -1681,26 +1748,62 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     }
   };
 
-  // The stand-in surfaces get the transcript's centered column from their
-  // container classes, so the hydrated messages land exactly where they stood.
-  const skeletonBubble = (width: string, trailing: boolean): HTMLElement =>
-    createNode("div", {
-      className: cx(
-        "persona-conversation-loading-bubble",
-        trailing && "persona-conversation-loading-bubble--trailing"
-      ),
+  const skeletonMessage = (role: "user" | "assistant"): HTMLElement => {
+    const layout = ctx.config.layout?.messages?.layout ?? "bubble";
+    const row = createNode("div", {
+      className: "persona-flex",
       attrs: { "aria-hidden": "true" },
-      style: { width },
     });
+    ctx.applyMessageRowLayout(row, role);
+    const bubble = createNode(
+      "div",
+      {
+        className: cx(ctx.getBubbleClasses(role, layout).join(" "), "persona-conversation-loading-bubble"),
+        attrs: { "data-persona-theme-zone": `${role}-message` },
+        style: {
+          width: role === "user" ? "64%" : "100%",
+          backgroundColor: layout === "flat" ? "transparent" :
+            `var(--persona-message-${role}-bg, var(--persona-${role === "user" ? "accent" : "container"}))`,
+          color: `var(--persona-message-${role}-text, ${role === "user" && layout !== "flat" ? "white" : "var(--persona-text)"})`,
+        },
+      },
+      ...["94%", ...(role === "assistant" ? ["86%"] : []), "62%"].map((width) =>
+        createNode("div", { className: "persona-conversation-loading-line", style: { width } })
+      )
+    );
+    ctx.applyBubbleGeometry(bubble, role, layout, {
+      ...ctx.resolveThemeDefaults(ctx.config.future).components.message[role],
+      ...ctx.config.theme?.components?.message?.[role],
+      ...ctx.config.darkTheme?.components?.message?.[role],
+    });
+    row.appendChild(bubble);
+    return row;
+  };
 
   const buildConversationOpenSkeleton = (): HTMLElement =>
     createNode(
       "div",
-      { className: "persona-conversation-loading-body" },
-      skeletonBubble("58%", false),
-      skeletonBubble("72%", true),
-      skeletonBubble("44%", false)
+      {
+        className: "persona-conversation-loading-body",
+        style: { gap: ctx.messagesWrapper.style.gap },
+      },
+      skeletonMessage("user"),
+      skeletonMessage("assistant"),
+      skeletonMessage("user"),
+      skeletonMessage("assistant")
     );
+
+  const buildConversationOpenIndicator = (): HTMLElement =>
+    ctx.config.loadingIndicator?.conversationOpenVariant === "skeleton"
+      ? buildConversationOpenSkeleton()
+      : createNode(
+          "div",
+          {
+            className: "persona-conversation-loading-spinner",
+            attrs: { "aria-hidden": "true" },
+          },
+          createNode("span", { className: "persona-conversation-loading-ring" })
+        );
 
   const mountConversationOpenState = (element: HTMLElement): void => {
     ctx.conversationOpenPendingEl?.remove();
@@ -1724,13 +1827,13 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
 
   const showConversationOpenPending = (): void => {
     // Same plugin -> config -> default chain as the streaming indicator. The
-    // hook replaces the skeleton only; the container keeps the centered
+    // hook replaces the indicator only; the container keeps the transcript
     // column, the status role, and the composer gate.
     const context: LoadingIndicatorRenderContext = {
       config: ctx.config,
       streaming: false,
       location: "conversation-open",
-      defaultRenderer: buildConversationOpenSkeleton,
+      defaultRenderer: buildConversationOpenIndicator,
     };
     let content: HTMLElement | null = null;
     const loadingPlugin = ctx.plugins.find((p) => p.renderLoadingIndicator);
@@ -1740,17 +1843,23 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     if (content === null && ctx.config.loadingIndicator?.render) {
       content = ctx.config.loadingIndicator.render(context);
     }
+    const rendered = content ?? buildConversationOpenIndicator();
     mountConversationOpenState(
       createNode(
         "div",
         {
-          className: "persona-conversation-loading",
+          className: cx(
+            "persona-conversation-loading",
+            rendered.classList.contains("persona-conversation-loading-spinner") &&
+              "persona-conversation-loading--centered"
+          ),
           attrs: {
             role: "status",
             "aria-label": historyShellCopy.openConversationLoadingLabel,
           },
+          style: { maxWidth: ctx.messagesWrapper.style.maxWidth || "none" },
         },
-        content ?? buildConversationOpenSkeleton()
+        rendered
       )
     );
   };
@@ -1819,19 +1928,20 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       }
       if (content) break;
     }
-    mountConversationOpenState(
-      createNode(
-        "div",
-        {
-          className: "persona-conversation-loading-error",
-          attrs: { role: "alert" },
-        },
-        content ?? buildDefaultBlock()
-      )
+    conversationOpenErrorEl?.remove();
+    conversationOpenErrorEl = createNode(
+      "div", {
+        className: "persona-conversation-loading-error",
+        attrs: { role: "alert" },
+      }, content ?? buildDefaultBlock()
     );
-    // A failure must never sit hidden behind the surface it replaces, so the
-    // error skips the stand-in's show delay.
-    engageConversationOpenTakeover();
+    if (!ctx.session.getActiveConversationId() && ctx.session.getMessages().length === 0 && !ctx.composerStore.getState().text && !ctx.attachmentManager?.hasAttachments()) {
+      const element = conversationOpenErrorEl;
+      conversationOpenErrorEl = null;
+      mountConversationOpenState(element);
+      engageConversationOpenTakeover();
+    } else ctx.body.insertBefore(conversationOpenErrorEl, ctx.messagesWrapper);
+    ctx.announceHistory(historyShellCopy.openConversationErrorTitle);
   };
 
   // The panel exit's deferred teardown restores the footer it captured, which
@@ -1850,9 +1960,30 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
    */
   const openHistoryConversation = async (
     conversationId: string,
-    { focusComposer = false }: { focusComposer?: boolean } = {}
+    { focusComposer = false, busy = "reject" }: { focusComposer?: boolean; busy?: "reject" | "stop" | "background" } = {}
   ): Promise<void> => {
     const scope = historyOperationScope();
+    if (busy === "background") {
+      ctx.session.assertBackgroundSwitchable();
+      if (ctx.composerStore.getState().phase === "preparing") {
+        throw new ctx.SessionHistoryError("conversation_busy", "Finish preparing this turn before switching conversations");
+      }
+    }
+    if (busy === "reject" && (ctx.session.isStreaming() || ["paused", "resuming"].includes(ctx.session.getStatus()) || ctx.composerStore.getState().phase === "preparing")) {
+      throw new ctx.SessionHistoryError("conversation_busy", "Finish or stop the current turn before switching conversations");
+    }
+    if (busy === "stop") {
+      ++ctx.composerConversationGeneration;
+      ctx.submissionAbort?.abort();
+      ctx.submissionAbort = null;
+      ctx.composerStore.setPreparing(false);
+      ctx.session.cancel();
+    }
+    const key = ctx.conversationStateKey();
+    if (!ctx.conversationOpenPendingEl || ctx.pendingConversationReading?.key !== key) {
+      ctx.pendingConversationReading = { key, reading: ctx.captureConversationReading() };
+    }
+    let persistenceOwner: number | null = null;
     // Seeds the header title binding from the list row before the list leaves.
     // The surface is usually gone by hydration time (the exit outruns the
     // fetch), so this is the only moment the title can be read from the list.
@@ -1866,21 +1997,42 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     }
     ctx.suppressScrollSend = true;
     try {
-      await ctx.session.openConversation(conversationId, { scope });
+      await ctx.session.openConversation(conversationId, {
+        scope, busy,
+        onBeforeCommit: () => {
+          ctx.saveConversationContinuity();
+          persistenceOwner = ctx.composerConversationGeneration;
+          ctx.conversationPersistenceOwner = persistenceOwner;
+        },
+        onCommitted: () => {
+          // The composer restoration is inside the session activation lock:
+          // a later queued commit snapshots this conversation, never its origin.
+          ctx.restoreConversationContinuity();
+          if (ctx.conversationPersistenceOwner === persistenceOwner) ctx.conversationPersistenceOwner = null;
+          if (ctx.usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
+          ctx.persistState();
+        },
+      });
     } catch (error) {
+      if (ctx.conversationPersistenceOwner === persistenceOwner) ctx.conversationPersistenceOwner = null;
+      if (persistenceOwner === ctx.composerConversationGeneration && ctx.usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
       if (token === conversationOpenToken) {
+        const reading = ctx.pendingConversationReading?.reading;
+        clearConversationOpenPending();
+        if (reading) ctx.restoreConversationReading(reading);
+        ctx.pendingConversationReading = null;
+        historySurface?.view.setActiveConversationId(ctx.session.getActiveConversationId());
         showConversationOpenError(conversationId);
+        ctx.suppressScrollSend = false;
       }
       throw error;
     } finally {
-      ctx.suppressScrollSend = false;
+      if (token === conversationOpenToken || !ctx.conversationOpenPendingEl) ctx.suppressScrollSend = false;
     }
     if (token !== conversationOpenToken) return;
     clearConversationOpenPending();
+    ctx.pendingConversationReading = null;
     ctx.messageCache.clear();
-    ctx.resetAnchorState();
-    ctx.resumeAutoScroll();
-    if (!ctx.restoreScrollPosition()) ctx.jumpToBottomInstant();
     // Fades only after the scroll settles, so the motion covers the final frame.
     fadeInTranscript();
     syncEarlierMessagesPill();
@@ -1906,7 +2058,28 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
   }: { focusComposer?: boolean } = {}): Promise<void> => {
     // A new conversation supersedes any transcript fetch still in flight.
     clearConversationOpenPending();
-    await ctx.session.startNewConversation({ scope: historyOperationScope() });
+    let persistenceOwner: number | null = null;
+    try {
+      await ctx.session.startNewConversation({
+        scope: historyOperationScope(),
+        onBeforeCommit: () => {
+          ctx.saveConversationContinuity();
+          persistenceOwner = ctx.composerConversationGeneration;
+          ctx.conversationPersistenceOwner = persistenceOwner;
+        },
+        onCommitted: () => {
+          ctx.restoreConversationContinuity(true);
+          if (ctx.conversationPersistenceOwner === persistenceOwner) ctx.conversationPersistenceOwner = null;
+          if (ctx.usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
+          ctx.persistState();
+          ctx.pendingConversationReading = null;
+        },
+      });
+    } catch (error) {
+      if (ctx.conversationPersistenceOwner === persistenceOwner) ctx.conversationPersistenceOwner = null;
+      if (persistenceOwner === ctx.composerConversationGeneration && ctx.usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
+      throw error;
+    }
     ctx.setActiveConversationSummary(null);
     ctx.messageCache.clear();
     ctx.resetAnchorState();
@@ -1950,6 +2123,12 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     const scope = historyOperationScope();
     const wasActive = ctx.session.getActiveConversationId() === conversationId;
     await ctx.session.deleteConversation(conversationId, { scope });
+    ctx.discardConversationContinuity(conversationId);
+    if (wasActive) {
+      ctx.attachmentManager?.destroy({ release: true });
+      ctx.attachmentManager = null;
+      ctx.restoreConversationContinuity(true);
+    }
     // Prune the open list too: the view's own delete flow removes its row
     // after this resolves, but built-in/headless deletes have no view caller.
     historySurface?.view.removeConversationSummary(conversationId);
@@ -1984,6 +2163,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       ...(targetId ? { targetId } : {}),
       scope,
     });
+    ctx.discardConversationContinuity();
     ctx.setActiveConversationSummary(null);
     ctx.messageCache.clear();
     ctx.resetAnchorState();
@@ -2016,6 +2196,8 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       const result = await ctx.session.resetHistoryDevice();
       remoteRevocationConfirmed = result.remoteRevocationConfirmed;
     } finally {
+      ctx.discardConversationContinuity();
+      clearConversationOpenPending();
       ctx.setActiveConversationSummary(null);
       ctx.session.clearArtifacts();
       ctx.messageCache.clear();
@@ -2024,10 +2206,12 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       ctx.config.clearStoredConversationId?.();
       ctx.persistentMetadata = {};
       ctx.actionManager.syncFromMetadata();
-      const storageAdapter = ctx.storageAdapter;
-      if (storageAdapter?.clear) {
+      // Remove any stored draft before the terminal clear mutation is queued.
+      ctx.clearPersistedDraft();
+      const activeStorageAdapter = ctx.storageAdapter;
+      if (activeStorageAdapter?.clear) {
         ctx.runStorageMutation(
-          () => storageAdapter.clear!(),
+          () => activeStorageAdapter.clear!(),
           "[AgentWidget] Failed to clear storage adapter:"
         );
       }
@@ -2320,6 +2504,10 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
   });
 
   return {
+    clearConversationOpenPending,
+    cancelConversationOpenTakeover,
+    historyOperationScope,
+    discardConversationContinuity: ctx.discardConversationContinuity,
     historyAvailable,
     historyScope,
     installHistoryProvider,

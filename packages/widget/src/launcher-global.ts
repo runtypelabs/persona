@@ -21,7 +21,7 @@
  *     → { root, element, update, destroy }
  */
 import { createLauncherSurface } from "./components/launcher";
-import { applyThemeVariables } from "./utils/theme";
+import { applyLauncherThemeVariables } from "./utils/theme";
 import { DEFAULT_LAUNCHER_CONFIG, DEFAULT_LAUNCHER_V5 } from "./defaults";
 import { setIconsExtraLoader } from "./icons-extra-loader";
 import type { AgentWidgetConfig } from "./types";
@@ -131,7 +131,7 @@ export const mount = (
   const root = document.createElement("div");
   root.setAttribute("data-persona-root", "true");
   root.setAttribute(CRITICAL_LAUNCHER_ATTR, "true");
-  applyThemeVariables(root, config);
+  applyLauncherThemeVariables(root, config);
 
   const surface = createLauncherSurface(config, onOpen);
   root.appendChild(surface.element);
@@ -142,7 +142,7 @@ export const mount = (
     element: surface.launcher.element,
     update: (next: AgentWidgetConfig) => {
       const merged = mergeCriticalLauncherConfig(next);
-      applyThemeVariables(root, merged);
+      applyLauncherThemeVariables(root, merged);
       surface.update(merged);
     },
     // Handoff destroys the whole surface, so a pending teaser timer cannot

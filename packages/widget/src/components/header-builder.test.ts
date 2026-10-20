@@ -8,6 +8,17 @@ import {
 import { buildHeader } from "./header-builder";
 
 describe("buildHeader tooltips", () => {
+  it("adds padding outside the custom image box without shrinking its content", () => {
+    const { iconHolder } = buildHeader({ config: {
+      apiUrl: "/dispatch", launcher: { headerIconSize: "20px", headerIconName: "", iconUrl: "/logo.svg" },
+    } });
+    expect(iconHolder.style.boxSizing).toBe("content-box");
+    expect(iconHolder.style.padding).toBe("var(--persona-components-header-iconPadding, 0px)");
+    expect(iconHolder.style.flexShrink).toBe("0");
+    expect(iconHolder.style.width).toBe("20px");
+    expect(iconHolder.querySelector("img")?.style.width).toBe("20px");
+    expect(iconHolder.querySelector("svg")).toBeNull();
+  });
   it.each([{ v5Defaults: false }, { v5Defaults: true }])(
     "uses the standard padding token under v5Defaults=%s",
     (future) => {

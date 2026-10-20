@@ -52,8 +52,9 @@ const widgetScriptSrc: string | null =
  * `remedy`.
  */
 const siblingChunk =
-  <T>(file: string, remedy = `host ${file} alongside it`) =>
-  (): Promise<T> => {
+  <T>(file: string, remedy = `host ${file} alongside it`) => {
+  let failures = 0;
+  return (): Promise<T> => {
     const chunkUrl = widgetScriptSrc?.replace(/index\.global\.js($|\?)/, `${file}$1`);
     if (!chunkUrl || chunkUrl === widgetScriptSrc) {
       return Promise.reject(
@@ -66,8 +67,14 @@ const siblingChunk =
     }
     // Runtime-only dynamic import; the specifier is a computed URL, so the bundler
     // leaves it untouched (and must not try to bundle it).
-    return import(/* @vite-ignore */ chunkUrl);
+    // Browsers cache failed module fetches too. Give explicit retries a fresh
+    // module URL; successful imports continue to share the chunk loader cache.
+    return import(/* @vite-ignore */ `${chunkUrl}${failures ? `#retry-${failures}` : ""}`).catch((error: unknown) => {
+      failures++;
+      throw error;
+    });
   };
+};
 
 setWebMcpPolyfillLoader(
   siblingChunk(
@@ -82,8 +89,8 @@ setWebMcpPolyfillLoader(
 // This bundle is built with `./markdown-parsers-entry` external: the Markdown
 // and HTML sanitization libraries are kept out of the CDN payload. Register a
 // loader that imports the self-contained `markdown-parsers.js` chunk from a
-// sibling URL. The UI warms it on first panel visibility (see
-// `warmMarkdownParsers` in ui.ts), so closed-launcher visitors never fetch it.
+// sibling URL. Renderer preparation loads it before revealing the full widget.
+// Deferred installs keep using the critical launcher until that preparation finishes.
 // ---------------------------------------------------------------------------
 
 import { setMarkdownParsersLoader } from "./markdown-parsers-loader";
@@ -92,7 +99,7 @@ setMarkdownParsersLoader(siblingChunk("markdown-parsers.js"));
 
 // Deferred SSE stream processor (`client-stream.ts`), built with
 // `./client-stream` external. The client starts the fetch when a dispatch
-// begins and the UI warms it alongside the markdown parsers.
+// begins and the UI warms it on first panel visibility.
 import { setClientStreamLoader } from "./client-stream-loader";
 
 setClientStreamLoader(siblingChunk("client-stream.js"));
@@ -311,3 +318,28 @@ setSessionReconnectLoader(siblingChunk("session-reconnect.js"));
 import { setEventStreamViewLoader } from "./event-stream-view-loader";
 
 setEventStreamViewLoader(siblingChunk("event-stream-view.js"));
+
+import { setComposerActionsLoader } from "./composer-actions-loader";
+setComposerActionsLoader(siblingChunk("composer-actions-runtime.js"));
+
+import { setDictationRuntimeLoader } from "./dictation-runtime-loader";
+setDictationRuntimeLoader(siblingChunk("dictation-runtime.js"));
+
+import { setBackgroundRuntimeLoader } from "./background-runtime-loader";
+setBackgroundRuntimeLoader(siblingChunk("background-runtime.js"));
+
+import { setConfigDiagnosticsLoader } from "./config-diagnostics-loader";
+setConfigDiagnosticsLoader(siblingChunk("config-diagnostics.js"));
+
+import { setActivityUiLoader } from "./activity-ui-loader";
+setActivityUiLoader(siblingChunk("activity-ui.js"));
+
+import { setLoadingLabelRuntimeLoader } from "./loading-label-runtime-loader";
+setLoadingLabelRuntimeLoader(siblingChunk("loading-label-runtime.js"));
+
+// Request construction and dispatch are needed only when sending a turn.
+import { setClientDispatchLoader } from "./client-dispatch-loader";
+setClientDispatchLoader(siblingChunk("client-dispatch.js"));
+
+import { setTurnActivityUiLoader } from "./turn-activity-ui-loader";
+setTurnActivityUiLoader(siblingChunk("turn-activity-ui.js"));

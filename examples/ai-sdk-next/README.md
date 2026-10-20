@@ -1,7 +1,6 @@
-# Persona SDK Adapter Minimal
+# Persona Workspace · Vercel AI SDK and OpenAI Responses
 
-This standalone example shows two minimal ways to plug an existing SDK stream
-into Persona's SSE protocol without writing Persona frames in every route:
+A restrained, full-page chat workspace with Persona V5 defaults, real in-visit conversation navigation, and explicit Preview / Live modes. The two adapters plug existing SDK streams into Persona’s SSE protocol:
 
 - **Vercel AI SDK**: wraps `streamText().fullStream`
 - **OpenAI Responses SDK**: wraps `openai.responses.create({ stream: true })`
@@ -20,12 +19,50 @@ future package export such as `@runtypelabs/persona-proxy/adapters`.
 
 ```bash
 pnpm --filter @runtypelabs/persona build
-cp examples/ai-sdk-next/.env.example examples/ai-sdk-next/.env.local
-# edit .env.local and set OPENAI_API_KEY
 pnpm --filter ai-sdk-next dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000`. **Preview is the default and requires no API key.**
+
+The preview contains illustrative launch research, never live research. The AI SDK
+path runs a deterministic `LanguageModelV4` through the real `streamText()` loop:
+reasoning, three executed in-memory tools, then a streamed final answer. The OpenAI
+path uses the official SDK with a local `fetch` fixture, then the production
+Responses adapter, preserving commentary and final-answer phases. The provider
+selector selects the corresponding preview path as well as the live path.
+The three starter prompts select research, comparison, and checklist scenarios.
+Other prompts use the sample research answer. Preview tools only read bundled data;
+`check_readiness` evaluates an in-memory checklist and never runs a shell command.
+
+To enable **Live**, configure server-only credentials and restart the app:
+
+```bash
+cp examples/ai-sdk-next/.env.example examples/ai-sdk-next/.env.local
+# Set OPENAI_API_KEY in .env.local; optionally set the model variables below.
+pnpm --filter ai-sdk-next dev
+```
+
+Live is visibly unavailable until the server has a key. Preview never silently
+falls back to live or consumes provider credits. Each new conversation retains
+its own mounted Persona instance, transcript, provider, and mode for this visit;
+refreshing the page clears the in-memory history. Switching modes/providers opens
+a new conversation so incompatible histories are never mixed.
+
+The workspace uses `future: { v5Defaults: true }`, embedded layout, and turn activity.
+Tool and reasoning detail uses V5’s bounded overflow and muted default icons.
+The greeting/composer moves from the centered empty state to a conversation on
+first message. On mobile, the same real conversation list opens as a drawer.
+
+Validated dependency baseline: AI SDK 7, `@ai-sdk/openai` 4, OpenAI SDK 7, Next.js 16,
+React 19, Zod 4. Exact compatible ranges are in `package.json`. Provider protocol
+fixtures use the current V4 interface. Reference: [AI SDK streaming](https://ai-sdk.dev/docs/reference/ai-sdk-core/stream-text),
+[AI SDK testing](https://ai-sdk.dev/docs/ai-sdk-core/testing).
+
+```bash
+pnpm --filter ai-sdk-next lint
+pnpm --filter ai-sdk-next test
+pnpm --filter ai-sdk-next build
+```
 
 The adapter tests run offline against a mocked model, so they need no API key:
 
@@ -37,6 +74,8 @@ pnpm --filter ai-sdk-next test
 
 | Route | SDK | Adapter |
 | --- | --- | --- |
+| `/api/preview/dispatch?adapter=ai-sdk` | Keyless AI SDK fixture | Real `streamText()` and `createAISDKPersonaHandler()` |
+| `/api/preview/dispatch?adapter=openai-responses` | Keyless OpenAI fixture | Official SDK and `createOpenAIResponsesPersonaHandler()` |
 | `/api/ai-sdk/dispatch` | Vercel AI SDK | `createAISDKPersonaHandler()` |
 | `/api/openai-responses/dispatch` | Official OpenAI SDK | `createOpenAIResponsesPersonaHandler()` |
 
@@ -76,6 +115,58 @@ data: {"type":"turn_complete","executionId":"exec_...","seq":5,"id":"turn_...","
 event: execution_complete
 data: {"type":"execution_complete","executionId":"exec_...","seq":6,"kind":"agent","success":true,"completedAt":"..."}
 ```
+
+## OpenAI message phases and turn activity
+
+The OpenAI tab enables `turnActivity: { enabled: true }`. The Responses adapter
+keeps each provider message and content part separate, using
+`<item_id>:<content_index>` as the Persona text block ID and one stable
+`executionId` for the request. If the provider supplies an assistant message
+phase before its first text delta, the adapter copies it to `text_start.phase`:
+
+| Phase | Placement with turn activity enabled |
+| --- | --- |
+| `commentary` | Inside the turn activity disclosure |
+| `partial_answer` or `final_answer` | In the conversation |
+| Missing or unknown | In the conversation |
+
+The adapter does not classify text by its wording, message order, or completion
+status. A completed commentary message remains commentary. Reasoning content is
+not copied into assistant text.
+
+OpenAI's assistant message phase is optional and depends on the model and
+workflow. The default `gpt-4.1-mini` route remains useful as ordinary streaming
+chat. To try a model supporting phases and a real hosted search, set these
+server-side variables in `.env.local`, then restart the dev server:
+
+```dotenv
+OPENAI_RESPONSES_MODEL=gpt-5.4
+OPENAI_RESPONSES_REASONING_EFFORT=low
+OPENAI_RESPONSES_WEB_SEARCH=true
+OPENAI_RESPONSES_MAX_OUTPUT_TOKENS=2048
+```
+
+Select **OpenAI Responses** and try: “Give me a brief progress update, then use
+web search to find the official OpenAI Responses API documentation and summarize
+what it says about streaming.” An update in prose does not guarantee provider
+phase metadata. Hosted search emits a tool start when OpenAI adds the search
+item, followed by its actual result and completion status. Function execution
+and browser tools still require a separate execution/resume loop.
+
+Placement is frozen when a text block begins. If a phase first arrives with
+`response.output_item.done`, `text_complete.phase` preserves it as history-only
+`agentMetadata.providerPhase`; already-visible text stays in place. Persona's
+outbound assistant history uses the authoritative provider phase when known.
+`personaMessagesToOpenAIInput()` preserves `commentary` and `final_answer` on
+assistant history and never labels user messages. `partial_answer` is accepted
+by the Persona wire but is not sent to OpenAI, whose documented input phase
+values are `commentary` and `final_answer`.
+
+Only `response.completed` completes a successful run. Provider failures,
+incomplete responses (including token limits), and unexpected EOF terminate with
+`execution_error`; cancelling the request or response reader aborts the provider
+request. See OpenAI's [phase guidance](https://developers.openai.com/api/docs/guides/reasoning#phase-parameter)
+and [streaming event reference](https://developers.openai.com/api/reference/resources/responses/streaming-events).
 
 ## Follow-up suggestions
 
@@ -231,6 +322,10 @@ To opt into automatic opening, set
 `features: { toolCallDisplay: { autoExpand: true } }`. Omit the V5 flag to retain
 V4 presentation. See the [theme guide](../../packages/widget/THEME-CONFIG.md#v5-tool-details)
 for color overrides and rendering behavior.
+
+Group labels use Persona's built-in summaries, including counts such as
+“Web searches (2)” for repeated searches and “3 activities” for completed mixed
+groups. No custom group-summary hook is enabled in the demo.
 
 ### Optional descriptive group labels
 

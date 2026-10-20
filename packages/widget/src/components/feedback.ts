@@ -54,326 +54,223 @@ const defaultCSATLabels: [string, string, string, string, string] = [
   'Very satisfied'
 ];
 
-/**
- * Create a CSAT (Customer Satisfaction) feedback form
- * Rating scale: 1-5
- */
+/** Shared form lifecycle keeps rating-specific controls and labels independent. */
+function createFeedbackForm(
+  options: CSATFeedbackOptions | NPSFeedbackOptions,
+  kind: "csat" | "nps",
+  renderRatings: (select: (rating: number) => void) => { element: HTMLElement; attentionTarget: HTMLElement },
+): HTMLElement {
+  const { onSubmit, onDismiss, title = kind === "csat" ? "How satisfied are you?" : "How likely are you to recommend us?",
+    subtitle = kind === "csat" ? "Please rate your experience" : "On a scale of 0 to 10",
+    commentPlaceholder = kind === "csat" ? "Share your thoughts (optional)..." : "What could we do better? (optional)...",
+    submitText = "Submit", skipText = "Skip", showComment = true } = options;
+  const container = document.createElement('div');
+  container.className = `persona-feedback-container persona-feedback-${kind}`;
+  container.setAttribute('role', 'dialog');
+  container.setAttribute("aria-label", kind === "csat" ? "Customer satisfaction feedback" : "Net Promoter Score feedback");
+
+  let selectedRating: number | null = null;
+
+  // Create inner content
+  const content = document.createElement('div');
+  content.className = 'persona-feedback-content';
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'persona-feedback-header';
+  
+  const titleEl = document.createElement('h3');
+  titleEl.className = 'persona-feedback-title';
+  titleEl.textContent = title;
+  header.appendChild(titleEl);
+
+  const subtitleEl = document.createElement('p');
+  subtitleEl.className = 'persona-feedback-subtitle';
+  subtitleEl.textContent = subtitle;
+  header.appendChild(subtitleEl);
+
+  content.appendChild(header);
+
+  const { element: ratings, attentionTarget } = renderRatings(rating => { selectedRating = rating; });
+  content.appendChild(ratings);
+
+  // Comment field
+  let commentTextarea: HTMLTextAreaElement | null = null;
+  if (showComment) {
+    const commentContainer = document.createElement('div');
+    commentContainer.className = 'persona-feedback-comment-container';
+    
+    commentTextarea = document.createElement('textarea');
+    commentTextarea.className = 'persona-feedback-comment';
+    commentTextarea.placeholder = commentPlaceholder;
+    commentTextarea.rows = 3;
+    commentTextarea.setAttribute('aria-label', 'Additional comments');
+    
+    commentContainer.appendChild(commentTextarea);
+    content.appendChild(commentContainer);
+  }
+
+  // Action buttons
+  const actions = document.createElement('div');
+  actions.className = 'persona-feedback-actions';
+
+  const skipButton = document.createElement('button');
+  skipButton.type = 'button';
+  skipButton.className = 'persona-feedback-btn persona-feedback-btn-skip';
+  skipButton.textContent = skipText;
+  skipButton.addEventListener('click', () => {
+    onDismiss?.();
+    container.remove();
+  });
+
+  const submitButton = document.createElement('button');
+  submitButton.type = 'button';
+  submitButton.className = 'persona-feedback-btn persona-feedback-btn-submit';
+  submitButton.textContent = submitText;
+  submitButton.addEventListener('click', async () => {
+    if (selectedRating === null) {
+      // Shake the rating container to indicate selection required
+      attentionTarget.classList.add('persona-feedback-shake');
+      setTimeout(() => attentionTarget.classList.remove('persona-feedback-shake'), 500);
+      return;
+    }
+    
+    submitButton.disabled = true;
+    submitButton.textContent = 'Submitting...';
+    
+    try {
+      const comment = commentTextarea?.value.trim() || undefined;
+      await onSubmit(selectedRating, comment);
+      container.remove();
+    } catch (error) {
+      submitButton.disabled = false;
+      submitButton.textContent = submitText;
+      // eslint-disable-next-line no-console
+      console.error(`[${kind.toUpperCase()} Feedback] Failed to submit:`, error);
+    }
+  });
+
+  actions.appendChild(skipButton);
+  actions.appendChild(submitButton);
+  content.appendChild(actions);
+
+  container.appendChild(content);
+
+  return container;
+}
+
+/** Create a CSAT feedback form with its original rating scale. */
 export function createCSATFeedback(options: CSATFeedbackOptions): HTMLElement {
-  const {
-    onSubmit,
-    onDismiss,
-    title = 'How satisfied are you?',
-    subtitle = 'Please rate your experience',
-    commentPlaceholder = 'Share your thoughts (optional)...',
-    submitText = 'Submit',
-    skipText = 'Skip',
-    showComment = true,
-    ratingLabels = defaultCSATLabels,
-  } = options;
+  return createFeedbackForm(options, "csat", select => {
+    const { ratingLabels = defaultCSATLabels } = options;
+    // Rating buttons (1-5 stars or numbers)
+    const ratingContainer = document.createElement('div');
+    ratingContainer.className = 'persona-feedback-rating persona-feedback-rating-csat';
+    ratingContainer.setAttribute('role', 'radiogroup');
+    ratingContainer.setAttribute('aria-label', 'Satisfaction rating from 1 to 5');
 
-  const container = document.createElement('div');
-  container.className = 'persona-feedback-container persona-feedback-csat';
-  container.setAttribute('role', 'dialog');
-  container.setAttribute('aria-label', 'Customer satisfaction feedback');
+    const ratingButtons: HTMLButtonElement[] = [];
 
-  let selectedRating: number | null = null;
+    for (let i = 1; i <= 5; i++) {
+      const ratingButton = document.createElement('button');
+      ratingButton.type = 'button';
+      ratingButton.className = 'persona-feedback-rating-btn persona-feedback-star-btn';
+      ratingButton.setAttribute('role', 'radio');
+      ratingButton.setAttribute('aria-checked', 'false');
+      ratingButton.setAttribute('aria-label', `${i} star${i > 1 ? 's' : ''}: ${ratingLabels[i - 1]}`);
+      ratingButton.title = ratingLabels[i - 1];
+      ratingButton.dataset.rating = String(i);
 
-  // Create inner content
-  const content = document.createElement('div');
-  content.className = 'persona-feedback-content';
+      // Star icon (filled when selected)
+      ratingButton.innerHTML = `
+        <svg class="persona-feedback-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+      `;
 
-  // Header
-  const header = document.createElement('div');
-  header.className = 'persona-feedback-header';
-  
-  const titleEl = document.createElement('h3');
-  titleEl.className = 'persona-feedback-title';
-  titleEl.textContent = title;
-  header.appendChild(titleEl);
-
-  const subtitleEl = document.createElement('p');
-  subtitleEl.className = 'persona-feedback-subtitle';
-  subtitleEl.textContent = subtitle;
-  header.appendChild(subtitleEl);
-
-  content.appendChild(header);
-
-  // Rating buttons (1-5 stars or numbers)
-  const ratingContainer = document.createElement('div');
-  ratingContainer.className = 'persona-feedback-rating persona-feedback-rating-csat';
-  ratingContainer.setAttribute('role', 'radiogroup');
-  ratingContainer.setAttribute('aria-label', 'Satisfaction rating from 1 to 5');
-
-  const ratingButtons: HTMLButtonElement[] = [];
-
-  for (let i = 1; i <= 5; i++) {
-    const ratingButton = document.createElement('button');
-    ratingButton.type = 'button';
-    ratingButton.className = 'persona-feedback-rating-btn persona-feedback-star-btn';
-    ratingButton.setAttribute('role', 'radio');
-    ratingButton.setAttribute('aria-checked', 'false');
-    ratingButton.setAttribute('aria-label', `${i} star${i > 1 ? 's' : ''}: ${ratingLabels[i - 1]}`);
-    ratingButton.title = ratingLabels[i - 1];
-    ratingButton.dataset.rating = String(i);
-
-    // Star icon (filled when selected)
-    ratingButton.innerHTML = `
-      <svg class="persona-feedback-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-      </svg>
-    `;
-
-    ratingButton.addEventListener('click', () => {
-      selectedRating = i;
-      ratingButtons.forEach((btn, index) => {
-        const isSelected = index < i;
-        btn.classList.toggle('selected', isSelected);
-        btn.setAttribute('aria-checked', index === i - 1 ? 'true' : 'false');
+      ratingButton.addEventListener('click', () => {
+        select(i);
+        ratingButtons.forEach((btn, index) => {
+          const isSelected = index < i;
+          btn.classList.toggle('selected', isSelected);
+          btn.setAttribute('aria-checked', index === i - 1 ? 'true' : 'false');
+        });
       });
-    });
 
-    ratingButtons.push(ratingButton);
-    ratingContainer.appendChild(ratingButton);
-  }
-
-  content.appendChild(ratingContainer);
-
-  // Comment field
-  let commentTextarea: HTMLTextAreaElement | null = null;
-  if (showComment) {
-    const commentContainer = document.createElement('div');
-    commentContainer.className = 'persona-feedback-comment-container';
-    
-    commentTextarea = document.createElement('textarea');
-    commentTextarea.className = 'persona-feedback-comment';
-    commentTextarea.placeholder = commentPlaceholder;
-    commentTextarea.rows = 3;
-    commentTextarea.setAttribute('aria-label', 'Additional comments');
-    
-    commentContainer.appendChild(commentTextarea);
-    content.appendChild(commentContainer);
-  }
-
-  // Action buttons
-  const actions = document.createElement('div');
-  actions.className = 'persona-feedback-actions';
-
-  const skipButton = document.createElement('button');
-  skipButton.type = 'button';
-  skipButton.className = 'persona-feedback-btn persona-feedback-btn-skip';
-  skipButton.textContent = skipText;
-  skipButton.addEventListener('click', () => {
-    onDismiss?.();
-    container.remove();
-  });
-
-  const submitButton = document.createElement('button');
-  submitButton.type = 'button';
-  submitButton.className = 'persona-feedback-btn persona-feedback-btn-submit';
-  submitButton.textContent = submitText;
-  submitButton.addEventListener('click', async () => {
-    if (selectedRating === null) {
-      // Shake the rating container to indicate selection required
-      ratingContainer.classList.add('persona-feedback-shake');
-      setTimeout(() => ratingContainer.classList.remove('persona-feedback-shake'), 500);
-      return;
+      ratingButtons.push(ratingButton);
+      ratingContainer.appendChild(ratingButton);
     }
-    
-    submitButton.disabled = true;
-    submitButton.textContent = 'Submitting...';
-    
-    try {
-      const comment = commentTextarea?.value.trim() || undefined;
-      await onSubmit(selectedRating, comment);
-      container.remove();
-    } catch (error) {
-      submitButton.disabled = false;
-      submitButton.textContent = submitText;
-      // eslint-disable-next-line no-console
-      console.error('[CSAT Feedback] Failed to submit:', error);
-    }
+
+
+    return { element: ratingContainer, attentionTarget: ratingContainer };
   });
-
-  actions.appendChild(skipButton);
-  actions.appendChild(submitButton);
-  content.appendChild(actions);
-
-  container.appendChild(content);
-
-  return container;
 }
 
-/**
- * Create an NPS (Net Promoter Score) feedback form
- * Rating scale: 0-10
- */
+/** Create a NPS feedback form with its original rating scale. */
 export function createNPSFeedback(options: NPSFeedbackOptions): HTMLElement {
-  const {
-    onSubmit,
-    onDismiss,
-    title = 'How likely are you to recommend us?',
-    subtitle = 'On a scale of 0 to 10',
-    commentPlaceholder = 'What could we do better? (optional)...',
-    submitText = 'Submit',
-    skipText = 'Skip',
-    showComment = true,
-    lowLabel = 'Not likely',
-    highLabel = 'Very likely',
-  } = options;
+  return createFeedbackForm(options, "nps", select => {
+    const { lowLabel = "Not likely", highLabel = "Very likely" } = options;
+    // Rating buttons (0-10)
+    const ratingContainer = document.createElement('div');
+    ratingContainer.className = 'persona-feedback-rating persona-feedback-rating-nps';
+    ratingContainer.setAttribute('role', 'radiogroup');
+    ratingContainer.setAttribute('aria-label', 'Likelihood rating from 0 to 10');
 
-  const container = document.createElement('div');
-  container.className = 'persona-feedback-container persona-feedback-nps';
-  container.setAttribute('role', 'dialog');
-  container.setAttribute('aria-label', 'Net Promoter Score feedback');
-
-  let selectedRating: number | null = null;
-
-  // Create inner content
-  const content = document.createElement('div');
-  content.className = 'persona-feedback-content';
-
-  // Header
-  const header = document.createElement('div');
-  header.className = 'persona-feedback-header';
+    // Labels row
+    const labelsRow = document.createElement('div');
+    labelsRow.className = 'persona-feedback-labels';
   
-  const titleEl = document.createElement('h3');
-  titleEl.className = 'persona-feedback-title';
-  titleEl.textContent = title;
-  header.appendChild(titleEl);
-
-  const subtitleEl = document.createElement('p');
-  subtitleEl.className = 'persona-feedback-subtitle';
-  subtitleEl.textContent = subtitle;
-  header.appendChild(subtitleEl);
-
-  content.appendChild(header);
-
-  // Rating buttons (0-10)
-  const ratingContainer = document.createElement('div');
-  ratingContainer.className = 'persona-feedback-rating persona-feedback-rating-nps';
-  ratingContainer.setAttribute('role', 'radiogroup');
-  ratingContainer.setAttribute('aria-label', 'Likelihood rating from 0 to 10');
-
-  // Labels row
-  const labelsRow = document.createElement('div');
-  labelsRow.className = 'persona-feedback-labels';
+    const lowLabelEl = document.createElement('span');
+    lowLabelEl.className = 'persona-feedback-label-low';
+    lowLabelEl.textContent = lowLabel;
   
-  const lowLabelEl = document.createElement('span');
-  lowLabelEl.className = 'persona-feedback-label-low';
-  lowLabelEl.textContent = lowLabel;
+    const highLabelEl = document.createElement('span');
+    highLabelEl.className = 'persona-feedback-label-high';
+    highLabelEl.textContent = highLabel;
   
-  const highLabelEl = document.createElement('span');
-  highLabelEl.className = 'persona-feedback-label-high';
-  highLabelEl.textContent = highLabel;
+    labelsRow.appendChild(lowLabelEl);
+    labelsRow.appendChild(highLabelEl);
   
-  labelsRow.appendChild(lowLabelEl);
-  labelsRow.appendChild(highLabelEl);
-  
-  // Numbers row
-  const numbersRow = document.createElement('div');
-  numbersRow.className = 'persona-feedback-numbers';
+    // Numbers row
+    const numbersRow = document.createElement('div');
+    numbersRow.className = 'persona-feedback-numbers';
 
-  const ratingButtons: HTMLButtonElement[] = [];
+    const ratingButtons: HTMLButtonElement[] = [];
 
-  for (let i = 0; i <= 10; i++) {
-    const ratingButton = document.createElement('button');
-    ratingButton.type = 'button';
-    ratingButton.className = 'persona-feedback-rating-btn persona-feedback-number-btn';
-    ratingButton.setAttribute('role', 'radio');
-    ratingButton.setAttribute('aria-checked', 'false');
-    ratingButton.setAttribute('aria-label', `Rating ${i} out of 10`);
-    ratingButton.textContent = String(i);
-    ratingButton.dataset.rating = String(i);
+    for (let i = 0; i <= 10; i++) {
+      const ratingButton = document.createElement('button');
+      ratingButton.type = 'button';
+      ratingButton.className = 'persona-feedback-rating-btn persona-feedback-number-btn';
+      ratingButton.setAttribute('role', 'radio');
+      ratingButton.setAttribute('aria-checked', 'false');
+      ratingButton.setAttribute('aria-label', `Rating ${i} out of 10`);
+      ratingButton.textContent = String(i);
+      ratingButton.dataset.rating = String(i);
 
-    // Color coding: detractors (0-6), passives (7-8), promoters (9-10)
-    if (i <= 6) {
-      ratingButton.classList.add('persona-feedback-detractor');
-    } else if (i <= 8) {
-      ratingButton.classList.add('persona-feedback-passive');
-    } else {
-      ratingButton.classList.add('persona-feedback-promoter');
-    }
+      // Color coding: detractors (0-6), passives (7-8), promoters (9-10)
+      if (i <= 6) {
+        ratingButton.classList.add('persona-feedback-detractor');
+      } else if (i <= 8) {
+        ratingButton.classList.add('persona-feedback-passive');
+      } else {
+        ratingButton.classList.add('persona-feedback-promoter');
+      }
 
-    ratingButton.addEventListener('click', () => {
-      selectedRating = i;
-      ratingButtons.forEach((btn, index) => {
-        btn.classList.toggle('selected', index === i);
-        btn.setAttribute('aria-checked', index === i ? 'true' : 'false');
+      ratingButton.addEventListener('click', () => {
+        select(i);
+        ratingButtons.forEach((btn, index) => {
+          btn.classList.toggle('selected', index === i);
+          btn.setAttribute('aria-checked', index === i ? 'true' : 'false');
+        });
       });
-    });
 
-    ratingButtons.push(ratingButton);
-    numbersRow.appendChild(ratingButton);
-  }
-
-  ratingContainer.appendChild(labelsRow);
-  ratingContainer.appendChild(numbersRow);
-  content.appendChild(ratingContainer);
-
-  // Comment field
-  let commentTextarea: HTMLTextAreaElement | null = null;
-  if (showComment) {
-    const commentContainer = document.createElement('div');
-    commentContainer.className = 'persona-feedback-comment-container';
-    
-    commentTextarea = document.createElement('textarea');
-    commentTextarea.className = 'persona-feedback-comment';
-    commentTextarea.placeholder = commentPlaceholder;
-    commentTextarea.rows = 3;
-    commentTextarea.setAttribute('aria-label', 'Additional comments');
-    
-    commentContainer.appendChild(commentTextarea);
-    content.appendChild(commentContainer);
-  }
-
-  // Action buttons
-  const actions = document.createElement('div');
-  actions.className = 'persona-feedback-actions';
-
-  const skipButton = document.createElement('button');
-  skipButton.type = 'button';
-  skipButton.className = 'persona-feedback-btn persona-feedback-btn-skip';
-  skipButton.textContent = skipText;
-  skipButton.addEventListener('click', () => {
-    onDismiss?.();
-    container.remove();
-  });
-
-  const submitButton = document.createElement('button');
-  submitButton.type = 'button';
-  submitButton.className = 'persona-feedback-btn persona-feedback-btn-submit';
-  submitButton.textContent = submitText;
-  submitButton.addEventListener('click', async () => {
-    if (selectedRating === null) {
-      // Shake the rating container to indicate selection required
-      numbersRow.classList.add('persona-feedback-shake');
-      setTimeout(() => numbersRow.classList.remove('persona-feedback-shake'), 500);
-      return;
+      ratingButtons.push(ratingButton);
+      numbersRow.appendChild(ratingButton);
     }
-    
-    submitButton.disabled = true;
-    submitButton.textContent = 'Submitting...';
-    
-    try {
-      const comment = commentTextarea?.value.trim() || undefined;
-      await onSubmit(selectedRating, comment);
-      container.remove();
-    } catch (error) {
-      submitButton.disabled = false;
-      submitButton.textContent = submitText;
-      // eslint-disable-next-line no-console
-      console.error('[NPS Feedback] Failed to submit:', error);
-    }
+
+    ratingContainer.appendChild(labelsRow);
+    ratingContainer.appendChild(numbersRow);
+
+    return { element: ratingContainer, attentionTarget: numbersRow };
   });
-
-  actions.appendChild(skipButton);
-  actions.appendChild(submitButton);
-  content.appendChild(actions);
-
-  container.appendChild(content);
-
-  return container;
 }
-
-
-

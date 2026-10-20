@@ -312,7 +312,15 @@ const baseConfig: AgentWidgetConfig = {
   launcher: { enabled: false, width: "100%" },
   persistState: false,
   statusIndicator: { visible: false },
-  suggestionChips: [],
+  suggestions: {
+    starters: {
+      items: [],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
   features: baseFeatures,
 };
 

@@ -9,6 +9,7 @@ describe("tool call display defaults", () => {
       activePreview: false,
       grouped: false,
       groupedMode: "stack",
+      groupBoundary: "adjacent",
       previewMaxLines: 3,
       expandable: true,
       loadingAnimation: "none",
@@ -22,6 +23,14 @@ describe("tool call display defaults", () => {
       expandable: true,
       loadingAnimation: "none",
     });
+  });
+
+  it("defaults V5 groups to inset while retaining explicit plain and V4 defaults", () => {
+    expect(mergeWithDefaults({ future: { v5Defaults: true } }).features?.toolCallDisplay?.groupAppearance).toBe("inset");
+    expect(mergeWithDefaults({
+      future: { v5Defaults: true }, features: { toolCallDisplay: { groupAppearance: "plain" } },
+    }).features?.toolCallDisplay?.groupAppearance).toBe("plain");
+    expect(mergeWithDefaults({}).features?.toolCallDisplay?.groupAppearance).toBeUndefined();
   });
 
   it("fills omitted tool display options when one option is overridden", () => {

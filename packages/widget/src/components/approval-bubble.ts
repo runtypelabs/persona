@@ -1,33 +1,19 @@
+/** @deprecated Built-in approvals use the renderApproval plugin in approval-actions. */
 import { BROWSER_TOOL_INTERRUPTION } from "../utils/restored-browser-state";
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
-import { formatUnknownValue } from "../utils/formatting";
+import { formatUnknownValue } from "../utils/format-value";
+import { resolveApprovalStyles } from "../utils/approval-styles";
 // The webmcp-title lookup is injected by ui.ts at chunk adoption: this module
 // ships in the lazy approval-ui chunk and must not read a duplicated (empty)
 // webmcp title map. See approval-deps. Icons are direct lucide data imports.
 import { getWebMcpToolDisplayTitle } from "./approval-deps";
-import { ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, ShieldX } from "lucide";
-import { renderIconNode } from "../utils/icon-node";
+import { renderApprovalIcon as renderIconNode } from "./approval-deps";
 import { WEBMCP_TOOL_PREFIX } from "../webmcp-bridge";
 
-/**
- * Turn a wire tool name into a user-facing label: strips the `webmcp:`
- * prefix and splits snake_case / kebab-case / camelCase into a sentence
- * (`add_to_cart` → "Add to cart"). Falls back to the input when nothing
- * word-like remains.
- */
-export const humanizeToolName = (toolName: string): string => {
-  const bare = toolName.startsWith(WEBMCP_TOOL_PREFIX)
-    ? toolName.slice(WEBMCP_TOOL_PREFIX.length)
-    : toolName;
-  const words = bare
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .split(/[_\-\s.]+/)
-    .filter(Boolean);
-  if (words.length === 0) return toolName;
-  const sentence = words.join(" ").toLowerCase();
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
-};
+import { humanizeToolName } from "../utils/humanize-tool-name";
+/** @deprecated Import from utils/humanize-tool-name instead. */
+export { humanizeToolName } from "../utils/humanize-tool-name";
 
 const resolveApprovalConfig = (config?: AgentWidgetConfig) =>
   config?.approval !== false ? config?.approval : undefined;
@@ -57,7 +43,7 @@ const applyDetailsToggleState = (
   const chevronHolder = toggle.querySelector("[data-approval-details-chevron]") as HTMLElement | null;
   if (chevronHolder) {
     chevronHolder.innerHTML = "";
-    const chevron = renderIconNode(expanded ? ChevronUp : ChevronDown, 14, "currentColor", 2);
+    const chevron = renderIconNode(expanded ? "chevron-up" : "chevron-down", 14, "currentColor", 2);
     if (chevron) {
       chevronHolder.appendChild(chevron);
     }
@@ -92,9 +78,9 @@ export const updateApprovalBubbleUI = (
   config?: AgentWidgetConfig,
   approval?: AgentWidgetMessage["approval"]
 ): void => {
+  const styles = resolveApprovalStyles(config, "public");
+  applyApprovalBubbleStyles(bubble, config);
   if (!approval) return;
-
-  const approvalConfig = config?.approval !== false ? config?.approval : undefined;
 
   // Update status badge
   const statusBadge = bubble.querySelector('[data-approval-status]') as HTMLElement;
@@ -105,19 +91,14 @@ export const updateApprovalBubbleUI = (
       : approval.status === "timeout" ? "Timeout"
       : "Pending";
 
-    // Update badge color
-    if (approval.status === "approved") {
+    // Resolved statuses share the same badge chrome and palette steps.
+    const palette = approval.status === "approved" ? "success"
+      : approval.status === "denied" ? "error"
+      : approval.status === "timeout" ? "warning" : undefined;
+    if (palette) {
       statusBadge.className = "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium";
-      statusBadge.style.backgroundColor = "var(--persona-palette-colors-success-100)";
-      statusBadge.style.color = "var(--persona-palette-colors-success-700)";
-    } else if (approval.status === "denied") {
-      statusBadge.className = "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium";
-      statusBadge.style.backgroundColor = "var(--persona-palette-colors-error-100)";
-      statusBadge.style.color = "var(--persona-palette-colors-error-700)";
-    } else if (approval.status === "timeout") {
-      statusBadge.className = "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium";
-      statusBadge.style.backgroundColor = "var(--persona-palette-colors-warning-100)";
-      statusBadge.style.color = "var(--persona-palette-colors-warning-700)";
+      statusBadge.style.backgroundColor = `var(--persona-palette-colors-${palette}-100)`;
+      statusBadge.style.color = `var(--persona-palette-colors-${palette}-700)`;
     }
     statusBadge.setAttribute("data-approval-status", approval.status);
   }
@@ -126,13 +107,13 @@ export const updateApprovalBubbleUI = (
   const iconContainer = bubble.querySelector('[data-approval-icon]') as HTMLElement;
   if (iconContainer) {
     iconContainer.innerHTML = "";
-    const iconData = approval.status === "denied" ? ShieldX
-      : approval.status === "timeout" ? ShieldAlert
-      : ShieldCheck;
+    const iconData = approval.status === "denied" ? "shield-x"
+      : approval.status === "timeout" ? "shield-alert"
+      : "shield-check";
     const iconColor = approval.status === "approved" ? "var(--persona-feedback-success, var(--persona-palette-colors-success-600))"
       : approval.status === "denied" ? "var(--persona-feedback-error, var(--persona-palette-colors-error-600))"
       : approval.status === "timeout" ? "var(--persona-feedback-warning, var(--persona-palette-colors-warning-600))"
-      : (approvalConfig?.titleColor ?? "currentColor");
+      : styles.pendingIconColor;
     const icon = renderIconNode(iconData, 20, iconColor, 2);
     if (icon) {
       iconContainer.appendChild(icon);
@@ -155,34 +136,20 @@ export const createApprovalBubble = (
   expansionState = new Map<string, boolean>()
 ): HTMLElement => {
   const approval = message.approval;
-  const approvalConfig = config?.approval !== false ? config?.approval : undefined;
+  const approvalConfig = resolveApprovalConfig(config);
   const isPending = approval?.status === "pending";
 
   const bubble = createElement(
     "div",
-    [
-      "persona-approval-bubble",
-      "persona-w-full",
-      "persona-rounded-2xl",
-      "persona-border",
-      "persona-shadow-sm",
-      "persona-overflow-hidden",
-    ].join(" ")
+    "persona-approval-bubble persona-w-full persona-rounded-2xl persona-border persona-shadow-sm persona-overflow-hidden"
   );
 
   // Set id for idiomorph matching
   bubble.id = `bubble-${message.id}`;
   bubble.setAttribute("data-message-id", message.id);
 
-  // Apply styling: use semantic tokens with config overrides
-  bubble.style.backgroundColor = approvalConfig?.backgroundColor ?? "var(--persona-approval-bg)";
-  bubble.style.borderColor = approvalConfig?.borderColor ?? "var(--persona-approval-border)";
-  bubble.style.boxShadow =
-    approvalConfig?.shadow !== undefined
-      ? (approvalConfig.shadow.trim() === "" ? "none" : approvalConfig.shadow)
-      : "var(--persona-approval-shadow)";
-
   if (!approval) {
+    applyApprovalBubbleStyles(bubble, config);
     return bubble;
   }
 
@@ -193,49 +160,22 @@ export const createApprovalBubble = (
   );
 
   // Icon container
-  const iconContainer = createElement("div", "persona-flex-shrink-0 persona-mt-0.5");
-  iconContainer.setAttribute("data-approval-icon", "true");
-  const iconData = approval.status === "denied" ? ShieldX
-    : approval.status === "timeout" ? ShieldAlert
-    : ShieldCheck;
-  const iconColor = approval.status === "approved" ? "var(--persona-feedback-success, var(--persona-palette-colors-success-600))"
-    : approval.status === "denied" ? "var(--persona-feedback-error, var(--persona-palette-colors-error-600))"
-    : approval.status === "timeout" ? "var(--persona-feedback-warning, var(--persona-palette-colors-warning-600))"
-    : (approvalConfig?.titleColor ?? "currentColor");
-  const icon = renderIconNode(iconData, 20, iconColor, 2);
-  if (icon) {
-    iconContainer.appendChild(icon);
-  }
-
+  const iconContainer = createNode("div", { className: "persona-flex-shrink-0 persona-mt-0.5", attrs: { "data-approval-icon": "true" } });
   // Content area
   const content = createElement("div", "persona-flex-1 persona-min-w-0");
 
   // Title row with status badge
   const titleRow = createElement("div", "persona-flex persona-items-center persona-gap-2");
-  const title = createElement("span", "persona-text-sm persona-font-medium persona-text-persona-primary");
-  if (approvalConfig?.titleColor) {
-    title.style.color = approvalConfig.titleColor;
-  }
-  title.textContent = approvalConfig?.title ?? "Approval Required";
+  const title = createNode("span", {
+    className: "persona-text-sm persona-font-medium persona-text-persona-primary",
+    attrs: { "data-approval-title": "true" }, text: approvalConfig?.title ?? "Approval Required",
+  });
   titleRow.appendChild(title);
 
   // Status badge (shown when resolved)
   if (!isPending) {
     const badge = createElement("span", "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium");
     badge.setAttribute("data-approval-status", approval.status);
-    if (approval.status === "approved") {
-      badge.style.backgroundColor = "var(--persona-palette-colors-success-100)";
-      badge.style.color = "var(--persona-palette-colors-success-700)";
-      badge.textContent = "Approved";
-    } else if (approval.status === "denied") {
-      badge.style.backgroundColor = "var(--persona-palette-colors-error-100)";
-      badge.style.color = "var(--persona-palette-colors-error-700)";
-      badge.textContent = "Denied";
-    } else if (approval.status === "timeout") {
-      badge.style.backgroundColor = "var(--persona-palette-colors-warning-100)";
-      badge.style.color = "var(--persona-palette-colors-warning-700)";
-      badge.textContent = (approval.status === "timeout" && approval.interrupted) ? "Interrupted" : "Timeout";
-    }
     titleRow.appendChild(badge);
   }
 
@@ -272,12 +212,10 @@ export const createApprovalBubble = (
       ? approval.description
       : `The assistant wants to use “${declaredTitle ?? humanizeToolName(approval.toolName)}”.`);
 
-  const summary = createElement("p", "persona-text-sm persona-mt-0.5 persona-text-persona-muted");
-  summary.setAttribute("data-approval-summary", "true");
-  if (approvalConfig?.descriptionColor) {
-    summary.style.color = approvalConfig.descriptionColor;
-  }
-  summary.textContent = summaryText;
+  const summary = createNode("p", {
+    className: "persona-text-sm persona-mt-0.5 persona-text-persona-muted",
+    attrs: { "data-approval-summary": "true" }, text: summaryText,
+  });
   content.appendChild(summary);
 
   // Agent-authored justification for this specific call. It is the agent's
@@ -287,11 +225,6 @@ export const createApprovalBubble = (
   if (approval.reason) {
     const reasonLine = createElement("p", "persona-text-sm persona-mt-1 persona-text-persona-muted");
     reasonLine.setAttribute("data-approval-reason", "true");
-    if (approvalConfig?.reasonColor) {
-      reasonLine.style.color = approvalConfig.reasonColor;
-    } else if (approvalConfig?.descriptionColor) {
-      reasonLine.style.color = approvalConfig.descriptionColor;
-    }
     const reasonLabel = createElement("span", "persona-font-medium");
     reasonLabel.textContent = `${approvalConfig?.reasonLabel ?? "Agent's stated reason:"} `;
     reasonLine.appendChild(reasonLabel);
@@ -314,9 +247,6 @@ export const createApprovalBubble = (
     toggle.type = "button";
     toggle.setAttribute("data-expand-header", "true");
     toggle.setAttribute("data-bubble-type", "approval");
-    if (approvalConfig?.descriptionColor) {
-      toggle.style.color = approvalConfig.descriptionColor;
-    }
     const toggleLabel = createElement("span");
     toggleLabel.setAttribute("data-approval-details-label", "true");
     const chevronHolder = createElement("span", "persona-inline-flex persona-items-center");
@@ -331,9 +261,7 @@ export const createApprovalBubble = (
 
     if (showDescriptionInDetails) {
       const description = createElement("p", "persona-text-sm persona-mt-1 persona-text-persona-muted");
-      if (approvalConfig?.descriptionColor) {
-        description.style.color = approvalConfig.descriptionColor;
-      }
+      description.setAttribute("data-approval-description", "true");
       description.textContent = approval.description;
       details.appendChild(description);
     }
@@ -343,12 +271,7 @@ export const createApprovalBubble = (
         "pre",
         "persona-mt-2 persona-text-xs persona-p-2 persona-rounded persona-overflow-x-auto persona-max-h-32 persona-bg-persona-container persona-text-persona-primary"
       );
-      if (approvalConfig?.parameterBackgroundColor) {
-        paramsPre.style.backgroundColor = approvalConfig.parameterBackgroundColor;
-      }
-      if (approvalConfig?.parameterTextColor) {
-        paramsPre.style.color = approvalConfig.parameterTextColor;
-      }
+      paramsPre.setAttribute("data-approval-parameters", "true");
       paramsPre.style.fontSize = "0.75rem";
       paramsPre.style.lineHeight = "1rem";
       paramsPre.textContent = formatUnknownValue(approval.parameters);
@@ -363,41 +286,57 @@ export const createApprovalBubble = (
     const buttonsContainer = createElement("div", "persona-flex persona-gap-2 persona-mt-2");
     buttonsContainer.setAttribute("data-approval-buttons", "true");
 
-    // Approve button
-    const approveBtn = createElement("button", "persona-inline-flex persona-items-center persona-px-3 persona-py-1.5 persona-rounded-md persona-text-xs persona-font-medium persona-border-none persona-cursor-pointer") as HTMLButtonElement;
-    approveBtn.type = "button";
-    approveBtn.style.backgroundColor = approvalConfig?.approveButtonColor ?? "var(--persona-approval-approve-bg)";
-    approveBtn.style.color = approvalConfig?.approveButtonTextColor ?? "var(--persona-button-primary-fg)";
-    approveBtn.setAttribute("data-approval-action", "approve");
-    const approveIcon = renderIconNode(ShieldCheck, 14, approvalConfig?.approveButtonTextColor ?? "var(--persona-button-primary-fg)", 2);
-    if (approveIcon) {
-      approveIcon.style.marginRight = "4px";
-      approveBtn.appendChild(approveIcon);
+    for (const action of ["approve", "deny"] as const) {
+      const button = createNode("button", {
+        className: "persona-inline-flex persona-items-center persona-px-3 persona-py-1.5 persona-rounded-md persona-text-xs persona-font-medium persona-cursor-pointer" +
+          (action === "approve" ? " persona-border-none" : ""),
+        attrs: { type: "button", "data-approval-action": action },
+      });
+      const icon = renderIconNode(action === "approve" ? "shield-check" : "shield-x", 14, "currentColor", 2);
+      if (icon) {
+        icon.style.marginRight = "4px";
+        button.appendChild(icon);
+      }
+      button.appendChild(document.createTextNode(action === "approve"
+        ? approvalConfig?.approveLabel ?? "Approve" : approvalConfig?.denyLabel ?? "Deny"));
+      buttonsContainer.appendChild(button);
     }
-    const approveLabel = document.createTextNode(approvalConfig?.approveLabel ?? "Approve");
-    approveBtn.appendChild(approveLabel);
-
-    // Deny button
-    const denyBtn = createElement("button", "persona-inline-flex persona-items-center persona-px-3 persona-py-1.5 persona-rounded-md persona-text-xs persona-font-medium persona-cursor-pointer") as HTMLButtonElement;
-    denyBtn.type = "button";
-    denyBtn.style.backgroundColor = approvalConfig?.denyButtonColor ?? "transparent";
-    denyBtn.style.color = approvalConfig?.denyButtonTextColor ?? "var(--persona-feedback-error, var(--persona-palette-colors-error-600))";
-    denyBtn.style.border = `1px solid ${approvalConfig?.denyButtonTextColor ? approvalConfig.denyButtonTextColor : "var(--persona-palette-colors-error-200)"}`;
-    denyBtn.setAttribute("data-approval-action", "deny");
-    const denyIcon = renderIconNode(ShieldX, 14, approvalConfig?.denyButtonTextColor ?? "var(--persona-feedback-error, var(--persona-palette-colors-error-600))", 2);
-    if (denyIcon) {
-      denyIcon.style.marginRight = "4px";
-      denyBtn.appendChild(denyIcon);
-    }
-    const denyLabel = document.createTextNode(approvalConfig?.denyLabel ?? "Deny");
-    denyBtn.appendChild(denyLabel);
-
-    buttonsContainer.append(approveBtn, denyBtn);
     content.appendChild(buttonsContainer);
   }
 
   header.append(iconContainer, content);
   bubble.appendChild(header);
-
+  updateApprovalBubbleUI(message.id, bubble, config, approval);
   return bubble;
+};
+
+
+/** Restore theme fallbacks when a host clears an appearance override during update. */
+const applyApprovalBubbleStyles = (bubble: HTMLElement, config?: AgentWidgetConfig): void => {
+  const styles = resolveApprovalStyles(config, "public");
+  bubble.style.backgroundColor = styles.backgroundColor ?? "var(--persona-approval-bg)";
+  bubble.style.borderColor = styles.borderColor ?? "var(--persona-approval-border)";
+  bubble.style.boxShadow = styles.shadow === undefined ? "var(--persona-approval-shadow)" : styles.shadow.trim() || "none";
+  const color = (selector: string, value?: string): void => {
+    bubble.querySelectorAll<HTMLElement>(selector).forEach((element) => { element.style.color = value ?? ""; });
+  };
+  if (!bubble.querySelector("[data-approval-status]")) {
+    bubble.querySelector("[data-approval-icon] svg")?.setAttribute("stroke", styles.pendingIconColor);
+  }
+  color("[data-approval-title]", styles.titleColor);
+  color("[data-approval-summary], [data-approval-description], button[data-bubble-type='approval']", styles.descriptionColor);
+  color("[data-approval-reason]", styles.reasonColor);
+  color("[data-approval-parameters]", styles.parameterTextColor);
+  bubble.querySelectorAll<HTMLElement>("[data-approval-parameters]").forEach((element) => {
+    element.style.backgroundColor = styles.parameterBackgroundColor ?? "";
+  });
+  for (const action of ["approve", "deny"] as const) {
+    const button = bubble.querySelector<HTMLElement>(`[data-approval-action="${action}"]`);
+    if (!button) continue;
+    const foreground = action === "approve" ? styles.approveButtonTextColor : styles.denyButtonTextColor;
+    button.style.backgroundColor = (action === "approve" ? styles.approveButtonColor ?? "var(--persona-approval-approve-bg)" : styles.denyButtonColor) ?? "";
+    button.style.color = foreground ?? "";
+    button.querySelector("svg")?.setAttribute("stroke", foreground ?? "currentColor");
+    if (action === "deny") button.style.border = `1px solid ${styles.denyBorderColor}`;
+  }
 };

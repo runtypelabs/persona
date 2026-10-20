@@ -1,138 +1,151 @@
 import { createPersonaSSEStream, type ChatMessage } from "./persona-wire";
 
-/**
- * Adapter: eve (`eve`, by Vercel) → Persona SSE.
- *
- * eve is a filesystem-first, durable-agent framework that runs its own server.
- * A session streams events; the incremental assistant text arrives on
- * `message.appended` events as `data.messageDelta`. Each becomes a
- * `text_delta`.
- *
- * Tool calls arrive on `actions.requested` as `{ kind: "tool-call", callId,
- * toolName, input }`. eve runs the tool itself, so each one is re-emitted
- * fire-and-forget (`tool_start` + `tool_complete`) with no `/resume` endpoint.
- * That is how `agent/tools/suggest_replies.ts` reaches the widget as chips.
- *
- * The session stream is an **injected dependency** (`session`), so tests drive
- * the adapter with a fake event stream, with no running eve server and no model key.
- * In production it defaults to connecting to the eve agent via the `eve/client` SDK.
- *
- * Host resolution (live path): an explicit `host` option wins, then `EVE_BASE_URL`
- * (point at an already-running eve server), then the request's own origin. The
- * origin fallback is what makes `withEve()` "just work": eve launches alongside
- * `next dev` and same-origin `/eve/v1/...` requests are proxied to it, so the
- * route reaches the agent without any env var.
- *
- * Note: eve is beta; the default wiring targets `eve/client`'s
- * `Client().session().send()` event stream and may need tweaks as the API
- * settles. The validation path does not depend on it.
- */
-
-const SUGGEST_REPLIES_TOOL_NAME = "suggest_replies";
-
-/** eve runs the tool; the result only confirms the chips were shown. */
-const SUGGEST_REPLIES_RESULT = {
-  content: [{ type: "text", text: "Suggestions shown to the user." }],
-};
-
-/** One entry of an `actions.requested` batch; only `tool-call` actions cross the wire. */
+/** The small part of Eve's event protocol consumed by Persona. */
 export type EveActionRequest = {
   kind?: string;
   callId?: string;
   toolName?: string;
   input?: unknown;
 };
-
 export type EveSessionEvent = {
-  type?: string;
+  type: string;
   data?: {
     messageDelta?: string;
+    reasoningDelta?: string;
+    reasoning?: string;
+    stepIndex?: number;
+    turnId?: string;
     actions?: readonly EveActionRequest[];
-    [key: string]: unknown;
+    result?: { callId: string; output?: unknown; isError?: boolean };
+    status?: string;
+    message?: string;
   };
 };
-
 export type EveSessionStream = (args: {
   prompt: string;
-  /** Origin of the inbound request; used as the same-origin eve base URL. */
   origin?: string;
+  signal?: AbortSignal;
 }) => AsyncIterable<EveSessionEvent> | Promise<AsyncIterable<EveSessionEvent>>;
 
 type CreateEvePersonaHandlerOptions = {
   getMessages: (body: unknown) => ChatMessage[];
-  /** Injectable. Defaults to an `eve/client` session resolved per request. */
   session?: EveSessionStream;
-  /** Pin a specific eve base URL, overriding EVE_BASE_URL and the request origin. */
   host?: string;
 };
 
-export function createEvePersonaHandler({
-  getMessages,
-  session,
-  host,
-}: CreateEvePersonaHandlerOptions) {
+/** Eve owns execution; Persona displays its actual tool and text lifecycle. */
+export function createEvePersonaHandler({ getMessages, session, host }: CreateEvePersonaHandlerOptions) {
   const sessionStream = session ?? defaultSession(host);
-
   return async function POST(req: Request): Promise<Response> {
-    const body = await req.json();
-    const prompt = toPrompt(getMessages(body));
-    const origin = originOf(req);
-
-    return createPersonaSSEStream(async ({ emit }) => {
-      const events = await sessionStream({ prompt, origin });
-
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return Response.json({ error: "Send a valid JSON message." }, { status: 400 });
+    }
+    const messages = getMessages(body);
+    if (!messages.some((message) => message.role === "user" && message.content.trim())) {
+      return Response.json({ error: "A message is required." }, { status: 400 });
+    }
+    const prompt = toPrompt(messages);
+    return createPersonaSSEStream(async ({ emit, signal: streamSignal }) => {
+      const signal = AbortSignal.any([req.signal, streamSignal]);
+      const events = await sessionStream({ prompt, origin: new URL(req.url).origin, signal });
+      const pending = new Set<string>();
+      const reasoning = new Map<string, { id: string; text: string }>();
       for await (const event of events) {
-        if (event.type === "message.appended" && event.data?.messageDelta) {
-          emit.textDelta(event.data.messageDelta);
-          continue;
-        }
-        if (event.type === "actions.requested") {
-          for (const action of event.data?.actions ?? []) {
-            if (action.kind !== "tool-call" || !action.toolName) continue;
-            // eve already executes the tool, so the widget gets the call only.
-            emit.toolCall(action.toolName, action.input ?? {}, {
-              toolCallId: action.callId,
-              // Same canned payload every Persona example puts on tool_complete.
-              ...(action.toolName === SUGGEST_REPLIES_TOOL_NAME
-                ? { result: SUGGEST_REPLIES_RESULT }
-                : {}),
-            });
+        if (signal.aborted) throw new Error("Response stopped.");
+        if (event.type === "reasoning.appended" || event.type === "reasoning.completed") {
+          const key = `${event.data?.turnId ?? "turn"}:${event.data?.stepIndex ?? 0}`;
+          let block = reasoning.get(key);
+          if (!block) {
+            block = { id: `reasoning_${crypto.randomUUID()}`, text: "" };
+            reasoning.set(key, block);
+            emit.reasoningStart(block.id);
           }
+          if (event.type === "reasoning.appended" && event.data?.reasoningDelta) {
+            block.text += event.data.reasoningDelta;
+            emit.reasoningDelta(block.id, event.data.reasoningDelta);
+          } else if (event.type === "reasoning.completed") {
+            // Completion includes the full reasoning; don't repeat prior deltas.
+            if (!block.text && event.data?.reasoning) emit.reasoningDelta(block.id, event.data.reasoning);
+            emit.reasoningComplete(block.id);
+            reasoning.delete(key);
+          }
+        } else if (event.type === "message.appended" && event.data?.messageDelta) {
+          emit.textDelta(event.data.messageDelta);
+        } else if (event.type === "actions.requested") {
+          for (const action of event.data?.actions ?? []) {
+            if (action.kind !== "tool-call" || !action.toolName || !action.callId || pending.has(action.callId)) continue;
+            pending.add(action.callId);
+            emit.toolStart(action.toolName, action.input ?? {}, action.callId);
+          }
+        } else if (event.type === "action.result" && event.data?.result) {
+          const result = event.data.result;
+          if (!pending.delete(result.callId)) continue;
+          emit.toolComplete(result.callId, result.output ?? {}, event.data.status === "completed" && !result.isError);
+        } else if (event.type === "turn.failed" || event.type === "session.failed") {
+          throw new Error(event.data?.message ?? "Eve could not finish this response.");
+        } else if (event.type === "turn.cancelled") {
+          throw new Error("Response stopped.");
+        } else if (event.type === "input.requested") {
+          throw new Error("This example does not support interactive Eve approvals.");
         }
       }
-
+      for (const block of reasoning.values()) emit.reasoningComplete(block.id);
+      if (pending.size) throw new Error("Eve ended before all tool results arrived.");
       emit.complete();
     });
   };
 }
 
 function defaultSession(host?: string): EveSessionStream {
-  return async ({ prompt, origin }) => {
-    // Explicit option > EVE_BASE_URL (external eve) > request origin (the
-    // withEve same-origin rewrite) > loopback default.
-    const baseUrl = host ?? process.env.EVE_BASE_URL ?? origin ?? "http://127.0.0.1:3000";
-    // Variable specifier keeps the heavy `eve/client` import off the validation
-    // path; the package is only loaded on the live path, never during testing.
-    const specifier = "eve/client";
-    const mod: any = await import(specifier);
-    const client = new mod.Client({ host: baseUrl });
-    return client.session().send(prompt) as AsyncIterable<EveSessionEvent>;
+  return async function* ({ prompt, origin, signal }) {
+    try {
+      // The typed import is lazy: Preview never loads or starts the Eve runtime.
+      const { Client } = await import("eve/client");
+      const client = new Client({
+        host: host ?? process.env.EVE_BASE_URL ?? origin ?? "http://127.0.0.1:3100",
+        ...(process.env.EVE_BEARER_TOKEN ? { auth: { bearer: process.env.EVE_BEARER_TOKEN } } : {}),
+        redirect: "error",
+      });
+      // A fresh Eve session receives Persona's full transcript each request. This
+      // keeps browser conversations isolated without a server session registry.
+      const { response } = await client.sessions.create({ message: prompt, signal });
+      const cancel = () => { void response.cancel().catch(() => undefined); };
+      signal?.addEventListener("abort", cancel, { once: true });
+      try {
+        for await (const event of response) {
+          switch (event.type) {
+            case "message.appended":
+            case "reasoning.appended":
+            case "reasoning.completed":
+            case "actions.requested":
+              yield event;
+              break;
+            case "turn.failed":
+            case "session.failed":
+              yield { type: event.type, data: { message: "Eve could not finish this response. Please try again." } };
+              break;
+            case "action.result":
+              if (event.data.result.kind === "tool-result") yield { type: event.type, data: { status: event.data.status, result: event.data.result } };
+              break;
+            case "turn.cancelled":
+            case "input.requested":
+              cancel();
+              yield { type: event.type };
+              return;
+          }
+        }
+      } finally {
+        signal?.removeEventListener("abort", cancel);
+      }
+    } catch {
+      throw new Error(signal?.aborted ? "Response stopped." : "Eve could not finish this response. Check the connection and try again.");
+    }
   };
 }
 
-function originOf(req: Request): string | undefined {
-  try {
-    return new URL(req.url).origin;
-  } catch {
-    return undefined;
-  }
-}
-
-/** Render the conversation as a single prompt; eve manages its own session state. */
 function toPrompt(messages: ChatMessage[]): string {
-  const turns = messages.filter((m) => m.role !== "system");
-  if (turns.length <= 1) return turns[0]?.content ?? "";
-  return turns
-    .map((m) => `${m.role === "assistant" ? "Assistant" : "User"}: ${m.content}`)
-    .join("\n\n");
+  return messages.map((message) => `${message.role === "assistant" ? "Assistant" : message.role === "system" ? "Context" : "User"}: ${message.content}`).join("\n\n");
 }

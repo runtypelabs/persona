@@ -53,17 +53,22 @@ export function hasHiddenModeChips(
  * Modes that still earn a header chip. A segmented track already shows its own
  * state, so a chip for the same mode would be a second, removable copy of it;
  * `chipVisibility: "hidden"` opts a buttons-presentation group out of the same
- * row on the same pathway.
+ * row on the same pathway. Selected-label defaults omit loose-mode chips,
+ * except explicit `auto` groups and forced overflow controls, whose chips keep
+ * their selected state discoverable while the menu is closed.
  */
 export function chipVisibleComposerModes(
   modes: readonly ComposerMode[] | undefined,
-  groups: readonly ComposerModeGroup[] | undefined
+  groups: readonly ComposerModeGroup[] | undefined,
+  selectedLabels = false
 ): ComposerMode[] {
   if (!modes?.length) return [];
   return modes.filter(
     (mode) =>
       !isSegmentedModeGroup(mode.groupId, groups) &&
-      !hasHiddenModeChips(mode.groupId, groups)
+      !hasHiddenModeChips(mode.groupId, groups) &&
+      (!selectedLabels || mode.presentation === "overflow" ||
+        groups?.find((group) => group.id === mode.groupId)?.chipVisibility === "auto")
   );
 }
 
@@ -144,4 +149,18 @@ export function resolveComposerModePlaceholder(
   if (!modes?.length || active.length === 0) return undefined;
   return modes.find((mode) => active.includes(mode.id) && mode.placeholder)
     ?.placeholder;
+}
+
+/** Set a selection with toggle's group rules. Last requested id wins a single
+ * group; unknown ids and duplicates are ignored. Output follows catalog order. */
+export function selectComposerModes(
+  ids: readonly string[],
+  modes: readonly ComposerMode[],
+  groups: readonly ComposerModeGroup[] | undefined
+): string[] {
+  let active: string[] = [];
+  for (const id of ids) {
+    if (!active.includes(id)) active = toggleComposerMode(active, id, modes, groups);
+  }
+  return active;
 }

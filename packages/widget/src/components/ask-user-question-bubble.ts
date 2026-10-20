@@ -1,4 +1,5 @@
 import { parse as parsePartialJson, ARR, OBJ, STR } from "partial-json";
+import { getExplicitLegacyStyle } from "../utils/style-provenance";
 import { createElement } from "../utils/dom";
 import {
   AgentWidgetAskUserQuestionFeature,
@@ -132,24 +133,25 @@ const promptAt = (
   return promptsFromPayload(payload)[index] ?? null;
 };
 
-const applyStyleVars = (
-  root: HTMLElement,
-  feature: AgentWidgetAskUserQuestionFeature
-): void => {
-  const s = feature.styles;
-  if (!s) return;
-  if (s.sheetBackground) root.style.setProperty("--persona-ask-sheet-bg", s.sheetBackground);
-  if (s.sheetBorder) root.style.setProperty("--persona-ask-sheet-border", s.sheetBorder);
-  if (s.sheetShadow) root.style.setProperty("--persona-ask-sheet-shadow", s.sheetShadow);
-  if (s.pillBackground) root.style.setProperty("--persona-ask-pill-bg", s.pillBackground);
-  if (s.pillBackgroundSelected)
-    root.style.setProperty("--persona-ask-pill-bg-selected", s.pillBackgroundSelected);
-  if (s.pillTextColor) root.style.setProperty("--persona-ask-pill-fg", s.pillTextColor);
-  if (s.pillTextColorSelected)
-    root.style.setProperty("--persona-ask-pill-fg-selected", s.pillTextColorSelected);
-  if (s.pillBorderRadius) root.style.setProperty("--persona-ask-pill-radius", s.pillBorderRadius);
-  if (s.customInputBackground)
-    root.style.setProperty("--persona-ask-input-bg", s.customInputBackground);
+const styleVariables = {
+  sheetBackground: "--persona-ask-sheet-bg",
+  sheetBorder: "--persona-ask-sheet-border",
+  sheetShadow: "--persona-ask-sheet-shadow",
+  pillBackground: "--persona-ask-pill-bg",
+  pillBackgroundSelected: "--persona-ask-pill-bg-selected",
+  pillTextColor: "--persona-ask-pill-fg",
+  pillTextColorSelected: "--persona-ask-pill-fg-selected",
+  pillBorderRadius: "--persona-ask-pill-radius",
+  customInputBackground: "--persona-ask-input-bg",
+} as const;
+
+const applyStyleVars = (root: HTMLElement, config?: AgentWidgetConfig): void => {
+  Object.entries(styleVariables).forEach(([key, variable]) => {
+    const value = getExplicitLegacyStyle(config, `features.askUserQuestion.styles.${key}`);
+    // Historical empty-string handling is retained; clearing exposes inherited theme variables.
+    if (typeof value === "string" && value) root.style.setProperty(variable, value);
+    else root.style.removeProperty(variable);
+  });
 };
 
 const buildAffordance = (
@@ -694,7 +696,7 @@ const buildSheet = (
   if (feature.slideInMs !== undefined) {
     sheet.style.setProperty("--persona-ask-sheet-duration", `${feature.slideInMs}ms`);
   }
-  applyStyleVars(sheet, feature);
+  applyStyleVars(sheet, config);
 
   // Header: question text (flex-1) + compact "N/M" stepper indicator on the
   // right (grouped only). Skip in the nav row is the canonical escape hatch
@@ -754,6 +756,7 @@ const syncSheetFromMessage = (
   message: AgentWidgetMessage,
   config: AgentWidgetConfig | undefined
 ): void => {
+  applyStyleVars(sheet, config);
   // If the payload's question count grew (rare mid-stream), update the cached count.
   const { payload } = parseAskUserQuestionPayload(message);
   const newCount = Math.max(1, promptsFromPayload(payload).length);
@@ -783,8 +786,7 @@ export const createAskUserQuestionBubble = (
   bubble.setAttribute("data-message-id", message.id);
   bubble.setAttribute("data-bubble-type", "ask-user-question");
 
-  const feature = resolveFeature(config);
-  applyStyleVars(bubble, feature);
+  applyStyleVars(bubble, config);
 
   const text = createElement("span", "persona-ask-stub-label");
   const { complete } = parseAskUserQuestionPayload(message);

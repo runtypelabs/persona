@@ -28,7 +28,7 @@ export default function Page() {
             title="LangGraph.js"
             subtitle="Ask a question and the graph's token stream will be wrapped for Persona."
             accent="#1c3c3c"
-            suggestionChips={[
+            starterItems={[
               "Explain what this adapter does",
               "Write a haiku about streaming",
               "Give me a short checklist for production",

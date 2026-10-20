@@ -1,11 +1,12 @@
+import { transform as transformCss } from "lightningcss";
 import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, posix, sep } from "node:path";
+import { join, posix, sep, resolve, dirname } from "node:path";
 import { defineConfig, type UserConfig } from "tsdown";
 
 /**
- * Every widget bundle, built by one `tsdown` run (Rolldown + Oxc). Replaces the
- * ~30 sequential tsup invocations that used to live in package.json scripts and
- * `tsup.*.config.ts` files; published filenames are unchanged.
+ * Widget bundle definitions for Rolldown + Oxc. build-bundles.mjs runs bounded
+ * groups in separate processes, releasing completed module graphs before the
+ * next group. Published filenames are unchanged.
  *
  * Bundling vocabulary, translated from tsup:
  *   - tsup `noExternal: [/.*\/]` → `deps.alwaysBundle: [/.*\/]`. Standalone
@@ -21,6 +22,15 @@ import { defineConfig, type UserConfig } from "tsdown";
  */
 
 const SUBPATH_CHUNKS = [
+  "@runtypelabs/persona/preferences-runtime",
+  "@runtypelabs/persona/activity-ui",
+  "@runtypelabs/persona/turn-activity-ui",
+  "@runtypelabs/persona/loading-label-runtime",
+  "@runtypelabs/persona/history-shell",
+  "@runtypelabs/persona/config-diagnostics",
+  "@runtypelabs/persona/background-runtime",
+  "@runtypelabs/persona/dictation-runtime",
+  "@runtypelabs/persona/composer-actions-runtime",
   "@runtypelabs/persona/context-mentions",
   "@runtypelabs/persona/context-mentions-inline",
   "@runtypelabs/persona/history-view",
@@ -40,14 +50,26 @@ const BUNDLE_ALL = [/.*/];
 
 const base = {
   outDir: "dist",
+  plugins: [{
+    name: "component-css-text",
+    resolveId(source, importer) {
+      if (source.endsWith(".css?raw") && importer) return resolve(dirname(importer), source);
+    },
+    load(id) {
+      if (!id.endsWith(".css?raw")) return;
+      const { code } = transformCss({ filename: id, code: readFileSync(id.slice(0, -4)), minify: true,
+        targets: { chrome: 94 << 16, edge: 94 << 16, firefox: 93 << 16, safari: (15 << 16) | (4 << 8), "ios_saf": (15 << 16) | (4 << 8) } });
+      return `export default ${JSON.stringify(code.toString())};`;
+    },
+  }],
   // Several configs write into the same dist/; the build script wipes it once
   // up front instead.
   clean: false,
   target: "es2022",
-  platform: "node",
+  platform: "browser",
   minify: true,
   report: false,
-  // Dozens of builds run concurrently, so per-build plugin timings are noise.
+  // Per-build plugin timings are noise across the entry-point groups.
   checks: { pluginTimings: false },
   outExtensions: ({ format }) => ({
     js: format === "cjs" ? ".cjs" : format === "iife" ? ".global.js" : ".js",
@@ -189,10 +211,11 @@ export default defineConfig([
     onSuccess: () => writeFileSync("dist/markdown-parsers-entry.js", 'export * from "./markdown-parsers.js";\n'),
   },
   siblingChunk("client-stream"),
+  siblingChunk("client-dispatch"),
   siblingChunk("client-history"),
   siblingChunk("ui-extras", "src/ui-extras-entry.ts"),
   siblingChunk("session-actions"),
-  siblingChunk("history-shell"),
+  lazyChunk("history-shell"),
 
   library({ index: "src/index.ts" }, { sourcemap: true, deps: { neverBundle: SUBPATH_CHUNKS } }),
 
@@ -206,6 +229,7 @@ export default defineConfig([
     "./runtype-tts-entry",
     "./markdown-parsers-entry",
     "./client-stream",
+    "./client-dispatch",
     "./client-history",
     "./ui-extras-entry",
     "./session-actions",
@@ -235,7 +259,7 @@ export default defineConfig([
   },
   library({ "theme-reference": "src/theme-reference.ts" }),
   library({ codegen: "src/codegen.ts" }),
-  library({ "theme-editor": "src/theme-editor.ts" }),
+  library({ "theme-editor": "src/theme-editor.ts" }, { deps: { neverBundle: SUBPATH_CHUNKS } }),
   library(
     { "theme-editor-preview": "src/theme-editor-preview.ts" },
     {
@@ -262,6 +286,14 @@ export default defineConfig([
   lazyChunk("voice-runtime"),
   lazyChunk("voice-client-tools"),
   lazyChunk("forms-ui"),
+  lazyChunk("activity-ui", ["@runtypelabs/persona/turn-activity-ui"]),
+  lazyChunk("turn-activity-ui"),
+  lazyChunk("loading-label-runtime"),
+  lazyChunk("preferences-runtime"),
+  lazyChunk("config-diagnostics"),
+  lazyChunk("background-runtime"),
+  lazyChunk("dictation-runtime"),
+  lazyChunk("composer-actions-runtime"),
 
   declarations({
     index: "src/index.ts",
@@ -277,4 +309,4 @@ export default defineConfig([
     "animations/wipe": "src/animations/wipe.ts",
     ...Object.fromEntries(LAZY_CHUNKS.map((name) => [name, `src/${name}.ts`])),
   }),
-].flat());
+].flat().map((config, index) => ({ ...config, name: config.dts ? "types" : `runtime-${Math.floor(index / 8)}` })));

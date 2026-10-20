@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "persona-relay-agents",
+  "main": "src/server.ts",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "SupportAgent", "class_name": "SupportAgent" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SupportAgent"] }],
+  "vars": { "OPENAI_MODEL": "gpt-5.5" }
+}

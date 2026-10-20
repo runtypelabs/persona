@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Persona × eve",
-  description: "Wrap an eve agent session stream in Persona's SSE wire protocol",
+  title: "Atlas — a workspace with Persona + Eve",
+  description: "A thoughtful document workspace with a Persona V5 copilot, powered by Eve.",
 };
 
 export default function RootLayout({

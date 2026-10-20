@@ -37,7 +37,7 @@ describe('version switching preserves authored values', () => {
     expect(state.get('features.toolCallDisplay.variant')).toBe('row');
     expect(state.get('features.toolCallDisplay.autoExpand')).toBe(true);
     expect(state.get('theme.components.header.controlSize')).toBe('32px');
-    expect(state.get('theme.components.header.controlIconSize')).toBe('18px');
+    expect(state.get('theme.components.header.controlIconSize')).toBe('16px');
     state.undo();
     state.redo();
     state.unset('future.v5Defaults');

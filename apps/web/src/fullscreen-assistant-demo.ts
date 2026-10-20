@@ -677,8 +677,10 @@ const config = mergeWithDefaults({
     ...fullscreenAssistantDarkTokens
   },
   launcher: { enabled: false, fullHeight: true },
+  welcome: {
+    variant: "none",
+  },
   copy: {
-    showWelcomeCard: false,
     inputPlaceholder: "Reply… (drop files on the chat to attach)"
   },
   voiceRecognition: { enabled: true },

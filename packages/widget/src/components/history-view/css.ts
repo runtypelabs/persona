@@ -1048,8 +1048,8 @@ export const HISTORY_VIEW_CSS =
   min-height: var(--persona-header-control-size, 44px);
 }
 .persona-history-topbar--shell button.persona-history-icon-button svg {
-  width: var(--persona-header-control-icon-size, 20px);
-  height: var(--persona-header-control-icon-size, 20px);
+  width: var(--persona-header-control-icon-size, 16px);
+  height: var(--persona-header-control-icon-size, 16px);
 }
 @media (pointer: coarse) {
   .persona-history-topbar--shell button.persona-history-icon-button {

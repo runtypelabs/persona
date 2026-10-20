@@ -2,6 +2,8 @@
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { mergeWithDefaults } from "../defaults";
+import { mergeConfigUpdate } from "../utils/config-merge";
 import { createArtifactPane as createArtifactPaneImpl } from "./artifact-pane";
 import type {
   AgentWidgetConfig,
@@ -1389,5 +1391,32 @@ describe("artifact-pane tablist accessibility", () => {
     // Focus survived the rebuild and moved to the new selected tab, so a second
     // arrow keeps working.
     expect(document.activeElement).toBe(after[1]);
+  });
+});
+
+
+describe("artifact pane style updates", () => {
+  it("restores theme padding and fade size without rebuilding the selected preview", () => {
+    let config = mergeWithDefaults({ features: { artifacts: { enabled: true, layout: { panePadding: "8px", tabFadeSize: "24px" } } }, theme: { components: { artifact: { pane: { padding: "12px" }, tab: { fadeSize: "36px" } } } } });
+    const pane = createArtifactPane(config, { onSelect: () => {} });
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const preview = contentEl(pane).firstElementChild;
+    const list = pane.element.querySelector<HTMLElement>(".persona-artifact-list")!;
+    const toolbar = pane.element.querySelector<HTMLElement>(".persona-artifact-toolbar")!;
+    expect(contentEl(pane).style.padding).toBe("8px");
+    expect(toolbar.style.paddingLeft).toBe("8px");
+    expect(list.style.getPropertyValue("--persona-artifact-tab-fade-size")).toBe("24px");
+    config = mergeConfigUpdate(config, { features: { artifacts: { layout: { panePadding: undefined, tabFadeSize: undefined } } } });
+    pane.setStyleConfig(config);
+    expect(contentEl(pane).style.padding).toBe("var(--persona-components-artifact-pane-padding)");
+    expect(toolbar.style.paddingLeft).toBe("var(--persona-components-artifact-pane-padding)");
+    expect(list.style.getPropertyValue("--persona-artifact-tab-fade-size")).toBe("var(--persona-components-artifact-tab-fadeSize)");
+    expect(contentEl(pane).firstElementChild).toBe(preview);
+    config = mergeConfigUpdate(config, { theme: { components: { artifact: { pane: { padding: undefined }, tab: { fadeSize: undefined } } } } });
+    pane.setStyleConfig(config);
+    expect(contentEl(pane).style.padding).toBe("");
+    expect(toolbar.style.paddingLeft).toBe("");
+    expect(list.style.getPropertyValue("--persona-artifact-tab-fade-size")).toBe("");
+    expect(contentEl(pane).firstElementChild).toBe(preview);
   });
 });

@@ -229,4 +229,52 @@ describe("messageActions.custom", () => {
     expect(() => actionButton(mount, "a1", "custom:boom")!.click()).not.toThrow();
     expect(error).toHaveBeenCalled();
   });
+
+  it.each([false, true])("updates the latest assistant visibility when the transcript grows (V5: %s)", async (v5Defaults) => {
+    const onSelect = vi.fn();
+    const { mount, controller } = makeController({
+      future: { v5Defaults },
+      initialMessages: turn(),
+      messageActions: { custom: [{ id: "share", label: "Share", onSelect }] },
+    });
+    await flush();
+    const row = () => mount.querySelector('[data-actions-for="a1"]')!;
+    expect(row().classList.contains("persona-message-actions-hover")).toBe(!v5Defaults);
+    expect(row().classList.contains("persona-message-actions-adaptive")).toBe(v5Defaults);
+
+    const newer = controller.injectAssistantMessage({ content: "Another answer" });
+    await flush();
+    expect(row().classList.contains("persona-message-actions-hover")).toBe(true);
+    const newerRow = mount.querySelector(`[data-actions-for="${newer.id}"]`)!;
+    expect(newerRow.classList.contains("persona-message-actions-hover")).toBe(!v5Defaults);
+    actionButton(mount, "a1", "custom:share")!.click();
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "a1" }));
+  });
+
+  it.each(["hover", "always"])("preserves explicit V5 %s visibility", async (visibility) => {
+    const { mount } = makeController({
+      future: { v5Defaults: true },
+      initialMessages: turn(),
+      messageActions: { visibility },
+    });
+    await flush();
+    const row = mount.querySelector('[data-actions-for="a1"]')!;
+    expect(row.classList.contains("persona-message-actions-adaptive")).toBe(false);
+    expect(row.classList.contains("persona-message-actions-hover")).toBe(visibility === "hover");
+  });
+
+  it("keeps a V5 custom message renderer in control of its content", async () => {
+    const { mount } = makeController({
+      future: { v5Defaults: true },
+      initialMessages: turn(),
+      layout: { messages: { renderAssistantMessage: () => {
+        const node = document.createElement("div");
+        node.textContent = "Custom answer";
+        return node;
+      } } },
+    });
+    await flush();
+    expect(mount.textContent).toContain("Custom answer");
+    expect(mount.querySelector('[data-actions-for="a1"]')).toBeNull();
+  });
 });

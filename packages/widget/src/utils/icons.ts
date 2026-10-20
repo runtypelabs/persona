@@ -21,7 +21,6 @@ import {
   Copy,
   Download,
   Ellipsis,
-  EllipsisVertical,
   ExternalLink,
   Eye,
   File as FileIcon,
@@ -64,16 +63,16 @@ import {
  * Curated icon registry for `renderLucideIcon` (host-suppliable name strings).
  *
  * Two tiers keep the payload honest:
- *  - CORE (55 names, below): every name the widget itself can emit —
+ *  - CORE (below): the initial widget chrome —
  *    config DEFAULTS (bot, send, mic, x, …) plus the chrome names routed
  *    through `utils/buttons` / `utils/dropdown`. Always resolves synchronously.
- *  - EXTRA (63 names, `src/icons-extra.ts`): the config-only tail
+ *  - EXTRA (`src/icons-extra.ts`): activity glyphs and the config-only tail
  *    (forms, commerce, media, …). The DATA ships in the lazy `icons-extra.js`
  *    sibling chunk; the first request for one of these names kicks the fetch
  *    and returns a correctly-sized empty placeholder SVG that fills in place
  *    when the chunk lands. Surfaces that clone/morph rendered icons should
- *    subscribe to `onExtraIconsReady` and re-render (ui.ts does this for the
- *    transcript, mirroring the markdown-parsers heal).
+ *    subscribe to `onExtraIconsReady` and re-render. The widget prepares this
+ *    registry before revealing its UI, so controls never show placeholders.
  *
  * Statically-known icons in widget code do NOT use this registry: they import
  * icon data directly and call `renderIconNode` (see utils/icon-node.ts).
@@ -115,17 +114,27 @@ const CORE_LUCIDE_ICONS = {
   "shield-check": ShieldCheck,
   "shield-x": ShieldX,
   "square": Square,
+  "square-text": [
+    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+    ["path", { d: "M7 8h10M7 12h10M7 16h6" }],
+  ],
   "thumbs-down": ThumbsDown,
   "thumbs-up": ThumbsUp,
   "upload": Upload,
   "volume-2": Volume2,
+  "voice-bars": [
+    ["path", { d: "M4 10v4" }],
+    ["path", { d: "M8 6v12" }],
+    ["path", { d: "M12 3v18" }],
+    ["path", { d: "M16 7v10" }],
+    ["path", { d: "M20 10v4" }],
+  ],
   "x": X,
   "at-sign": AtSign,
   "arrow-left": ArrowLeft,
   "arrow-right": ArrowRight,
   "external-link": ExternalLink,
   "ellipsis": Ellipsis,
-  "ellipsis-vertical": EllipsisVertical,
   "menu": Menu,
   "panel-left": PanelLeft,
   "plus": Plus,
@@ -150,6 +159,12 @@ const CORE_LUCIDE_ICONS = {
  * `icons-partition.test.ts`).
  */
 export const EXTRA_ICON_NAMES = [
+  "brain",
+  "toolbox",
+  "wrench",
+  "circle",
+  "database",
+  "terminal",
   "user",
   "mail",
   "phone",
@@ -169,6 +184,7 @@ export const EXTRA_ICON_NAMES = [
   "info",
   "ban",
   "shield",
+  "ellipsis-vertical",
   "house",
   "pen-line",
   "save",
@@ -234,14 +250,7 @@ const runtimeIcons = new Map<string, IconNode>(
 // re-render via onExtraIconsReady.
 // ---------------------------------------------------------------------------
 
-type PendingIcon = {
-  el: SVGElement;
-  name: string;
-  size: number | string;
-  color: string;
-  strokeWidth: number;
-};
-const pendingIcons = new Set<PendingIcon>();
+const pendingIcons = new Map<SVGElement, string>();
 
 let extraIconsLoaded = false;
 const extraReadySubscribers = new Set<() => void>();
@@ -284,17 +293,19 @@ export const onExtraIconsReady = (cb: () => void): (() => void) => {
 
 const fillPendingIcons = (): number => {
   let filled = 0;
-  for (const pending of [...pendingIcons]) {
-    const data = runtimeIcons.get(pending.name);
+  for (const [el, name] of pendingIcons) {
+    const data = runtimeIcons.get(name);
     if (!data) continue;
-    pendingIcons.delete(pending);
+    pendingIcons.delete(el);
     filled++;
-    const real = renderIconNode(data, pending.size, pending.color, pending.strokeWidth);
+    // Only adopt children: size, color, and stroke width already live on the
+    // placeholder shell, so retaining and applying those options again is redundant.
+    const real = renderIconNode(data);
     if (!real) continue;
     // Fill IN PLACE: the placeholder already carries the correct svg attrs,
     // so adopting the real children swaps nothing the layout depends on.
-    pending.el.removeAttribute("data-persona-icon-pending");
-    while (real.firstChild) pending.el.appendChild(real.firstChild);
+    el.removeAttribute("data-persona-icon-pending");
+    while (real.firstChild) el.appendChild(real.firstChild);
   }
   return filled;
 };
@@ -336,28 +347,15 @@ export const __eagerlyProvideExtraIcons = (
   notifyExtraIconsReady(true);
 };
 
-let extraIconsKickFailedRetry = false;
+/** Prepare icon data before revealing controls, including unopened menus. */
+export const prepareIconRegistry = (): Promise<void> | null => extraIconsLoaded ? null :
+  loadIconsExtra().then(mod => __eagerlyProvideExtraIcons(mod.EXTRA_LUCIDE_ICONS));
+
 const kickExtraIcons = (): void => {
-  void loadIconsExtra()
-    .then((mod) => {
-      if (extraIconsLoaded) return;
-      for (const [name, data] of Object.entries(mod.EXTRA_LUCIDE_ICONS)) {
-        // The chunk is BASE data: never clobber a host's registerIcons()
-        // override ("later registrations win", and the host's came first).
-        if (!runtimeIcons.has(name)) runtimeIcons.set(name, data);
-      }
-      extraIconsLoaded = true;
-      fillPendingIcons();
-      notifyExtraIconsReady(true);
-    })
-    .catch((err) => {
-      // Failed fetch (ad blocker, offline, renamed self-hosted bundle):
-      // placeholders stay empty and the next extra-name render retries via
-      // the chunk loader's rejection-retry. Surface the loader's guidance
-      // (e.g. the self-hosting rename message) instead of swallowing it.
-      extraIconsKickFailedRetry = true;
-      console.warn("[Persona] Failed to load the icons-extra chunk", err);
-    });
+  void prepareIconRegistry()?.catch((err) => {
+    // Placeholders stay empty; the next render retries via the chunk loader.
+    console.warn("[Persona] Failed to load the icons-extra chunk", err);
+  });
 };
 
 const createPlaceholderSvg = (
@@ -365,16 +363,8 @@ const createPlaceholderSvg = (
   color: string,
   strokeWidth: number
 ): SVGElement => {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", String(size));
-  svg.setAttribute("height", String(size));
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", color);
-  svg.setAttribute("stroke-width", String(strokeWidth));
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("aria-hidden", "true");
+  // The same shell as a resolved glyph, so filling it never changes geometry.
+  const svg = renderIconNode([], size, color, strokeWidth)!;
   svg.setAttribute("data-persona-icon-pending", "true");
   return svg;
 };
@@ -406,24 +396,20 @@ export const renderLucideIcon = (
   if (iconData) return renderIconNode(iconData, size, color, strokeWidth);
 
   if ((EXTRA_ICON_NAMES as readonly string[]).includes(iconName)) {
-    if (extraIconsKickFailedRetry) extraIconsKickFailedRetry = false;
     const el = createPlaceholderSvg(size, color, strokeWidth);
     // Bounded: a permanently failing chunk (ad blocker) must not accumulate
     // element refs without limit. Oldest entries are dropped — they simply
     // stay empty, like any clone the fill can't reach.
     if (pendingIcons.size >= 500) {
-      const oldest = pendingIcons.values().next().value;
-      if (oldest) pendingIcons.delete(oldest);
+      pendingIcons.delete(pendingIcons.keys().next().value!);
     }
-    pendingIcons.add({ el, name: iconName, size, color, strokeWidth });
+    pendingIcons.set(el, iconName);
     kickExtraIcons();
     return el;
   }
 
   console.warn(
-    `Lucide icon "${iconName}" is not in the Persona registry. ` +
-    `Register it via registerIcons(), or add it to packages/widget/src/utils/icons.ts ` +
-    `(see docs/icon-registry-shortlist.md).`
+    `Unknown Persona icon "${iconName}". Use registerIcons().`
   );
   return null;
 };

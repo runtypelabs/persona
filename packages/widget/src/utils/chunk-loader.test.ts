@@ -4,6 +4,14 @@ import { createChunkLoader } from "./chunk-loader";
 type FakeModule = { value: number };
 
 describe("createChunkLoader", () => {
+  it("normalizes a synchronous loader failure and allows retry", async () => {
+    const fallbackImport = vi.fn<() => Promise<FakeModule>>()
+      .mockImplementationOnce(() => { throw new Error("offline"); })
+      .mockResolvedValue({ value: 1 });
+    const loader = createChunkLoader({ fallbackImport });
+    await expect(loader.load()).rejects.toThrow("offline");
+    await expect(loader.load()).resolves.toEqual({ value: 1 });
+  });
   it("uses the fallback import when no loader is registered", async () => {
     const mod: FakeModule = { value: 1 };
     const fallbackImport = vi.fn(async () => mod);
