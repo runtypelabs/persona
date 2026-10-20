@@ -424,8 +424,18 @@ export class WebMcpBridge {
       const mod = await this.#deps.loadPolyfill();
       // Idempotent: no-ops if `document.modelContext` already exists (native or
       // a prior install by the host page).
-      if ("initializeWebMCPPolyfill" in mod) mod.initializeWebMCPPolyfill();
-      else mod.installWebMCP();
+      if ("installWebMCP" in mod) mod.installWebMCP();
+      else mod.initializeWebMCPPolyfill();
+      if (!this.#getModelContext()) {
+        // v6 deliberately no-ops instead of half-installing: insecure page,
+        // or an engine without the APIs its core needs.
+        log.warn(
+          "WebMCP polyfill did not install document.modelContext: WebMCP consumption disabled. " +
+            "It requires a secure context (HTTPS or localhost) and Chrome/Firefox 126+ or Safari 18+.",
+        );
+        this.#installed = false;
+        return;
+      }
       this.#installed = true;
     } catch (err) {
       log.warn(

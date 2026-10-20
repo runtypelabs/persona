@@ -54,8 +54,9 @@ app authoring the tools and activate it in that app's TypeScript configuration.
 It is different from `@mcp-b/webmcp-types`. Neither declarations nor inference
 validate runtime input or install WebMCP in a browser.
 
-Keep Persona's structural consumer types, v5 fallback, and multi-generation
-bridge intact. Do not replace them with native-only assumptions. A page can
+Keep Persona's structural consumer types and multi-generation bridge intact.
+The automatic fallback uses v6; host-installed v5 runtimes remain supported.
+Do not replace that compatibility with native-only assumptions. A page can
 use native support or install its own supported polyfill before registration;
 do not replace an existing `document.modelContext`. Verify declaration builds
 and browser/polyfill behavior before changing any compatibility contract.

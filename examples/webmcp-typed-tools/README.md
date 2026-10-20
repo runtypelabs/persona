@@ -2,7 +2,13 @@
 
 This headless example registers two page tools using native `webmcp-types`
 schema inference. It adds no dependency to Persona's published packages and
-does not change the bridge, automatic v5 fallback, or approval policy.
+does not change the bridge, automatic fallback, or approval policy.
+
+The authoring types are pinned to `0.1.9`, matching the v6 fallback's dependency.
+The offline checks import Persona's source bridge, which resolves that fallback's
+declarations too. Loading different versions of `webmcp-types` in one TypeScript
+program duplicates its global type aliases; keep these pins aligned when updating
+the fallback. This does not restrict host-installed v5 runtime compatibility.
 
 - `get_cart` reads a cart containing a customer note, marked as untrusted.
 - `open_checkout` opens a review screen, never charges or places an order.
