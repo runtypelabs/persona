@@ -6959,7 +6959,11 @@
 
 .persona-turn-activity-duration { font-size: inherit; }
 
-[data-persona-turn-activity] > .persona-activity-header { width: 100%; border-radius: 0; border-bottom: 1px solid var(--persona-message-border); }
+[data-persona-turn-activity] > .persona-activity-header {
+  width: 100%;
+  border-radius: 0;
+  border-bottom: var(--persona-components-turnActivity-dividerWidth, 1px) solid var(--persona-components-turnActivity-dividerColor, color-mix(in srgb, var(--persona-primary) 8%, transparent));
+}
 
 /* Detail treatments reuse existing disclosure content. Card layout already
    supplies the panel frame, so it never receives a second bordered box. */

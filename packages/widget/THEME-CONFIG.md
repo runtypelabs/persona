@@ -3517,6 +3517,24 @@ Legacy tool/reasoning shadow tokens remain supported (V5 defaults to none).
 
 V5 grouped children default to `features.toolCallDisplay.groupAppearance: "inset"`: a single 2px line using the same border color as inset reasoning, with no branches or dots. Set `"plain"` for indentation alone. This applies to both collapsible and always-expanded stack groups, preserves group spacing tokens, and leaves custom summaries intact. Summary-only groups have no empty rail. An explicit `"plain"` also selects indentation alone in V4; leaving the option unset preserves the V4 stack tree.
 
+The “Worked …” turn header has its own divider controls under
+`theme.components.turnActivity`, independent of message and tool borders:
+
+```ts
+theme: {
+  components: {
+    turnActivity: {
+      dividerColor: "color-mix(in srgb, var(--persona-primary) 8%, transparent)",
+      dividerWidth: "1px", // Use "0px" to hide it.
+    },
+  },
+}
+```
+
+Both fields are optional. These defaults apply in light and dark mode, deriving
+the color from the active theme and blending with the actual background. An
+explicit CSS color or color-token reference overrides the derived color.
+
 V5 completed mixed tool groups use a short count such as “3 activities”; homogeneous groups retain counted categories such as “File reads (3)”. Active groups and groups needing attention keep descriptive summaries and their status. Custom `renderGroupedSummary` results still take precedence. Collapsible and stack children share the group spacing controls above. For group geometry, `toolBubble.groupIndent`, `toolBubble.groupGap`, and `toolBubble.groupPadding` override the matching shared activity values independently, including scoped turn defaults.
 
 V5 expanded reasoning uses the body typography in both row and card layouts, across plain, inset, and panel appearances. `theme.components.activity.overflow` shares `{ maxHeight, fadeHeight }` between reasoning and every tool detail section (V5 rendered defaults: `"240px"` and `"12px"`). Set `maxHeight: "none"` for unlimited height or `fadeHeight: "0px"` for no fades. Each property in `toolBubble.overflow` or `reasoningBubble.overflow` overrides only the matching shared property. For example, shared `{ maxHeight: "360px", fadeHeight: "16px" }` plus `toolBubble.overflow: { maxHeight: "160px" }` gives tools a 160px cap with the shared 16px fade. Request and Response scroll independently. Top and bottom fades appear only when content is hidden beyond that edge; panel chrome, labels, copy controls, and focus outlines remain outside the mask. Streaming, resizing, and live theme updates refresh the edge state; reset an authored property to `undefined` to inherit again. V4 retains uncapped reasoning and the legacy tool cap with no fades until configured.

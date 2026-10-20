@@ -323,6 +323,10 @@ To opt into automatic opening, set
 V4 presentation. See the [theme guide](../../packages/widget/THEME-CONFIG.md#v5-tool-details)
 for color overrides and rendering behavior.
 
+Group labels use Persona's built-in summaries, including counts such as
+“Web searches (2)” for repeated searches and “3 activities” for completed mixed
+groups. No custom group-summary hook is enabled in the demo.
+
 ### Optional descriptive group labels
 
 [tool-activity-summary.ts](app/lib/tool-activity-summary.ts) is a reusable,

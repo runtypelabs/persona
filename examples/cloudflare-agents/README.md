@@ -42,6 +42,7 @@ Live uses `@ai-sdk/openai` with `OPENAI_MODEL` from `wrangler.jsonc` (default `g
 - `src/lib/knowledge.ts`: sample runbooks and service-status snapshots.
 - `src/shared/tickets.ts`: fictional tickets shared with the workspace.
 - `src/client/`: product workspace and Persona mounting.
+- `src/client/customer-transcript.ts`: a second, read-only Persona instance for the customer/support thread. Initial messages stay local; custom message renderers preserve human names, roles, avatars, and times. Layout slots keep the subject and note in the same scroll area. It has no API endpoint, composer, or message actions, and is destroyed when switching tickets.
 - `src/lib/persona-wire.ts` and `tests/wire-testing.ts`: canonical vendored protocol helpers. Copy these alongside the adapter when reusing it.
 
 The Worker exposes `/api/dispatch` and `/api/config`. It does not expose a general `/agents/*` router, RPC endpoint, or WebSocket endpoint. Agent instances are named by mode, ticket ID, and validated browser conversation UUID. `read_ticket` is closed over the selected server-side record, so model-generated arguments cannot select another ticket.

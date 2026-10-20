@@ -1650,3 +1650,19 @@ describe("activity overflow theme inheritance", () => {
     expect(root.style.getPropertyValue("--persona-components-toolBubble-overflow-fadeHeight")).toBe("");
   });
 });
+
+
+describe.each(['light', 'dark'] as const)('turn activity divider (%s)', colorScheme => {
+  it('keeps overrides independent of other borders and supports hiding the line', () => {
+    const base = { future: { v5Defaults: true }, colorScheme };
+    const defaults = themeToCssVariables(getActiveTheme(base));
+    const css = themeToCssVariables(getActiveTheme({ ...base, theme: { components: {
+      turnActivity: { dividerColor: '#abcdef', dividerWidth: '0px' },
+    } } }));
+    expect(css['--persona-components-turnActivity-dividerColor']).toBe('#abcdef');
+    expect(css['--persona-components-turnActivity-dividerWidth']).toBe('0px');
+    expect(css['--persona-message-border']).toBe(defaults['--persona-message-border']);
+    expect(defaults['--persona-components-turnActivity-dividerColor']).toBeUndefined();
+    expect(defaults['--persona-components-turnActivity-dividerWidth']).toBeUndefined();
+  });
+});

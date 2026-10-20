@@ -11,7 +11,6 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .sidebar { width: 224px; flex-shrink: 0; background: #f8f8f7; border-right: 1px solid #e9e9e6; display: flex; flex-direction: column; padding: 26px 14px 0; }
 .wordmark { display: flex; align-items: center; gap: 8px; padding: 0 10px; color: #1d1d1b; font-weight: 660; font-size: 24px; letter-spacing: -1.1px; text-decoration: none; }
 .brand-mark { width: 27px; height: 28px; display: grid; place-items: center; color: #fff; background: #262624; border-radius: 7px; font-family: Georgia, serif; font-size: 24px; font-style: italic; line-height: 1; padding-bottom: 4px; }
-.workspace-label { font-size: 11px; font-weight: 400; color: #8b8b85; letter-spacing: -.1px; padding-top: 6px; }
 .project-label { display: flex; align-items: center; gap: 10px; margin: 43px 0 27px; padding: 9px 11px; font-size: 16px; font-weight: 550; }
 .project-count { margin-left: auto; color: #aaa; font-size: 11px; }
 .nav-caption { color: #96968f; font-size: 11px; font-weight: 600; letter-spacing: 1.3px; margin: 0 12px 12px; }
@@ -20,10 +19,6 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .document-nav button svg { flex-shrink: 0; }
 .document-nav button:hover { background: #eeeee9; }
 .document-nav button.selected { background: #eaeae6; color: #292925; font-weight: 550; }
-.sidebar-footer { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 19px 8px; border-top: 1px solid #e6e6e1; font-size: 11px; }
-.team-avatar { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid #deded7; border-radius: 7px; font-family: Georgia, serif; }
-.sidebar-footer small { display: block; color: #97978f; font-size: 11px; margin-top: 3px; }
-.version-label { margin-left: auto; font-size: 11px; color: #99998f; }
 .workspace-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .workspace-header { height: 67px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid #ededeb; padding: 0 30px; }
 .breadcrumbs { display: flex; align-items: center; gap: 14px; font-size: 11px; color: #9c9c96; min-width: 0; }
@@ -70,20 +65,24 @@ h1 { margin: 26px 0 13px; font-family: Georgia, "Times New Roman", serif; font-w
 .persona-host { flex: 1; min-height: 0; width: 100%; }
 .copilot-footnote { flex-shrink: 0; padding: 7px 20px 13px; text-align: center; font-size: 11px; line-height: 1.6; color: #a4a49a; }
 .workspace-attribution { flex-shrink: 0; display: flex; justify-content: flex-end; padding: 10px 20px; border-top: 1px solid #ededeb; }
-.persona-attribution { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 6px; color: #666; font-size: 12px; line-height: 1.5; }
-.persona-attribution > a { display: inline-flex; align-items: center; gap: 6px; }
-.persona-attribution a { color: inherit; text-decoration: none; white-space: nowrap; }
-.persona-attribution > span { white-space: nowrap; }
-.persona-attribution a:hover, .persona-attribution a:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
-.persona-attribution img { flex-shrink: 0; }
 @media (max-width: 800px) { .workspace-attribution { justify-content: center; } }
 .mobile-tabs { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 @media (min-width: 1500px) { .document-content { padding-top: 65px; } }
-@media (max-width: 1180px) { .sidebar { width: 206px; } .workspace-label { display: none; } .document-nav button { font-size: 12px; gap: 7px; } .copilot-pane { width: 365px; } .document-content { padding-left: 32px; padding-right: 32px; } .breadcrumbs { gap: 9px; } }
+@media (max-width: 1180px) { .sidebar { width: 206px; } .document-nav button { font-size: 12px; gap: 7px; } .copilot-pane { width: 365px; } .document-content { padding-left: 32px; padding-right: 32px; } .breadcrumbs { gap: 9px; } }
 @media (max-width: 980px) { .sidebar { width: 185px; padding-left: 8px; padding-right: 8px; } .copilot-pane { width: 340px; } .document-content { padding: 35px 24px 24px; } .document-eyebrow { flex-wrap: wrap; gap: 8px; } .document-meta { flex-wrap: wrap; } .workspace-header { padding: 0 20px; } .breadcrumbs > span:first-child, .breadcrumbs > span:nth-child(2) { display: none; } }
 @media (max-width: 800px) { .workspace { min-height: 0; } .sidebar { display: none; } .workspace-header { height: 53px; padding: 0 16px; } .breadcrumbs { font-size: 11px; } .mobile-tabs { display: flex; padding: 8px 16px; border-bottom: 1px solid #eaeae5; gap: 7px; } .mobile-tabs button { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #929288; border-radius: 5px; padding: 7px 13px; font-size: 11px; } .mobile-tabs button[aria-pressed="true"] { background: #efefea; color: #33332e; } .mobile-document .copilot-pane { display: none; } .mobile-copilot .document-pane { display: none; } .copilot-pane { width: 100%; border-left: 0; } .document-content { padding: 34px 26px; max-width: 660px; } h1 { font-size: 38px; } .document-section p { font-size: 14px; } .document-section h2 { font-size: 15px; } .document-description { font-size: 14px; } .document-eyebrow { font-size: 11px; } .document-meta { font-size: 11px; } .milestone-row strong { font-size: 12px; } .persona-host { max-width: 650px; margin: auto; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
 
 .mobile-document-select { display: none; }
 @media (max-width: 800px) { .mobile-document-select { display: block; padding: 10px 16px 0; } .mobile-document-select select { width: 100%; background: #fff; border: 1px solid #e8e8e2; border-radius: 5px; color: #66665d; padding: 8px 10px; font-size: 11px; } }
+
+
+/* A single sentence keeps every word on the same typographic baseline. */
+.persona-attribution { display: block; color: #666; font-size: 12px; font-weight: 400; line-height: 20px; text-align: center; }
+.persona-attribution a { display: inline; color: inherit; text-decoration: none; white-space: nowrap; }
+.persona-attribution img { display: inline-block; height: 14px; vertical-align: middle; }
+.persona-attribution .persona-attribution-icon { width: 14px; margin-right: 4px; }
+.persona-attribution .runtype-wordmark { width: auto; height: 1em; vertical-align: -0.3em; }
+.persona-attribution a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.persona-attribution a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 2px; }

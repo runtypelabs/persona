@@ -67,27 +67,26 @@ export function Workspace({ liveAvailable }: { liveAvailable: boolean }) {
       {mobile && sidebarOpen && <button className="sidebarScrim" tabIndex={-1} aria-hidden="true" onClick={() => setSidebarOpen(false)} />}
       <aside id="conversation-navigation" ref={sidebarRef} className="sidebar" data-open={sidebarOpen} aria-label="Conversation navigation" role={mobile ? "dialog" : undefined} aria-modal={mobile && sidebarOpen ? true : undefined} aria-hidden={mobile && !sidebarOpen ? true : undefined} inert={mobile && !sidebarOpen}>
         <button ref={closeRef} className="sidebarClose" aria-label="Close navigation" onClick={() => setSidebarOpen(false)}>Close <span aria-hidden="true">×</span></button>
-        <a className="brand" href="/" aria-label="Persona workspace home"><img className="brandLogo" src="/persona-js.svg" width="112" height="31" alt="persona.js" /><span className="brandEdition">Workspace</span></a>
+        <a className="brand" href="/" aria-label="Persona workspace home"><img className="brandLogo" src="/persona-js.svg" width="112" height="31" alt="persona.js" /></a>
         <button className="newChat" onClick={() => start()}><span aria-hidden="true">＋</span> New conversation <span className="shortcut" aria-hidden="true">↗</span></button>
         <div className="navLabel">YOUR CONVERSATIONS</div>
         <nav className="conversationList" aria-label="Conversations in this visit">
           {[...conversations].reverse().map(item => <button key={item.id} className="conversationLink" aria-current={item.id === active ? "page" : undefined} onClick={() => { setActive(item.id); setSidebarOpen(false); }}><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 12.5a2 2 0 0 1-2 2H7l-3 2v-10a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2Z" /></svg><span>{item.title}</span></button>)}
         </nav>
-        <div className="sidebarFoot"><span className="workspaceAvatar">P</span><div>Personal workspace<small>Conversations stay in this visit</small></div></div>
+        <p className="sidebarFoot">Conversations stay in this visit</p>
       </aside>
       <section className="mainPane" aria-label="Chat workspace" inert={mobile && sidebarOpen}>
         <header className="workspaceHeader">
           <button ref={menuRef} className="mobileMenu" aria-controls="conversation-navigation" aria-label="Open navigation" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}>☰</button>
           <div className="headerControls">
             <label className="adapterSelect"><span className="srOnly">Provider adapter</span><select value={current.adapter} onChange={event => start({ adapter: event.target.value as Conversation["adapter"] })}><option value="ai-sdk">Vercel AI SDK</option><option value="openai-responses">OpenAI Responses</option></select></label>
-            <div className="modeSwitch" aria-label="Connection mode"><button aria-pressed={current.mode === "preview"} onClick={() => current.mode !== "preview" && start({ mode: "preview" })}>Preview</button><button aria-pressed={current.mode === "live"} onClick={() => current.mode !== "live" && start({ mode: "live" })}>Live</button></div>
+            <div className="modeSwitch" aria-label="Connection mode"><button title="Sample responses. No live model or search." aria-pressed={current.mode === "preview"} onClick={() => current.mode !== "preview" && start({ mode: "preview" })}>Preview</button><button title={liveAvailable ? "Connected to your configured provider" : "Provider setup required"} aria-pressed={current.mode === "live"} onClick={() => current.mode !== "live" && start({ mode: "live" })}>Live</button></div>
           </div>
         </header>
-        <div className="modeNote"><span className="statusDot" />{current.mode === "preview" ? "Preview · Sample responses, no live model or search" : liveAvailable ? "Live · Connected to your configured provider" : "Live · Provider setup required"}</div>
         {conversations.map(item => <div key={item.id} className="conversationPane" hidden={item.id !== active}>
           {item.mode === "live" && !liveAvailable ? <div className="setupState"><h1>Connect a provider</h1><p>Add <code>OPENAI_API_KEY</code> to your server’s <code>.env.local</code> and restart the app to chat with a live model.</p><button className="primaryButton" onClick={() => start({ mode: "preview" })}>Explore the preview</button><a href="https://github.com/runtypelabs/persona/tree/main/examples/ai-sdk-next" target="_blank" rel="noreferrer">Read the setup guide ↗</a></div> : <PersonaWidget apiUrl={item.mode === "preview" ? `/api/preview/dispatch?adapter=${item.adapter}` : `/api/${item.adapter}/dispatch`} conversationId={item.id} onTitle={updateTitle} preview={item.mode === "preview"} />}
         </div>)}
-        <footer className="workspaceFooter"><span className="persona-attribution"><a href="https://persona-chat.dev" target="_blank" rel="noreferrer"><img src="/persona-js-icon.svg" width="16" height="16" alt="" />Built with persona.js</a><span>· by <a href="https://runtype.com" target="_blank" rel="noreferrer">Runtype</a></span></span></footer>
+        <footer className="workspaceFooter"><span className="persona-attribution">Agent UI built with <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noreferrer"><img className="persona-attribution-icon" src="/persona-js-icon.svg" width="14" height="14" alt="" />persona.js</a>, an open-source project by <a href="https://runtype.com" target="_blank" rel="noreferrer"><img className="runtype-wordmark" src="/runtype-logo.svg" width="56" height="12" alt="Runtype" /></a>.</span></footer>
       </section>
     </main>
   );

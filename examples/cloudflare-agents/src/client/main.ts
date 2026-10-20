@@ -2,7 +2,8 @@ import { initAgentWidget, markdownPostprocessor, type AgentWidgetInitHandle } fr
 import "@runtypelabs/persona/widget.css";
 import "../styles.css";
 import { tickets } from "../shared/tickets";
-import { renderToolRow, renderToolSummary } from "./tool-summary";
+import { renderToolRow } from "./tool-summary";
+import { mountCustomerTranscript } from "./customer-transcript";
 
 const root = document.querySelector<HTMLDivElement>("#app")!;
 type Mode = "preview" | "live";
@@ -14,13 +15,28 @@ let query = "";
 let liveAvailable = false;
 let conversationId = crypto.randomUUID();
 let assistant: AgentWidgetInitHandle | undefined;
+let stopAssistantListeners = () => {};
+let customerTranscript: ReturnType<typeof mountCustomerTranscript> | undefined;
+const assistantPreferenceKey = "relay:assistant-open";
+
+function initiallyOpenAssistant() {
+  if (!window.matchMedia("(min-width: 1280px)").matches) return false;
+  try { return localStorage.getItem(assistantPreferenceKey) !== "false"; }
+  catch { return true; }
+}
+function syncAssistantButton(open: boolean) {
+  root.querySelector("#ask-assistant")?.setAttribute("aria-expanded", String(open));
+}
+function rememberAssistant(open: boolean) {
+  syncAssistantButton(open);
+  try { localStorage.setItem(assistantPreferenceKey, String(open)); }
+  catch { /* The assistant still works when browser storage is unavailable. */ }
+}
 
 const icons = {
-  inbox: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 13h5l2 3h4l2-3h5"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
   chevron: '<path d="m9 5 7 7-7 7"/>',
-  shield: '<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
-  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  panel: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M15 4v16"/>',
 };
 function icon(name: keyof typeof icons) { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`; }
 function escape(value: string) { return value.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!); }
@@ -28,15 +44,14 @@ function initials(name: string) { return name.split(" ").map(part => part[0]).sl
 
 root.innerHTML = `
   <header class="app-header">
-    <a class="brand" href="/" aria-label="Relay support home"><span class="brand-symbol">r</span>relay<span class="brand-divider"></span><span class="workspace-name">Acme support</span></a>
-    <div class="header-right"><span class="sample-badge">Sample workspace</span><div class="mode-switch" aria-label="Assistant connection mode"><button data-mode="preview" aria-pressed="true">Preview</button><button data-mode="live" aria-pressed="false" disabled title="Configure a provider to enable Live">Live</button></div><span class="team-avatar" aria-label="Support team">AC</span></div>
+    <a class="brand" href="/" aria-label="Relay support home"><span class="brand-symbol">r</span>relay</a>
+    <div class="header-right"><span class="sample-badge">Sample data</span><div class="mode-switch" aria-label="Assistant connection mode"><button data-mode="preview" aria-pressed="true">Preview</button><button data-mode="live" aria-pressed="false" disabled title="Configure a provider to enable Live">Live</button></div></div>
   </header>
   <div class="app-stage">
-    <nav class="navigation-rail" aria-label="Workspace navigation"><button class="rail-button active" id="inbox-home" aria-label="Show all conversations" title="Inbox">${icon("inbox")}</button></nav>
     <div class="dock-boundary">
       <main id="support-workspace" class="support-workspace">
         <aside class="inbox" aria-label="Support conversations">
-          <div class="inbox-heading"><h1>Inbox <span>${tickets.length}</span></h1><span class="inbox-symbol">${icon("inbox")}</span></div>
+          <div class="inbox-heading"><h1>Inbox <span>${tickets.length}</span></h1></div>
           <label class="search-box">${icon("search")}<input id="ticket-search" type="search" placeholder="Search conversations" aria-label="Search conversations" autocomplete="off" /></label>
           <div class="inbox-filters" aria-label="Filter conversations"><button data-filter="all" aria-pressed="true">All</button><button data-filter="open" aria-pressed="false">Open</button><button data-filter="waiting" aria-pressed="false">Waiting</button></div>
           <div id="ticket-list" class="ticket-list"></div>
@@ -47,8 +62,7 @@ root.innerHTML = `
   </div>
   <footer class="app-footer">
     <div class="persona-attribution">
-      <a href="https://persona-chat.dev" target="_blank" rel="noreferrer"><img src="/persona-js-icon.svg" width="16" height="16" alt="" />Built with persona.js</a>
-      <span>· by <a href="https://runtype.com" target="_blank" rel="noreferrer">Runtype</a></span>
+      Agent UI built with <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noreferrer"><img class="persona-attribution-icon" src="/persona-js-icon.svg" width="14" height="14" alt="" />persona.js</a>, an open-source project by <a href="https://runtype.com" target="_blank" rel="noreferrer"><img class="runtype-wordmark" src="/runtype-logo.svg" width="56" height="12" alt="Runtype" /></a>.
     </div>
   </footer>`;
 
@@ -64,22 +78,28 @@ function renderList() {
   root.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.filter === filter)));
 }
 function renderDetail() {
+  customerTranscript?.destroy();
   const ticket = selected;
   const detail = root.querySelector<HTMLElement>("#ticket-detail")!;
   detail.innerHTML = `
-    <header class="ticket-toolbar"><button class="back-to-inbox" id="back-to-inbox" aria-label="Back to inbox">← Inbox</button><span class="ticket-breadcrumb">Inbox ${icon("chevron")} <span>${escape(ticket.id.replace("ticket-", "#"))}</span></span><div class="ticket-actions"><span class="ticket-status"><i class="status-dot ${ticket.status}"></i>${ticket.status === "open" ? "Open conversation" : "Waiting on customer"}</span><button class="ask-assistant" id="ask-assistant">Ask assistant</button></div></header>
+    <header class="ticket-toolbar"><button class="back-to-inbox" id="back-to-inbox" aria-label="Back to inbox">← Inbox</button><span class="ticket-breadcrumb">Inbox ${icon("chevron")} <span>${escape(ticket.id.replace("ticket-", "#"))}</span></span><div class="ticket-actions"><button class="ask-assistant" id="ask-assistant" aria-expanded="${assistant?.getState().open ?? false}">${icon("panel")}Assistant</button></div></header>
     <div class="ticket-scroll">
-      <div class="ticket-title"><div class="ticket-category">${escape(ticket.category)}</div><h2 id="ticket-title-heading" tabindex="-1">${escape(ticket.subject)}</h2><div class="ticket-subtitle"><span>${escape(ticket.customer)}</span><span class="separator-dot">·</span>${escape(ticket.company)}<span class="separator-dot">·</span>${escape(ticket.email)}</div><div class="ticket-tags">${ticket.tags.map(tag => `<span>${escape(tag)}</span>`).join("")}</div></div>
-      <div class="conversation-date"><span></span>Customer conversation<span></span></div>
-      <div class="customer-thread">${ticket.messages.map(message => `<article class="thread-message ${message.role}"><span class="message-avatar ${message.role === "support" ? "support-avatar" : ""}">${escape(initials(message.author))}</span><div class="message-content"><div class="message-heading"><strong>${escape(message.author)}</strong><span>${message.role === "support" ? "Support team" : "Customer"}</span><time>${escape(message.time)}</time></div><div class="message-body">${escape(message.body).split("\n\n").map(paragraph => `<p>${paragraph.replaceAll("\n", "<br />")}</p>`).join("")}</div></div></article>`).join("")}</div>
-      <section class="service-signals" aria-label="Conversation context"><div class="signal-item">${icon("shield")}<div><span>Customer context</span><strong>${escape(ticket.company)}</strong></div></div><div class="signal-item">${icon("clock")}<div><span>Service signals</span><button id="check-service">Check with assistant ↗</button></div></div></section>
+      <div class="ticket-title"><h2 id="ticket-title-heading" tabindex="-1">${escape(ticket.subject)}</h2><div class="ticket-subtitle"><span>${escape(ticket.customer)}</span><span class="separator-dot">·</span>${escape(ticket.company)}<span class="separator-dot">·</span>${escape(ticket.email)}</div><div class="ticket-tags"><span class="ticket-status"><i class="status-dot ${ticket.status}" aria-hidden="true"></i>${ticket.status === "open" ? "Open" : "Waiting"}</span>${ticket.tags.map(tag => `<span>${escape(tag)}</span>`).join("")}</div></div>
+
+
       <p class="draft-only-note">Suggestions and drafts stay here. Nothing is sent to the customer.</p>
     </div>`;
-  detail.querySelector("#ask-assistant")!.addEventListener("click", () => { assistant?.open(); });
-  detail.querySelector("#check-service")!.addEventListener("click", () => { assistant?.open(); void assistant?.submitMessage("Check the relevant service status and explain what it means for this customer."); });
+  const host = detail.querySelector<HTMLElement>(".ticket-scroll")!;
+  const title = host.querySelector<HTMLElement>(".ticket-title")!;
+  const note = host.querySelector<HTMLElement>(".draft-only-note")!;
+  title.remove();
+  note.remove();
+  customerTranscript = mountCustomerTranscript(host, ticket, title, note);
+  detail.querySelector("#ask-assistant")!.addEventListener("click", () => { assistant?.toggle(); });
   detail.querySelector("#back-to-inbox")!.addEventListener("click", () => { root.dataset.mobileView = "inbox"; root.querySelector<HTMLButtonElement>(`[data-ticket="${selected.id}"]`)?.focus(); });
 }
 function mountAssistant(keepOpen = false) {
+  stopAssistantListeners();
   assistant?.destroy();
   conversationId = crypto.randomUUID();
   assistant = initAgentWidget({
@@ -92,7 +112,7 @@ function mountAssistant(keepOpen = false) {
       launcher: {
         enabled: true,
         mountMode: "docked",
-        dock: { side: "right", width: "420px", reveal: "emerge", maxHeight: "calc(100dvh - 68px)" },
+        dock: { side: "right", width: "380px", reveal: "emerge", maxHeight: "100%" },
         autoExpand: keepOpen,
         mobileFullscreen: true,
         mobileBreakpoint: 1080,
@@ -106,10 +126,14 @@ function mountAssistant(keepOpen = false) {
       contextProviders: [() => ({ ticketId: selected.id, conversationId })],
       suggestions: { starters: { items: ["Summarize this conversation", "Investigate the issue", "Draft a helpful reply"], variant: "chip", placement: "welcome", maxItems: 3 } },
       theme: { components: { introCard: { padding: "0", title: { fontSize: "18px", lineHeight: "24px" } } }, semantic: { colors: { accent: "#3864bd", primary: "#252b36", background: "#ffffff", surface: "#ffffff" } } },
-      toolCall: { renderCollapsedSummary: renderToolRow, renderGroupedSummary: renderToolSummary, resolveActionTitle: call => ({ read_ticket: "Review customer conversation", search_runbook: "Look up support guidance", check_service_status: "Check relevant service status" })[call.name ?? ""] },
+      toolCall: { renderCollapsedSummary: renderToolRow, resolveActionTitle: call => ({ read_ticket: "Review customer conversation", search_runbook: "Look up support guidance", check_service_status: "Check relevant service status" })[call.name ?? ""] },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     },
   });
+  syncAssistantButton(assistant.getState().open);
+  const stopOpen = assistant.on("widget:opened", () => rememberAssistant(true));
+  const stopClose = assistant.on("widget:closed", () => rememberAssistant(false));
+  stopAssistantListeners = () => { stopOpen(); stopClose(); };
   let hadMessages = false;
   assistant.on("messages:changed", messages => {
     if (hadMessages && !messages.length) conversationId = crypto.randomUUID();
@@ -133,7 +157,6 @@ function selectTicket(id: string) {
 }
 root.querySelector<HTMLInputElement>("#ticket-search")!.addEventListener("input", event => { query = (event.target as HTMLInputElement).value; renderList(); });
 root.querySelectorAll<HTMLButtonElement>("[data-filter]").forEach(button => button.addEventListener("click", () => { filter = button.dataset.filter as Filter; renderList(); }));
-root.querySelector("#inbox-home")!.addEventListener("click", () => { filter = "all"; query = ""; root.querySelector<HTMLInputElement>("#ticket-search")!.value = ""; root.dataset.mobileView = "inbox"; renderList(); });
 root.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach(button => button.addEventListener("click", () => {
   const next = button.dataset.mode as Mode;
   if (next === mode || (next === "live" && !liveAvailable)) return;
@@ -145,7 +168,7 @@ root.querySelectorAll<HTMLButtonElement>("[data-mode]").forEach(button => button
 root.dataset.mobileView = "inbox";
 renderList();
 renderDetail();
-mountAssistant();
+mountAssistant(initiallyOpenAssistant());
 void fetch("/api/config").then(async response => {
   if (!response.ok) throw new Error("Configuration unavailable");
   const config: { liveAvailable?: boolean } = await response.json();
@@ -154,4 +177,4 @@ void fetch("/api/config").then(async response => {
   button.disabled = !liveAvailable;
   button.title = liveAvailable ? "Use your configured Cloudflare agent" : "Set the server’s provider key to enable Live mode";
 }).catch(() => { /* Preview remains available when provider configuration cannot be checked. */ });
-window.addEventListener("pagehide", () => assistant?.destroy(), { once: true });
+window.addEventListener("pagehide", () => { stopAssistantListeners(); assistant?.destroy(); customerTranscript?.destroy(); }, { once: true });

@@ -33,13 +33,12 @@ export function Workspace({ liveAvailable }: { liveAvailable: boolean }) {
   return (
     <main className={`workspace mobile-${mobileView}`}>
       <aside className="sidebar" aria-label="Project navigation">
-        <a className="wordmark" href="/" aria-label="Atlas workspace home"><span className="brand-mark">a</span>atlas<span className="workspace-label">workspace</span></a>
+        <a className="wordmark" href="/" aria-label="Atlas workspace home"><span className="brand-mark">a</span>atlas</a>
         <div className="project-label"><Icon name="grid" /><span>Atlas launch</span><span className="project-count">3</span></div>
         <div className="nav-caption">PROJECT DOCUMENTS</div>
         <nav className="document-nav" aria-label="Documents">
           {documents.map((item, index) => <button key={item.id} type="button" className={selected === index ? "selected" : ""} aria-current={selected === index ? "page" : undefined} onClick={() => { setSelected(index); setMobileView("document"); }}><Icon name="document" size={16} /><span>{item.title}</span></button>)}
         </nav>
-        <div className="sidebar-footer"><span className="team-avatar">A</span><div>Atlas team<small>Sample workspace</small></div><span className="version-label">V5</span></div>
       </aside>
       <div className="workspace-main">
         <header className="workspace-header">
@@ -67,7 +66,7 @@ export function Workspace({ liveAvailable }: { liveAvailable: boolean }) {
             <div className="copilot-footnote">{mode === "preview" ? "Preview · prepared responses, no model connected" : "Live Eve · answers grounded in your sample project"}</div>
           </aside>
         </div>
-        <footer className="workspace-attribution"><span className="persona-attribution"><a href="https://persona-chat.dev" target="_blank" rel="noreferrer"><img src="/persona-js-icon.svg" width="16" height="16" alt="" />Built with persona.js</a><span>· by <a href="https://runtype.com" target="_blank" rel="noreferrer">Runtype</a></span></span></footer>
+        <footer className="workspace-attribution"><span className="persona-attribution">Agent UI built with <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noreferrer"><img className="persona-attribution-icon" src="/persona-js-icon.svg" width="14" height="14" alt="" />persona.js</a>, an open-source project by <a href="https://runtype.com" target="_blank" rel="noreferrer"><img className="runtype-wordmark" src="/runtype-logo.svg" width="56" height="12" alt="Runtype" /></a>.</span></footer>
       </div>
     </main>
   );

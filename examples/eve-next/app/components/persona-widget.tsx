@@ -3,18 +3,18 @@
 import { useEffect, useRef } from "react";
 import { createAgentExperience, markdownPostprocessor, type AgentWidgetMessage } from "@runtypelabs/persona";
 
-const toolLabels: Record<string, { active: string; complete: string; groupComplete: string }> = {
-  read_document: { active: "Reading document", complete: "Read document", groupComplete: "Read documents" },
-  review_milestones: { active: "Reviewing milestones", complete: "Reviewed milestones", groupComplete: "Reviewed milestones" },
+const toolLabels: Record<string, { active: string; complete: string }> = {
+  read_document: { active: "Reading document", complete: "Read document" },
+  review_milestones: { active: "Reviewing milestones", complete: "Reviewed milestones" },
 };
 
-function toolLabel(tool: NonNullable<AgentWidgetMessage["toolCall"]>, grouped = false): string | null {
+function toolLabel(tool: NonNullable<AgentWidgetMessage["toolCall"]>): string | null {
   // Let Persona retain its own failure, interruption, and approval wording.
   if (tool.success === false || tool.interrupted || tool.superseded ||
       tool.approvalStatus === "pending" || tool.approvalStatus === "denied" || tool.approvalStatus === "timeout") return null;
   const labels = toolLabels[tool.name ?? ""];
   if (!labels) return null;
-  return tool.status === "complete" ? (grouped ? labels.groupComplete : labels.complete) : labels.active;
+  return tool.status === "complete" ? labels.complete : labels.active;
 }
 
 export function PersonaWidget({ apiUrl }: { apiUrl: string }) {
@@ -44,11 +44,6 @@ export function PersonaWidget({ apiUrl }: { apiUrl: string }) {
       features: { showToolCalls: true, showReasoning: true },
       toolCall: {
         renderCollapsedSummary: ({ toolCall }) => toolLabel(toolCall),
-        renderGroupedSummary: ({ toolCalls }) => {
-          const labels = toolCalls.map((tool) => toolLabel(tool, true));
-          if (labels.some((label) => label === null)) return null;
-          return [...new Set(labels.filter((label) => label !== null))].map((label, index) => index ? label.charAt(0).toLowerCase() + label.slice(1) : label).join(", ");
-        },
       },
       theme: {
         semantic: { colors: { accent: "#252525", primary: "#252525", background: "#ffffff", surface: "#ffffff" } },

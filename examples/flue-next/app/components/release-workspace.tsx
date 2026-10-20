@@ -66,17 +66,6 @@ export function ReleaseWorkspace({
         },
         toolCall: {
           renderCollapsedSummary: ({ toolCall }) => toolActivity(toolCall),
-          renderGroupedSummary: ({ toolCalls }) => {
-            const labels = toolCalls.map(toolActivity);
-            if (labels.some((label) => label === null)) return null;
-            return [...new Set(labels)]
-              .map((label, index) =>
-                index === 0
-                  ? label
-                  : label!.charAt(0).toLowerCase() + label!.slice(1)
-              )
-              .join(", ");
-          },
         },
         apiUrl: `/api/flue/dispatch?mode=${mode}`,
         launcher: {
@@ -159,11 +148,8 @@ export function ReleaseWorkspace({
       <header className="topbar">
         <a className="wordmark" href="/" aria-label="Orbit home">
           <span className="orbit-mark" />
-          orbit<span className="workspace-name">/ &nbsp; Acme workspace</span>
+          orbit
         </a>
-        <div className="topbar-right">
-          <span className="avatar">MC</span>
-        </div>
       </header>
       <nav className="subnav" aria-label="Workspace">
         <a href="#release" className="nav-active">
@@ -355,11 +341,7 @@ export function ReleaseWorkspace({
               : "Live assistant · Sample workspace"}
           </span>
           <div className="persona-attribution">
-            <a href="https://persona-chat.dev" target="_blank" rel="noreferrer">
-              <img src="/persona-js-icon.svg" width="16" height="16" alt="" />
-              Built with persona.js
-            </a>
-            <span>· by <a href="https://runtype.com" target="_blank" rel="noreferrer">Runtype</a></span>
+            Agent UI built with <a href="https://github.com/runtypelabs/persona" target="_blank" rel="noreferrer"><img className="persona-attribution-icon" src="/persona-js-icon.svg" width="14" height="14" alt="" />persona.js</a>, an open-source project by <a href="https://runtype.com" target="_blank" rel="noreferrer"><img className="runtype-wordmark" src="/runtype-logo.svg" width="56" height="12" alt="Runtype" /></a>.
           </div>
         </footer>
       </main>

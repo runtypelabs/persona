@@ -1344,6 +1344,13 @@ export interface ComponentTokens {
   askUserQuestion?: AskUserQuestionTokens;
   attachment: AttachmentTokens;
   activity?: ActivityTokens;
+  /** Divider below the grouped turn-activity disclosure ("Worked …"). */
+  turnActivity?: {
+    /** Defaults to the theme primary color at 8% opacity. */
+    dividerColor?: TokenReference<'color'>;
+    /** CSS border width. Defaults to 1px; use 0px to hide the divider. */
+    dividerWidth?: string;
+  };
   toolBubble: ToolBubbleTokens;
   reasoningBubble: ReasoningBubbleTokens;
   /** Event-stream inspector badge chips. */

@@ -69,18 +69,6 @@ a {
   min-width:0;
 }
 
-.brandEdition {
-  flex-shrink:0;
-  font-size:12px;
-  letter-spacing:0;
-  font-weight:500;
-  color:#787873;
-  margin-left:auto;
-  border:1px solid #dededb;
-  padding:3px 5px;
-  border-radius:4px;
-}
-
 .newChat {
   display:flex;
   align-items:center;
@@ -156,32 +144,11 @@ a {
 }
 
 .sidebarFoot {
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:17px 9px 4px;
-  margin-top:auto;
-  border-top:1px solid #e3e3df;
-  color:#55554f;
-  font-size:11px;
-}
-
-.sidebarFoot small {
-  display:block;
-  font-size:11px;
-  color:#96968e;
-  margin-top:5px;
-}
-
-.workspaceAvatar {
-  display:grid;
-  place-items:center;
-  width:30px;
-  height:30px;
-  border:1px solid #deded9;
-  background:#eeeee9;
-  border-radius:50%;
-  font-size:11px;
+  margin: auto 0 0;
+  padding: 17px 9px 4px;
+  color: #70706a;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .mainPane {
@@ -244,22 +211,7 @@ a {
   box-shadow:0 1px 3px #0000000c;
 }
 
-.modeNote {
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:7px;
-  padding:18px 16px 0;
-  color:#8b8b84;
-  font-size:12px;
-}
 
-.statusDot {
-  height:5px;
-  width:5px;
-  background:#989890;
-  border-radius:50%;
-}
 
 .conversationPane {
   flex:1;
@@ -291,36 +243,6 @@ a {
   font-size:11px;
   color:#a0a099;
   padding:12px 34px 18px;
-}
-
-.persona-attribution {
-  display:inline-flex;
-  flex-wrap:wrap;
-  align-items:center;
-  justify-content:center;
-  gap:4px 6px;
-  color:#666;
-  font-size:12px;
-  line-height:1.5;
-}
-
-.persona-attribution > a {
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-}
-
-.persona-attribution a, .persona-attribution > span {
-  white-space:nowrap;
-}
-
-.persona-attribution a:hover, .persona-attribution a:focus-visible {
-  text-decoration:underline;
-  text-underline-offset:3px;
-}
-
-.persona-attribution img {
-  flex-shrink:0;
 }
 
 .providerError {
@@ -480,10 +402,6 @@ a {
     font-size:12px;
     max-width:126px;
   }
-  .modeNote {
-    font-size:11px;
-    padding-top:15px;
-  }
   .conversationPane {
     padding:0 12px;
   }
@@ -500,3 +418,13 @@ a {
     font-size:25px;
   }
 }
+
+
+/* A single sentence keeps every word on the same typographic baseline. */
+.persona-attribution { display: block; color: #666; font-size: 12px; font-weight: 400; line-height: 20px; text-align: center; }
+.persona-attribution a { display: inline; color: inherit; text-decoration: none; white-space: nowrap; }
+.persona-attribution img { display: inline-block; height: 14px; vertical-align: middle; }
+.persona-attribution .persona-attribution-icon { width: 14px; margin-right: 4px; }
+.persona-attribution .runtype-wordmark { width: auto; height: 1em; vertical-align: -0.3em; }
+.persona-attribution a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.persona-attribution a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 2px; }
