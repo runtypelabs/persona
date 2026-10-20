@@ -7986,7 +7986,7 @@ export const createAgentExperience = (
   let conversationOpenTakeover = false;
 
   // Welcome visibility is derived, never stored: `resolveWelcomeConfig` owns
-  // the config and the session's user messages own the dismissal.
+  // the config and the session's transcript activity owns the dismissal.
   let welcomeShown = !welcomeHost.hidden;
   // The dismiss runs across many renders (assistant placeholder, every
   // streaming chunk), so the in-flight animation owns the host until it settles.

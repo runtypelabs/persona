@@ -6521,7 +6521,8 @@ export type AgentWidgetWelcomeAlign = "start" | "center";
  */
 export interface AgentWidgetWelcomeConfig {
   /** Vertical placement: V4 defaults to top; V5 to centered. Fullscreen centered
-   * welcomes also raise the empty composer unless `anchor` is explicitly set. */
+   * welcomes also raise the empty composer when the welcome is enabled, unless
+   * `anchor` is explicitly set. */
   layout?: "top" | "centered";
   /** Card or hero title. V4: "Hello 👋". V5: "What can I help with?". */
   title?: string;
@@ -6553,8 +6554,10 @@ export interface AgentWidgetWelcomeConfig {
   dismiss?: AgentWidgetWelcomeDismiss;
   /**
    * Vertical anchoring of the greeting-plus-composer pair in the EMPTY
-   * conversation only. On the first message the pair drops to the bottom
-   * (animated; see `data-persona-conversation-state`).
+   * conversation only. User messages or substantive assistant transcript activity
+   * (including tools and reasoning) drop the pair to the bottom. The configured
+   * `welcome.message` greeting keeps the empty layout.
+   * (Animated; see `data-persona-conversation-state`.)
    *
    * - `"bottom"`: the composer stays pinned at the bottom.
    * - `"center"`: greeting and composer float together so the composer's top
@@ -6564,8 +6567,8 @@ export interface AgentWidgetWelcomeConfig {
    * Composes with either `composer.placement`. Ignored in composer-bar mount
    * mode. `renderWelcome` plugin content inherits the anchor: the widget
    * positions the overlay host and reserves the composer zone.
-   * Defaults to bottom, except centered fullscreen layouts, which center the
-   * measured greeting/composer group when no anchor override is supplied.
+   * Defaults to bottom, except enabled centered fullscreen welcomes, which center
+   * the measured greeting/composer group when no anchor override is supplied.
    */
   anchor?: AgentWidgetWelcomeAnchor;
   /**
@@ -6586,10 +6589,12 @@ export interface AgentWidgetWelcomeConfig {
    * chrome derived from config, never a session message: it does not appear in
    * `getMessages()`, is never persisted or sent to the model, `onMessage` does
    * not fire for it, and it survives `clearChat()`. Use an assistant
-   * `initialMessages` entry instead when the model should see the greeting.
+   * `initialMessages` entry instead when the model should see the greeting;
+   * that real transcript entry activates the conversation layout.
    *
    * Ignored (with a debug-mode warning) when `variant` is `"hero"`: the hero
-   * is the greeting.
+   * is the greeting. Unlike real assistant transcript messages, this display-only
+   * greeting preserves the empty welcome layout and centered composer.
    */
   message?: string;
 }

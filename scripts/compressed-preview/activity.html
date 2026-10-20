@@ -57,10 +57,11 @@
 </section>
 <section id="summary-limit-comparison" style="margin:28px 0">
   <h2>Group summary category limits</h2>
-  <p>The same fixed history compares the previous homogeneous header “File reads (2)” with the new default “Read files” and limits 0, 1, 2, 3, and 8. The mixed batch contains five categories; the second batch contains two file-read calls. Positive limits describe the action without guessing how many files were read. Zero explicitly shows “2 activities.” Switch the batch state to see “Reading files” or attention suffixes. The previous column reproduces the old counted homogeneous header with a custom summary; all columns use the current production build. These controls affect only this comparison.</p>
+  <p>The same fixed history compares the previous homogeneous header “File reads (2)” with the new default “Read files” and limits 0, 1, 2, 3, and 8. The mixed batch contains five categories; the second batch contains two file-read calls. Positive limits describe the action without guessing how many files were read. Zero explicitly shows “2 activities.” Switch the batch state to see “Reading files” or attention suffixes. The previous column reproduces the old counted homogeneous header with a custom summary; all columns use the current production build. Uncheck “Include user prompt” to verify that tool-only history also keeps the composer below expanded details. These controls affect only this comparison.</p>
   <div class="controls">
     <label>Layout <select id="limit-mode"><option value="collapsible">Collapsible groups</option><option value="summary">Summary only</option><option value="stack">Stack with children</option></select></label>
     <label><input id="limit-turn" type="checkbox" checked>Inside turn activity</label>
+    <label><input id="limit-user" type="checkbox" checked>Include user prompt</label>
     <label>Summary <select id="limit-summary"><option value="aggregate">Aggregate batch</option><option value="current-action">Current action</option></select></label>
     <label>Batch state <select id="limit-state"><option value="complete">Completed</option><option value="running">One active action</option><option value="parallel">Parallel actions</option><option value="attention">Approval, failure and interruption</option></select></label>
   </div>
@@ -328,7 +329,7 @@ for (const input of [hierarchyMode,hierarchyTurn,hierarchyComparison,hierarchyAn
   for (const {handle,side} of hierarchyPreviews) handle.update(hierarchyConfig(side));
   requestAnimationFrame(openHierarchyGroups);
 });
-const limitMode = document.querySelector('#limit-mode'), limitTurn = document.querySelector('#limit-turn'), limitSummary = document.querySelector('#limit-summary'), limitState = document.querySelector('#limit-state');
+const limitMode = document.querySelector('#limit-mode'), limitTurn = document.querySelector('#limit-turn'), limitSummary = document.querySelector('#limit-summary'), limitState = document.querySelector('#limit-state'), limitUser = document.querySelector('#limit-user');
 function limitMessages() {
   const state = limitState.value;
   const turnId = 'limit-turn-' + state;
@@ -343,7 +344,7 @@ function limitMessages() {
       ...(state === 'attention' && index === 5 ? {interrupted:true} : {}),
       args:{file:'src/example.ts'},result:'Fixed comparison output'},
   }));
-  return [{id:turnId + '-request',role:'user',content:'Inspect the adapter, update it, and check the final diff.',createdAt:'2026-01-01T00:00:00Z'}, ...tools];
+  return [...(limitUser.checked ? [{id:turnId + '-request',role:'user',content:'Inspect the adapter, update it, and check the final diff.',createdAt:'2026-01-01T00:00:00Z'}] : []), ...tools];
 }
 function previousHomogeneousSummary({toolCalls,defaultSummary}) {
   if (!toolCalls.every(tool => ['Read','read_text_file'].includes(tool.name))) return null;
@@ -370,7 +371,7 @@ Promise.all(limitPreviews.map(({handle}) => handle.ready)).then(() => {
   openLimitTurns(); document.querySelector('#limit-ready').textContent = 'Fixed history ready. Expand a group to inspect its repeated categories.';
 }).catch(error => { document.querySelector('#limit-ready').textContent = 'Comparison failed: ' + error.message; });
 let limitGeneration = 0;
-for (const input of [limitMode,limitTurn,limitSummary,limitState]) input.addEventListener('change', async () => {
+for (const input of [limitMode,limitTurn,limitSummary,limitState,limitUser]) input.addEventListener('change', async () => {
   const generation = ++limitGeneration;
   // A held local stream supplies real run ownership for active examples.
   // Closing it settles the previous fixture without a network request.
@@ -385,7 +386,7 @@ for (const input of [limitMode,limitTurn,limitSummary,limitState]) input.addEven
     const {handle,limit} = preview;
     handle.update(limitConfig(limit));
     // Config updates do not replace the transcript. Clear the settled run before
-    // seeding the new fixture.
+    // seeding the new fixture, so toggling the prompt removes its old message.
     handle.clearChat();
     if (['running','parallel'].includes(limitState.value)) {
       preview.streamTask = handle.connectStream(new ReadableStream({start(controller) { preview.closeStream = () => controller.close(); }}));

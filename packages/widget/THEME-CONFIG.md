@@ -1157,7 +1157,7 @@ Two matching attributes are stamped on the same element:
 | Attribute | Values |
 |-----------|--------|
 | `data-persona-composer-placement` | `"block"` \| `"overlay"` (resolved, so composer-bar mount mode always reads `"block"`) |
-| `data-persona-conversation-state` | `"empty"` \| `"active"` — `"active"` from the first user message in the transcript |
+| `data-persona-conversation-state` | `"empty"` \| `"active"` — `"active"` from a user message or substantive assistant transcript activity (including tools and reasoning) |
 | `data-persona-welcome-anchor` | `"bottom"` \| `"center"` — root-level mirror of the resolved `welcome.anchor` |
 
 The config knobs themselves are `composer.placement` and `welcome.anchor` /
@@ -3094,7 +3094,7 @@ which owns its own geometry.
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `welcome.anchor` | `"bottom"` | `"center"` floats the greeting and composer together in the empty conversation; they drop to the bottom on the first user message |
+| `welcome.anchor` | `"bottom"` | `"center"` floats the greeting and composer together in the empty conversation; they drop to the bottom on a user message or substantive assistant transcript activity |
 | `welcome.anchorComposerTop` | `"44%"` | Under `anchor: "center"`, the composer's top edge as a percentage of the panel column height |
 | `welcome.composerGap` | `"24px"` | Under `anchor: "center"`, the gap between the bottom of the welcome surface and the top of the composer |
 
@@ -3398,9 +3398,14 @@ defaults to `centered`: greeting, optional subtitle, and starters form a centere
 transcript group in floating and docked panels. In fullscreen, the empty greeting
 and composer are centered as one measured group. Explicit `welcome.anchor` or
 `welcome.anchorComposerTop` retain the existing percentage-based geometry.
-The composer moves to the footer on the first user message in 320ms; reduced motion
-makes this immediate. Clearing the chat restores the empty layout. Assistant-only
-history does not dismiss the greeting.
+The composer moves to the footer on a user message or substantive assistant
+transcript activity (including tool calls and reasoning) in 320ms; reduced motion
+makes this immediate. Injected and restored assistant-only activity also dismisses
+an `on-first-message` welcome. Blank assistant placeholders and hidden system
+context keep the empty layout. Clearing the chat restores it. Use `welcome.message`
+for an intentional greeting that preserves the empty layout and centered composer.
+A disabled welcome (`variant: "none"`, including `copy.showWelcomeCard: false`)
+keeps the empty composer at the bottom unless `welcome.anchor: "center"` is explicit.
 
 V5 defaults to title `What can I help with?`, no subtitle, and
 `dismiss: "on-first-message"` for every variant. Explicit welcome fields, legacy
