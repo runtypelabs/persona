@@ -11,6 +11,8 @@ import { assistantIcons, assistantPresets, createAssistantPreset } from "./assis
 registerIcons(assistantIcons);
 renderExamplesShell();
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const markdownReply = "# Streaming Markdown\n\nWatch **bold**, *italic*, and `inline code` arrive character by character. Try **nested *emphasis*** too.\n\nRead [the Persona docs](https://persona-chat.dev) once the link is complete.\n\n![Persona sample](/favicon-32.png)\n\n| Feature | State |\n| --- | --- |\n| Markdown | Streaming |\n\n```js\nconst literal = '**not emphasis**';\n```";
+
 let selected = "claude";
 let widget: ReturnType<typeof initAgentWidget> | undefined;
 let code = "";
@@ -103,7 +105,7 @@ function mount() {
       dictation: { ...config.voiceRecognition.dictation, provider: { type: "custom", custom: createDemoDictationProvider } },
     },
     composer: { ...config.composer, actions: actions() },
-    apiUrl: "/assistant-lab-local", customFetch: createDemoEchoFetch({ reply: () => "This is a **local Persona preview**. Your message exercises the real composer and streaming renderer.\n\nTry a longer draft, switch a mode, or narrow the preview to compare how this configuration responds." }),
+    apiUrl: "/assistant-lab-local", customFetch: createDemoEchoFetch({ reply: () => element<HTMLSelectElement>("lab-reply").value === "markdown" ? markdownReply : "This is a **local Persona preview**. Your message exercises the real composer and streaming renderer.\n\nTry a longer draft, switch a mode, or narrow the preview to compare how this configuration responds." }),
   } });
   widget.on("voice:status", ({ status }) => {
     if (!active()) muted = false;

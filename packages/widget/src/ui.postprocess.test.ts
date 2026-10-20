@@ -93,6 +93,43 @@ describe("buildPostprocessor degraded path (parsers not loaded)", () => {
 });
 
 describe("buildPostprocessor loaded path (parsers available)", () => {
+  it("repairs streaming display without mutating the stored or final Markdown", () => {
+    const text = "Read **unfinished";
+    const message: AgentWidgetMessage = {
+      id: "stream", role: "assistant", content: text, createdAt: "2026-10-20T00:00:00.000Z",
+    };
+    const transform = buildPostprocessor({ markdown: {} }, undefined, undefined);
+    expect(transform({ text, message, streaming: true })).toContain("<strong>unfinished</strong>");
+    expect(message.content).toBe(text);
+    expect(transform({ text, message, streaming: false })).toBe("<p>Read **unfinished</p>\n");
+  });
+
+  it("leaves custom postprocessors and plain-text rendering untouched during streaming", () => {
+    const text = "**unfinished";
+    const message: AgentWidgetMessage = {
+      id: "stream", role: "assistant", content: text, createdAt: "2026-10-20T00:00:00.000Z",
+    };
+    const custom = vi.fn(({ text }: { text: string }) => escapeHtml(text));
+    const transform = buildPostprocessor({ markdown: {}, postprocessMessage: custom }, undefined, undefined);
+    expect(transform({ text, message, streaming: true })).toBe(text);
+    expect(custom.mock.calls[0][0].text).toBe(text);
+    expect(buildPostprocessor(undefined, undefined, undefined)({ text, message, streaming: true })).toBe(text);
+  });
+
+  it("sanitizes completed links after streaming repair and retains legacy custom parser compatibility", () => {
+    const text = "[bad](javascript:alert(1)) **hello";
+    const message: AgentWidgetMessage = {
+      id: "stream", role: "assistant", content: text, createdAt: "2026-10-20T00:00:00.000Z",
+    };
+    const transform = buildPostprocessor({ markdown: {} }, undefined, undefined);
+    const out = transform({ text, message, streaming: true });
+    expect(out).toContain("<strong>hello</strong>");
+    expect(out).not.toContain("javascript:");
+    const parsers = parsersLoader.getMarkdownParsersSync()!;
+    vi.spyOn(parsersLoader, "getMarkdownParsersSync").mockReturnValue({ Marked: parsers.Marked, DOMPurify: parsers.DOMPurify });
+    expect(transform({ text, message, streaming: true })).toContain("**hello");
+  });
+
   it("renders markdown to real HTML, normalizes apostrophes, strips scripts", () => {
     // No spy: vitest.setup.ts eager-provides parsers, so this is the loaded path.
     const text = "**bold** I'll go\n\n<script>alert(1)</script>";

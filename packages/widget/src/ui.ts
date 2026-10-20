@@ -817,7 +817,8 @@ export const buildPostprocessor = (
     // displayed entities literally (I'll -> &amp;#39;). Only run the sanitizer when
     // it can actually parse HTML; escapeHtml output is already inert. Checked per
     // render (not once at setup): the chunk lands later and the self-heal re-renders.
-    const parsersReady = getMarkdownParsersSync() !== null;
+    const parsers = getMarkdownParsersSync();
+    const parsersReady = parsers !== null;
     let html: string;
     if (cfg?.postprocessMessage) {
       const out = cfg.postprocessMessage({
@@ -829,10 +830,11 @@ export const buildPostprocessor = (
       // sanitizer's degraded fallback. Honors `sanitize: false` (pass-through) as before.
       html = sanitize ? sanitize(out) : out;
     } else if (markdownProcessor) {
-      // While streaming, normalize tables-in-progress so they render as a real
-      // <table> from the first row with a stable column count (Telegram-style
-      // space reservation). The final, non-streaming render is left untouched.
-      const source = context.streaming ? stabilizeStreamingTables(nextText) : nextText;
+      // Stabilize incomplete Markdown only for display during streaming. The
+      // final render and the stored response always use the original text.
+      const source = context.streaming
+        ? (parsers?.stabilizeStreamingMarkdown ?? stabilizeStreamingTables)(nextText)
+        : nextText;
       // Already escapeHtml(text) (single, safe) while parsers are not loaded.
       const out = markdownProcessor(source);
       html = sanitize && parsersReady ? sanitize(out) : out;
