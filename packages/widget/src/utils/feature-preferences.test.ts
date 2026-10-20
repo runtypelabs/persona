@@ -357,3 +357,17 @@ test.each(['plain', 'inset'] as const)('persists %s group appearance independent
     expect.objectContaining({ path: 'toolCallDisplay.groupAppearance', code: 'invalid_value' }),
   ]);
 });
+
+
+test.each([0, 1, 3, 100])('round trips numeric group summary cap %s through preference layers', groupSummaryMaxItems => {
+  const preference = { toolCallDisplay: { groupSummaryMaxItems } };
+  const parsed = parseWidgetPreferenceSlice(JSON.parse(JSON.stringify(preference)));
+  expect(parsed).toEqual({ preferences: preference, issues: [] });
+  expect(applyFeaturePreferences({ toolCallDisplay: { groupSummaryMaxItems: 2 } }, [parsed.preferences]).toolCallDisplay?.groupSummaryMaxItems).toBe(groupSummaryMaxItems);
+});
+
+test.each([-1, 1.5, NaN, Infinity, '0', null, true])('rejects invalid group summary cap %s in preferences', groupSummaryMaxItems => {
+  const parsed = parseWidgetPreferenceSlice({ toolCallDisplay: { groupSummaryMaxItems } });
+  expect(parsed.preferences).toEqual({});
+  expect(parsed.issues).toEqual([expect.objectContaining({ path: 'toolCallDisplay.groupSummaryMaxItems', code: 'invalid_value' })]);
+});

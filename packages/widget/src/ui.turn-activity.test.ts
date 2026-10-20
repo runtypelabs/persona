@@ -455,7 +455,7 @@ it.each([false, true])("separates outer turn spacing from compact nested groups 
     expect(turn.style.getPropertyValue(`--persona-components-activity-${token}`)).toBe(expected);
   }
   const group = body.querySelector('[data-persona-tool-group]')!;
-  expect(group.querySelector(":scope > button")?.textContent).toBe("Web searches (2)");
+  expect(group.querySelector(":scope > button")?.textContent).toBe("Searched the web");
   const children = group.querySelectorAll('[data-persona-tool-group-stack] > [data-wrapper-id]');
   expect(children).toHaveLength(2);
   for (const child of children) expect(child.querySelector(":scope > .persona-activity-row > button")?.textContent).toBe("Searched the web");
@@ -639,7 +639,7 @@ it("projects the sole running action into a stable batch header and restores agg
   inject(tool("search", "web_search", "complete"));
   expect(original.textContent?.replace(/\s/g, " ")).toContain("Testing the example");
   inject(tool("parallel", "Bash", "complete"));
-  expect(original.textContent?.replace(/\s/g, " ")).toContain("3 activities");
+  expect(original.textContent?.replace(/\s/g, " ")).toContain("Read files, searched the web, ran commands");
   expect(batch()).toBe(original);
 });
 
@@ -665,7 +665,7 @@ it("keeps attention and custom summaries authoritative and leaves ordinary tools
   tools[1].toolCall!.actionTitle = "   "; inject(tools[1]);
   expect(batch().textContent?.replace(/\s/g, " ")).toContain("Searching the web");
   controller.update({ turnActivity: { enabled: false } });
-  expect(batch().textContent?.replace(/\s/g, " ")).toContain("Web searches (2)");
+  expect(batch().textContent?.replace(/\s/g, " ")).toContain("Searching the web");
 });
 
 it("updates a standalone title without tool output and honors authored row summaries", async () => {
@@ -700,7 +700,7 @@ it.each(["unclassified", "final"] as const)("leaves %s tool groups aggregate whi
     turnActivity: kind === "final" ? { id: "history", kind: "final" } : undefined,
   });
   const group = mount.querySelector('[data-persona-tool-group] > button')!;
-  expect(group.textContent?.replace(/\s/g, " ")).toContain("File reads (2)");
+  expect(group.textContent?.replace(/\s/g, " ")).toContain("Reading files");
   expect(group.closest('[data-persona-turn-activity]')).toBeNull();
 });
 
@@ -721,7 +721,7 @@ it("passes current-action defaults to grouped hooks and keeps message-level appr
   second.approval = { id: "approval", status: "pending", agentId: "agent", executionId: "history", toolName: "Read", description: "Allow reading?" };
   inject(second);
   expect(group().textContent?.replace(/\s/g, " ")).toContain("Waiting for approval");
-  expect(custom.mock.lastCall?.[0]).toMatchObject({ defaultSummary: "File reads (2) · Waiting for approval" });
+  expect(custom.mock.lastCall?.[0]).toMatchObject({ defaultSummary: "Read · Waiting for approval" });
 });
 
 it.each(['collapsible', 'summary', 'stack'] as const)('resolves scoped %s defaults, explicit summary resets and adapter updates', async groupedMode => {
@@ -743,4 +743,21 @@ it.each(['collapsible', 'summary', 'stack'] as const)('resolves scoped %s defaul
   expect(summary()).toContain(aggregate);
   controller.update({ features: { toolCallDisplay: { groupSummary: 'current-action' } } });
   expect(summary()).toContain('Checking documentation');
+});
+
+
+it.each((['collapsible', 'summary', 'stack'] as const).flatMap(groupedMode =>
+  [true, false].map(enabled => ({ groupedMode, enabled }))
+))('updates $groupedMode category caps live (turn activity: $enabled)', async ({ groupedMode, enabled }) => {
+  await setup({ turnActivity: { enabled }, features: { toolCallDisplay: { grouped: true, groupedMode, groupSummary: 'aggregate' } } });
+  for (const [index, name] of ['Read', 'read_text_file', 'Bash', 'Edit', 'web_search'].entries()) {
+    inject({ ...message(String(index)), variant: 'tool', content: '', toolCall: { id: String(index), name, status: 'complete' } });
+  }
+  const summary = () => mount.querySelector('[data-persona-tool-group] > button, .persona-tool-group-summary')!.textContent?.replace(/\s/g, ' ');
+  for (const [limit, expected] of [[0, '5 activities'], [1, 'Read files, and 3 more'], [2, 'Read files, ran commands, and 2 more'], [3, 'Read files, ran commands, edited files, and 1 more'], [5, 'Read files, ran commands, edited files, searched the web']] as const) {
+    controller.update({ features: { toolCallDisplay: { groupSummaryMaxItems: limit } } });
+    expect(summary()).toContain(expected);
+  }
+  controller.update({ features: { toolCallDisplay: { groupSummaryMaxItems: undefined } } });
+  expect(summary()).toContain('Read files, ran commands, edited files, and 1 more');
 });

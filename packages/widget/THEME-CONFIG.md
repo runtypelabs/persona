@@ -2699,6 +2699,8 @@ Automatic group timing spans the earliest known tool start through the latest kn
 | `grouped` | `false` | Visually group consecutive tool call rows |
 | `groupedMode` | `"stack"` | `"stack"`, `"summary"`, or `"collapsible"` (V5 default) |
 | `groupAppearance` | `"inset"` in V5; legacy tree in V4 | `"plain"` uses indentation alone; `"inset"` adds one subtle vertical line beside children. Independent of stack/collapsible layout; summary-only groups have no line. |
+| `groupSummary` | current action in classified progress (except stacks); aggregate elsewhere | `"current-action"` shows the single active action; parallel work and attention retain the aggregate. |
+| `groupSummaryMaxItems` | `3` | Nonnegative integer cap on distinct categories in aggregate row summaries, including completed groups. Extra categories become `and N more`; homogeneous groups use action phrasing such as `Read files` or `Reading files`. `0` shows total activities, including singleton counts. Attention suffixes and current-action labels retain precedence. Invalid configuration falls back to `3`; invalid stored preferences are rejected. |
 | `groupBoundary` | `"adjacent"` | `"iteration"` splits visible neighbors when both have different known iterations or execution IDs; unknown metadata retains adjacency |
 | `groupIconVisibility` | inherits `iconVisibility` | `"always"`, `"active"`, or `"never"` for the built-in collapsible group header only |
 | `durationDisplay` | `"none"` | Automatic timing: `"tools"`, `"group"`, or `"all"`. Tool rows, V5 cards, and collapsible group headers show compact elapsed times (`2s`, `12s`, `1m 5s`), omitting sub-second or unknown times. Authored `{duration}` placeholders, custom timer elements, and exact timing metadata remain available. |
@@ -3471,7 +3473,7 @@ stagger animations.
 
 V5 tool display defaults to `grouped: true`, `groupedMode: "collapsible"` and
 `loadingAnimation: "shimmer"`; V5 reasoning also defaults to shimmer. Consecutive
-calls become an expandable counted category (`Web searches (5)`) or a mixed
+calls become an expandable action summary (`Searched the web`) or a mixed
 activity summary (`Read files, ran commands`), with a 40ms stagger between children.
 Attention labels remain visible for failures, interruptions and approvals. `grouped: false` keeps individual rows.
 The existing `"stack"` and `"summary"` grouping modes keep their behavior.
@@ -3538,7 +3540,7 @@ Both fields are optional. These defaults apply in light and dark mode, deriving
 the color from the active theme and blending with the actual background. An
 explicit CSS color or color-token reference overrides the derived color.
 
-V5 completed mixed tool groups use a short count such as “3 activities”; homogeneous groups retain counted categories such as “File reads (3)”. Active groups and groups needing attention keep descriptive summaries and their status. Custom `renderGroupedSummary` results still take precedence. Collapsible and stack children share the group spacing controls above. For group geometry, `toolBubble.groupIndent`, `toolBubble.groupGap`, and `toolBubble.groupPadding` override the matching shared activity values independently, including scoped turn defaults.
+V5 completed tool groups keep descriptive action summaries such as “Read files” or “Read files, ran commands,” capped at three distinct categories by default. Set `features.toolCallDisplay.groupSummaryMaxItems: 0` for a total count such as “3 activities.” Active groups and groups needing attention keep their activity state and status suffixes. Custom `renderGroupedSummary` results still take precedence. Collapsible and stack children share the group spacing controls above. For group geometry, `toolBubble.groupIndent`, `toolBubble.groupGap`, and `toolBubble.groupPadding` override the matching shared activity values independently, including scoped turn defaults.
 
 V5 expanded reasoning uses the body typography in both row and card layouts, across plain, inset, and panel appearances. `theme.components.activity.overflow` shares `{ maxHeight, fadeHeight }` between reasoning and every tool detail section (V5 rendered defaults: `"240px"` and `"12px"`). Set `maxHeight: "none"` for unlimited height or `fadeHeight: "0px"` for no fades. Each property in `toolBubble.overflow` or `reasoningBubble.overflow` overrides only the matching shared property. For example, shared `{ maxHeight: "360px", fadeHeight: "16px" }` plus `toolBubble.overflow: { maxHeight: "160px" }` gives tools a 160px cap with the shared 16px fade. Request and Response scroll independently. Top and bottom fades appear only when content is hidden beyond that edge; panel chrome, labels, copy controls, and focus outlines remain outside the mask. Streaming, resizing, and live theme updates refresh the edge state; reset an authored property to `undefined` to inherit again. V4 retains uncapped reasoning and the legacy tool cap with no fades until configured.
 

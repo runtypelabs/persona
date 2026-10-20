@@ -28,7 +28,7 @@ Send a message through the composer and wait for “The example works.” The Wo
 header should become Worked and collapse after completion, with the final answer
 still visible. Open the Worked button to see progress text interleaved with a
 two-file reading group and one direct command disclosure. Expand the reading
-group: its counted summary should differ from its two compact individual rows,
+group: its plural “Read files” summary should differ from its two compact individual rows,
 with more space between the outer progress blocks than between the child rows.
 Capture `run:started` and `run:finished`: one of each with the same run id, plus
 six `assistant:complete` events (three text blocks and three tools).

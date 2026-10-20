@@ -342,7 +342,7 @@ export const THEME_TOKEN_DOCS = {
     features: {
       description: 'Feature flags.',
       properties:
-        'showReasoning (AI thinking steps), showToolCalls (tool invocations), toolCallDisplay (collapsedMode, activePreview, activeMinHeight, previewMaxLines, grouped, groupedMode, groupAppearance, groupBoundary, groupIconVisibility, expandable, loadingAnimation), reasoningDisplay (activePreview, activeMinHeight, previewMaxLines, expandable, loadingAnimation), artifacts (sidebar config).',
+        'showReasoning, showToolCalls, toolCallDisplay (collapsedMode, activePreview, activeMinHeight, previewMaxLines, grouped, groupedMode, groupAppearance, groupSummary, groupSummaryMaxItems, groupBoundary, groupIconVisibility, expandable, loadingAnimation), reasoningDisplay (activePreview, activeMinHeight, previewMaxLines, expandable, loadingAnimation), artifacts (sidebar config).',
     },
   },
 }

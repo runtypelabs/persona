@@ -58,7 +58,7 @@ describe.each([false, true])('activity UI (V5 %s)', v5Defaults => {
     start(v5Defaults, { variant: 'row', grouped: true, groupedMode: 'collapsible' });
     inject('tool1', 'complete', ['one']); inject('tool2', 'complete', ['two']);
     const group = mount.querySelector('[data-persona-tool-group]')!;
-    expect(group.querySelector('button')?.textContent).toContain('Search (2)');
+    expect(group.querySelector('button')?.textContent).toContain('Used Search');
     const children = group.querySelectorAll<HTMLElement>('.persona-activity-group-child'); expect(children).toHaveLength(2);
     expect(children[1].style.getPropertyValue('--persona-activity-stagger')).toBe('40ms');
     const chevron = () => header('tool-group-tool1').querySelector('.persona-activity-chevron')!.outerHTML;
@@ -144,7 +144,7 @@ it.each(['stack', 'summary', 'collapsible'] as const)('manages loading effects o
   expect(group).toBeDefined();
   inject('tool2', 'running', ['two']);
   expect(started.filter(entry => entry.kind === 'tool-group')).toHaveLength(1);
-  expect(group.update).toHaveBeenCalledWith(expect.objectContaining({ text: 'Search (2)' }));
+  expect(group.update).toHaveBeenCalledWith(expect.objectContaining({ text: 'Using Search' }));
   expect(started.filter(entry => entry.kind === 'tool')).toHaveLength(groupedMode === 'summary' ? 0 : 2);
   inject('tool1', 'complete', ['one']); inject('tool2', 'complete', ['two']);
   for (const entry of started) expect(entry.destroy).toHaveBeenCalledTimes(1);

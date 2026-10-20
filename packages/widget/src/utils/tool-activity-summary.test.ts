@@ -26,6 +26,10 @@ describe("semantic tool activity", () => {
     expect(toolActivityLabel(tool(name))).toMatch(/^Used /);
   });
 
+  it("preserves unknown tool title casing after the first category", () => {
+    expect(summarizeToolActivity([tool("Read"), tool("lookup_order_status")])).toBe("Read files, used Lookup order status");
+  });
+
   it("humanizes unknown snake/camel names without inspecting arguments or results", () => {
     expect(toolActivityLabel(tool("lookup_order_status"))).toBe("Used Lookup order status");
     expect(toolActivityLabel(tool("lookupOrderStatus", { status: "running", args: "web_search", result: "success" }))).toBe("Using Lookup order status");
@@ -35,43 +39,65 @@ describe("semantic tool activity", () => {
   it("deduplicates categories in first-occurrence order using actual activity state", () => {
     const tools = [tool("Read"), tool("read_text_file"), tool("Bash", { status: "running" }), tool("Edit")];
     expect(summarizeToolActivity(tools)).toBe("Read files, running commands, edited files");
-    expect(summarizeToolActivity([tool("web_search"), tool("WebSearch")])).toBe("Web searches (2)");
-    expect(summarizeToolActivity([tool("Read"), tool("Read", { status: "pending" })])).toBe("File reads (2)");
+    expect(summarizeToolActivity([tool("web_search"), tool("WebSearch")])).toBe("Searched the web");
+    expect(summarizeToolActivity([tool("Read"), tool("Read", { status: "pending" })])).toBe("Reading files");
   });
 
-  it("distinguishes homogeneous headers from child labels without guessing from args", () => {
+  it("uses plural action phrasing for homogeneous headers without guessing entity counts from args", () => {
     const searches = Array.from({ length: 5 }, () => tool("web_search", { args: { query: "ignored" } }));
-    expect(summarizeToolActivity(searches)).toBe("Web searches (5)");
+    expect(summarizeToolActivity(searches)).toBe("Searched the web");
     expect(toolActivityLabel(searches[0])).toBe("Searched the web");
     expect(summarizeToolActivity([tool("Read"), tool("Bash")])).toBe("Read files, ran commands");
     expect(toolActivityLabel(tool("Read", { status: "running" }))).toBe("Reading a file");
     expect(toolActivityLabel(tool("read_multiple_files"))).toBe("Read files");
     expect(toolActivityLabel(tool("apply_patch"))).toBe("Edited files");
-    expect(summarizeToolActivity([tool("lookup_order"), tool("lookup_order")])).toBe("Lookup order (2)");
-  });
-
-  it("counts completed mixed tools only when compact summaries are requested", () => {
-    const tools = [tool("Read"), tool("read_text_file"), tool("Bash")];
-    expect(summarizeToolActivity(tools, true)).toBe("3 activities");
-    expect(summarizeToolActivity(tools)).toBe("Read files, ran commands");
-    expect(summarizeToolActivity([tool("Read"), tool("read_text_file")], true)).toBe("File reads (2)");
-    expect(summarizeToolActivity([tool("Read")], true)).toBe("Read files");
-    expect(summarizeToolActivity([], true)).toBe("");
+    expect(summarizeToolActivity([tool("lookup_order"), tool("lookup_order")])).toBe("Used Lookup order");
   });
 
   it.each([
-    { status: "running" as const }, { status: "pending" as const },
-    { approvalStatus: "pending" as const }, { approvalStatus: "denied" as const }, { approvalStatus: "timeout" as const },
-    { success: false }, { interrupted: true }, { superseded: true }, { error: "Tool failed" },
-  ])("preserves active and attention summaries when compact summaries are requested: %o", state => {
-    const tools = [tool("Read"), tool("Bash", state)];
-    expect(summarizeToolActivity(tools, true)).toBe(summarizeToolActivity(tools));
-    expect(summarizeToolActivity(tools, true)).not.toBe("2 activities");
+    ["Read", "Read files", "Reading files"],
+    ["Bash", "Ran commands", "Running commands"],
+    ["web_search", "Searched the web", "Searching the web"],
+    ["Edit", "Edited files", "Editing files"],
+    ["lookup_order", "Used Lookup order", "Using Lookup order"],
+  ])("keeps homogeneous %s action phrasing at every positive cap", (name, completed, active) => {
+    for (const limit of [1, 2, 3, 8]) {
+      expect(summarizeToolActivity([tool(name), tool(name)], limit)).toBe(completed);
+      expect(summarizeToolActivity([tool(name), tool(name, { status: "running" })], limit)).toBe(active);
+      expect(summarizeToolActivity([tool(name, { status: "pending" }), tool(name)], limit)).toBe(active);
+    }
+    expect(summarizeToolActivity([tool(name), tool(name)], 0)).toBe("2 activities");
   });
 
-  it("retains all attention states in counted homogeneous groups", () => {
-    expect(summarizeToolActivity([tool("web_search"), tool("WebSearch", { success: false })])).toBe("Web searches (2) · Failed");
-    expect(summarizeToolActivity([tool("Read", { approvalStatus: "pending" }), tool("Read", { approvalStatus: "denied" })])).toBe("File reads (2) · Waiting for approval · Approval denied");
+  it.each([
+    [0, "5 activities"], [1, "Read files, and 3 more"],
+    [2, "Read files, ran commands, and 2 more"],
+    [3, "Read files, ran commands, edited files, and 1 more"],
+    [4, "Read files, ran commands, edited files, searched the web"],
+    [20, "Read files, ran commands, edited files, searched the web"],
+  ])("caps distinct categories at %s for completed and active batches", (limit, expected) => {
+    const tools = [tool("Read"), tool("read_text_file"), tool("Bash"), tool("Edit"), tool("web_search")];
+    expect(summarizeToolActivity(tools, limit)).toBe(expected);
+    tools[4].status = "running";
+    expect(summarizeToolActivity(tools, limit)).toBe(expected.replace("searched the web", "searching the web"));
+  });
+
+  it("uses an explicit zero for all aggregate counts, including homogeneous groups and singletons", () => {
+    expect(summarizeToolActivity([tool("Read"), tool("Read")], 0)).toBe("2 activities");
+    expect(summarizeToolActivity([tool("Read")], 0)).toBe("1 activity");
+    expect(summarizeToolActivity([], 0)).toBe("");
+    expect(summarizeToolActivity(Array.from({length: 10}, () => tool("Read")).concat([tool("Bash"), tool("Bash")]), 1)).toBe("Read files, and 1 more");
+    expect(summarizeToolActivity(Array.from({length: 5}, () => tool("Read")), 1)).toBe("Read files");
+  });
+
+  it.each([-1, 1.5, NaN, Infinity, -Infinity])("falls back to three categories for invalid limit %s", limit => {
+    const tools = [tool("Read"), tool("Bash"), tool("Edit"), tool("web_search")];
+    expect(summarizeToolActivity(tools, limit)).toBe(summarizeToolActivity(tools));
+  });
+
+  it("retains neutral labels and all attention states in homogeneous groups", () => {
+    expect(summarizeToolActivity([tool("web_search"), tool("WebSearch", { success: false })])).toBe("Web search · Failed");
+    expect(summarizeToolActivity([tool("Read", { approvalStatus: "pending" }), tool("Read", { approvalStatus: "denied" })])).toBe("Read · Waiting for approval · Approval denied");
     expect(toolActivityLabel(tool("Read", { success: false }))).toBe("Read");
   });
 
@@ -79,8 +105,17 @@ describe("semantic tool activity", () => {
     const tools = [tool("Read"), tool("Bash"), tool("Edit"), tool("web_search", { success: false }),
       tool("computer", { interrupted: true }), tool("Agent", { approvalStatus: "pending" }),
       tool("Grep", { approvalStatus: "denied" }), tool("sql_db_query", { approvalStatus: "timeout" })];
-    expect(summarizeToolActivity(tools)).toBe("Read files, ran commands, edited files, and 5 other activities · Waiting for approval · Approval denied · Approval expired · Failed · Interrupted");
-    expect(summarizeToolActivity(tools.slice(0, 4))).toContain("1 other activity · Failed");
+    expect(summarizeToolActivity(tools)).toBe("Read files, ran commands, edited files, and 5 more · Waiting for approval · Approval denied · Approval expired · Failed · Interrupted");
+    expect(summarizeToolActivity(tools, 0)).toBe("8 activities · Waiting for approval · Approval denied · Approval expired · Failed · Interrupted");
+    expect(summarizeToolActivity([tool("Read", { superseded: true })], 0)).toBe("1 activity · Approved, ran again below");
+    expect(summarizeToolActivity(tools.slice(0, 4))).toContain("1 more · Failed");
+  });
+
+  it("keeps error-only failures visible once in count-only and truncated summaries", () => {
+    const tools = [tool("Read"), tool("Bash", { error: "Command failed" })];
+    expect(summarizeToolActivity(tools, 0)).toBe("2 activities · Failed");
+    expect(summarizeToolActivity(tools, 1)).toBe("Read files, and 1 more · Failed");
+    expect(summarizeToolActivity([tool("Bash", { error: "Command failed", success: false })], 0)).toBe("1 activity · Failed");
   });
 
   it("does not describe failed, interrupted, or unapproved actions as completed", () => {

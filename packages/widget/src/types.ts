@@ -2479,6 +2479,11 @@ export type AgentWidgetToolCallDisplayFeature = {
    * aggregate. Defaults to current-action in classified turn progress, aggregate elsewhere;
    * stack defaults to aggregate everywhere. Custom summary callbacks retain precedence. */
   groupSummary?: "current-action" | "aggregate";
+  /** Maximum distinct categories in built-in aggregate row/group summaries. Nonnegative
+   * integer; 0 shows only the total activity count. Positive limits use action labels
+   * such as Read files; omitted categories become "and N more". Attention
+   * suffixes and current-action labels remain visible. Invalid values use 3. @default 3 */
+  groupSummaryMaxItems?: number;
   /** Split adjacent tools at known iteration or execution changes. Missing metadata preserves adjacency. @default "adjacent" */
   groupBoundary?: "adjacent" | "iteration";
   /** Built-in collapsible header icon visibility. Inherits iconVisibility; child rows and custom summary content keep their own icons. */
@@ -2862,6 +2867,7 @@ export type WidgetPreferenceSlice = {
     | "groupedMode"
     | "groupAppearance"
     | "groupSummary"
+    | "groupSummaryMaxItems"
     | "groupBoundary"
     | "loadingAnimation"
   >;
@@ -6179,9 +6185,10 @@ export type AgentWidgetToolCallConfig = {
    * In `groupedMode: "summary"`, the summary owns the visible row starting
    * with the first tool so its DOM stays stable as more calls arrive.
    * Other modes call this only for multiple tools.
-   * Return `null` to use the built-in summary: readable activity phrases for
-   * active/attention row groups, counted categories or activities for completed
-   * V5 row groups, or a tool count for legacy card groups.
+   * Return `null` to use the built-in summary: capped descriptive action phrases
+   * for active and completed row groups, with attention suffixes, or a tool
+   * count for legacy card groups.
+   * groupSummaryMaxItems controls aggregate category caps; zero counts activities.
    */
   renderGroupedSummary?: (context: {
     messages: AgentWidgetMessage[];

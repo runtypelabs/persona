@@ -36,15 +36,15 @@ it.each(['summary', 'stack', 'collapsible'] as const)('summarizes semantic categ
   expect(summary).toHaveBeenCalledWith(expect.objectContaining({ defaultSummary: 'Read files, running commands' }));
 });
 
-it.each(['summary', 'stack', 'collapsible'] as const)('counts completed mixed V5 %s groups while preserving custom and V4 summaries', mode => {
+it.each(['summary', 'stack', 'collapsible'] as const)('retains completed mixed V5 %s summaries while preserving custom and V4 summaries', mode => {
   const a = tool('read'), b = tool('command'); a.toolCall!.name = 'Read'; b.toolCall!.name = 'Bash';
   const settings = config(mode); settings.features!.toolCallDisplay!.variant = 'row';
   settings.future = { v5Defaults: true };
   const summary = () => render([a, b], settings).querySelector('[data-persona-tool-group-row]')?.textContent;
-  expect(summary()).toBe('2 activities');
+  expect(summary()).toBe('Read files, ran commands');
   const custom = vi.fn(() => 'Host summary'); settings.toolCall = { renderGroupedSummary: custom };
   expect(summary()).toBe('Host summary');
-  expect(custom).toHaveBeenCalledWith(expect.objectContaining({ defaultSummary: '2 activities' }));
+  expect(custom).toHaveBeenCalledWith(expect.objectContaining({ defaultSummary: 'Read files, ran commands' }));
   delete settings.toolCall; settings.future.v5Defaults = false;
   expect(summary()).toBe('Read files, ran commands');
 });
@@ -54,11 +54,46 @@ it('keeps descriptive mixed summaries during active V5 gaps between batches', ()
   const settings = config('collapsible', 'adjacent'); settings.future = { v5Defaults: true };
   const summary = (streaming: boolean) => render([a, b], settings, streaming, ['read', 'command']).querySelector('[data-persona-tool-group] > button')?.textContent?.replace(/\s/g, ' ');
   expect(summary(true)).toBe('Read files, ran commands');
-  expect(summary(false)).toBe('2 activities');
+  expect(summary(false)).toBe('Read files, ran commands');
+});
+
+it.each(['summary', 'stack', 'collapsible'] as const)('applies aggregate category caps in %s rows with current-action and custom precedence', mode => {
+  const messages = ['Read', 'read_text_file', 'Bash', 'Edit', 'web_search'].map((name, index) => {
+    const message = tool(String(index)); message.toolCall!.name = name; return message;
+  });
+  const settings = config(mode); settings.features!.toolCallDisplay!.layout = 'row';
+  const display = settings.features!.toolCallDisplay!;
+  const summary = () => render(messages, settings).querySelector('[data-persona-tool-group-row]')?.textContent;
+  display.groupSummaryMaxItems = 1;
+  expect(summary()).toBe('Read files, and 3 more');
+  display.groupSummaryMaxItems = 0;
+  expect(summary()).toBe('5 activities');
+  display.groupSummary = 'current-action';
+  messages[4].toolCall!.status = 'running'; messages[4].toolCall!.actionTitle = 'Checking citations';
+  expect(summary()).toBe('Checking citations');
+  messages[0].approval = { id: 'approval', status: 'pending', agentId: 'agent', executionId: 'run', toolName: 'Read', description: 'Allow reading?' };
+  expect(summary()).toBe('5 activities · Waiting for approval');
+  settings.toolCall = { renderGroupedSummary: () => 'Host summary' };
+  expect(summary()).toBe('Host summary');
+});
+
+it.each(['summary', 'stack', 'collapsible'] as const)('uses homogeneous action labels in %s rows and counts only at an explicit zero', mode => {
+  const messages = [tool('one'), tool('two')];
+  for (const message of messages) message.toolCall!.name = 'Read';
+  const settings = config(mode); settings.features!.toolCallDisplay!.layout = 'row';
+  const summary = () => render(messages, settings).querySelector('[data-persona-tool-group-row]')?.textContent;
+  expect(summary()).toBe('Read files');
+  messages[1].toolCall!.status = 'running';
+  expect(summary()).toBe('Reading files');
+  settings.features!.toolCallDisplay!.groupSummaryMaxItems = 0;
+  expect(summary()).toBe('2 activities');
+  settings.toolCall = { renderGroupedSummary: () => 'Host action summary' };
+  expect(summary()).toBe('Host action summary');
 });
 
 it('keeps legacy card stack summaries unchanged', () => {
-  expect(render([tool('a'), tool('b')], config('stack')).querySelector('.persona-tool-group-summary')?.textContent).toBe('Called 2 tools');
+  const settings = config('stack'); settings.features!.toolCallDisplay!.groupSummaryMaxItems = 0;
+  expect(render([tool('a'), tool('b')], settings).querySelector('.persona-tool-group-summary')?.textContent).toBe('Called 2 tools');
 });
 
 it('preserves pending approval and failure text when different children need attention', () => {

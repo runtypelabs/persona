@@ -102,14 +102,14 @@ export function groupToolRows(options: ActivityGroupOptions) {
 
       const approvals = group.map(item => item.approval?.status ?? item.toolCall?.approvalStatus);
       const approvalStatus = (["pending", "denied", "timeout"] as const).find(status => approvals.includes(status));
-      const success = !tools.some(tool => tool.success === false);
+      const success = !tools.some(tool => tool.success === false || tool.error);
       const attention = interrupted || !success || approvalStatus;
       const running = tools.some(tool => tool.status !== "complete");
       const active = running ||
         (!iterationBoundary && streaming && isLatestGroup && isCurrentRunGroup && !attention);
       const toolCount = `${group.length} tool${group.length === 1 ? "" : "s"}`;
       const aggregate = display.groupedMode === "collapsible" || activityLayout(config, "tool") === "row"
-        ? summarizeToolActivity(tools.map((tool, index) => ({ ...tool, approvalStatus: approvals[index] })), config.future?.v5Defaults && !active)
+        ? summarizeToolActivity(tools.map((tool, index) => ({ ...tool, approvalStatus: approvals[index] })), display.groupSummaryMaxItems)
         : interrupted ? `${toolCount} · Interrupted` : `Called ${toolCount}`;
 
       const defaultSummary = groupToolSummary(group, config, aggregate);
