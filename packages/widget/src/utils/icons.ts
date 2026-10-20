@@ -21,7 +21,6 @@ import {
   Copy,
   Download,
   Ellipsis,
-  EllipsisVertical,
   ExternalLink,
   Eye,
   File as FileIcon,
@@ -64,10 +63,10 @@ import {
  * Curated icon registry for `renderLucideIcon` (host-suppliable name strings).
  *
  * Two tiers keep the payload honest:
- *  - CORE (below): every name the widget itself can emit —
+ *  - CORE (below): the initial widget chrome —
  *    config DEFAULTS (bot, send, mic, x, …) plus the chrome names routed
  *    through `utils/buttons` / `utils/dropdown`. Always resolves synchronously.
- *  - EXTRA (66 names, `src/icons-extra.ts`): the config-only tail
+ *  - EXTRA (`src/icons-extra.ts`): activity glyphs and the config-only tail
  *    (forms, commerce, media, …). The DATA ships in the lazy `icons-extra.js`
  *    sibling chunk; the first request for one of these names kicks the fetch
  *    and returns a correctly-sized empty placeholder SVG that fills in place
@@ -136,7 +135,6 @@ const CORE_LUCIDE_ICONS = {
   "arrow-right": ArrowRight,
   "external-link": ExternalLink,
   "ellipsis": Ellipsis,
-  "ellipsis-vertical": EllipsisVertical,
   "menu": Menu,
   "panel-left": PanelLeft,
   "plus": Plus,
@@ -161,6 +159,9 @@ const CORE_LUCIDE_ICONS = {
  * `icons-partition.test.ts`).
  */
 export const EXTRA_ICON_NAMES = [
+  "brain",
+  "toolbox",
+  "wrench",
   "circle",
   "database",
   "terminal",
@@ -183,6 +184,7 @@ export const EXTRA_ICON_NAMES = [
   "info",
   "ban",
   "shield",
+  "ellipsis-vertical",
   "house",
   "pen-line",
   "save",
@@ -248,14 +250,7 @@ const runtimeIcons = new Map<string, IconNode>(
 // re-render via onExtraIconsReady.
 // ---------------------------------------------------------------------------
 
-type PendingIcon = {
-  el: SVGElement;
-  name: string;
-  size: number | string;
-  color: string;
-  strokeWidth: number;
-};
-const pendingIcons = new Set<PendingIcon>();
+const pendingIcons = new Map<SVGElement, string>();
 
 let extraIconsLoaded = false;
 const extraReadySubscribers = new Set<() => void>();
@@ -298,17 +293,19 @@ export const onExtraIconsReady = (cb: () => void): (() => void) => {
 
 const fillPendingIcons = (): number => {
   let filled = 0;
-  for (const pending of [...pendingIcons]) {
-    const data = runtimeIcons.get(pending.name);
+  for (const [el, name] of pendingIcons) {
+    const data = runtimeIcons.get(name);
     if (!data) continue;
-    pendingIcons.delete(pending);
+    pendingIcons.delete(el);
     filled++;
-    const real = renderIconNode(data, pending.size, pending.color, pending.strokeWidth);
+    // Only adopt children: size, color, and stroke width already live on the
+    // placeholder shell, so retaining and applying those options again is redundant.
+    const real = renderIconNode(data);
     if (!real) continue;
     // Fill IN PLACE: the placeholder already carries the correct svg attrs,
     // so adopting the real children swaps nothing the layout depends on.
-    pending.el.removeAttribute("data-persona-icon-pending");
-    while (real.firstChild) pending.el.appendChild(real.firstChild);
+    el.removeAttribute("data-persona-icon-pending");
+    while (real.firstChild) el.appendChild(real.firstChild);
   }
   return filled;
 };
@@ -404,10 +401,9 @@ export const renderLucideIcon = (
     // element refs without limit. Oldest entries are dropped — they simply
     // stay empty, like any clone the fill can't reach.
     if (pendingIcons.size >= 500) {
-      const oldest = pendingIcons.values().next().value;
-      if (oldest) pendingIcons.delete(oldest);
+      pendingIcons.delete(pendingIcons.keys().next().value!);
     }
-    pendingIcons.add({ el, name: iconName, size, color, strokeWidth });
+    pendingIcons.set(el, iconName);
     kickExtraIcons();
     return el;
   }

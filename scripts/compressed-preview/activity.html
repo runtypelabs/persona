@@ -97,13 +97,13 @@
 <p>Rendering and summary choices apply to the live agent, runnable mocks, and their saved history. The completion icon comparison keeps fixed settings. The default group summary follows the current action inside turn activity, except stacks; other groups keep their aggregate. Cards keep their original header.</p>
 <section id="completion-icon-comparison" style="margin:28px 0">
   <h2>Completion icon defaults</h2>
-  <p>The same fixed, keyless history: web searches keep their globe, an unfamiliar tool and a mixed file/command group use square-text. Expand groups to inspect child icons. Compare the mapped default with an explicit check override, inside or outside turn activity and with either version's defaults.</p>
+  <p>The same fixed, keyless history: completed reasoning uses brain, the outer Worked header uses square-text, mixed tool groups use toolbox, and an unfamiliar tool uses wrench. Homogeneous web searches keep their globe. Expand groups to inspect child icons. Compare these defaults with explicit check overrides, inside or outside turn activity and with either version's defaults.</p>
   <div class="controls">
     <label><input id="completion-turn" type="checkbox" checked>Inside turn activity</label>
     <label><input id="completion-v5" type="checkbox" checked>V5 defaults</label>
   </div>
   <div class="grid">
-    <section><h2>Mapped · default</h2><div id="completion-icons" class="widget"></div></section>
+    <section><h2>Semantic icons · default</h2><div id="completion-icons" class="widget"></div></section>
     <section><h2>Check · explicit override</h2><div id="completion-checks" class="widget"></div></section>
   </div>
 </section>
@@ -173,19 +173,20 @@ const iconTools = [
   toolCall:{id, name, status:'complete', success:true, result:'Complete'},
 }));
 const completionTurn = document.querySelector('#completion-turn'), completionV5 = document.querySelector('#completion-v5');
-const completionDisplay = () => ({
+const completionDisplay = kind => ({
   future:{v5Defaults:completionV5.checked}, turnActivity:{enabled:completionTurn.checked},
-  features:{toolCallDisplay:{layout:'row',grouped:true,groupedMode:'collapsible',groupBoundary:'iteration',iconVisibility:'always',groupIconVisibility:'always',autoExpand:false,autoCollapseDelay:false}},
+  features:{toolCallDisplay:{layout:'row',grouped:true,groupedMode:'collapsible',groupBoundary:'iteration',iconVisibility:'always',groupIconVisibility:'always',autoExpand:false,autoCollapseDelay:false},reasoningDisplay:{layout:'row',iconVisibility:'always',iconName:kind === 'checks' ? 'check' : undefined,autoExpand:false}},
 });
 const iconPreviews = ['icons', 'checks'].map(kind => AgentWidget.initAgentWidget({target:'#completion-' + kind, config:{
   persistState:false, launcher:{enabled:false,fullHeight:true},
   layout:{showHeader:false,showFooter:false}, voiceRecognition:{enabled:false}, suggestions:{starters:{items:[]}},
   welcome:{variant:'none'}, composer:{inputDisabled:true}, toolCall:{iconName:kind === 'checks' ? 'check' : undefined}, initialMessages:[
-    {id:'icon-request',role:'user',content:'Compare the default tool icons.',createdAt:'2026-01-01T00:00:00Z'},
+    {id:'icon-request',role:'user',content:'Compare the completed activity icons.',createdAt:'2026-01-01T00:00:00Z'},
+    {id:'icon-reasoning',role:'assistant',content:'',createdAt:'2026-01-01T00:00:00Z',variant:'reasoning',reasoning:{id:'icon-reasoning',status:'complete',chunks:['Compare web search results, inspect the source, and run the focused checks.'],durationMs:3000},turnActivity:{id:'icon-comparison',kind:'progress',outcome:'success'}},
     ...structuredClone(iconTools),
-    {id:'icon-answer',role:'assistant',content:'Compare the completed group and child icons.',createdAt:'2026-01-01T00:00:01Z'},
+    {id:'icon-answer',role:'assistant',content:'Compare the Worked, reasoning, group, and child icons.',createdAt:'2026-01-01T00:00:01Z'},
   ],
-  ...completionDisplay(),
+  ...completionDisplay(kind),
 }}));
 const headerPreviews = ['default', 'configured'].map(size => AgentWidget.initAgentWidget({
   target:'#header-' + size,
@@ -203,7 +204,7 @@ function openCompletionTurns() {
 }
 Promise.all(iconPreviews.map(handle => handle.ready)).then(openCompletionTurns);
 for (const input of [completionTurn, completionV5]) input.addEventListener('change', () => {
-  for (const handle of iconPreviews) handle.update(completionDisplay());
+  iconPreviews.forEach((handle, index) => handle.update(completionDisplay(index ? 'checks' : 'icons')));
   requestAnimationFrame(openCompletionTurns);
 });
 const shadowV5 = document.querySelector('#shadow-v5'), shadowOverride = document.querySelector('#shadow-override'), shadowScheme = document.querySelector('#shadow-scheme'), shadowGroup = document.querySelector('#shadow-group'), shadowTurn = document.querySelector('#shadow-turn');

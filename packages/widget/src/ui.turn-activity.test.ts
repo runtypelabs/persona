@@ -510,6 +510,30 @@ it.each([false, true])("uses mapped completion icons inside and outside turn act
   expect(iconFor("search")?.innerHTML).toBe(iconMarkup("globe"));
 });
 
+it.each([false, true])("distinguishes completed reasoning and Worked headers while retaining overrides (V5 %s)", async v5Defaults => {
+  await setup({ future: { v5Defaults }, features: {
+    toolCallDisplay: { iconVisibility: "always", groupIconVisibility: "always" },
+    reasoningDisplay: { layout: "row", iconVisibility: "always" },
+  } });
+  inject({ ...message("thought"), content: "", variant: "reasoning", reasoning: { id: "thought", status: "complete", chunks: ["Inspect the implementation"] } });
+  const turnIcon = () => header().querySelector<HTMLElement>(":scope > .persona-activity-icon");
+  expect(header().textContent).toContain("Worked");
+  expect(turnIcon()?.innerHTML).toBe(iconMarkup("square-text"));
+  expect(turnIcon()?.style.color).toBe("inherit");
+  expect(iconFor("thought")?.innerHTML).toBe(iconMarkup("brain"));
+  expect(iconFor("thought")?.style.color).toBe("inherit");
+  expect(mount.querySelector("[data-persona-icon-pending]")).toBeNull();
+  controller.update({ toolCall: { iconName: "check" }, features: { reasoningDisplay: { iconName: "check" } } });
+  expect(turnIcon()?.innerHTML).toBe(iconMarkup("check"));
+  expect(turnIcon()?.style.color).toBe("");
+  expect(iconFor("thought")?.innerHTML).toBe(iconMarkup("check"));
+  expect(iconFor("thought")?.style.color).toBe("");
+  controller.update({ toolCall: { iconName: undefined }, features: { reasoningDisplay: { iconName: undefined } }, turnActivity: { enabled: false } });
+  expect(iconFor("thought")?.innerHTML).toBe(iconMarkup("brain"));
+  controller.update({ features: { reasoningDisplay: { iconVisibility: "active" } } });
+  expect(iconFor("thought")).toBeNull();
+});
+
 it.each([[false, false], [false, true], [true, false], [true, true]])("resolves group icons and preserves custom summaries (V5 %s, turn %s)", async (v5Defaults, enabled) => {
   await setup({ future: { v5Defaults }, turnActivity: { enabled }, features: { toolCallDisplay: { variant: "row", grouped: true, groupedMode: "collapsible", iconVisibility: "always", groupIconVisibility: "always" } }, toolCall: { renderGroupedSummary: () => {
     const custom = document.createElement("span"); custom.dataset.customSummary = "true"; custom.textContent = "Custom batch"; return custom;
@@ -518,7 +542,7 @@ it.each([[false, false], [false, true], [true, false], [true, true]])("resolves 
   expect(iconFor("tool-group-one")?.innerHTML).toBe(iconMarkup("globe"));
   expect(mount.querySelector("[data-custom-summary]")?.textContent).toBe("Custom batch");
   inject(toolMessage("three", "Read"));
-  expect(iconFor("tool-group-one")?.innerHTML).toBe(iconMarkup("square-text"));
+  expect(iconFor("tool-group-one")?.innerHTML).toBe(iconMarkup("toolbox"));
   controller.update({ toolCall: { iconName: "check" } });
   expect(iconFor("tool-group-one")?.innerHTML).toBe(iconMarkup("check"));
   expect(iconFor("tool-group-one")?.style.color).toBe("");
@@ -533,13 +557,13 @@ it("supports registered per-tool icons, live callback replacement, fallback and 
   await setup({ features: { toolCallDisplay: { grouped: false } }, toolCall: { iconName: tool => tool.name === "lookup" ? "custom-query" : undefined } });
   inject(toolMessage("lookup", "lookup")); inject(toolMessage("read", "Read"));
   inject(toolMessage("unknown", "lookup_order_status"));
-  expect(iconFor("unknown")?.innerHTML).toBe(iconMarkup("square-text"));
+  expect(iconFor("unknown")?.innerHTML).toBe(iconMarkup("wrench"));
   expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("custom-query"));
   expect(iconFor("read")?.innerHTML).toBe(iconMarkup("file-text"));
   controller.update({ toolCall: { iconName: () => "pencil" } });
   expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("pencil"));
   controller.update({ toolCall: { iconName: undefined } });
-  expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("square-text"));
+  expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("wrench"));
   controller.update({ toolCall: { iconName: "check" } });
   expect(iconFor("lookup")?.innerHTML).toBe(iconMarkup("check"));
   expect(iconFor("lookup")?.style.color).toBe("");

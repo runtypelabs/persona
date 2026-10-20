@@ -20,6 +20,7 @@ import {
   renderLucideIcon,
 } from "./utils/icons";
 import { EXTRA_LUCIDE_ICONS } from "./icons-extra";
+import type { IconsExtraModule } from "./icons-extra-loader";
 
 describe("icon registry partition", () => {
   it("EXTRA_ICON_NAMES matches the chunk's map keys exactly", () => {
@@ -57,6 +58,76 @@ describe("icon registry partition", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(svg!.hasAttribute("data-persona-icon-pending")).toBe(false);
     expect(svg!.childNodes.length).toBeGreaterThan(0);
+  });
+
+  it("loads ellipsis-vertical lazily and fills its original SVG before notifying subscribers", async () => {
+    vi.resetModules();
+    const { setIconsExtraLoader } = await import("./icons-extra-loader");
+    let finishLoad!: (mod: IconsExtraModule) => void;
+    const load = vi.fn(() => new Promise<IconsExtraModule>((resolve) => { finishLoad = resolve; }));
+    setIconsExtraLoader(load);
+    const { EXTRA_ICON_NAMES, onExtraIconsReady, renderLucideIcon } = await import("./utils/icons");
+    expect(EXTRA_ICON_NAMES).toContain("ellipsis-vertical");
+    const ready = vi.fn(() => ({
+      pending: svg.hasAttribute("data-persona-icon-pending"),
+      circles: svg.querySelectorAll("circle").length,
+    }));
+    onExtraIconsReady(ready);
+    expect(load).not.toHaveBeenCalled();
+
+    const svg = renderLucideIcon("ellipsis-vertical", "1.25rem", "#123456", 3)!;
+    svg.classList.add("persona-menu-icon");
+    expect(svg.getAttribute("data-persona-icon-pending")).toBe("true");
+    expect(svg.childNodes).toHaveLength(0);
+    expect(svg.getAttribute("width")).toBe("1.25rem");
+    expect(svg.getAttribute("height")).toBe("1.25rem");
+    expect(load).toHaveBeenCalledOnce();
+    expect(ready).not.toHaveBeenCalled();
+
+    finishLoad({ EXTRA_LUCIDE_ICONS });
+    await vi.waitFor(() => expect(ready).toHaveBeenCalledOnce());
+    expect(ready).toHaveReturnedWith({ pending: false, circles: 3 });
+    expect(svg.getAttribute("stroke")).toBe("#123456");
+    expect(svg.getAttribute("stroke-width")).toBe("3");
+    expect(svg.classList.contains("persona-menu-icon")).toBe(true);
+    expect(renderLucideIcon("ellipsis-vertical", "1.25rem", "#123456", 3)!.innerHTML).toBe(svg.innerHTML);
+    expect(load).toHaveBeenCalledOnce();
+  });
+
+  it("prepares ellipsis-vertical before controls render so it needs no placeholder", async () => {
+    vi.resetModules();
+    const { setIconsExtraLoader } = await import("./icons-extra-loader");
+    const load = vi.fn().mockResolvedValue({ EXTRA_LUCIDE_ICONS });
+    setIconsExtraLoader(load);
+    const { prepareIconRegistry, renderLucideIcon } = await import("./utils/icons");
+    await prepareIconRegistry();
+
+    const svg = renderLucideIcon("ellipsis-vertical")!;
+    expect(svg.hasAttribute("data-persona-icon-pending")).toBe(false);
+    expect(svg.querySelectorAll("circle")).toHaveLength(3);
+    expect(prepareIconRegistry()).toBeNull();
+    expect(load).toHaveBeenCalledOnce();
+  });
+
+  it("drops only the oldest placeholder when more than 500 icons await the same chunk", async () => {
+    vi.resetModules();
+    const { setIconsExtraLoader } = await import("./icons-extra-loader");
+    let finishLoad!: (mod: IconsExtraModule) => void;
+    const load = vi.fn(() => new Promise<IconsExtraModule>((resolve) => { finishLoad = resolve; }));
+    setIconsExtraLoader(load);
+    const { renderLucideIcon } = await import("./utils/icons");
+    const icons = Array.from({ length: 501 }, () => renderLucideIcon("ellipsis-vertical")!);
+    expect(icons.every((svg) => svg.hasAttribute("data-persona-icon-pending"))).toBe(true);
+    expect(load).toHaveBeenCalledOnce();
+
+    finishLoad({ EXTRA_LUCIDE_ICONS });
+    await vi.waitFor(() => expect(icons[500].hasAttribute("data-persona-icon-pending")).toBe(false));
+    expect(icons[0].hasAttribute("data-persona-icon-pending")).toBe(true);
+    expect(icons[0].childNodes).toHaveLength(0);
+    for (const svg of icons.slice(1)) {
+      expect(svg.hasAttribute("data-persona-icon-pending")).toBe(false);
+      expect(svg.querySelectorAll("circle")).toHaveLength(3);
+    }
   });
 
   it("keeps SVG shell attributes and caller styling when registration fills a pending icon", async () => {

@@ -6062,7 +6062,8 @@ export type AgentWidgetToolCallConfig = {
    * title on toolCall. Does not alter wire events or inspect private tool arguments. */
   resolveActionTitle?: (toolCall: AgentWidgetToolCall, message: AgentWidgetMessage) => string | null | undefined;
   /** Completed row icon from the registry (including registerIcons), or a per-tool resolver.
-   * Undefined uses mapped icons on visible rows and collapsible group headers.
+   * Undefined uses mapped tool icons, a wrench for unknown tools, and a toolbox for mixed groups.
+   * A string also overrides completed turn headers (square-text by default).
    * Active/attention states and iconVisibility retain precedence. Cards are unchanged.
    * The callback returns a registry name, never DOM. Explicit "check" retains success color.
    */

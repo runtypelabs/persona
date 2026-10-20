@@ -164,7 +164,8 @@ export function render(options: ActivityGroupOptions, deps: TurnActivityDependen
     activityLifecycle.observe(synthetic, "tool", toolExpansionState, { autoExpand: true, autoCollapseDelay: 0 });
     const header = label(turn, state);
     const row = deps.group(synthetic, config, toolExpansionState.has(id), header,
-      !turn.pendingApproval && (typeof header === "string" || header.dataset.personaTurnLabel === "true"));
+      !turn.pendingApproval && (typeof header === "string" || header.dataset.personaTurnLabel === "true"),
+      typeof config.toolCall?.iconName === "string" ? config.toolCall.iconName : "square-text");
     row.bubble.removeAttribute("data-persona-tool-group");
     row.bubble.dataset.personaTurnActivity = turn.id;
     row.body.classList.add("persona-turn-activity-body");

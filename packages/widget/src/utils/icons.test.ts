@@ -28,7 +28,7 @@ describe("renderLucideIcon", () => {
     }
   );
 
-  it.each(["lightbulb", "chart-column", "image", "pen-line"] as const)(
+  it.each(["lightbulb", "chart-column", "image", "pen-line", "brain", "toolbox", "wrench"] as const)(
     "renders extra-tier %s as a sized placeholder that fills once the chunk lands",
     async (name) => {
       const svg = renderLucideIcon(name);

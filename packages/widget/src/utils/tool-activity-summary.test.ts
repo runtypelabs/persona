@@ -93,29 +93,30 @@ describe("semantic tool activity", () => {
 
  it.each([
    ["web_search", "globe"], ["Read", "file-text"], ["edit_file", "pencil"], ["Bash", "terminal"],
-   ["sql_db_query", "database"], ["search_events", "square-text"], ["my_web_search", "square-text"],
+   ["sql_db_query", "database"], ["search_events", "wrench"], ["my_web_search", "wrench"],
  ])("maps the completed icon for %s without guessing", (name, icon) => expect(toolActivityIcon(tool(name))).toBe(icon));
 
- it("keeps homogeneous group icons and uses square-text for mixed categories", () => {
+ it("keeps homogeneous group icons and uses toolbox for mixed categories", () => {
    const config = {};
    expect(groupActivityIcon([tool("web_search"), tool("WebSearch")], config)).toBe("globe");
-   expect(groupActivityIcon([tool("web_search"), tool("Read")], config)).toBe("square-text");
-   expect(groupActivityIcon([tool("web_search"), tool("web_fetch")], config)).toBe("square-text");
+   expect(groupActivityIcon([tool("web_search"), tool("Read")], config)).toBe("toolbox");
+   expect(groupActivityIcon([tool("web_search"), tool("web_fetch")], config)).toBe("toolbox");
+   expect(groupActivityIcon([tool("lookup_order"), tool("lookup_order")], config)).toBe("wrench");
    expect(groupActivityIcon([], config)).toBeUndefined();
  });
 
  it("keeps custom icon overrides and neutral unknown-tool groups", () => {
    const tools = [tool("lookup_order"), tool("read_graph")];
-   expect(groupActivityIcon(tools, { toolCall: { iconName: toolActivityIcon } })).toBe("square-text");
+   expect(groupActivityIcon(tools, { toolCall: { iconName: toolActivityIcon } })).toBe("toolbox");
    expect(groupActivityIcon(tools, { toolCall: { iconName: "check" } })).toBe("check");
    expect(groupActivityIcon([tool("Read"), tool("read_text_file")], { toolCall: { iconName: () => "pencil" } })).toBe("pencil");
-   expect(groupActivityIcon([tool("web_search"), tool("Read")], { toolCall: { iconName: () => "pencil" } })).toBe("square-text");
+   expect(groupActivityIcon([tool("web_search"), tool("Read")], { toolCall: { iconName: () => "pencil" } })).toBe("toolbox");
    expect(groupActivityIcon([tool("Read"), tool("read_text_file")], { toolCall: { iconName: () => undefined } })).toBe("file-text");
  });
 
  it("resolves mapped defaults, callback fallbacks and explicit checks consistently", () => {
    expect(resolveToolIcon(tool("Read"), {})).toBe("file-text");
-   expect(resolveToolIcon(tool("lookup"), {})).toBe("square-text");
+   expect(resolveToolIcon(tool("lookup"), {})).toBe("wrench");
    expect(resolveToolIcon(tool("Read"), { toolCall: { iconName: () => undefined } })).toBe("file-text");
    expect(resolveToolIcon(tool("Read"), { toolCall: { iconName: "check" } })).toBe("check");
    expect(resolveToolIcon(tool("Read"), { toolCall: { iconName: () => "check" } })).toBe("check");

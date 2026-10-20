@@ -82,9 +82,10 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
   bubble.dataset.activityState = state;
   const icon = createElement("span", "persona-activity-icon");
   icon.dataset.activityIcon = state;
-  const semanticIcon = kind === "tool" && state === "done" ? completionIcon ?? (groupHeader ? undefined : resolveToolIcon(message.toolCall!, config)) : undefined;
-  if (semanticIcon && semanticIcon !== "check") icon.style.color = "inherit";
   const customIcon = kind === "reasoning" ? config.features?.reasoningDisplay?.iconName : undefined;
+  const semanticIcon = state === "done" ? kind === "reasoning" ? customIcon || "brain"
+    : completionIcon ?? (groupHeader ? "toolbox" : resolveToolIcon(message.toolCall!, config)) : undefined;
+  if (semanticIcon && semanticIcon !== "check") icon.style.color = "inherit";
   let glyph = renderLucideIcon(customIcon || (state === "pending" ? "circle" : state === "awaiting-approval" ? "clock" : state === "running" ? "loader-circle" : state === "done" ? semanticIcon || "check" : "x"), 16, "currentColor", 2);
   if (!glyph && semanticIcon) glyph = renderLucideIcon("square-text", 16, "currentColor", 2);
   if (glyph) icon.appendChild(glyph);

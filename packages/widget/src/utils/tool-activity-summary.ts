@@ -35,7 +35,7 @@ const labels = (tool: AgentWidgetToolCall) => {
   return aliases.get(name) ?? [`Using ${title}`, `Used ${title}`, title];
 };
 /** Exact-name categories keep unfamiliar tools neutral. */
-export const toolActivityIcon = (tool: AgentWidgetToolCall): string => labels(tool)[3] ?? "square-text";
+export const toolActivityIcon = (tool: AgentWidgetToolCall): string => labels(tool)[3] ?? "wrench";
 
 /** Host overrides fall back to the same mapped icon on every activity surface. */
 export const resolveToolIcon = (tool: AgentWidgetToolCall, config: AgentWidgetConfig): string => {
@@ -46,7 +46,7 @@ export const resolveToolIcon = (tool: AgentWidgetToolCall, config: AgentWidgetCo
 export function groupActivityIcon(tools: AgentWidgetToolCall[], config: AgentWidgetConfig): string | undefined {
   if (typeof config.toolCall?.iconName === "string") return config.toolCall.iconName;
   const icons = tools.map(tool => resolveToolIcon(tool, config));
-  return tools.every((tool, index) => labels(tool)[0] === labels(tools[0])[0] && icons[index] === icons[0]) ? icons[0] : "square-text";
+  return tools.every((tool, index) => labels(tool)[0] === labels(tools[0])[0] && icons[index] === icons[0]) ? icons[0] : "toolbox";
 }
 
 const states = [
