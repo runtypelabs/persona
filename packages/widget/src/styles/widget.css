@@ -5980,6 +5980,29 @@
   padding: 0 8px;
 }
 
+/* Follow-ups belong to the expanded panel; the transcript scrolls above
+ * this fixed row while the persistent composer remains below the panel. */
+.persona-widget-wrapper[data-persona-composer-bar] .persona-panel-suggestions.persona-suggestions:not([hidden]) {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 12px 24px 16px;
+  background: var(--persona-surface, #fff);
+}
+.persona-widget-wrapper[data-expanded-size="fullscreen"] .persona-panel-suggestions:not([hidden]) {
+  margin-bottom: calc(var(--persona-pill-bottom, 16px) + var(--persona-pill-area-height, var(--persona-measured-pill-area-height, 80px)));
+}
+.persona-widget-wrapper[data-expanded-size="fullscreen"]:has(.persona-panel-suggestions:not([hidden])) .persona-widget-body > :last-child {
+  padding-bottom: 16px;
+}
+.persona-panel-suggestions-fade:not([hidden]) {
+  position: absolute;
+  inset-inline: 0;
+  height: 24px;
+  z-index: 1;
+  pointer-events: none;
+  background: var(--persona-composer-overlay-band, transparent);
+}
+
 /* --- Container chrome ---------------------------------------------------
  *
  * Container chrome (background, border, border-radius, box-shadow) is
@@ -6018,6 +6041,12 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* The hidden peek retains layout space above the footer. Let that empty
+   * region pass clicks through to the transcript and jump button behind it. */
+  pointer-events: none;
+}
+.persona-widget-pill-root > .persona-widget-footer {
+  pointer-events: auto;
 }
 @media (min-width: 640px) {
   .persona-widget-pill-root {
@@ -6165,7 +6194,7 @@
   padding-bottom: 0;
 }
 .persona-widget-wrapper[data-persona-composer-bar][data-expanded-size="fullscreen"] .persona-widget-body > :last-child {
-  padding-bottom: calc(var(--persona-pill-bottom, 16px) + var(--persona-pill-area-height, 80px) + 16px);
+  padding-bottom: calc(var(--persona-pill-bottom, 16px) + var(--persona-pill-area-height, var(--persona-measured-pill-area-height, 80px)) + 16px);
 }
 
 /* `modal` and `anchored` get their geometry inline from ui.ts; nothing

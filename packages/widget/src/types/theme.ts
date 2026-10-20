@@ -1076,8 +1076,9 @@ export interface ComposerChromeTokens {
   /**
    * Background painted behind an overlaid composer footer
    * (`composer.placement: "overlay"`). Any CSS `background` value, gradients
-   * included — same convention as the shadow tokens. Inert under
-   * `placement: "block"`.
+   * included — same convention as the shadow tokens. Also paints the 24px
+   * transcript edge above fixed composer-bar follow-ups when more content
+   * is hidden below. Otherwise inert under `placement: "block"`.
    * @default "transparent" (V4); a theme-aware 24px fade (V5)
    */
   overlayBand?: string;

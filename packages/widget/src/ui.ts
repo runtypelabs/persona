@@ -1519,6 +1519,16 @@ export const createAgentExperience = (
   const scrollToBottomControl = createScrollToBottomControl(renderLucideIcon, "transcript", body);
   const scrollToBottomButton = scrollToBottomControl.element;
   container.appendChild(scrollToBottomButton);
+  // Persistent-composer follow-ups stay on the panel surface, outside the
+  // scrolling transcript, rather than floating over the host page.
+  const panelSuggestions = createElement("div", "persona-panel-suggestions");
+  panelSuggestions.setAttribute("data-persona-panel-suggestions", "");
+  panelSuggestions.hidden = true;
+  container.appendChild(panelSuggestions);
+  const panelSuggestionsFade = createElement("div", "persona-panel-suggestions-fade");
+  panelSuggestionsFade.setAttribute("aria-hidden", "true");
+  panelSuggestionsFade.hidden = true;
+  container.appendChild(panelSuggestionsFade);
 
   // Anchor-top scroll mode: zero-height spacer kept after the messages
   // wrapper. Sized on send so the just-sent user message can be scrolled to
@@ -1613,6 +1623,17 @@ export const createAgentExperience = (
 
   const updateScrollToBottomButtonOffset = () => {
     const footerHidden = footer.style.display === "none";
+    if (isComposerBar()) {
+      // The fixed composer is a sibling of the transcript. Anchored panels
+      // already clear it; only reserve space when it overlaps the panel
+      // (for example in fullscreen mode).
+      const overlap = footerHidden || !footer.offsetHeight ? 0 :
+        Math.max(0, container.getBoundingClientRect().bottom - footer.getBoundingClientRect().top);
+      const suggestionOverlap = panelSuggestions.hidden ? 0 :
+        Math.max(0, container.getBoundingClientRect().bottom - panelSuggestions.getBoundingClientRect().top);
+      scrollToBottomButton.style.bottom = `${Math.max(overlap, suggestionOverlap) + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
+      return;
+    }
     let footerHeight = footerHidden ? 0 : footer.offsetHeight;
     if (footerHeight > 0) {
       let contentTop = Infinity;
@@ -1627,6 +1648,19 @@ export const createAgentExperience = (
     scrollToBottomButton.style.bottom = `${footerHeight + (footerHidden ? 0 : readLiftPx()) + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
   };
   updateScrollToBottomButtonOffset();
+
+  const syncComposerBarClearance = () => {
+    if (!isComposerBar()) return;
+    // Measure the visible composer, including suggestions and attachments.
+    // The invisible peek banner still occupies layout space outside it.
+    const height = footer.style.display === "none" ? 0 : footer.offsetHeight;
+    if (height > 0) {
+      wrapper.style.setProperty("--persona-measured-pill-area-height", `${height + 8}px`);
+    } else {
+      wrapper.style.removeProperty("--persona-measured-pill-area-height");
+    }
+    wrapper.style.setProperty("--persona-pill-bottom", config.launcher?.composerBar?.bottomOffset ?? "16px");
+  };
 
   // block+center raises the footer with flex spacing, not absolute
   // positioning: the container is a flex column with body { flex: 1 1 0% }, so
@@ -1689,7 +1723,9 @@ export const createAgentExperience = (
     );
     blockCenterLiftPx = placement === "block" ? lift : 0;
     applyBlockCenterLift();
+    syncComposerBarClearance();
     updateScrollToBottomButtonOffset();
+    syncTranscriptEdgeFades();
   };
 
   scrollToBottomControl.update(config, false);
@@ -4369,12 +4405,21 @@ export const createAgentExperience = (
   let warnedComposerBarPlacement = false;
   // mount.style.cssText is wiped by applyFullHeightStyles, so every
   // mount-level var re-stamps here, next to applyContentMaxWidthVar.
-  function syncTranscriptTopFade() {
+  function syncTranscriptEdgeFades() {
     if (config.layout?.topFade && body.scrollTop > 1) body.setAttribute("data-persona-top-fade", "true");
     else body.removeAttribute("data-persona-top-fade");
+    // The fixed suggestion row is the lower transcript boundary. Reuse the
+    // existing overlay-band theme; transparent disables its paint in V4 or
+    // for hosts that opt out. Only show it while content remains below.
+    panelSuggestionsFade.hidden = !isComposerBar() || panelSuggestions.hidden ||
+      body.scrollHeight - body.clientHeight - body.scrollTop <= 1;
+    if (!panelSuggestionsFade.hidden) {
+      panelSuggestionsFade.style.bottom = `${container.getBoundingClientRect().bottom -
+        panelSuggestions.getBoundingClientRect().top - container.clientTop}px`;
+    }
   }
   const applyComposerPlacement = () => {
-    syncTranscriptTopFade();
+    syncTranscriptEdgeFades();
     const placement = resolveComposerPlacement(config, isComposerBar());
     if (
       isComposerBar() &&
@@ -4611,10 +4656,12 @@ export const createAgentExperience = (
   let composerSuggestionsManager = createSuggestions(suggestions);
   const starterSuggestionsManager = createSuggestions(starterSuggestions);
   const transcriptSuggestionsManager = createSuggestions(transcriptSuggestions);
+  const panelSuggestionsManager = createSuggestions(panelSuggestions);
   const suggestionManagers = [
     composerSuggestionsManager,
     starterSuggestionsManager,
     transcriptSuggestionsManager,
+    panelSuggestionsManager,
   ];
   destroyCallbacks.push(() => {
     suggestionManagers.forEach((manager) => manager.destroy());
@@ -4753,7 +4800,7 @@ export const createAgentExperience = (
       const manager =
         placement === "after-message"
           ? transcriptSuggestionsManager
-          : composerSuggestionsManager;
+          : isComposerBar() ? panelSuggestionsManager : composerSuggestionsManager;
       clearOthers(manager);
       manager.render(
         followUpSuggestions,
@@ -7461,11 +7508,10 @@ export const createAgentExperience = (
     const modalMaxWidth = cb.modalMaxWidth ?? "880px";
     const modalMaxHeight = cb.modalMaxHeight ?? "min(90vh, 800px)";
     const viewportClamp = "calc(100vw - 32px)";
-    // Static fallback for the pill area's height (pill + 8px gap + peek
-    // slack). Anchored mode uses this to compute the wrapper's bottom edge
-    // so the chat panel chrome doesn't overlap the pill below. Defer
-    // ResizeObserver-based dynamic sizing until we see a real misalignment.
-    const pillAreaClearance = "var(--persona-pill-area-height, 80px)";
+    // Retain the authored override and use measured clearance as the default.
+    // ResizeObserver updates this when suggestions or composer content grow.
+    syncComposerBarClearance();
+    const pillAreaClearance = "var(--persona-pill-area-height, var(--persona-measured-pill-area-height, 80px))";
 
     // Reset everything geometry-related so each branch sets exactly what it
     // needs. Using empty strings drops the inline declaration entirely so
@@ -9094,7 +9140,7 @@ export const createAgentExperience = (
     lastScrollTop = body.scrollTop;
     lastBottomOffset = getScrollBottomOffset(body);
     updateScrollToBottomCountBadge();
-    syncTranscriptTopFade();
+    syncTranscriptEdgeFades();
     syncScrollToBottomButton();
 
   };
@@ -10747,6 +10793,7 @@ export const createAgentExperience = (
     footerResizeObserver.observe(footer);
     footerResizeObserver.observe(container);
     footerResizeObserver.observe(welcomeHost);
+    footerResizeObserver.observe(panelSuggestions);
   };
 
   let lastWelcomeFullscreen = isWelcomeFullscreen();
@@ -10897,7 +10944,7 @@ export const createAgentExperience = (
   let lastBottomOffset = getScrollBottomOffset(body);
 
   const handleScroll = () => {
-    syncTranscriptTopFade();
+    syncTranscriptEdgeFades();
     const scrollTop = body.scrollTop;
     // When content mutates (e.g. stream-animation plugins re-rendering text)
     // or the viewport grows (composer shrinking back), the maximum scroll
@@ -10968,6 +11015,7 @@ export const createAgentExperience = (
   if (typeof ResizeObserver !== "undefined") {
     const contentResizeObserver = new ResizeObserver(() => {
       handleContentResize();
+      syncTranscriptEdgeFades();
       // A resize can start or stop a table overflowing without a render or a
       // scroll, which are the only other things that recompute the fades.
       refreshTableScrollFades(messagesWrapper);
@@ -11545,7 +11593,7 @@ export const createAgentExperience = (
     if (!following && !readerEngagedThisTurn) repinAnchoredMessage();
     lastScrollTop = body.scrollTop;
     lastBottomOffset = getScrollBottomOffset(body);
-    syncTranscriptTopFade();
+    syncTranscriptEdgeFades();
     syncScrollToBottomButton();
     // Open popovers/tooltips listen at their own instance root, including
     // lazy chunks with separate module copies. Other widgets are untouched.

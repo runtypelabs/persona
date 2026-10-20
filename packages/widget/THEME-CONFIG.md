@@ -1124,8 +1124,11 @@ This paints an opaque band; it does not change the scroll viewport. The 6px offs
 footer content, input heights, or padding may require adjusting the stop.
 
 
-`overlayBand` only paints under `composer.placement: "overlay"`, where the
-composer footer is absolutely overlaid on the transcript. It takes any CSS
+`overlayBand` paints under `composer.placement: "overlay"`, where the
+composer footer is absolutely overlaid on the transcript. In composer-bar mode,
+it also paints the 24px edge above the fixed follow-up row while transcript
+content is hidden below. That edge disappears at the bottom; use
+`overlayBand: "transparent"` to disable its paint. It takes any CSS
 `background` value, gradients included, so a scrim that fades the transcript
 into the composer is one token:
 
