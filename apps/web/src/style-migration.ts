@@ -1,3 +1,4 @@
+import { registerDemoPageLifecycle } from "./demo-page-lifecycle";
 import "@runtypelabs/persona/widget.css";
 import "./style-migration.css";
 import { initAgentWidget, type AgentWidgetConfig, type AgentWidgetConfigPatch, type AgentWidgetMessage } from "@runtypelabs/persona";
@@ -180,7 +181,7 @@ document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", e
   (event.currentTarget as HTMLButtonElement).textContent = custom ? "Clear comparison styles" : "Restore comparison styles";
   renderComparisons();
 });
-window.addEventListener("pagehide", () => widget.destroy(), { once: true });
+registerDemoPageLifecycle({ destroy: () => widget.destroy() });
 renderComparisons();
 showCode("live-code", legacyOverrides(scheme()));
 status.textContent = "Legacy fixture mounted. Type a draft, then add theme values, migrate the aliases, or reset the styles.";

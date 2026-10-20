@@ -177,4 +177,9 @@ void fetch("/api/config").then(async response => {
   button.disabled = !liveAvailable;
   button.title = liveAvailable ? "Use your configured Cloudflare agent" : "Set the server’s provider key to enable Live mode";
 }).catch(() => { /* Preview remains available when provider configuration cannot be checked. */ });
-window.addEventListener("pagehide", () => { stopAssistantListeners(); assistant?.destroy(); customerTranscript?.destroy(); }, { once: true });
+window.addEventListener("pagehide", (event) => {
+  if (event.persisted) return;
+  stopAssistantListeners();
+  assistant?.destroy();
+  customerTranscript?.destroy();
+});

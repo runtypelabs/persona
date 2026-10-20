@@ -1,3 +1,4 @@
+import { registerDemoPageLifecycle } from "./demo-page-lifecycle";
 import "@runtypelabs/persona/widget.css";
 import "./assistant-composers.css";
 import { initAgentWidget, registerIcons } from "@runtypelabs/persona";
@@ -153,5 +154,5 @@ element("lab-copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(code); notice("Configuration copied, including demo callbacks. Supply your own transport when integrating."); }
   catch { notice("Clipboard is unavailable. Select and copy the configuration below."); }
 });
-window.addEventListener("pagehide", () => widget?.destroy());
+registerDemoPageLifecycle({ destroy: () => widget?.destroy() });
 mount();

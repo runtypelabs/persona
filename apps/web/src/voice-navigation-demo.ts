@@ -161,6 +161,7 @@ note.querySelector("#forget-creds")?.addEventListener("click", (event) => {
 
 let voiceStatus: VoiceStatus = "idle";
 let streaming = false;
+let navigationTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * Leave the page in a natural pause: no reply streaming, no voice audio playing,
@@ -168,6 +169,7 @@ let streaming = false;
  * the assistant off (the audio dies with the document).
  */
 function navigateWhenSettled(target: PageId): void {
+  clearTimeout(navigationTimer);
   const SETTLE_MS = 600;
   let quietSince = 0;
   const tick = () => {
@@ -183,10 +185,10 @@ function navigateWhenSettled(target: PageId): void {
       window.location.assign(pageUrl(target));
       return;
     }
-    setTimeout(tick, 100);
+    navigationTimer = setTimeout(tick, 100);
   };
   // Give the reply a moment to start before judging "quiet".
-  setTimeout(tick, 400);
+  navigationTimer = setTimeout(tick, 400);
 }
 
 const resolvePage = (text: string): PageId | null => {
@@ -391,14 +393,26 @@ controller.on("assistant:complete", () => {
 
 const NAV_STAMP_KEY = "voiceNavigationDemo:leftAt";
 const hud = document.getElementById("resume-hud")!;
-window.addEventListener("pagehide", () => {
+let resumeCachedCall = false;
+// Capture the live flag before Persona releases the cached page's provider.
+window.addEventListener("pagehide", (event) => {
   const live = voiceStatus !== "idle" && voiceStatus !== "disconnected" && voiceStatus !== "error";
+  resumeCachedCall = event.persisted && live;
+  clearTimeout(navigationTimer);
+  pendingKeylessNav = null;
+  streaming = false;
   try {
     if (live) sessionStorage.setItem(NAV_STAMP_KEY, String(Date.now()));
     else sessionStorage.removeItem(NAV_STAMP_KEY);
   } catch {
     /* storage unavailable: no HUD */
   }
+}, { capture: true });
+window.addEventListener("pageshow", (event) => {
+  if (!event.persisted || !resumeCachedCall) return;
+  resumeCachedCall = false;
+  hud.textContent = "Reconnecting voice…";
+  controller.startVoiceRecognition();
 });
 let leftAt = 0;
 try {

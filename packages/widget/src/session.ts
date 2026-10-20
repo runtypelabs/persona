@@ -875,11 +875,14 @@ export class AgentWidgetSession {
    * Toggle voice recognition on/off
    */
   public async toggleVoice() {
+    const generation = this.#voiceSetupGeneration;
     // A click can race the setup chunk load; wait for it rather than
     // erroring (prefetch at construction makes this window ~one microtask).
     if (!this.#voiceProvider && this.#voiceSetupPromise) {
       await this.#voiceSetupPromise;
     }
+    // A navigation or config replacement supersedes a click waiting on setup.
+    if (generation !== this.#voiceSetupGeneration) return;
     if (!this.#voiceProvider) {
       console.error('Voice not configured');
       return;

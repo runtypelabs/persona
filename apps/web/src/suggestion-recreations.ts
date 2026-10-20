@@ -1,3 +1,4 @@
+import { registerDemoPageLifecycle } from "./demo-page-lifecycle";
 /**
  * Five commercial welcome states paired with the current composer presets
  * measured in the standalone recreations. The authored surface is public
@@ -904,9 +905,9 @@ RECREATIONS.forEach(({ id, build }) => {
   if (article) attachPanelControls(article, build, controller);
 });
 
-window.addEventListener("beforeunload", () => {
+registerDemoPageLifecycle({ destroy: () => {
   controllers.forEach((controller) => controller.destroy());
-});
+} });
 
 // Handy for poking at any instance from the console.
 Object.defineProperty(window, "suggestionRecreations", {

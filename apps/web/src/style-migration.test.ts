@@ -34,6 +34,20 @@ function click(id: string) { document.querySelector<HTMLButtonElement>(`#${id}`)
 afterEach(() => { window.dispatchEvent(new Event("pagehide")); vi.clearAllMocks(); document.body.innerHTML = ""; });
 
 describe("style migration lab", () => {
+  it("retains its mounted widget and live controls over repeated cached Back restores", async () => {
+    await start();
+    for (let cycle = 0; cycle < 2; cycle++) {
+      window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      click("live-layer");
+      expect(mocks.update.mock.lastCall?.[0]).toMatchObject(themeOverrides());
+      expect(mocks.init).toHaveBeenCalledOnce();
+      expect(mocks.destroy).not.toHaveBeenCalled();
+    }
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
+    expect(mocks.destroy).toHaveBeenCalledOnce();
+  });
+
   it("mounts once with isolated storage and applies resets without clearing the transcript", async () => {
     await start();
     expect(mocks.init.mock.lastCall?.[0].config.persistState).toBe(false);

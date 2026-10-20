@@ -5167,6 +5167,7 @@ export const createAgentExperience = (
     voiceState.manuallyDeactivated = Boolean(rawVoiceState.manuallyDeactivated);
     if (wasActive && Date.now() - timestamp < VOICE_STATE_RESTORE_WINDOW) {
       setTimeout(() => {
+        if (pageHiding) return;
         if (!voiceState.active) {
           voiceState.manuallyDeactivated = false;
           if (usesSessionVoice(config.voiceRecognition?.provider)) {
@@ -5192,10 +5193,10 @@ export const createAgentExperience = (
     }
   };
   // Re-stamp a live call as the page unloads: the restore window counts from
-  // the navigation, not from when the (possibly long) call was started. A
-  // back/forward-cache hide (`persisted`) isn't an unload: the page lives on.
-  const handleVoicePageHide = (event: PageTransitionEvent) => {
-    pageHiding = !event.persisted;
+  // the navigation, not from when the (possibly long) call was started. Protect
+  // that record from the trailing disconnect statuses, including cached hides.
+  const handleVoicePageHide = () => {
+    pageHiding = true;
     if (voiceState.active) persistVoiceMetadata();
   };
   if (typeof window !== "undefined") {
@@ -9625,6 +9626,7 @@ export const createAgentExperience = (
   // otherwise dispatch the same text/command twice. It also covers an async
   // `onBeforeSend` (the `preparing` phase).
   let submitInFlight = false;
+  let submitEpoch = 0;
   /** Aborts the in-flight preparation on destroy or a superseding stop. */
   let submissionAbort: AbortController | null = null;
 
@@ -10035,10 +10037,11 @@ export const createAgentExperience = (
     }
     if (submitInFlight) return;
     submitInFlight = true;
+    const epoch = ++submitEpoch;
     try {
       await performSubmit({ resolveInlineCommand: true, ...submitOptions });
     } finally {
-      submitInFlight = false;
+      if (epoch === submitEpoch) submitInFlight = false;
     }
   };
 
@@ -10065,8 +10068,9 @@ export const createAgentExperience = (
   ): void => {
     if (submitInFlight) return;
     submitInFlight = true;
+    const epoch = ++submitEpoch;
     const finish = () => {
-      submitInFlight = false;
+      if (epoch === submitEpoch) submitInFlight = false;
     };
     try {
       const result = performSubmit({ ...options, overrideText: text });
@@ -10508,7 +10512,7 @@ export const createAgentExperience = (
 
     voiceState.active = false;
     emitVoiceState(source);
-    persistVoiceMetadata();
+    if (!pageHiding) persistVoiceMetadata();
     syncComposerCompact();
 
     if (micButton) {
@@ -10714,7 +10718,7 @@ export const createAgentExperience = (
     }
     const generation = composerConversationGeneration;
     setTimeout(() => {
-      if (generation !== composerConversationGeneration) return;
+      if (pageHiding || generation !== composerConversationGeneration) return;
       if (!voiceState.active && !voiceState.manuallyDeactivated) {
         if (usesSessionVoice(config.voiceRecognition?.provider)) {
           session.toggleVoice().then(() => {
@@ -10729,6 +10733,43 @@ export const createAgentExperience = (
     }, 600);
   });
   destroyCallbacks.push(autoResumeUnsub);
+
+  // A cached document retains its DOM and controller, but must release live
+  // transports and capture before it freezes. A fresh navigation still uses
+  // the existing teardown/voice-metadata path above.
+  let cachedPage = false;
+  const suspendCachedPage = (event: PageTransitionEvent) => {
+    if (!event.persisted || cachedPage) return;
+    cachedPage = true;
+    pageHiding = true;
+    composerConversationGeneration++;
+    submitEpoch++;
+    submitInFlight = false;
+    submissionAbort?.abort();
+    submissionAbort = null;
+    composerStore.setPreparing(false);
+    dismissDictation();
+    stopVoiceRecognition("system");
+    session.cancel();
+    session.stopSpeaking();
+    session.cleanupVoice();
+    throughputTracker?.reset();
+    eventStreamView?.update();
+  };
+  const restoreCachedPage = (event: PageTransitionEvent) => {
+    if (!event.persisted || !cachedPage) return;
+    cachedPage = false;
+    pageHiding = false;
+    // Rebuild the provider lazily so the same controls can start a new call.
+    // Neither stopped replies nor calls restart automatically on Back.
+    if (config.voiceRecognition?.enabled === true && usesSessionVoiceForConfig(config)) session.setupVoice();
+  };
+  window.addEventListener("pagehide", suspendCachedPage);
+  window.addEventListener("pageshow", restoreCachedPage);
+  destroyCallbacks.push(() => {
+    window.removeEventListener("pagehide", suspendCachedPage);
+    window.removeEventListener("pageshow", restoreCachedPage);
+  });
 
   // Handle action:resubmit event - automatically trigger another model call
   // when an action handler needs the model to continue processing (e.g., analyzing search results)

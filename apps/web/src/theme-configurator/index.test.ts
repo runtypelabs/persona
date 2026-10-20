@@ -327,7 +327,7 @@ describe('theme configurator shell', () => {
   });
 
   afterEach(() => {
-    window.dispatchEvent(new Event('beforeunload'));
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
   });
 
   test('initializes grouped sections and preview shell', async () => {

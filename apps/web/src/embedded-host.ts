@@ -1,3 +1,4 @@
+import { registerDemoPageLifecycle } from "./demo-page-lifecycle";
 import "@runtypelabs/persona/widget.css";
 import "./embedded-host.css";
 import { initAgentWidget, createStaticMentionSource, registerIcons, type AgentWidgetConfig } from "@runtypelabs/persona";
@@ -382,5 +383,9 @@ target.addEventListener("change", () => {
   syncConversationSelect(name);
 });
 defaults.addEventListener("change", mount);
-window.addEventListener("pagehide", () => { widgets.forEach(widget => widget.destroy()); widgets.clear(); durableChats.forEach(chat => chat.destroy()); durableChats.clear(); });
+registerDemoPageLifecycle({
+  suspend: () => durableChats.forEach(chat => chat.pause()),
+  resume: () => durableChats.forEach(chat => chat.resume()),
+  destroy: () => { widgets.forEach(widget => widget.destroy()); widgets.clear(); durableChats.forEach(chat => chat.destroy()); durableChats.clear(); },
+});
 mount();

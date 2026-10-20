@@ -1,3 +1,4 @@
+import { registerDemoPageLifecycle } from "../demo-page-lifecycle";
 /** Theme Configurator v2: Entry point */
 
 import '@runtypelabs/persona/widget.css';
@@ -250,7 +251,7 @@ function init(): void {
   const mcp = mountThemeEditorMcp(state, {
     extraTools: [createScreenshotPreviewTool(() => previewManager)],
   });
-  window.addEventListener('beforeunload', mcp.unmount);
+  registerDemoPageLifecycle({ destroy: mcp.unmount });
 
   // Mount the docked Theme Copilot: the live agent that drives the tools
   // above: only after registration completes, so its first dispatch always
