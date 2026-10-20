@@ -38,8 +38,11 @@ async function personaFixture(shape: "object" | "string", confirm = false) {
       ...tool, title: tool.title ?? "", window: pageWindow, origin: "https://example.test",
       inputSchema: shape === "string" ? JSON.stringify(tool.inputSchema) : tool.inputSchema,
     })),
-    executeTool: async (tool: { name: string }, input: Record<string, unknown>) =>
-      JSON.stringify(await f.call(tool.name, input)),
+    executeTool: async (
+      tool: { name: string },
+      input: Record<string, unknown>,
+      options?: { signal?: AbortSignal },
+    ) => JSON.stringify(await f.call(tool.name, input, options?.signal)),
   } });
   const bridge = new WebMcpBridge({ enabled: true, onConfirm: async () => confirm }, {
     recordToolDisplayTitles: () => {},
@@ -135,6 +138,27 @@ describe("typed checkout page tools", () => {
     const result = await f.bridge.executeToolCall("webmcp:open_checkout", { cartId: "cart-1" });
     expect(result.isError).toBe(true);
     expect(result.content).toEqual([{ type: "text", text: "UNSAVED_CHANGES: Ask the user to save or discard their draft first." }]);
+    expect(f.visible()).toBe("cart");
+  });
+
+  it.each(["object", "string"] as const)("cancels a pending page update through Persona with a %s schema", async (shape) => {
+    const f = await personaFixture(shape, true);
+    let release!: () => void;
+    let started!: () => void;
+    const rendered = new Promise<void>((resolve) => { release = resolve; });
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const navigate = f.host.showCheckout;
+    f.host.showCheckout = async (id, signal) => {
+      started();
+      await rendered;
+      await navigate(id, signal);
+    };
+    const controller = new AbortController();
+    const pending = f.bridge.executeToolCall("webmcp:open_checkout", { cartId: "cart-1" }, controller.signal);
+    await entered;
+    controller.abort();
+    release();
+    expect(await pending).toMatchObject({ isError: true });
     expect(f.visible()).toBe("cart");
   });
 });
