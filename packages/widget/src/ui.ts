@@ -4050,7 +4050,11 @@ export const createAgentExperience = (
     body.style.cssText = '';
     // A plugin-owned footer is the plugin's DOM: its inline state (the home
     // screen's `display: none` placeholder) is not ours to reset.
-    if (!composerIsPluginOwned) footer.style.cssText = '';
+    if (!composerIsPluginOwned) {
+      footer.style.cssText = '';
+      // The reset also wipes the hidden state that layout.showFooter set.
+      if (config.layout?.showFooter === false) footer.style.display = 'none';
+    }
 
     // Preserve the event-stream takeover across a layout-mode change. The
     // cssText reset above wiped the `display: none` that toggleEventStreamOn
@@ -4402,6 +4406,7 @@ export const createAgentExperience = (
         border-top: none !important;
         padding: 8px 16px 12px 16px !important;
         ${chatFlush ? 'background: transparent !important;' : ''}
+        ${config.layout?.showFooter === false ? 'display: none !important;' : ''}
       `;
     }
 
@@ -11427,6 +11432,8 @@ export const createAgentExperience = (
 
       view.replaceComposer(nextFooter);
       footer = view.composer.footer;
+      // A rebuilt footer starts visible; keep honoring layout.showFooter.
+      if (config.layout?.showFooter === false) footer.style.display = "none";
       // A plugin composer owns its own send affordance, so the built-in
       // send/stop swap has nothing to drive.
       const isDefaultFooter =
