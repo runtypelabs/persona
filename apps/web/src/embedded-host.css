@@ -27,7 +27,7 @@
 .host-test-controls { margin-block: 12px; color: #56524b; }
 .host-test-controls summary { cursor: pointer; }
 .host-test-controls .host-controls { margin-block: 12px; }
-#host-status { max-width: 90ch; margin: 0 0 12px; color: #615c54; font-size: 14px; line-height: 1.5; }
+#host-status { max-width: 90ch; min-height: 1.5em; margin: 0 0 12px; color: #615c54; font-size: 14px; line-height: 1.5; }
 
 .host-pane[data-scheme="dark"] { --host-surface: #17171a; --host-text: #f4f4f5; --host-border: #35353b; color-scheme: dark; }
 .host-pane[data-scheme="dark"] .host-context { background: #2e283d; color: #e0d4f3; }

@@ -376,8 +376,8 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
   {
     slug: "embedded-host",
     href: "/embedded-host.html",
-    title: "Embedded Host APIs",
-    blurb: "Two independent assistants with host controls, instance events, managed slots, and interactive component lifecycles. Runs locally.",
+    title: "Control From Your App",
+    blurb: "Two assistants on one page, driven by your own code: switch conversations, move a widget, and add your own cards. Runs locally.",
     tier: "reference",
     tags: ["embedding", "events", "components"],
     modes: ["inline"],

@@ -88,7 +88,7 @@ describe("embedded host composer scenarios", () => {
     expect(close).toHaveBeenCalledTimes(1);
     expect(dialog.open).toBe(false);
     expect(research.moveTo).toHaveBeenLastCalledWith(document.getElementById("research"), { preserveFocus: false });
-    expect(document.getElementById("host-status")!.textContent).toContain("returned to the sidebar");
+    expect(document.getElementById("host-status")!.textContent).toContain("is back in place, with its conversation and draft intact.");
     expect(mocks.init).toHaveBeenCalledTimes(2); expect(research.destroy).not.toHaveBeenCalled();
   });
   it("starts with a quiet stacked reference and compares both V4 arrangements", async () => {

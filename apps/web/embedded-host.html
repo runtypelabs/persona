@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/src/demo-shared.css" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
-  <title>Embedded assistants · Persona</title>
+  <title>Control widgets from your app · Persona</title>
 </head>
 <body>
   <main class="shell-main host-demo">
     <header class="title-strip">
-      <h1>Embedded assistants</h1>
-      <p>Test independent widgets, switch conversations, and move a widget into a modal. Replies are mocked.</p>
+      <h1>Control widgets from your app</h1>
+      <p>Run two independent assistants on one page and drive them from your own code. Switch conversations, move a widget into a modal, and add your own cards. Replies are simulated.</p>
     </header>
     <div class="host-playground">
       <aside class="host-sidebar" aria-label="Host controls">
@@ -23,7 +23,7 @@
             <label>Composer <select id="host-scenario"><option value="reference">Reference composer</option><option value="basic">Basic modes</option><option value="chips">Context chips</option><option value="inline">Inline mentions</option><option value="responsive">Responsive tools</option><option value="crowded">Crowded toolbar + slot</option></select></label>
             <label>Layout <select id="host-layout"><option value="stacked">Stacked</option><option value="single-row">Single row</option></select></label>
             <label>Theme <select id="host-scheme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
-            <label>Host width <select id="host-width"><option value="full">Full</option><option value="narrow">Narrow (380px)</option></select></label>
+            <label>Widget width <select id="host-width"><option value="full">Full</option><option value="narrow">Narrow (380px)</option></select></label>
             <button type="button" id="host-move">Move to modal</button>
           </section>
           <section class="host-conversations" aria-label="Conversation continuity">
@@ -58,7 +58,7 @@
         </div>
       </aside>
       <div class="host-preview">
-        <p id="host-status" role="status">Use + for files and context, or Concise for shorter replies. Responsive tools move into + at narrow widths. V4 presets use a fixed layout.</p>
+        <p id="host-status" role="status"></p>
         <div class="host-grid">
           <section class="host-pane" aria-label="Research assistant"><h2>Research</h2><div id="research" class="host-mount"></div></section>
           <section class="host-pane" aria-label="Support assistant"><h2>Support</h2><div id="support" class="host-mount"></div></section>
@@ -66,7 +66,7 @@
       </div>
     </div>
     <dialog id="host-modal" class="host-modal host-pane" aria-labelledby="host-modal-title">
-      <div class="host-controls"><h2 id="host-modal-title">Assistant in modal</h2><button type="button" id="host-return">Return to sidebar</button></div>
+      <div class="host-controls"><h2 id="host-modal-title">Assistant in modal</h2><button type="button" id="host-return">Return to page</button></div>
       <div id="host-modal-mount" class="host-mount"></div>
     </dialog>
     <details class="host-events"><summary>Widget events</summary><p>Each widget owns its <code>HostCard</code> renderer. Update or remove a card to inspect its lifecycle events.</p><pre id="host-log" tabindex="0" aria-label="Recent host events"></pre></details>
