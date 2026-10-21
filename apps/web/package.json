@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "pnpm --filter @runtypelabs/persona build && vite build && pnpm --filter bento-slides build:web",
     "preview": "vite preview",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
     "test:run": "vitest run src",
     "runtype:ensure": "node runtype/ensure-docs-agent.ts"
   },

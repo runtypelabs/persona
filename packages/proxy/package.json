@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsdown",
     "lint": "oxlint",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
     "test:run": "vitest run"
   },
   "dependencies": {
