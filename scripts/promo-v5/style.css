@@ -103,7 +103,7 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
 .outro-row { display: flex; align-items: center; gap: 26px; }
 .outro-code { font: 500 26px/1 var(--mono); color: #cfccc4; padding: 13px 20px; border: 1px solid var(--hair); background: rgba(20, 20, 19, 0.8); }
 .outro-code b { color: var(--teal); }
-.outro-url { font: 500 28px/1 var(--mono); color: var(--muted); letter-spacing: 0.04em; margin-top: -10px; }
+.outro-url { font: 500 34px/1 var(--mono); color: #d8d4ca; letter-spacing: 0.04em; margin-top: -6px; }
 .built-by { position: absolute; left: 0; right: 0; bottom: 70px; display: flex; align-items: center; justify-content: center; gap: 26px; }
 .built-label { font: 500 22px/1 var(--mono); color: var(--muted); letter-spacing: 0.16em; text-transform: uppercase; }
 .runtype-wordmark { font-family: 'Runtype Wordmark', serif; font-style: normal; font-weight: 400; font-synthesis: none;
