@@ -131,6 +131,7 @@ export const createToolBubble = (
   if (!tool) {
     return applyActivityRow(bubble, message, config, "tool");
   }
+  if (tool.id) bubble.dataset.toolCallId = tool.id;
 
   const toolDisplayConfig = config.features!.toolCallDisplay!;
   const expandable = toolDisplayConfig.expandable ?? DEFAULT_TOOL_CALL_DISPLAY.expandable;

@@ -226,6 +226,7 @@ export type {
   // Visitor conversation history (client-token mode) types
   AgentWidgetHistoryFeature,
   AgentWidgetOpenConversationOptions,
+  AgentWidgetRevealToolCallOptions,
   BackgroundConversationAdapter,
   ConversationExecutionState,
   AgentWidgetHistoryListAction,

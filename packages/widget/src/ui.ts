@@ -66,6 +66,7 @@ import {
   AgentWidgetContextMentionRef,
   AgentWidgetStoredDraft,
   AgentWidgetOpenConversationOptions,
+  AgentWidgetRevealToolCallOptions,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionSource,
   AgentWidgetWelcomeIcon,
@@ -367,6 +368,8 @@ const VOICE_STATE_RESTORE_WINDOW = 30 * 1000;
 const VOICE_RESUME_NOTICE = "Tap the mic to resume your voice call";
 // Split desktop boundary; must match widget.css artifact media queries (min-width:641px).
 const ARTIFACT_SPLIT_DESKTOP_MIN = 641;
+// Covers the default 160ms V5 disclosure transition.
+const REVEAL_SETTLE_MS = 200;
 
 /** Marks the status region while a composer lock reason owns it. */
 const COMPOSER_REASON_ATTR = "data-persona-composer-reason";
@@ -662,6 +665,12 @@ type Controller = {
    * (launcher mode) or textarea is unavailable.
    */
   focusInput: () => boolean;
+  /**
+   * Bring a tool call into view: opens any collapsed group holding it, expands its details
+   * (unless `expand: false`), scrolls it to the center of the transcript and briefly marks it
+   * with `data-persona-revealed`. Returns false when no rendered tool bubble has that id.
+   */
+  revealToolCall: (toolCallId: string, options?: AgentWidgetRevealToolCallOptions) => boolean;
   /**
    * Programmatically resolve a pending approval.
    * @param approvalId - The approval ID to resolve
@@ -2860,8 +2869,10 @@ export const createAgentExperience = (
 
     // Check if the click/keypress is on an expand header button
     const headerButton = target.closest('button[data-expand-header="true"]') as HTMLElement;
-    if (!headerButton) return;
+    if (headerButton) toggleBubbleHeader(headerButton);
+  };
 
+  const toggleBubbleHeader = (headerButton: HTMLElement) => {
     // Find the parent bubble element
     const bubble = headerButton.closest('.persona-reasoning-bubble, .persona-tool-bubble, .persona-approval-bubble') as HTMLElement;
     if (!bubble) return;
@@ -2949,6 +2960,24 @@ export const createAgentExperience = (
   // Add event delegation for message action buttons (upvote, downvote, copy)
   // This handles clicks even after idiomorph morphs the DOM and strips inline listeners
   const messageVoteState = new Map<string, "upvote" | "downvote">();
+
+  // Reveal state belongs to the message, not its current DOM node: streaming
+  // renders can morph or replace the bubble before the highlight expires.
+  const revealedToolCalls = new Map<string, number>();
+  let revealCenterTimer: number | undefined;
+  let revealScrollGeneration = 0;
+  const refreshRevealedToolCalls = () => {
+    messagesWrapper.querySelectorAll<HTMLElement>(".persona-tool-bubble[data-tool-call-id]").forEach((bubble) => {
+      bubble.toggleAttribute("data-persona-revealed", revealedToolCalls.has(bubble.dataset.messageId!));
+    });
+  };
+  const clearRevealedToolCalls = () => {
+    window.clearTimeout(revealCenterTimer);
+    revealCenterTimer = undefined;
+    revealedToolCalls.forEach((timer) => window.clearTimeout(timer));
+    revealedToolCalls.clear();
+    refreshRevealedToolCalls();
+  };
 
   // Read-aloud (text-to-speech) button state. The ReadAloudController in the
   // session is the source of truth; these mirror its last-known state so the
@@ -5097,6 +5126,9 @@ export const createAgentExperience = (
   // look at the scroll event.
   let readerEngagedThisTurn = false;
   const markReaderEngaged = () => {
+    // Reader input invalidates only reveal scrolling, including its settle pass.
+    // The animation checks this generation before its next scroll write.
+    revealScrollGeneration++;
     readerEngagedThisTurn = true;
     revealTranscriptScrollbar();
   };
@@ -7190,6 +7222,15 @@ export const createAgentExperience = (
     if (messages.length > 0) warmClientStream();
     renderMessagesWithPluginsImpl(container, messages, transform);
     refreshReadAloudButtons();
+    if (revealedToolCalls.size > 0) {
+      for (const [id, timer] of revealedToolCalls) {
+        if (!messages.some((message) => message.id === id)) {
+          window.clearTimeout(timer);
+          revealedToolCalls.delete(id);
+        }
+      }
+      refreshRevealedToolCalls();
+    }
   };
 
   /**
@@ -12768,6 +12809,7 @@ export const createAgentExperience = (
       disposeApprovalRenders();
       artifactsPaneUserHidden = false;
       activityLifecycle?.clear();
+      clearRevealedToolCalls();
       toolExpansionState.clear();
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();
@@ -13171,6 +13213,68 @@ export const createAgentExperience = (
       textarea.focus();
       return true;
     },
+    revealToolCall(toolCallId: string, options: AgentWidgetRevealToolCallOptions = {}): boolean {
+      const bubble = Array.from(body.querySelectorAll<HTMLElement>(".persona-tool-bubble[data-tool-call-id]"))
+        .find((el) => el.dataset.toolCallId === toolCallId);
+      if (!bubble) return false;
+      const ownHeader = (owner: HTMLElement) =>
+        Array.from(owner.querySelectorAll<HTMLElement>('button[data-expand-header="true"]'))
+          .find((header) => header.closest(".persona-tool-bubble") === owner);
+      const openHeader = (header: HTMLElement | undefined) => {
+        if (header?.getAttribute("aria-expanded") === "false") toggleBubbleHeader(header);
+      };
+      const groups: HTMLElement[] = [];
+      for (let group = bubble.parentElement?.closest<HTMLElement>(".persona-tool-bubble"); group;
+        group = group.parentElement?.closest<HTMLElement>(".persona-tool-bubble")) groups.unshift(group);
+      groups.forEach((group) => openHeader(ownHeader(group)));
+      const header = ownHeader(bubble);
+      if (options.expand !== false) openHeader(header);
+
+      markReaderEngaged();
+      // A prior jump owns a separate animation whose completion resumes follow.
+      latestScroll.cancel();
+      pauseAutoScroll();
+      const revealGeneration = revealScrollGeneration;
+      const anchor = header ?? bubble;
+      const shouldContinue = () => !destroyed && revealGeneration === revealScrollGeneration && body.contains(anchor);
+      const reduceMotion = typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const targetTop = () => {
+        const raw = offsetTopWithinBody(anchor) - (body.clientHeight - anchor.offsetHeight) / 2;
+        return Math.max(0, Math.min(raw, getScrollBottomOffset(body)));
+      };
+      const center = () => {
+        if (!shouldContinue()) return;
+        // Use the same programmatic-scroll tracking as automatic following so
+        // centering near the bottom cannot be mistaken for reader intent.
+        if (reduceMotion) {
+          cancelSmoothScroll();
+          isAutoScrolling = true;
+          body.scrollTop = targetTop();
+          lastScrollTop = body.scrollTop;
+          isAutoScrolling = false;
+        } else animateScrollTo(body, targetTop, REVEAL_SETTLE_MS, shouldContinue);
+      };
+      window.clearTimeout(revealCenterTimer);
+      center();
+      // Disclosure height transitions move the row after the first pass; center again once they settle.
+      revealCenterTimer = window.setTimeout(() => {
+        revealCenterTimer = undefined;
+        center();
+      }, REVEAL_SETTLE_MS);
+
+      const highlightMs = options.highlightMs ?? 2000;
+      if (highlightMs > 0) {
+        const messageId = bubble.dataset.messageId!;
+        window.clearTimeout(revealedToolCalls.get(messageId));
+        revealedToolCalls.set(messageId, window.setTimeout(() => {
+          revealedToolCalls.delete(messageId);
+          refreshRevealedToolCalls();
+        }, highlightMs));
+        bubble.setAttribute("data-persona-revealed", "");
+      }
+      return true;
+    },
     async resolveApproval(
       approvalId: string,
       decision: 'approved' | 'denied',
@@ -13315,6 +13419,7 @@ export const createAgentExperience = (
       }
       activityLifecycle?.destroy();
       loadingLabelLifecycle?.destroy();
+      clearRevealedToolCalls();
       toolExpansionState.clear();
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();

@@ -3568,6 +3568,14 @@ export type AgentWidgetOpenConversationOptions = {
   busy?: "reject" | "stop" | "background";
 };
 
+/** Options for `controller.revealToolCall()`. */
+export type AgentWidgetRevealToolCallOptions = {
+  /** Expand the tool's details. Default true. */
+  expand?: boolean;
+  /** How long the bubble keeps `data-persona-revealed`, in ms; 0 skips the mark. Default 2000. */
+  highlightMs?: number;
+};
+
 /** The single in-flight history operation, or `null` when idle. */
 export type HistoryPendingAction =
   | { kind: "refresh" | "load-more" | "start-new" | "clear" | "reset" }

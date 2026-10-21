@@ -6773,6 +6773,12 @@
   outline-offset: 2px;
 }
 
+/* revealToolCall() marks the revealed tool briefly. */
+.persona-tool-bubble[data-persona-revealed] {
+  outline: 2px solid var(--persona-focus-ring, var(--persona-primary, #171717));
+  outline-offset: 2px;
+}
+
 /* Compact approval disclosures share the tool detail surfaces. */
 .persona-approval-row .persona-approval-details {
   display: grid;
