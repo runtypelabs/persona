@@ -1,0 +1,18 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e1]
+  - generic
+    - paragraph
+      - StaticText "Check the scroll position while I read the reasoning."
+    - button "Thought for a moment" [expanded=false, ref=e6]
+      - StaticText "Thought for a moment"
+    - generic
+      - paragraph
+        - StaticText "After thinking it over: the answer is "
+      - button "Copy message" [ref=e7]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e3]
+      - button "Start voice recognition" [ref=e4]
+      - button "Send message" [ref=e5]

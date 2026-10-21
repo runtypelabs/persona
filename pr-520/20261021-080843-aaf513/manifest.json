@@ -1,0 +1,79 @@
+{
+  "runId": "20261021-080843-aaf513",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "Current main inset reasoning expanded",
+      "note": null,
+      "files": [
+        "02-streaming-current-main-inset-reasoning-expanded.png",
+        "02-streaming-current-main-inset-reasoning-expanded.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T08:12:23.248Z",
+      "head": "44c759fb50ee5b6bf085874bcd0a0d22712d0bac",
+      "diffHash": "860ea69d7f9c"
+    },
+    {
+      "feature": "streaming",
+      "label": "Current main reasoning open and close",
+      "note": null,
+      "files": [
+        "01-streaming-current-main-reasoning-open-and-close.gif",
+        "01-streaming-current-main-reasoning-open-and-close.webm",
+        "01-streaming-current-main-reasoning-open-and-close.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T08:12:29.362Z",
+      "head": "44c759fb50ee5b6bf085874bcd0a0d22712d0bac",
+      "diffHash": "860ea69d7f9c"
+    },
+    {
+      "feature": "streaming",
+      "label": "Reasoning through the real session",
+      "note": null,
+      "files": [
+        "03-streaming-reasoning-through-the-real-session.gif",
+        "03-streaming-reasoning-through-the-real-session.webm",
+        "03-streaming-reasoning-through-the-real-session.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?scenario=reasoning&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%7D",
+      "at": "2026-10-21T08:17:42.980Z",
+      "head": "44c759fb50ee5b6bf085874bcd0a0d22712d0bac",
+      "diffHash": "8dd3528948a0"
+    },
+    {
+      "feature": "streaming",
+      "label": "Completed reasoning after toggling",
+      "note": null,
+      "files": [
+        "04-streaming-completed-reasoning-after-toggling.png",
+        "04-streaming-completed-reasoning-after-toggling.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?scenario=reasoning&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%7D",
+      "at": "2026-10-21T08:17:43.782Z",
+      "head": "44c759fb50ee5b6bf085874bcd0a0d22712d0bac",
+      "diffHash": "8dd3528948a0"
+    },
+    {
+      "feature": "streaming",
+      "label": "Reasoning request and events",
+      "note": "1 request(s) crossed the network boundary, 6 controller event(s)",
+      "files": [
+        "05-streaming-reasoning-request-and-events.page.json"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?scenario=reasoning&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%7D",
+      "at": "2026-10-21T08:17:44.509Z",
+      "head": "44c759fb50ee5b6bf085874bcd0a0d22712d0bac",
+      "diffHash": "8dd3528948a0"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Final main-based source: 12 browser cases pass, including mouse/keyboard, animated/reduced motion and rapid reversals. Actual session proof: one request, one user message, two assistant completions and matching run start/finish. Build, lint, typecheck and gzip checks pass; lazy activity allowance +50 bytes, CDN unchanged."
+    }
+  ]
+}

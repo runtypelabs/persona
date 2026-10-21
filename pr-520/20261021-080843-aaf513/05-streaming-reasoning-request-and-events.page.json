@@ -1,0 +1,109 @@
+{
+  "scenario": "reasoning",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 51816,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Check the scroll position while I read the reasoning.",
+            "createdAt": "2026-10-21T08:17:24.276Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 51786,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1792570644276
+      }
+    },
+    {
+      "at": 51786,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvhua1bo_nb0wsmhx",
+        "timestamp": 1792570644276
+      }
+    },
+    {
+      "at": 51801,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvhua1bo_zqkgbwnh",
+        "role": "user",
+        "content": "Check the scroll position while I read the reasoning.",
+        "createdAt": "2026-10-21T08:17:24.276Z",
+        "sequence": 1792570592508,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 52195,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "reason-reason_1",
+        "role": "assistant",
+        "content": "",
+        "createdAt": "2026-10-21T08:17:24.492Z",
+        "streaming": false,
+        "variant": "reasoning",
+        "agentMetadata": {
+          "executionId": "exec_verify_1"
+        },
+        "sequence": 1792570644307,
+        "reasoning": {
+          "id": "reason_1",
+          "status": "complete",
+          "chunks": [
+            "The user asked a question. ",
+            "I should answer briefly and cite the docs."
+          ],
+          "startedAt": 1792570644492,
+          "completedAt": 1792570644677,
+          "durationMs": 185
+        }
+      }
+    },
+    {
+      "at": 52445,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1792570644800-9caea0e8d49b98",
+        "role": "assistant",
+        "content": "After thinking it over: the answer is **42**.",
+        "createdAt": "2026-10-21T08:17:24.800Z",
+        "streaming": false,
+        "sequence": 1792570644308,
+        "agentMetadata": {
+          "textBlockId": "text_1",
+          "executionId": "exec_verify_1",
+          "iteration": 1,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 52562,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvhua1bo_nb0wsmhx",
+        "timestamp": 1792570645052,
+        "outcome": "success"
+      }
+    }
+  ]
+}
