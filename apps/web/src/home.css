@@ -345,6 +345,65 @@ section[id], aside[id] {
   gap: 26px;
 }
 
+/* Launch notice above the hero headline; links to the V5 preview. */
+.hero-announce {
+  align-self: flex-start;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  padding: 6px 14px 6px 6px;
+  border: 1px solid var(--hairline);
+  background: var(--paper-low);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.hero-announce:hover {
+  border-color: var(--teal-ink);
+  background: var(--teal-soft);
+}
+
+.hero-announce:focus-visible {
+  outline: 2px solid var(--teal-ink);
+  outline-offset: 3px;
+}
+
+.hero-announce-tag {
+  padding: 4px 8px;
+  background: var(--teal);
+  color: var(--ink);
+}
+
+.hero-announce-arrow {
+  transition: transform 0.25s ease;
+}
+
+.hero-announce:hover .hero-announce-arrow {
+  transform: translateX(3px);
+}
+
+/* Phones keep the notice on one line by dropping the detail. */
+@media (max-width: 480px) {
+  .hero-announce-detail {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-announce-arrow {
+    transition: none;
+  }
+}
+
 .hero-display {
   margin: 0;
   font-family: var(--font-display);

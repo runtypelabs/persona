@@ -79,6 +79,16 @@
   ],
   "redirects": [
     {
+      "source": "/v5",
+      "destination": "/v5-preview.html",
+      "permanent": false
+    },
+    {
+      "source": "/v5-preview",
+      "destination": "/v5-preview.html",
+      "permanent": false
+    },
+    {
       "source": "/bento",
       "destination": "/bento/",
       "permanent": false
