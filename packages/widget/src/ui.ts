@@ -2961,6 +2961,23 @@ export const createAgentExperience = (
   // This handles clicks even after idiomorph morphs the DOM and strips inline listeners
   const messageVoteState = new Map<string, "upvote" | "downvote">();
 
+  // Reveal state belongs to the message, not its current DOM node: streaming
+  // renders can morph or replace the bubble before the highlight expires.
+  const revealedToolCalls = new Map<string, number>();
+  let revealCenterTimer: number | undefined;
+  const refreshRevealedToolCalls = () => {
+    messagesWrapper.querySelectorAll<HTMLElement>(".persona-tool-bubble[data-tool-call-id]").forEach((bubble) => {
+      bubble.toggleAttribute("data-persona-revealed", revealedToolCalls.has(bubble.dataset.messageId!));
+    });
+  };
+  const clearRevealedToolCalls = () => {
+    window.clearTimeout(revealCenterTimer);
+    revealCenterTimer = undefined;
+    revealedToolCalls.forEach((timer) => window.clearTimeout(timer));
+    revealedToolCalls.clear();
+    refreshRevealedToolCalls();
+  };
+
   // Read-aloud (text-to-speech) button state. The ReadAloudController in the
   // session is the source of truth; these mirror its last-known state so the
   // button visuals can be re-applied after every render/morph (which would
@@ -7196,6 +7213,15 @@ export const createAgentExperience = (
     if (messages.length > 0) warmClientStream();
     renderMessagesWithPluginsImpl(container, messages, transform);
     refreshReadAloudButtons();
+    if (revealedToolCalls.size > 0) {
+      for (const [id, timer] of revealedToolCalls) {
+        if (!messages.some((message) => message.id === id)) {
+          window.clearTimeout(timer);
+          revealedToolCalls.delete(id);
+        }
+      }
+      refreshRevealedToolCalls();
+    }
   };
 
   /**
@@ -12772,6 +12798,7 @@ export const createAgentExperience = (
       disposeApprovalRenders();
       artifactsPaneUserHidden = false;
       activityLifecycle?.clear();
+      clearRevealedToolCalls();
       toolExpansionState.clear();
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();
@@ -13197,20 +13224,39 @@ export const createAgentExperience = (
       const anchor = header ?? bubble;
       const reduceMotion = typeof window.matchMedia === "function" &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const center = () => {
+      const targetTop = () => {
         const raw = offsetTopWithinBody(anchor) - (body.clientHeight - anchor.offsetHeight) / 2;
-        const top = Math.max(0, Math.min(raw, getScrollBottomOffset(body)));
-        if (typeof body.scrollTo === "function") body.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
-        else body.scrollTop = top;
+        return Math.max(0, Math.min(raw, getScrollBottomOffset(body)));
       };
+      const center = () => {
+        if (destroyed || !body.contains(anchor)) return;
+        // Use the same programmatic-scroll tracking as automatic following so
+        // centering near the bottom cannot be mistaken for reader intent.
+        if (reduceMotion) {
+          cancelSmoothScroll();
+          isAutoScrolling = true;
+          body.scrollTop = targetTop();
+          lastScrollTop = body.scrollTop;
+          isAutoScrolling = false;
+        } else animateScrollTo(body, targetTop, REVEAL_SETTLE_MS);
+      };
+      window.clearTimeout(revealCenterTimer);
       center();
       // Disclosure height transitions move the row after the first pass; center again once they settle.
-      window.setTimeout(center, REVEAL_SETTLE_MS);
+      revealCenterTimer = window.setTimeout(() => {
+        revealCenterTimer = undefined;
+        center();
+      }, REVEAL_SETTLE_MS);
 
       const highlightMs = options.highlightMs ?? 2000;
       if (highlightMs > 0) {
+        const messageId = bubble.dataset.messageId!;
+        window.clearTimeout(revealedToolCalls.get(messageId));
+        revealedToolCalls.set(messageId, window.setTimeout(() => {
+          revealedToolCalls.delete(messageId);
+          refreshRevealedToolCalls();
+        }, highlightMs));
         bubble.setAttribute("data-persona-revealed", "");
-        window.setTimeout(() => bubble.removeAttribute("data-persona-revealed"), highlightMs);
       }
       return true;
     },
@@ -13358,6 +13404,7 @@ export const createAgentExperience = (
       }
       activityLifecycle?.destroy();
       loadingLabelLifecycle?.destroy();
+      clearRevealedToolCalls();
       toolExpansionState.clear();
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();
