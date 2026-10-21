@@ -1,0 +1,53 @@
+{
+  "runId": "20261021-171720-93c6c8",
+  "entries": [
+    {
+      "feature": "tool-calls",
+      "label": "Default grouped and individual action labels",
+      "note": null,
+      "files": [
+        "02-tool-calls-default-grouped-and-individual-action-labels.png",
+        "02-tool-calls-default-grouped-and-individual-action-labels.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T17:18:07.360Z",
+      "head": "fd690c9c20f8138899e7f92b502f45a164e6a49d",
+      "diffHash": "9fce7bbe89ca"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "Default descriptive labels",
+      "note": null,
+      "files": [
+        "01-tool-calls-default-descriptive-labels.gif",
+        "01-tool-calls-default-descriptive-labels.webm",
+        "01-tool-calls-default-descriptive-labels.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T17:18:12.608Z",
+      "head": "fd690c9c20f8138899e7f92b502f45a164e6a49d",
+      "diffHash": "9fce7bbe89ca"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "Settled default labels",
+      "note": null,
+      "files": [
+        "03-tool-calls-settled-default-labels.png",
+        "03-tool-calls-settled-default-labels.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T17:18:21.827Z",
+      "head": "fd690c9c20f8138899e7f92b502f45a164e6a49d",
+      "diffHash": "9fce7bbe89ca"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "tool-calls",
+      "pass": true,
+      "skipped": false,
+      "note": "V5 preview with Tool grouping set to Default: group reads Searched docs, read files; child rows read Searched docs and Read a file. Preview uses local sample injection, so no network request is expected. Full SDK streaming path is outside this label-only proof."
+    }
+  ]
+}
