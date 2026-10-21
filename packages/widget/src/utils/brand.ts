@@ -111,8 +111,12 @@ export const deriveBrandTheme = (brand?: BrandConfig, scheme: 'light' | 'dark' =
     const shadow = flat ? 'none' : brand.elevation === 'subtle' ? '0 2px 8px rgba(0, 0, 0, 0.08)' : '0 12px 32px rgba(0, 0, 0, 0.18)';
     const border = flat ? '1px solid var(--persona-border)' : '1px solid color-mix(in srgb, var(--persona-border) 65%, transparent)';
     theme.palette = { ...theme.palette, shadows: { sm: shadow, md: shadow, lg: shadow, xl: shadow, '2xl': shadow } };
-    const shadows = (node: Record<string, unknown>): Record<string, unknown> => {
+    const shadows = (node: Record<string, unknown>, path = ''): Record<string, unknown> => {
       const overlay: Record<string, unknown> = {};
+      // V5 assistant defaults are unpadded prose, not a surface to elevate.
+      // Explicit theme tokens still win; custom bubbles can opt into the brand
+      // shadow scale with `palette.shadows.sm` alongside their padding/background.
+      if (v5Defaults && path === 'message.assistant') return overlay;
       for (const [key, value] of Object.entries(node)) {
         if (key.toLowerCase().endsWith('shadow')) {
           overlay[key] = shadow;
@@ -120,7 +124,7 @@ export const deriveBrandTheme = (brand?: BrandConfig, scheme: 'light' | 'dark' =
           if (borderKey in node) overlay[borderKey] = typeof node[borderKey] === 'string' && (node[borderKey] as string).includes('solid') ? border : flat ? 'semantic.colors.border' : 'color-mix(in srgb, var(--persona-border) 65%, transparent)';
         }
         else if (value && typeof value === 'object') {
-          const child = shadows(value as Record<string, unknown>);
+          const child = shadows(value as Record<string, unknown>, path ? `${path}.${key}` : key);
           if (Object.keys(child).length) overlay[key] = child;
         }
       }
