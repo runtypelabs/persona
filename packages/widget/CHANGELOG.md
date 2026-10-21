@@ -1,5 +1,24 @@
 # @runtypelabs/persona
 
+## 4.32.0
+
+### Minor Changes
+
+- 1b55f5a: Add `controller.revealToolCall(toolCallId, { expand?, highlightMs? })`, which opens any collapsed group holding a tool call, expands its details, centers it in the transcript and briefly marks it with `data-persona-revealed`. Tool bubbles now carry their tool call id as `data-tool-call-id`, so hosts can map transcript clicks back to their own records without observing the DOM.
+
+  Reveal highlights survive streaming updates for their configured duration, and revealing the same tool again restarts the highlight timer.
+
+  Revealing keeps automatic following paused even when centering reaches the bottom, and a newer reveal cancels any pending centering from the previous call.
+
+  Reader input cancels reveal scrolling and its pending centering pass without removing the highlight.
+
+  Revealing a tool also cancels an earlier smooth jump to the latest message so it cannot resume following or override the reveal.
+
+### Patch Changes
+
+- 66f9e7f: Keep the footer hidden when `layout.showFooter` is `false`. The mount-layout pass reset the footer's inline styles (and the sidebar pass replaced them), and a composer rebuild swapped in a fresh footer, each of which brought back the composer that read-only transcripts had hidden.
+- 7920b20: Preserve the transcript's scroll position when expanding or collapsing reasoning and tool details, including animated disclosures in anchored conversations.
+
 ## 4.31.0
 
 ### Minor Changes
