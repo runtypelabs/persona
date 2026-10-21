@@ -279,7 +279,7 @@ function renderS3(t: number) {
 // ── scene 4: any framework ─────────────────────────────────────────────────
 const cam4 = $("#cam4");
 const TILE_W = 236, TILE_H = 220, TILE_GAP = 26;
-const tiles = [...frameworks.map(fw => ({ html: `${fw.svg}<span>${fw.name}</span>`, cls: fw.id === "eve" ? "tile wide" : "tile" })),
+const tiles = [...frameworks.map(fw => ({ html: `${fw.svg}<span>${fw.name}</span>`, cls: fw.id === "eve" ? "tile wide" : fw.id === "mastra" ? "tile mastra" : "tile" })),
   { html: "<b>+</b><span>any SSE<br />backend</span>", cls: "tile more" }].map((spec, i) => {
   const tile = el("div", spec.cls, spec.html);
   cam4.append(tile);

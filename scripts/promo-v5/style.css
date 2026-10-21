@@ -124,7 +124,8 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
   background: rgba(22, 22, 20, 0.92); border: 1px solid var(--hair); color: var(--paper);
   box-shadow: 12px 12px 0 -1px rgba(38, 254, 220, 0.08), 0 30px 80px rgba(0, 0, 0, 0.5); backface-visibility: hidden; }
 .tile svg { width: 76px; height: 76px; display: block; }
-.tile.wide svg { width: 150px; height: 48px; }
+.tile.wide svg { width: 150px; height: 76px; }
+.tile.mastra svg { width: 96px; height: 76px; }
 .tile span { font: 500 19px/1 var(--mono); letter-spacing: 0.06em; color: #cfccc4; }
 .tile.more { border-style: dashed; border-color: rgba(38, 254, 220, 0.5); background: rgba(38, 254, 220, 0.05); }
 .tile.more b { font: 700 54px/1 var(--mono); color: var(--teal); }
