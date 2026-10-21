@@ -262,6 +262,26 @@ chat.focusInput()
 
 In launcher mode, `focusInput()` returns `false` when the panel is closed and does not auto-open it. Use `chat.open()` first if you want to open and focus in one flow.
 
+### Reveal a tool call
+
+Each rendered tool bubble carries its tool call id as `data-tool-call-id`, so a host can map clicks in the transcript back to its own records:
+
+```ts
+chatRoot.addEventListener('click', (event) => {
+  const bubble = (event.target as HTMLElement).closest('[data-tool-call-id]')
+  if (bubble) showToolInSidebar(bubble.getAttribute('data-tool-call-id'))
+})
+```
+
+`revealToolCall()` goes the other way. It opens any collapsed group that holds the tool, expands the tool's details, centers it in the transcript (smoothly unless the reader prefers reduced motion) and marks the bubble with `data-persona-revealed` for two seconds. The default style outlines the marked bubble with the focus ring color.
+
+```ts
+chat.revealToolCall('call_123')                                    // expand, scroll, mark
+chat.revealToolCall('call_123', { expand: false, highlightMs: 0 }) // scroll only
+```
+
+It returns `false` when no rendered tool bubble has that id (for example, a summary-only group or a tool the transcript has not reached yet). Revealing counts as reading: like a manual disclosure, it pauses follow-scrolling.
+
 ### Accessing from window
 
 To access the controller globally (e.g., from browser console or external scripts), use the `windowKey` option:

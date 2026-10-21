@@ -66,6 +66,7 @@ import {
   AgentWidgetContextMentionRef,
   AgentWidgetStoredDraft,
   AgentWidgetOpenConversationOptions,
+  AgentWidgetRevealToolCallOptions,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionSource,
   AgentWidgetWelcomeIcon,
@@ -367,6 +368,8 @@ const VOICE_STATE_RESTORE_WINDOW = 30 * 1000;
 const VOICE_RESUME_NOTICE = "Tap the mic to resume your voice call";
 // Split desktop boundary; must match widget.css artifact media queries (min-width:641px).
 const ARTIFACT_SPLIT_DESKTOP_MIN = 641;
+// Covers the default 160ms V5 disclosure transition.
+const REVEAL_SETTLE_MS = 200;
 
 /** Marks the status region while a composer lock reason owns it. */
 const COMPOSER_REASON_ATTR = "data-persona-composer-reason";
@@ -662,6 +665,12 @@ type Controller = {
    * (launcher mode) or textarea is unavailable.
    */
   focusInput: () => boolean;
+  /**
+   * Bring a tool call into view: opens any collapsed group holding it, expands its details
+   * (unless `expand: false`), scrolls it to the center of the transcript and briefly marks it
+   * with `data-persona-revealed`. Returns false when no rendered tool bubble has that id.
+   */
+  revealToolCall: (toolCallId: string, options?: AgentWidgetRevealToolCallOptions) => boolean;
   /**
    * Programmatically resolve a pending approval.
    * @param approvalId - The approval ID to resolve
@@ -2860,8 +2869,10 @@ export const createAgentExperience = (
 
     // Check if the click/keypress is on an expand header button
     const headerButton = target.closest('button[data-expand-header="true"]') as HTMLElement;
-    if (!headerButton) return;
+    if (headerButton) toggleBubbleHeader(headerButton);
+  };
 
+  const toggleBubbleHeader = (headerButton: HTMLElement) => {
     // Find the parent bubble element
     const bubble = headerButton.closest('.persona-reasoning-bubble, .persona-tool-bubble, .persona-approval-bubble') as HTMLElement;
     if (!bubble) return;
@@ -13162,6 +13173,45 @@ export const createAgentExperience = (
       if (launcherEnabled && !open && !isComposerBar()) return false;
       if (!textarea) return false;
       textarea.focus();
+      return true;
+    },
+    revealToolCall(toolCallId: string, options: AgentWidgetRevealToolCallOptions = {}): boolean {
+      const bubble = Array.from(body.querySelectorAll<HTMLElement>(".persona-tool-bubble[data-tool-call-id]"))
+        .find((el) => el.dataset.toolCallId === toolCallId);
+      if (!bubble) return false;
+      const ownHeader = (owner: HTMLElement) =>
+        Array.from(owner.querySelectorAll<HTMLElement>('button[data-expand-header="true"]'))
+          .find((header) => header.closest(".persona-tool-bubble") === owner);
+      const openHeader = (header: HTMLElement | undefined) => {
+        if (header?.getAttribute("aria-expanded") === "false") toggleBubbleHeader(header);
+      };
+      const groups: HTMLElement[] = [];
+      for (let group = bubble.parentElement?.closest<HTMLElement>(".persona-tool-bubble"); group;
+        group = group.parentElement?.closest<HTMLElement>(".persona-tool-bubble")) groups.unshift(group);
+      groups.forEach((group) => openHeader(ownHeader(group)));
+      const header = ownHeader(bubble);
+      if (options.expand !== false) openHeader(header);
+
+      markReaderEngaged();
+      pauseAutoScroll();
+      const anchor = header ?? bubble;
+      const reduceMotion = typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const center = () => {
+        const raw = offsetTopWithinBody(anchor) - (body.clientHeight - anchor.offsetHeight) / 2;
+        const top = Math.max(0, Math.min(raw, getScrollBottomOffset(body)));
+        if (typeof body.scrollTo === "function") body.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
+        else body.scrollTop = top;
+      };
+      center();
+      // Disclosure height transitions move the row after the first pass; center again once they settle.
+      window.setTimeout(center, REVEAL_SETTLE_MS);
+
+      const highlightMs = options.highlightMs ?? 2000;
+      if (highlightMs > 0) {
+        bubble.setAttribute("data-persona-revealed", "");
+        window.setTimeout(() => bubble.removeAttribute("data-persona-revealed"), highlightMs);
+      }
       return true;
     },
     async resolveApproval(
