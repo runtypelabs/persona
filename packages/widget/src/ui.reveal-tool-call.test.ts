@@ -175,6 +175,39 @@ describe("revealToolCall", () => {
     expect(body.scrollTop).toBe(600);
   });
 
+  it.each([
+    ["wheel", 80, false],
+    ["wheel", 250, false],
+    ["keydown", 80, false],
+    ["touchmove", 80, false],
+    ["pointerdown", 80, false],
+    ["wheel", 80, true],
+  ] as const)("yields to %s at %sms (reduced motion: %s)", (input, elapsed, reduced) => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: reduced, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    setup(false);
+    controller.update({ features: { scrollBehavior: { mode: "follow" } } });
+    const { body } = installScrollMetrics();
+    controller.revealToolCall("call-2", { expand: false });
+    if (elapsed > 200) {
+      vi.advanceTimersByTime(180);
+      // A disclosure transition moves the target before the settle pass.
+      Object.defineProperty(ownHeader(toolBubble("call-2")!), "offsetTop", { configurable: true, get: () => 750 });
+      vi.advanceTimersByTime(elapsed - 180);
+    } else vi.advanceTimersByTime(elapsed);
+    body.dispatchEvent(input === "wheel" ? new WheelEvent("wheel", { deltaY: -100 })
+      : input === "keydown" ? new KeyboardEvent("keydown", { key: "ArrowUp" }) : new Event(input));
+    body.scrollTop = 123;
+    body.dispatchEvent(new Event("scroll"));
+    vi.advanceTimersByTime(20);
+    expect(body.scrollTop).toBe(123);
+    vi.advanceTimersByTime(480);
+    expect(body.scrollTop).toBe(123);
+    expect(toolBubble("call-2")!.hasAttribute("data-persona-revealed")).toBe(true);
+    controller.revealToolCall("call-2", { expand: false });
+    vi.advanceTimersByTime(500);
+    expect(body.scrollTop).toBe(elapsed > 200 ? 550 : 600);
+  });
+
   it("cancels the previous reveal's delayed centering", () => {
     vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
     setup(false);

@@ -2965,6 +2965,7 @@ export const createAgentExperience = (
   // renders can morph or replace the bubble before the highlight expires.
   const revealedToolCalls = new Map<string, number>();
   let revealCenterTimer: number | undefined;
+  let revealScrollGeneration = 0;
   const refreshRevealedToolCalls = () => {
     messagesWrapper.querySelectorAll<HTMLElement>(".persona-tool-bubble[data-tool-call-id]").forEach((bubble) => {
       bubble.toggleAttribute("data-persona-revealed", revealedToolCalls.has(bubble.dataset.messageId!));
@@ -5120,6 +5121,9 @@ export const createAgentExperience = (
   // look at the scroll event.
   let readerEngagedThisTurn = false;
   const markReaderEngaged = () => {
+    // Reader input invalidates only reveal scrolling, including its settle pass.
+    // The animation checks this generation before its next scroll write.
+    revealScrollGeneration++;
     readerEngagedThisTurn = true;
     revealTranscriptScrollbar();
   };
@@ -13221,7 +13225,9 @@ export const createAgentExperience = (
 
       markReaderEngaged();
       pauseAutoScroll();
+      const revealGeneration = revealScrollGeneration;
       const anchor = header ?? bubble;
+      const shouldContinue = () => !destroyed && revealGeneration === revealScrollGeneration && body.contains(anchor);
       const reduceMotion = typeof window.matchMedia === "function" &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const targetTop = () => {
@@ -13229,7 +13235,7 @@ export const createAgentExperience = (
         return Math.max(0, Math.min(raw, getScrollBottomOffset(body)));
       };
       const center = () => {
-        if (destroyed || !body.contains(anchor)) return;
+        if (!shouldContinue()) return;
         // Use the same programmatic-scroll tracking as automatic following so
         // centering near the bottom cannot be mistaken for reader intent.
         if (reduceMotion) {
@@ -13238,7 +13244,7 @@ export const createAgentExperience = (
           body.scrollTop = targetTop();
           lastScrollTop = body.scrollTop;
           isAutoScrolling = false;
-        } else animateScrollTo(body, targetTop, REVEAL_SETTLE_MS);
+        } else animateScrollTo(body, targetTop, REVEAL_SETTLE_MS, shouldContinue);
       };
       window.clearTimeout(revealCenterTimer);
       center();

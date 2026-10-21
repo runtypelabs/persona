@@ -7,3 +7,5 @@ Add `controller.revealToolCall(toolCallId, { expand?, highlightMs? })`, which op
 Reveal highlights survive streaming updates for their configured duration, and revealing the same tool again restarts the highlight timer.
 
 Revealing keeps automatic following paused even when centering reaches the bottom, and a newer reveal cancels any pending centering from the previous call.
+
+Reader input cancels reveal scrolling and its pending centering pass without removing the highlight.
