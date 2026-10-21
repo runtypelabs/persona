@@ -4,6 +4,7 @@ import "./style.css";
 import { initAgentWidget, registerIcons, type AgentWidgetConfig, type AgentWidgetMessage } from "@runtypelabs/persona";
 import { assistantIcons, assistantPresets, createAssistantPreset } from "../../apps/web/src/assistant-presets";
 import { personaLogoSvg } from "./logo";
+import { frameworks } from "./frameworks";
 
 registerIcons(assistantIcons);
 
@@ -59,9 +60,10 @@ const states: State[] = [
   { name: "terminal", v5: true, glow: "#22c55e", brand: { accent: "#22c55e", neutral: "#101916", font: "JetBrains Mono", radius: "none", density: "compact", elevation: "subtle" } },
 ];
 // Code edit for state k starts at CHANGE[k]; the widget wipe follows WIPE_LAG later.
-const CHANGE = [0, 1.62, 2.5, 3.38, 4.26];
-const WIPE_LAG = 0.3, WIPE_DUR = 0.4;
-const T = { s2In: 1.0, s2Out: 5.3, s3In: 5.28, s3Out: 8.42, outroIn: 8.5 };
+const CHANGE = [0, 3.2, 4.3, 5.35, 6.4];
+const WIPE_LAG = 0.3, WIPE_DUR = 0.45;
+const DURATION = 20;
+const T = { introOut: 2.55, s2In: 2.35, s2Out: 7.6, s3In: 7.55, s3Out: 14.5, s4In: 14.4, s4Out: 17.05, outroIn: 17.0 };
 
 function defaultsConfig(s: State): AgentWidgetConfig {
   return {
@@ -181,15 +183,18 @@ function glowColor(t: number) {
   return mixHex(states[Math.max(0, k - 1)].glow, states[k].glow, p);
 }
 
-// ── scene 3: five assistant styles ─────────────────────────────────────────
+// ── scene 3: five assistant styles, each sending a prompt ───────────────────
 const PANEL_GAP = 1100;
-const prompts: Record<string, string> = {
-  chatgpt: "Plan a launch for Persona v5",
-  claude: "Draft the v5 announcement",
-  gemini: "Summarize the release notes",
-  copilot: "Compare chat widget options",
-  perplexity: "What’s new in Persona v5?",
+const chats: Record<string, { prompt: string; reply: string }> = {
+  chatgpt: { prompt: "Plan a launch for Persona v5", reply: "Here’s a tight plan:\n\n1. **Tease** it with a short demo video\n2. **Point** people at the v5 preview\n3. **Ship** `v5Defaults` to everyone" },
+  claude: { prompt: "Draft the v5 announcement", reply: "**The Persona v5 preview is here.** Quieter activity, a refreshed composer, and six brand fields that restyle everything." },
+  gemini: { prompt: "Summarize the release notes", reply: "Three highlights: compact tool activity, clear approval outcomes, and brand presets in six fields." },
+  copilot: { prompt: "Compare chat widget options", reply: "Persona is plain JavaScript, so it drops into any stack without framework lock-in." },
+  perplexity: { prompt: "What’s new in Persona v5?", reply: "The v5 preview adds new defaults, a refreshed composer, approval outcomes and one-line brand theming." },
 };
+// The camera arrives at panel i at ARRIVE[i], drifts while it types, sends and replies, then moves on.
+const ARRIVE = [8.1, 9.3, 10.5, 11.7, 12.9];
+const DWELL = 0.72;
 const cam3 = $("#cam3");
 const panels = assistantPresets.map((preset, i) => {
   const panel = el("div", "panel");
@@ -198,48 +203,102 @@ const panels = assistantPresets.map((preset, i) => {
   frame.append(host);
   panel.append(el("div", "panel-label", `<i></i>${preset.name.toUpperCase()} <em>STYLE</em>`), frame);
   cam3.append(panel);
-  const config = createAssistantPreset(preset.id, () => {});
-  initAgentWidget({ target: host, config });
-  return { panel, host, id: preset.id, x: i * PANEL_GAP, z: i % 2 ? -90 : 0 };
+  const widget = initAgentWidget({ target: host, config: createAssistantPreset(preset.id, () => {}) });
+  return { panel, host, widget, id: preset.id, x: i * PANEL_GAP, z: i % 2 ? -90 : 0, sent: false, replyLen: -1 };
 });
 
-const s3Focus = track([[5.28, -1500], [5.78, 0], [6.22, 1 * PANEL_GAP], [6.64, 2 * PANEL_GAP], [7.06, 3 * PANEL_GAP], [7.5, 4 * PANEL_GAP], [8.42, 2 * PANEL_GAP]]);
-const s3Z = track([[5.28, -520], [5.8, -130], [7.5, -170], [8.42, -4300]]);
-const s3RY = track([[5.28, -30], [5.85, -16], [7.5, -13], [8.4, -2]]);
-const s3RX = track([[5.28, 9], [7.5, 6], [8.4, 2]]);
-const typeAt = [5.62, 6.08, 6.5, 6.92, 7.34];
+const focusKeys: [number, number][] = [[7.55, -1500]];
+ARRIVE.forEach((a, i) => focusKeys.push([a, i * PANEL_GAP - 30], [a + DWELL, i * PANEL_GAP + 30]));
+const lastDwell = ARRIVE[4] + DWELL;
+focusKeys.push([14.25, 2 * PANEL_GAP]);
+const s3Focus = track(focusKeys);
+const s3Z = track([[7.55, -520], [8.1, -130], [lastDwell, -170], [14.25, -4300]]);
+const s3RY = track([[7.55, -30], [8.15, -16], [lastDwell, -12], [14.25, -2]]);
+const s3RX = track([[7.55, 9], [lastDwell, 6], [14.25, 2]]);
 
 function renderS3(t: number) {
   const f = s3Focus(t);
   cam3.style.transform = `translate3d(0, 70px, ${s3Z(t).toFixed(2)}px) rotateX(${s3RX(t).toFixed(3)}deg) rotateY(${s3RY(t).toFixed(3)}deg) translate3d(${(-f).toFixed(2)}px, 0, 0)`;
   panels.forEach((p, i) => {
     p.panel.style.transform = `translate3d(${p.x}px, 0, ${p.z}px) translate(-50%, -50%)`;
-    // Type the prompt as the camera arrives; the send button appears with the draft.
+    const { prompt, reply } = chats[p.id];
+    const typeAt = ARRIVE[i] - 0.22, sendAt = ARRIVE[i] + 0.3, replyAt = sendAt + 0.1;
     const input = p.host.querySelector<HTMLTextAreaElement>("textarea");
-    if (!input) return;
-    const text = prompts[p.id];
-    const n = Math.round(text.length * prog(t, typeAt[i], typeAt[i] + 0.5));
-    const want = text.slice(0, n);
-    if (input.value !== want) { input.value = want; input.dispatchEvent(new Event("input", { bubbles: true })); }
+    if (input) {
+      // Type the prompt as the camera arrives; the send button appears with the draft.
+      const want = t >= sendAt ? "" : prompt.slice(0, Math.round(prompt.length * prog(t, typeAt, typeAt + 0.45)));
+      if (input.value !== want) { input.value = want; input.dispatchEvent(new Event("input", { bubbles: true })); }
+    }
+    const epoch = Date.parse("2026-10-21T16:00:00Z");
+    if (t >= sendAt && !p.sent) {
+      p.sent = true;
+      p.widget.injectTestMessage({ type: "message", message: { id: "u", role: "user", content: prompt, createdAt: new Date(epoch).toISOString(), sequence: 0 } });
+    }
+    if (t >= replyAt) {
+      // Stream the reply word by word on the virtual clock.
+      const words = reply.split(/(?<=\s)/);
+      const n = Math.round(words.length * easeOut3(prog(t, replyAt, replyAt + 0.75)));
+      if (n !== p.replyLen) {
+        p.replyLen = n;
+        p.widget.injectTestMessage({ type: "message", message: { id: "a", role: "assistant", content: words.slice(0, n).join(""), streaming: n < words.length, createdAt: new Date(epoch + 100).toISOString(), sequence: 1 } });
+      }
+    }
   });
   return f;
 }
 
+// ── scene 4: any framework ─────────────────────────────────────────────────
+const cam4 = $("#cam4");
+const TILE_W = 236, TILE_H = 220, TILE_GAP = 26;
+const tiles = [...frameworks.map(fw => ({ html: `${fw.svg}<span>${fw.name}</span>`, cls: fw.id === "eve" ? "tile wide" : "tile" })),
+  { html: "<b>+</b><span>any SSE<br />backend</span>", cls: "tile more" }].map((spec, i) => {
+  const tile = el("div", spec.cls, spec.html);
+  cam4.append(tile);
+  const c = i % 6, r = Math.floor(i / 6);
+  return { tile, c, r, x: (c - 2.5) * (TILE_W + TILE_GAP), y: (r - 0.5) * (TILE_H + TILE_GAP) + 70 };
+});
+const s4RY = track([[T.s4In, 26], [T.s4Out, -10]]);
+const s4RX = track([[T.s4In, 24], [15.2, 15], [T.s4Out, 10]]);
+const s4Z = track([[T.s4In, -700], [15.1, -260], [T.s4Out, -60]]);
+
+function renderS4(t: number) {
+  const vis = easeOut3(prog(t, T.s4In, T.s4In + 0.25)) * (1 - easeIn3(prog(t, T.s4Out - 0.2, T.s4Out + 0.05)));
+  setOpacity("#s4", vis);
+  if (vis <= 0) return;
+  cam4.style.transform = `translate3d(0, 0, ${s4Z(t).toFixed(2)}px) rotateX(${s4RX(t).toFixed(3)}deg) rotateY(${s4RY(t).toFixed(3)}deg)`;
+  // A teal highlight sweeps across the grid once the tiles have landed.
+  const sweep = lerp(-1.5, 7.5, prog(t, 15.5, 16.6));
+  tiles.forEach(({ tile, c, r, x, y }, i) => {
+    const d = T.s4In + 0.15 + (c + r) * 0.07;
+    const p = prog(t, d, d + 0.55), e = easeOutBack(p);
+    const float = Math.sin(t * 2.1 + i * 0.9) * 10;
+    tile.style.transform = `translate3d(${x}px, ${y}px, ${(lerp(-500, 0, easeOut3(p)) + float).toFixed(2)}px) rotateX(${lerp(-95, 0, e).toFixed(2)}deg) translate(-50%, -50%)`;
+    tile.style.opacity = String(clamp(p * 2.5));
+    const glow = clamp(1 - Math.abs(c + r * 0.5 - sweep) / 1.2);
+    tile.style.borderColor = glow > 0.01 ? `rgba(38, 254, 220, ${(0.12 + 0.75 * glow).toFixed(3)})` : "";
+    tile.style.color = glow > 0.01 ? `rgb(${mixHex("#fef9f1", "#26fedc", glow).join(",")})` : "";
+  });
+}
+
 // ── master timeline ────────────────────────────────────────────────────────
 const cam2 = $("#cam2"), device = $("#device");
-const s2RY = track([[1.0, 40], [1.5, 26], [5.0, 13], [5.35, 6]]);
-const s2RX = track([[1.0, 14], [1.5, 9], [5.35, 4]]);
-const s2Z = track([[1.0, -900], [1.55, -330], [5.0, -170], [5.35, -110]]);
-const s2X = track([[1.0, 260], [1.55, 120], [5.0, -40], [5.32, 1800]]);
-const s2Y = track([[1.0, 40], [5.35, -10]]);
+const s2RY = track([[2.35, 40], [2.85, 26], [7.25, 13], [7.62, 6]]);
+const s2RX = track([[2.35, 14], [2.85, 9], [7.62, 4]]);
+const s2Z = track([[2.35, -900], [2.9, -330], [7.25, -170], [7.62, -110]]);
+const s2X = track([[2.35, 260], [2.9, 120], [7.25, -40], [7.6, 1800]]);
+const s2Y = track([[2.35, 40], [7.62, -10]]);
 
 function setOpacity(sel: string, o: number) { const e = $(sel); e.style.opacity = String(clamp(o)); e.style.visibility = o <= 0.001 ? "hidden" : "visible"; }
+const reveal = (sel: string, t: number, a: number, dy = 24) => {
+  const e = $(sel), p = easeOutExpo(prog(t, a, a + 0.5));
+  e.style.opacity = String(p); e.style.transform = `translateY(${lerp(dy, 0, p)}px)`;
+};
 
 function renderIntro(t: number) {
   const root = $("#intro");
   const lock = root.querySelector<HTMLElement>(".intro-lockup")!;
-  const exit = easeIn3(prog(t, 0.95, 1.22));
-  lock.style.transform = `scale(${lerp(0.94, 1.0, easeOut3(prog(t, 0, 1.0))) * lerp(1, 1.9, exit)})`;
+  const exit = easeIn3(prog(t, T.introOut - 0.3, T.introOut));
+  lock.style.transform = `scale(${lerp(0.94, 1.0, easeOut3(prog(t, 0, 2.2))) * lerp(1, 1.9, exit)})`;
   lock.style.filter = exit > 0 ? `blur(${(exit * 10).toFixed(2)}px)` : "none";
   setOpacity("#intro", 1 - exit);
   const svg = root.querySelector("svg")!;
@@ -255,9 +314,13 @@ function renderIntro(t: number) {
   const word = svg.querySelector<SVGPathElement>(".logo-word")!;
   word.style.opacity = String(wp);
   word.style.transform = `translateX(${lerp(-3, 0, wp)}px)`;
-  const pill = $("#intro-pill"), pp = easeOutExpo(prog(t, 0.5, 0.85));
-  pill.style.opacity = String(pp);
-  pill.style.transform = `translateY(${lerp(30, 0, pp)}px)`;
+  reveal("#intro-pill", t, 0.5, 30);
+  // What it is, spelled out: the main line wipes on, the sub line follows.
+  const main = root.querySelector<HTMLElement>(".tagline-main")!;
+  const mp = easeOutExpo(prog(t, 0.8, 1.45));
+  main.style.clipPath = `inset(-10% ${((1 - mp) * 100).toFixed(2)}% -20% 0)`;
+  main.style.transform = `translateY(${lerp(14, 0, mp)}px)`;
+  reveal(".tagline-sub", t, 1.15, 16);
 }
 
 function renderS2(t: number) {
@@ -282,37 +345,49 @@ function renderHud(sel: string, t: number, a: number, b: number) {
   h1.style.clipPath = `inset(0 ${((1 - hp) * 100).toFixed(2)}% -20% 0)`;
 }
 
+// Official Runtype mark: an 8×8 grid of faint cells with nine solid cells forming the "r".
+const R_CELLS = [[3, 3], [5, 3], [6, 3], [3, 4], [4, 4], [7, 4], [3, 5], [3, 6], [3, 7]];
+$("#runtype-mark").innerHTML = `<svg viewBox="0 0 8 8" aria-label="Runtype">${Array.from({ length: 64 }, (_, i) => {
+  const c = i % 8, r = Math.floor(i / 8), solid = R_CELLS.findIndex(([x, y]) => x === c && y === r);
+  return `<rect x="${c + 0.1}" y="${r + 0.1}" width="0.8" height="0.8" fill="currentColor" fill-opacity="0.124"${solid >= 0 ? ` data-solid="${solid}"` : ""}/>`;
+}).join("")}</svg>`;
+const solidCells = [...document.querySelectorAll<SVGRectElement>("#runtype-mark [data-solid]")];
+
 function renderOutro(t: number) {
-  const vis = easeOut3(prog(t, T.outroIn, T.outroIn + 0.3));
+  const a = T.outroIn;
+  const vis = easeOut3(prog(t, a, a + 0.3));
   setOpacity("#outro", vis);
   if (vis <= 0) return;
   const logo = $("#outro-logo");
-  const lp = easeOutExpo(prog(t, T.outroIn, T.outroIn + 0.7));
+  const lp = easeOutExpo(prog(t, a, a + 0.7));
   logo.style.transform = `scale(${lerp(1.25, 1, lp)})`;
   logo.style.filter = lp < 1 ? `blur(${((1 - lp) * 8).toFixed(2)}px)` : "none";
   const svg = logo.querySelector("svg")!;
   svg.querySelector<SVGPathElement>(".logo-bubble")!.style.strokeDashoffset = "0";
   svg.querySelector<SVGLineElement>(".logo-bar")!.style.strokeDashoffset = "0";
-  const reveal = (sel: string, a: number) => {
-    const e = $(sel), p = easeOutExpo(prog(t, a, a + 0.5));
-    e.style.opacity = String(p); e.style.transform = `translateY(${lerp(24, 0, p)}px)`;
-  };
-  reveal("#outro-row", T.outroIn + 0.25);
-  reveal("#outro-url", T.outroIn + 0.38);
-  reveal("#built-by", T.outroIn + 0.5);
+  reveal("#outro-row", t, a + 0.25);
+  reveal("#outro-url", t, a + 0.38);
+  reveal("#built-by", t, a + 0.6);
+  // The "r" lights up cell by cell, Runtype's own dot-matrix reveal.
+  solidCells.forEach((cell) => {
+    const k = Number(cell.dataset.solid);
+    cell.setAttribute("fill-opacity", (lerp(0.124, 1, easeOut3(prog(t, a + 0.85 + k * 0.045, a + 1.05 + k * 0.045)))).toFixed(3));
+  });
   // Slow push-in through the hold.
-  $("#outro").querySelector<HTMLElement>(".outro-lockup")!.style.transform = `scale(${lerp(1, 1.035, prog(t, T.outroIn, 10))})`;
+  $("#outro").querySelector<HTMLElement>(".outro-lockup")!.style.transform = `scale(${lerp(1, 1.035, prog(t, a, DURATION))})`;
 }
 
 function renderBg(t: number, focus: number) {
   const floor = $("#floor");
-  const s3 = clamp(prog(t, T.s3In, T.s3In + 0.4));
-  floor.style.backgroundPosition = `${(-focus * 0.35 * s3 - s2X(t) * 0.35 * (1 - s3)).toFixed(1)}px ${(t * 140).toFixed(1)}px`;
+  // Blend each scene's lateral motion into the next so the grid never jumps.
+  const w3 = prog(t, T.s3In, T.s3In + 0.4), w4 = prog(t, T.s4In, T.s4In + 0.4);
+  const x = lerp(lerp(-s2X(t) * 0.35, -focus * 0.35, w3), -s4RY(t) * 30, w4);
+  floor.style.backgroundPosition = `${x.toFixed(1)}px ${(t * 140).toFixed(1)}px`;
   const [r, g, b] = t < T.s3In ? glowColor(t) : [38, 254, 220];
   const glow = $("#glow");
   const amp = 0.18 + 0.05 * Math.sin(t * 2.2);
   glow.style.background = `radial-gradient(closest-side, rgba(${r},${g},${b},${amp}), rgba(${r},${g},${b},0.04) 55%, transparent)`;
-  glow.style.transform = `translate(${t < T.s3In ? 160 : 0}px, 0) scale(${lerp(0.9, 1.15, (Math.sin(t * 0.9) + 1) / 2)})`;
+  glow.style.transform = `translate(${t > T.s2In && t < T.s3In ? 160 : 0}px, 0) scale(${lerp(0.9, 1.15, (Math.sin(t * 0.9) + 1) / 2)})`;
 }
 
 // Persona's own CSS animations/transitions run on virtual time: each one is
@@ -329,28 +404,26 @@ function syncAnimations(t: number) {
 function seek(t: number) {
   renderIntro(t);
   renderS2(t);
-  const s3vis = easeOut3(prog(t, T.s3In, T.s3In + 0.2)) * (1 - easeIn3(prog(t, T.s3Out - 0.15, T.s3Out + 0.12)));
+  const s3vis = easeOut3(prog(t, T.s3In, T.s3In + 0.2)) * (1 - easeIn3(prog(t, T.s3Out - 0.15, T.s3Out + 0.05)));
   setOpacity("#s3", s3vis);
   const focus = renderS3(t);
-  renderHud("#hud2", t, 1.18, 3.7);
-  renderHud("#hud3", t, 5.6, 7.55);
+  renderS4(t);
+  renderHud("#hud2", t, 2.55, 5.0);
+  renderHud("#hud3", t, 7.8, 10.6);
+  renderHud("#hud4", t, 14.55, 16.85);
   renderOutro(t);
   renderBg(t, focus);
   syncAnimations(t);
 }
 
-declare global { interface Window { __seek: (t: number) => Promise<void>; __ready: boolean } }
+declare global { interface Window { __seek: (t: number) => Promise<void>; __ready: boolean; __duration: number } }
+window.__duration = DURATION;
 window.__seek = async (t: number) => {
   seek(t);
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 };
 document.fonts.ready.then(() => { seek(0); window.__ready = true; });
 
-// Preview mode: ?play scrubs in real time; ?t=3.2 freezes on a frame.
+// Preview mode: ?t=3.2 freezes on a frame.
 const params = new URLSearchParams(location.search);
 if (params.has("t")) document.fonts.ready.then(() => setTimeout(() => window.__seek(Number(params.get("t"))), 600));
-if (params.has("play")) {
-  const t0 = performance.now();
-  const loop = () => { seek(((performance.now() - t0) / 1000) % 10); requestAnimationFrame(loop); };
-  document.fonts.ready.then(() => setTimeout(loop, 600));
-}

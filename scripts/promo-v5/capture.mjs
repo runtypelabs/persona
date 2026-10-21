@@ -16,7 +16,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) =>
 const url = args.url ?? "http://localhost:5199/";
 const scale = Number(args.scale ?? 1);
 const fps = Number(args.fps ?? 60);
-const duration = Number(args.duration ?? 10);
+const duration = Number(args.duration ?? 20);
 const outDir = args.dir ?? "out";
 mkdirSync(outDir, { recursive: true });
 

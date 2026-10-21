@@ -79,7 +79,7 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
 .panel { width: 960px; height: 600px; }
 .panel-frame { position: absolute; inset: 0; overflow: hidden; border-radius: 18px; border: 1px solid rgba(254, 249, 241, 0.14);
   box-shadow: 0 50px 120px rgba(0, 0, 0, 0.6); }
-.panel-frame > .whost { position: absolute; inset: 0; display: flex; }
+.panel-frame > .whost { position: absolute; inset: 0; display: flex; zoom: 1.14; }
 .panel-label { position: absolute; left: 0; top: -74px; display: flex; align-items: center; gap: 14px;
   font: 600 26px/1 var(--mono); letter-spacing: 0.14em; color: var(--paper); }
 .panel-label i { width: 12px; height: 12px; background: var(--teal); box-shadow: 0 0 14px var(--teal); }
@@ -98,10 +98,29 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
 .outro-code { font: 500 26px/1 var(--mono); color: #cfccc4; padding: 13px 20px; border: 1px solid var(--hair); background: rgba(20, 20, 19, 0.8); }
 .outro-code b { color: var(--teal); }
 .outro-url { font: 500 28px/1 var(--mono); color: var(--muted); letter-spacing: 0.04em; margin-top: -10px; }
-.built-by { position: absolute; left: 0; right: 0; bottom: 74px; display: flex; align-items: baseline; justify-content: center; gap: 18px; }
-.built-by span:first-child { font: 500 22px/1 var(--mono); color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase; }
+.built-by { position: absolute; left: 0; right: 0; bottom: 70px; display: flex; align-items: center; justify-content: center; gap: 26px; }
+.built-label { font: 500 22px/1 var(--mono); color: var(--muted); letter-spacing: 0.16em; text-transform: uppercase; }
+.runtype-lockup { display: inline-flex; align-items: center; gap: 16px; color: var(--paper); }
+#runtype-mark { width: 60px; height: 60px; display: block; }
+#runtype-mark svg { width: 100%; height: 100%; display: block; }
 .runtype-wordmark { font-family: 'Runtype Wordmark', serif; font-style: normal; font-weight: 400; font-synthesis: none;
-  font-kerning: none; letter-spacing: 0; white-space: nowrap; font-size: 46px; line-height: 1; color: var(--paper); }
+  font-kerning: none; letter-spacing: 0; white-space: nowrap; font-size: 64px; line-height: 1; color: var(--paper); }
 
 /* Chip icons size via an SVG attribute that cannot take var(); size them here. */
 .persona-suggestion__icon { width: var(--persona-suggestion-icon-size, 16px); height: var(--persona-suggestion-icon-size, 16px); }
+
+/* ── Intro tagline ── */
+.tagline { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-top: 6px; }
+.tagline-main { font: 800 54px/1.05 var(--display); letter-spacing: -0.015em; color: var(--paper); }
+.tagline-sub { font: 500 22px/1 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+
+/* ── Framework tiles ── */
+.tile { width: 236px; height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+  background: rgba(22, 22, 20, 0.92); border: 1px solid var(--hair); color: var(--paper);
+  box-shadow: 12px 12px 0 -1px rgba(38, 254, 220, 0.08), 0 30px 80px rgba(0, 0, 0, 0.5); backface-visibility: hidden; }
+.tile svg { width: 76px; height: 76px; display: block; }
+.tile.wide svg { width: 150px; height: 48px; }
+.tile span { font: 500 19px/1 var(--mono); letter-spacing: 0.06em; color: #cfccc4; }
+.tile.more { border-style: dashed; border-color: rgba(38, 254, 220, 0.5); background: rgba(38, 254, 220, 0.05); }
+.tile.more b { font: 700 54px/1 var(--mono); color: var(--teal); }
+.tile.more span { color: var(--teal); text-align: center; line-height: 1.35; }
