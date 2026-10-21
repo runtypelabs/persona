@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 import pageHtml from "../v5-preview.html?raw";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AgentWidgetMessage } from "@runtypelabs/persona";
 const mocks = vi.hoisted(() => ({ init: vi.fn(), inject: vi.fn(), destroy: vi.fn(), upsertArtifact: vi.fn() }));
 vi.mock("@runtypelabs/persona", () => ({ initAgentWidget: mocks.init }));
 vi.mock("./examples-nav", () => ({ renderExamplesShell: vi.fn() }));
 vi.mock("./demo-echo-fetch", () => ({ createDemoEchoFetch: () => vi.fn() }));
 async function start() {
   vi.resetModules();
-  mocks.init.mockReturnValue({ injectTestMessage: mocks.inject, destroy: mocks.destroy, on: vi.fn(), upsertArtifact: mocks.upsertArtifact });
+  mocks.init.mockReturnValue({ injectTestMessage: mocks.inject, destroy: mocks.destroy, on: vi.fn(), upsertArtifact: mocks.upsertArtifact,
+    getMessages: () => [...new Map(mocks.inject.mock.calls.map(([event]) => [event.message.id, event.message])).values()],
+  });
   document.body.innerHTML = pageHtml;
   await import("./v5-preview");
 }
@@ -18,6 +21,26 @@ function choose(id: string, value: string) {
 }
 afterEach(() => { window.dispatchEvent(new Event("pagehide")); vi.useRealTimers(); vi.clearAllMocks(); document.body.innerHTML = ""; });
 describe("V5 preview", () => {
+  it.each(["streaming", "actions", "activity"])("preserves the %s scene on cached Back while stopping its sample transitions", async scene => {
+    vi.useFakeTimers();
+    await start();
+    if (scene !== "activity") choose("scene", scene);
+    document.querySelector<HTMLButtonElement>("#v5-stream")!.click();
+    const mounts = mocks.init.mock.calls.length;
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    const count = mocks.inject.mock.calls.length;
+    expect(mocks.destroy).toHaveBeenCalledTimes(mounts - 1);
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    vi.advanceTimersByTime(10000);
+    expect(mocks.init).toHaveBeenCalledTimes(mounts);
+    expect(mocks.inject).toHaveBeenCalledTimes(count);
+    const messages: AgentWidgetMessage[] = mocks.init.mock.results[mocks.init.mock.results.length - 1].value.getMessages();
+    expect(messages.some(message => message.streaming || message.toolCall?.status === "running" || message.reasoning?.status === "streaming")).toBe(false);
+    expect(document.querySelector<HTMLButtonElement>("#v5-stream")!.disabled).toBe(false);
+    document.querySelector<HTMLButtonElement>("#v5-stream")!.click();
+    expect(mocks.inject.mock.calls.length).toBeGreaterThan(count);
+  });
+
   it("compares scroll glyphs, transitions, and an application-owned animation hook", async () => {
     await start();
     choose("scene", "scroll-control");

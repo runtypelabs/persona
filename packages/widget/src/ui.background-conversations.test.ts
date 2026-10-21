@@ -43,6 +43,12 @@ it.each([false, true])("restores the draft and emits conversation-scoped backgro
   expect(widget.getComposerState().text).toBe("");
   expect(states).toHaveBeenCalledWith(expect.objectContaining({ conversationId: "a", status: "running", detached: true }), expect.objectContaining({ instanceId: expect.any(String) }));
   widget.setMessage("Draft B");
+  window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+  window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+  // Cached restoration must not discard A's detached replay checkpoint or
+  // attach a foreground reader until the visitor opens that conversation.
+  expect(widget.getComposerState().text).toBe("Draft B");
+  expect(reconnect).not.toHaveBeenCalled();
   await widget.openConversation("a");
   await vi.waitFor(() => expect(widget.getMessages().filter(message => message.content === "Partial reply")).toHaveLength(1));
   expect(widget.getComposerState().text).toBe("Follow-up draft A");

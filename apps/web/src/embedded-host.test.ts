@@ -22,6 +22,23 @@ function choose(id: string, value: string) {
 }
 afterEach(() => { window.dispatchEvent(new Event("pagehide")); vi.clearAllMocks(); document.body.innerHTML = ""; });
 describe("embedded host composer scenarios", () => {
+  it("retains both assistants and their host controls through repeated cached restores", async () => {
+    await start();
+    const [research, support] = mocks.init.mock.results.map(result => result.value);
+    for (let cycle = 0; cycle < 2; cycle++) {
+      window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      choose("scheme", "dark");
+      expect(research.update.mock.lastCall?.[0]).toEqual({ colorScheme: "dark" });
+      expect(research.destroy).not.toHaveBeenCalled();
+      expect(support.destroy).not.toHaveBeenCalled();
+      expect(mocks.init).toHaveBeenCalledTimes(2);
+    }
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
+    expect(research.destroy).toHaveBeenCalledOnce();
+    expect(support.destroy).toHaveBeenCalledOnce();
+  });
+
   it("compares loaders per assistant without remounting or changing reply indicators", async () => {
     await start();
     const research = mocks.init.mock.results[0].value;
@@ -71,7 +88,7 @@ describe("embedded host composer scenarios", () => {
     expect(close).toHaveBeenCalledTimes(1);
     expect(dialog.open).toBe(false);
     expect(research.moveTo).toHaveBeenLastCalledWith(document.getElementById("research"), { preserveFocus: false });
-    expect(document.getElementById("host-status")!.textContent).toContain("returned to the sidebar");
+    expect(document.getElementById("host-status")!.textContent).toContain("is back in place, with its conversation and draft intact.");
     expect(mocks.init).toHaveBeenCalledTimes(2); expect(research.destroy).not.toHaveBeenCalled();
   });
   it("starts with a quiet stacked reference and compares both V4 arrangements", async () => {

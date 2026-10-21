@@ -5,6 +5,8 @@ import type DOMPurify from "dompurify";
 export type MarkdownParsersModule = {
   Marked: typeof Marked;
   DOMPurify: typeof DOMPurify;
+  /** Optional for compatibility with custom parser loaders. Display-only repairs. */
+  stabilizeStreamingMarkdown?: (source: string) => string;
 };
 
 // Memoization + rejection-retry semantics live in `createChunkLoader`. The

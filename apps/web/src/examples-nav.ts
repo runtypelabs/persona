@@ -376,8 +376,8 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
   {
     slug: "embedded-host",
     href: "/embedded-host.html",
-    title: "Embedded Host APIs",
-    blurb: "Two independent assistants with host controls, instance events, managed slots, and interactive component lifecycles. Runs locally.",
+    title: "Control From Your App",
+    blurb: "Two assistants on one page, driven by your own code: switch conversations, move a widget, and add your own cards. Runs locally.",
     tier: "reference",
     tags: ["embedding", "events", "components"],
     modes: ["inline"],
@@ -486,9 +486,9 @@ export type ExamplesShellOptions = {
  * Mount the persistent top app bar with brand + demo picker + prev/next.
  * Idempotent: safe to call multiple times.
  *
- * Visual contract: a fixed 56px bar at the top of the viewport. Body padding
- * for the bar is reserved by demo-shared.css so first paint already accounts
- * for it (no jump when this runs).
+ * Visual contract: a fixed bar on desktop and an in-flow bar on mobile/tablet.
+ * Space for both layouts is reserved by demo-shared.css before this deferred
+ * module runs, so inserting the header does not move the content.
  */
 export function renderExamplesShell(
   currentSlug?: string,

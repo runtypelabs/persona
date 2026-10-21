@@ -1,7 +1,9 @@
+import { registerDemoPageLifecycle } from "./demo-page-lifecycle";
 import "@runtypelabs/persona/widget.css";
 import "./assistant-composers.css";
-import { initAgentWidget, registerIcons } from "@runtypelabs/persona";
+import { initAgentWidget, registerIcons, markdownPostprocessor, preprocessStreamingMarkdown } from "@runtypelabs/persona";
 import { renderExamplesShell } from "./examples-nav";
+import { bindControlsToggle } from "./controls-toggle";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { createDemoVoiceProvider } from "./demo-voice-provider";
 import { createDemoDictationProvider } from "./demo-dictation-provider";
@@ -10,6 +12,9 @@ import { assistantIcons, assistantPresets, createAssistantPreset } from "./assis
 registerIcons(assistantIcons);
 renderExamplesShell();
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+bindControlsToggle(element("lab-controls-toggle"));
+const markdownReply = "## Get started with Persona\n\nPersona is a **customizable chat UI** built with *plain JavaScript*. The Runtype CLI provides a guided setup with `persona init`.\n\n| Feature | What you can build |\n| --- | --- |\n| Streaming Markdown | Replies with formatted text, tables, and code |\n| Themes and layouts | Floating, embedded, or fullscreen chat |\n| Tools and voice | Tool activity, approval prompts, and voice conversations |\n\nTo connect Persona to Runtype, run:\n\n```sh\nnpx @runtypelabs/cli@latest persona init\n```\n\nSign in when prompted. The CLI creates an agent and client token, then provides an embed snippet. Paste that snippet into your site to add the widget.\n\nExplore more options in [the Persona docs](https://persona-chat.dev).";
+
 let selected = "claude";
 let widget: ReturnType<typeof initAgentWidget> | undefined;
 let code = "";
@@ -23,6 +28,19 @@ function mount() {
   widget?.destroy();
   const preset = assistantPresets.find(p => p.id === selected)!;
   const config = createAssistantPreset(selected, notice);
+  if (element<HTMLSelectElement>("lab-reply").value === "custom") {
+    config.onLinkClick = ({ anchor, preventDefault }) => {
+      if (anchor.getAttribute("href") !== "/account/orders/12345") return;
+      preventDefault();
+      window.alert("This is a sample order link. In your app, it would open the order details page.");
+    };
+    config.postprocessMessage = ({ text, streaming }) => {
+      let transformed = text.replace(/\[\[order:(\d+)\]\]/g, "[Order #$1](/account/orders/$1)");
+      // Custom syntax belongs to this callback; hold an unfinished order token.
+      if (streaming) transformed = transformed.replace(/\[\[[^\]]*\]?$/, "");
+      return markdownPostprocessor(preprocessStreamingMarkdown(transformed, streaming));
+    };
+  }
   const display = element<HTMLSelectElement>("lab-dictation-display").value as "transcript" | "waveform" | "inline";
   config.future = { ...config.future, v5Defaults: element<HTMLSelectElement>("lab-defaults").value === "v5" };
   config.voiceRecognition = {
@@ -50,10 +68,14 @@ function mount() {
   const exportConfig = { ...config, plugins: [], composer: { ...config.composer, actions: config.composer?.actions?.filter(action => action.presentation !== "overflow") } };
   code = JSON.stringify(exportConfig, (_key, value: unknown) => {
     if (typeof value !== "function") return value;
-    functions.push(value.toString());
+    functions.push(_key === "postprocessMessage" ? `({ text, streaming }) => {
+    let transformed = text.replace(/\\[\\[order:(\\d+)\\]\\]/g, "[Order #$1](/account/orders/$1)");
+    if (streaming) transformed = transformed.replace(/\\[\\[[^\\]]*\\]?$/, "");
+    return markdownPostprocessor(preprocessStreamingMarkdown(transformed, streaming));
+  }` : value.toString());
     return `__CALLBACK_${functions.length - 1}__`;
   }, 2).replace(/"__CALLBACK_(\d+)__"/g, (_match, index: string) => functions[Number(index)]);
-  code = `import { registerIcons } from "@runtypelabs/persona";\nregisterIcons(${JSON.stringify(assistantIcons, null, 2)});\n\n// Demo callback; replace with your host integration.\nconst notice = (message) => console.info(message);\n\nconst config = ${code};\n\n// Copy the showcase helper alongside this example for the local submenu demo.\n// Replace its callbacks with your own integrations.\nconst menuDemo = createAssistantMenuPreset(${JSON.stringify(selected)}, notice);\nconfig.plugins = menuDemo.plugins;\nconfig.composer.actions.push(...menuDemo.actions);`;
+  code = `import { registerIcons, markdownPostprocessor, preprocessStreamingMarkdown } from "@runtypelabs/persona";\nregisterIcons(${JSON.stringify(assistantIcons, null, 2)});\n\n// Demo callback; replace with your host integration.\nconst notice = (message) => console.info(message);\n\nconst config = ${code};\n\n// Copy the showcase helper alongside this example for the local submenu demo.\n// Replace its callbacks with your own integrations.\nconst menuDemo = createAssistantMenuPreset(${JSON.stringify(selected)}, notice);\nconfig.plugins = menuDemo.plugins;\nconfig.composer.actions.push(...menuDemo.actions);`;
   code = `import { createAssistantMenuPreset } from "./assistant-menu-presets";\n${code}`;
   element("lab-config").textContent = code;
   const voiceProvider = createDemoVoiceProvider();
@@ -102,7 +124,7 @@ function mount() {
       dictation: { ...config.voiceRecognition.dictation, provider: { type: "custom", custom: createDemoDictationProvider } },
     },
     composer: { ...config.composer, actions: actions() },
-    apiUrl: "/assistant-lab-local", customFetch: createDemoEchoFetch({ reply: () => "This is a **local Persona preview**. Your message exercises the real composer and streaming renderer.\n\nTry a longer draft, switch a mode, or narrow the preview to compare how this configuration responds." }),
+    apiUrl: "/assistant-lab-local", customFetch: createDemoEchoFetch({ reply: () => element<HTMLSelectElement>("lab-reply").value === "custom" ? "Your **order update** is ready. Track [[order:12345]] for the latest *delivery details*." : element<HTMLSelectElement>("lab-reply").value === "markdown" ? markdownReply : "This is a **local Persona preview**. Your message exercises the real composer and streaming renderer.\n\nTry a longer draft, switch a mode, or narrow the preview to compare how this configuration responds." }),
   } });
   widget.on("voice:status", ({ status }) => {
     if (!active()) muted = false;
@@ -141,7 +163,7 @@ element("lab-width").addEventListener("change", () => {
   element("lab-stage").style.setProperty("--lab-width", element<HTMLSelectElement>("lab-width").value === "narrow" ? "380px" : selected === "gemini" ? "100%" : `${preset.width + 32}px`);
 });
 element("lab-reset").addEventListener("click", mount);
-for (const id of ["lab-dictation-display", "lab-defaults", "lab-dictation-send"]) element(id).addEventListener("change", mount);
+for (const id of ["lab-dictation-display", "lab-defaults", "lab-dictation-send", "lab-reply"]) element(id).addEventListener("change", mount);
 element("lab-voice").addEventListener("click", () => toggleConversation());
 element("lab-dictate").addEventListener("click", () => toggleDictation());
 element("lab-conversation").addEventListener("click", () => {
@@ -153,5 +175,5 @@ element("lab-copy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(code); notice("Configuration copied, including demo callbacks. Supply your own transport when integrating."); }
   catch { notice("Clipboard is unavailable. Select and copy the configuration below."); }
 });
-window.addEventListener("pagehide", () => widget?.destroy());
+registerDemoPageLifecycle({ destroy: () => widget?.destroy() });
 mount();

@@ -11,9 +11,8 @@ import { isBrowserLocalApproval } from "./utils/restored-browser-state";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
 import type { DictationSession } from "./dictation-session";
 import { usesSessionVoice, usesSessionVoiceForConfig } from "./utils/voice-support";
-import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
+import { escapeHtml, createMarkdownProcessorFromConfig, preprocessStreamingMarkdown } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
-import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
 import { getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { loadClientStream } from "./client-stream-loader";
@@ -817,7 +816,8 @@ export const buildPostprocessor = (
     // displayed entities literally (I'll -> &amp;#39;). Only run the sanitizer when
     // it can actually parse HTML; escapeHtml output is already inert. Checked per
     // render (not once at setup): the chunk lands later and the self-heal re-renders.
-    const parsersReady = getMarkdownParsersSync() !== null;
+    const parsers = getMarkdownParsersSync();
+    const parsersReady = parsers !== null;
     let html: string;
     if (cfg?.postprocessMessage) {
       const out = cfg.postprocessMessage({
@@ -829,10 +829,9 @@ export const buildPostprocessor = (
       // sanitizer's degraded fallback. Honors `sanitize: false` (pass-through) as before.
       html = sanitize ? sanitize(out) : out;
     } else if (markdownProcessor) {
-      // While streaming, normalize tables-in-progress so they render as a real
-      // <table> from the first row with a stable column count (Telegram-style
-      // space reservation). The final, non-streaming render is left untouched.
-      const source = context.streaming ? stabilizeStreamingTables(nextText) : nextText;
+      // Stabilize incomplete Markdown only for display during streaming. The
+      // final render and the stored response always use the original text.
+      const source = preprocessStreamingMarkdown(nextText, context.streaming);
       // Already escapeHtml(text) (single, safe) while parsers are not loaded.
       const out = markdownProcessor(source);
       html = sanitize && parsersReady ? sanitize(out) : out;
@@ -1226,6 +1225,10 @@ export const createAgentExperience = (
     getSessionMetadata,
     updateSessionMetadata,
     emit: eventBus.emit,
+    captureResubmitGuard: () => {
+      const generation = restartGeneration;
+      return () => canRestart(generation);
+    },
     documentRef: typeof document !== "undefined" ? document : null
   });
   actionManager.syncFromMetadata();
@@ -1250,10 +1253,31 @@ export const createAgentExperience = (
   // Track pending resubmit state for injection-triggered resubmit
   // When a handler returns resubmit: true, we wait for injectAssistantMessage()
   // to be called before triggering the actual resubmit (to avoid race conditions)
+  // Cached restoration reuses this controller, so work queued by the old page
+  // lifecycle must remain stale even after pageshow makes the page active again.
+  let restartGeneration = 0;
+  let destroyed = false;
+  const canRestart = (generation: number) =>
+    !destroyed && !pageHiding && generation === restartGeneration;
+  const invalidatePendingRestarts = () => {
+    restartGeneration++;
+    pendingResubmit = false;
+    if (pendingResubmitTimeout !== null) clearTimeout(pendingResubmitTimeout);
+    pendingResubmitTimeout = null;
+  };
+  const scheduleResubmit = () => {
+    const generation = restartGeneration;
+    if (!canRestart(generation)) return;
+    setTimeout(() => {
+      if (canRestart(generation) && !session.isStreaming()) session.continueConversation();
+    }, 100);
+  };
+
   let pendingResubmit = false;
   let pendingResubmitTimeout: ReturnType<typeof setTimeout> | null = null;
 
   const handleResubmitRequested = () => {
+    if (!canRestart(restartGeneration)) return;
     pendingResubmit = true;
     // Clear any existing timeout
     if (pendingResubmitTimeout) {
@@ -5166,11 +5190,14 @@ export const createAgentExperience = (
     const timestamp = Number(rawVoiceState.timestamp ?? 0);
     voiceState.manuallyDeactivated = Boolean(rawVoiceState.manuallyDeactivated);
     if (wasActive && Date.now() - timestamp < VOICE_STATE_RESTORE_WINDOW) {
+      const generation = restartGeneration;
       setTimeout(() => {
+        if (!canRestart(generation)) return;
         if (!voiceState.active) {
           voiceState.manuallyDeactivated = false;
           if (usesSessionVoice(config.voiceRecognition?.provider)) {
             session.toggleVoice().then(() => {
+              if (!canRestart(generation)) return;
               voiceState.active = isSessionVoiceLive();
               emitVoiceState("restore");
               if (voiceState.active) {
@@ -5192,10 +5219,10 @@ export const createAgentExperience = (
     }
   };
   // Re-stamp a live call as the page unloads: the restore window counts from
-  // the navigation, not from when the (possibly long) call was started. A
-  // back/forward-cache hide (`persisted`) isn't an unload: the page lives on.
-  const handleVoicePageHide = (event: PageTransitionEvent) => {
-    pageHiding = !event.persisted;
+  // the navigation, not from when the (possibly long) call was started. Protect
+  // that record from the trailing disconnect statuses, including cached hides.
+  const handleVoicePageHide = () => {
+    pageHiding = true;
     if (voiceState.active) persistVoiceMetadata();
   };
   if (typeof window !== "undefined") {
@@ -9625,6 +9652,7 @@ export const createAgentExperience = (
   // otherwise dispatch the same text/command twice. It also covers an async
   // `onBeforeSend` (the `preparing` phase).
   let submitInFlight = false;
+  let submitEpoch = 0;
   /** Aborts the in-flight preparation on destroy or a superseding stop. */
   let submissionAbort: AbortController | null = null;
 
@@ -10035,10 +10063,11 @@ export const createAgentExperience = (
     }
     if (submitInFlight) return;
     submitInFlight = true;
+    const epoch = ++submitEpoch;
     try {
       await performSubmit({ resolveInlineCommand: true, ...submitOptions });
     } finally {
-      submitInFlight = false;
+      if (epoch === submitEpoch) submitInFlight = false;
     }
   };
 
@@ -10065,8 +10094,9 @@ export const createAgentExperience = (
   ): void => {
     if (submitInFlight) return;
     submitInFlight = true;
+    const epoch = ++submitEpoch;
     const finish = () => {
-      submitInFlight = false;
+      if (epoch === submitEpoch) submitInFlight = false;
     };
     try {
       const result = performSubmit({ ...options, overrideText: text });
@@ -10508,7 +10538,7 @@ export const createAgentExperience = (
 
     voiceState.active = false;
     emitVoiceState(source);
-    persistVoiceMetadata();
+    if (!pageHiding) persistVoiceMetadata();
     syncComposerCompact();
 
     if (micButton) {
@@ -10698,9 +10728,10 @@ export const createAgentExperience = (
   const pendingSubmissionUnsub = eventBus.on("assistant:complete", () => {
     const pending = composerStore.getState().pendingSubmission;
     const generation = composerConversationGeneration;
+    const restart = restartGeneration;
     if (!pending) return;
     setTimeout(() => {
-      if (session.isStreaming() || generation !== composerConversationGeneration || composerStore.getState().pendingSubmission !== pending) return;
+      if (!canRestart(restart) || session.isStreaming() || generation !== composerConversationGeneration || composerStore.getState().pendingSubmission !== pending) return;
       sendPendingSubmission();
     }, 0);
   });
@@ -10713,11 +10744,13 @@ export const createAgentExperience = (
       return;
     }
     const generation = composerConversationGeneration;
+    const restart = restartGeneration;
     setTimeout(() => {
-      if (generation !== composerConversationGeneration) return;
+      if (!canRestart(restart) || generation !== composerConversationGeneration) return;
       if (!voiceState.active && !voiceState.manuallyDeactivated) {
         if (usesSessionVoice(config.voiceRecognition?.provider)) {
           session.toggleVoice().then(() => {
+            if (!canRestart(restart) || generation !== composerConversationGeneration) return;
             voiceState.active = session.isVoiceActive();
             emitVoiceState("auto");
             if (session.isVoiceActive()) applyRuntypeMicRecordingStyles();
@@ -10730,17 +10763,50 @@ export const createAgentExperience = (
   });
   destroyCallbacks.push(autoResumeUnsub);
 
+  // A cached document retains its DOM and controller, but must release live
+  // transports and capture before it freezes. A fresh navigation still uses
+  // the existing teardown/voice-metadata path above.
+  let cachedPage = false;
+  const suspendCachedPage = (event: PageTransitionEvent) => {
+    if (!event.persisted || cachedPage) return;
+    cachedPage = true;
+    pageHiding = true;
+    invalidatePendingRestarts();
+    composerConversationGeneration++;
+    submitEpoch++;
+    submitInFlight = false;
+    submissionAbort?.abort();
+    submissionAbort = null;
+    composerStore.setPreparing(false);
+    dismissDictation();
+    stopVoiceRecognition("system");
+    session.cancel();
+    session.stopSpeaking();
+    session.cleanupVoice();
+    throughputTracker?.reset();
+    eventStreamView?.update();
+  };
+  const restoreCachedPage = (event: PageTransitionEvent) => {
+    if (!event.persisted || !cachedPage) return;
+    cachedPage = false;
+    pageHiding = false;
+    // Rebuild the provider lazily so the same controls can start a new call.
+    // Neither stopped replies nor calls restart automatically on Back.
+    if (config.voiceRecognition?.enabled === true && usesSessionVoiceForConfig(config)) session.setupVoice();
+  };
+  window.addEventListener("pagehide", suspendCachedPage);
+  window.addEventListener("pageshow", restoreCachedPage);
+  destroyCallbacks.push(() => {
+    window.removeEventListener("pagehide", suspendCachedPage);
+    window.removeEventListener("pageshow", restoreCachedPage);
+  });
+
   // Handle action:resubmit event - automatically trigger another model call
   // when an action handler needs the model to continue processing (e.g., analyzing search results)
   const resubmitUnsub = eventBus.on("action:resubmit", () => {
     // Short delay to allow UI to update with any injected messages
     // Handlers should call context.triggerResubmit() AFTER their async work completes
-    setTimeout(() => {
-      if (session && !session.isStreaming()) {
-        // Continue conversation without adding a visible user message
-        session.continueConversation();
-      }
-    }, 100);
+    scheduleResubmit();
   });
   destroyCallbacks.push(resubmitUnsub);
 
@@ -12234,6 +12300,10 @@ export const createAgentExperience = (
         getSessionMetadata,
         updateSessionMetadata,
         emit: eventBus.emit,
+        captureResubmitGuard: () => {
+          const generation = restartGeneration;
+          return () => canRestart(generation);
+        },
         documentRef: typeof document !== "undefined" ? document : null
       });
 
@@ -12883,11 +12953,7 @@ export const createAgentExperience = (
           pendingResubmitTimeout = null;
         }
         // Short delay to ensure message is in context
-        setTimeout(() => {
-          if (session && !session.isStreaming()) {
-            session.continueConversation();
-          }
-        }, 100);
+        scheduleResubmit();
       }
 
       return result;
@@ -13224,6 +13290,8 @@ export const createAgentExperience = (
       return session.submitNPSFeedback(rating, comment);
     },
     destroy() {
+      destroyed = true;
+      invalidatePendingRestarts();
       renderReadiness.destroy();
       slots.destroy();
       mount.removeEventListener("click", routeLinkClick);

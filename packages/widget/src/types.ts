@@ -8557,6 +8557,11 @@ export type AgentWidgetConfig = {
    * ```
    */
   webmcp?: AgentWidgetWebMcpConfig;
+  /**
+   * Custom HTML renderer; receives unmodified streaming text. To opt into the
+   * default Markdown display repairs after your text transforms, call
+   * `preprocessStreamingMarkdown(text, streaming)` before your Markdown parser.
+   */
   postprocessMessage?: (context: {
     text: string;
     message: AgentWidgetMessage;

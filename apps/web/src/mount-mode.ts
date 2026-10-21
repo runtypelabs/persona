@@ -1,3 +1,4 @@
+import { registerDemoPageLifecycle } from "./demo-page-lifecycle";
 import {
   createAgentExperience,
   initAgentWidget,
@@ -325,5 +326,5 @@ export function setupMountMode(config: MountModeConfig): void {
   };
   window.addEventListener("hashchange", onHashChange);
 
-  window.addEventListener("beforeunload", cleanup);
+  registerDemoPageLifecycle({ destroy: cleanup });
 }

@@ -1,6 +1,20 @@
 import type { RendererObject } from "marked";
 import type { AgentWidgetMarkdownConfig, AgentWidgetMarkdownRendererOverrides, AgentWidgetMarkdownOptions } from "./types";
 import { getMarkdownParsersSync } from "./markdown-parsers-loader";
+import { stabilizeStreamingTables } from "./utils/streaming-table";
+
+/**
+ * Repair incomplete Markdown for a streaming display before parsing it as HTML.
+ * Apply custom text transforms first, then pass the result and the callback's
+ * `streaming` flag here. Completed text is returned unchanged. This never
+ * mutates message content or raw payloads and does not load the parser chunk;
+ * until that chunk is ready, only the lightweight table repairs are available.
+ */
+export const preprocessStreamingMarkdown = (text: string, streaming: boolean): string =>
+  streaming
+    ? (getMarkdownParsersSync()?.stabilizeStreamingMarkdown ?? stabilizeStreamingTables)(text)
+    : text;
+
 
 /**
  * Options for creating a markdown processor

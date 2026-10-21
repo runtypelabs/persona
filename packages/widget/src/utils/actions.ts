@@ -28,6 +28,7 @@ type ActionManagerOptions = {
     payload: AgentWidgetControllerEventMap[K]
   ) => void;
   documentRef: Document | null;
+  captureResubmitGuard?: () => () => boolean;
 };
 
 const stripCodeFence = (value: string) => {
@@ -195,7 +196,9 @@ export const createActionManager = (options: ActionManagerOptions) => {
       try {
         // Create triggerResubmit function that emits the resubmit event
         // Handlers should call this AFTER async work completes (not return resubmit: true)
+        const canResubmit = options.captureResubmitGuard?.();
         const triggerResubmit = () => {
+          if (canResubmit && !canResubmit()) return;
           options.emit("action:resubmit", eventPayload);
         };
 

@@ -1,3 +1,4 @@
+import { registerDemoPageLifecycle } from "./demo-page-lifecycle";
 import "@runtypelabs/persona/widget.css";
 
 import {
@@ -1205,7 +1206,7 @@ artifactObserver.observe(mount, {
 });
 syncArtifactFullscreen();
 
-window.addEventListener("beforeunload", () => {
+registerDemoPageLifecycle({ destroy: () => {
   stopWatchingWidgetOpen();
   stopWatchingWidgetClose();
   artifactObserver.disconnect();
@@ -1214,7 +1215,8 @@ window.addEventListener("beforeunload", () => {
   pillRoot.removeEventListener("pointerdown", engageEntryFromInput, true);
   pillRoot.removeEventListener("click", engageEntryFromSuggestion, true);
   toolController.abort();
-});
+  widget.destroy();
+} });
 
 declare global {
   interface Window {

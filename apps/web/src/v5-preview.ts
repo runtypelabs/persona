@@ -1,13 +1,16 @@
+import { registerDemoPageLifecycle } from "./demo-page-lifecycle";
 import "@runtypelabs/persona/widget.css";
 import "./v5-preview.css";
 import { initAgentWidget, type AgentWidgetConfig, type AgentWidgetMessage, type AgentWidgetPlugin } from "@runtypelabs/persona";
 import { renderExamplesShell } from "./examples-nav";
+import { bindControlsToggle } from "./controls-toggle";
 import { renderScrollToBottomIcon } from "./scroll-to-bottom-icon";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 // Reuse the documented application-level hook; this is not a library default.
 import { renderToolActivitySummary } from "../../../examples/ai-sdk-next/app/lib/tool-activity-summary";
 
 renderExamplesShell();
+bindControlsToggle(document.querySelector<HTMLButtonElement>("#v5-settings-toggle")!);
 const host = document.querySelector<HTMLElement>("#v5-host")!;
 const select = (name: string) => document.querySelector<HTMLSelectElement>(`#v5-${name}`)!;
 // Each preset uses the same six public fields. The theme selector remains an
@@ -111,6 +114,17 @@ function cancelStream() {
   timers.forEach(clearTimeout);
   timers = [];
   streamButton.disabled = false;
+}
+function suspendStream() {
+  cancelStream();
+  for (const message of widget.getMessages()) {
+    if (!message.streaming && message.toolCall?.status !== "running" && message.reasoning?.status !== "streaming") continue;
+    inject({ ...message, streaming: false,
+      ...(message.toolCall?.status === "running" ? { toolCall: { ...message.toolCall, status: "complete", success: false, error: "Stopped when leaving this page." } } : {}),
+      ...(message.reasoning?.status === "streaming" ? { reasoning: { ...message.reasoning, status: "complete" } } : {}),
+    });
+  }
+  status.textContent = "Paused when leaving this page. Run the stream to try again.";
 }
 function configuration(): AgentWidgetConfig {
   const v5 = select("version").value === "v5";
@@ -400,5 +414,5 @@ function runStream() {
 for (const control of document.querySelectorAll<HTMLSelectElement>(".v5-controls select")) control.addEventListener("change", loadScene);
 streamButton.addEventListener("click", runStream);
 document.querySelector("#v5-reset")!.addEventListener("click", loadScene);
-window.addEventListener("pagehide", () => { cancelStream(); widget.destroy(); });
+registerDemoPageLifecycle({ suspend: suspendStream, destroy: () => { cancelStream(); widget.destroy(); } });
 loadScene();

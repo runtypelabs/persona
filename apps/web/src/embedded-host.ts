@@ -1,16 +1,20 @@
+import { registerDemoPageLifecycle } from "./demo-page-lifecycle";
 import "@runtypelabs/persona/widget.css";
 import "./embedded-host.css";
 import { initAgentWidget, createStaticMentionSource, registerIcons, type AgentWidgetConfig } from "@runtypelabs/persona";
 import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-history-provider";
 import { renderExamplesShell } from "./examples-nav";
+import { bindControlsToggle } from "./controls-toggle";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { createDemoDurableChat } from "./demo-durable-chat";
 
 registerIcons({ "host-concise": [["path", { d: "M4 9h16M4 15h10" }]] });
 renderExamplesShell();
+bindControlsToggle(document.querySelector<HTMLButtonElement>("#host-controls-toggle")!);
 type Handle = ReturnType<typeof initAgentWidget>;
 type Name = "research" | "support";
 const names: Name[] = ["research", "support"];
+const labels: Record<Name, string> = { research: "Research", support: "Support" };
 const widgets = new Map<Name, Handle>();
 const historyProviders = new Map<Name, ReturnType<typeof createDemoHistoryProvider>>();
 const durableChats = new Map<Name, ReturnType<typeof createDemoDurableChat>>();
@@ -83,21 +87,21 @@ const log = document.querySelector<HTMLElement>("#host-log")!;
 const lines: string[] = [];
 const modal = document.querySelector<HTMLDialogElement>("#host-modal")!;
 let modalOwner: Name | null = null;
-function returnToSidebar() {
+function returnToPage() {
   if (!modalOwner) return;
   const name = modalOwner;
   // Capture transcript geometry while the dialog is still visible. Closing
   // first removes its layout and resets scrollTop before moveTo can snapshot it.
   widgets.get(name)?.moveTo(document.getElementById(name)!, { preserveFocus: false });
-  // Skip widget focus restoration while the sidebar is inert; closing the
-  // host dialog now restores its opener and makes the sidebar interactive.
+  // Skip widget focus restoration while the page is inert; closing the
+  // host dialog now restores its opener and makes the page interactive.
   modal.close();
   modalOwner = null;
-  record(name, "moved back to sidebar · same live widget");
-  status.textContent = `${name} returned to the sidebar. Conversation and draft preserved.`;
+  record(name, "returned to page · same live widget");
+  status.textContent = `${labels[name]} is back in place, with its conversation and draft intact.`;
 }
-modal.addEventListener("cancel", (event) => { event.preventDefault(); returnToSidebar(); });
-document.getElementById("host-return")!.addEventListener("click", returnToSidebar);
+modal.addEventListener("cancel", (event) => { event.preventDefault(); returnToPage(); });
+document.getElementById("host-return")!.addEventListener("click", returnToPage);
 function record(instance: string, detail: string) {
   lines.push(`${instance} · ${detail}`);
   if (lines.length > 80) lines.shift();
@@ -166,7 +170,7 @@ function slots(name: Name): NonNullable<NonNullable<AgentWidgetConfig["layout"]>
   } };
 }
 function mount() {
-  returnToSidebar();
+  returnToPage();
   widgets.forEach(widget => widget.destroy());
   widgets.clear();
   durableChats.forEach(chat => chat.destroy());
@@ -213,7 +217,7 @@ function mount() {
         messageActions: { enabled: true, showQuote: true, visibility: "always" },
         onLinkClick: ({ url, preventDefault }) => {
           preventDefault();
-          status.textContent = `${name} requested ${url}. The host handled this link.`;
+          status.textContent = `${labels[name]} requested ${url}. Your code handled this link.`;
           record(name, "link handled by host");
         },
         components: {
@@ -253,7 +257,7 @@ function mount() {
     widget.on("conversation:executionState", (event) => {
       const key = event.conversationId.slice(`host-${name}-`.length) as keyof typeof conversationTitles;
       const title = conversationTitles[key] ?? event.conversationId;
-      executionStates.set(`${name}:${event.conversationId}`, `${name} · ${title}: ${event.status}${event.detached ? " · background" : ""}`);
+      executionStates.set(`${name}:${event.conversationId}`, `${labels[name]} · ${title}: ${event.status}${event.detached ? " · background" : ""}`);
       document.getElementById("host-executions")!.textContent = [...executionStates.values()].join(" · ");
       record(name, `${title}: ${event.status}${event.detached ? " (background)" : ""}`);
     });
@@ -261,7 +265,7 @@ function mount() {
       history.saveRun(widget);
       record(context.instanceId, `run finished: ${run.outcome}`);
     });
-    widget.injectAssistantMessage({ content: `This is the ${name} assistant. [Open workspace](/workspace/${name}) or try the host controls above.` });
+    widget.injectAssistantMessage({ content: `This is the ${name} assistant. [Open workspace](/workspace/${name}) or try the host controls.` });
     widget.injectComponentDirective({ id: "host-card", component: "HostCard", props: { count: 1 } });
     record(widget.instanceId, "ready");
   }
@@ -276,15 +280,15 @@ function action(id: string, run: (widget: Handle, name: Name) => void) {
 }
 action("host-run", (widget) => { widget.submitMessage("Show me an independent local reply."); });
 action("host-move", (widget, name) => {
-  returnToSidebar();
+  returnToPage();
   modal.dataset.scheme = schemes.get(name) ?? "light";
-  document.getElementById("host-modal-title")!.textContent = `${name === "research" ? "Research" : "Support"} in modal`;
+  document.getElementById("host-modal-title")!.textContent = `${labels[name]} in modal`;
   modal.showModal();
   widget.moveTo("#host-modal-mount");
   modalOwner = name;
   widget.focusInput();
   record(name, "moved to modal · same live widget");
-  status.textContent = `${name} moved to the modal. Press Escape to return.`;
+  status.textContent = `${labels[name]} moved to the modal. Press Escape to return.`;
 });
 action("host-mode", (widget) => {
   widget.setComposerModes(widget.getComposerState().activeModeIds.includes("concise") ? [] : ["concise"]);
@@ -341,17 +345,17 @@ conversationSelect.addEventListener("change", async () => {
     failNextOpen.checked = false;
   }
   conversationSelect.disabled = true;
-  status.textContent = `Opening ${conversationTitles[key]} for ${name}…`;
+  status.textContent = `Opening ${conversationTitles[key]} for ${labels[name]}…`;
   try {
     await widget.openConversation(`host-${name}-${key}`, { busy: busySelect.value === "background" ? "background" : busySelect.value === "stop" ? "stop" : "reject" });
     if (widgets.get(name) !== widget) return;
     record(name, `opened ${conversationTitles[key]} · same widget`);
-    status.textContent = `${name}: ${conversationTitles[key]} opened.`;
+    status.textContent = `${labels[name]}: ${conversationTitles[key]} opened.`;
   } catch (error) {
     if (widgets.get(name) !== widget) return;
     const busy = error && typeof error === "object" && "code" in error && error.code === "conversation_busy";
     status.textContent = busy
-      ? `${name} is busy. Choose Continue in background to keep a durable task running, or Stop current run, then select the conversation again.`
+      ? `${labels[name]} is busy. Choose Continue in background to keep a durable task running, or Stop current run, then select the conversation again.`
       : `Could not open ${conversationTitles[key]}. The current conversation is still available.`;
     record(name, busy ? "conversation switch rejected: busy" : "conversation switch failed");
   } finally {
@@ -382,5 +386,9 @@ target.addEventListener("change", () => {
   syncConversationSelect(name);
 });
 defaults.addEventListener("change", mount);
-window.addEventListener("pagehide", () => { widgets.forEach(widget => widget.destroy()); widgets.clear(); durableChats.forEach(chat => chat.destroy()); durableChats.clear(); });
+registerDemoPageLifecycle({
+  suspend: () => durableChats.forEach(chat => chat.pause()),
+  resume: () => durableChats.forEach(chat => chat.resume()),
+  destroy: () => { widgets.forEach(widget => widget.destroy()); widgets.clear(); durableChats.forEach(chat => chat.destroy()); durableChats.clear(); },
+});
 mount();

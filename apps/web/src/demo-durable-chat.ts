@@ -12,6 +12,7 @@ type Run = {
   readers: Set<() => void>;
   observers: Set<(status: RunStatus) => void>;
   timer?: ReturnType<typeof setInterval>;
+  tick?: () => void;
 };
 
 /** A browser-local stand-in for a durable server: aborting a reader never stops a job. */
@@ -24,6 +25,7 @@ export function createDemoDurableChat(options: {
   const encoder = new TextEncoder();
   let serial = 0;
   let disposed = false;
+  let paused = false;
 
   function lookup(conversationId: string, executionId: string) {
     const run = runs.get(executionId);
@@ -77,7 +79,7 @@ export function createDemoDurableChat(options: {
     emit({ type: "turn_start", executionId, id: `${executionId}-turn`, role: "assistant", iteration: 1 });
     emit({ type: "text_start", executionId, id: textId });
     let position = 0;
-    run.timer = setInterval(() => {
+    run.tick = () => {
       if (position < text.length) {
         emit({ type: "text_delta", executionId, id: textId, delta: text.slice(position, position + 8) });
         position += 8;
@@ -92,12 +94,26 @@ export function createDemoDurableChat(options: {
       run.status = "completed";
       run.readers.forEach(read => read());
       run.observers.forEach(observe => observe(run.status));
-    }, options.delayMs ?? 350);
+    };
+    if (!paused) run.timer = setInterval(run.tick, options.delayMs ?? 350);
     return attach(run, "0", init?.signal);
   };
 
   return {
     customFetch,
+    // This server stand-in lives in the document too. Freeze its jobs while
+    // cached, preserving frames/checkpoints for an explicit conversation reopen.
+    pause() {
+      paused = true;
+      for (const run of runs.values()) clearInterval(run.timer);
+    },
+    resume() {
+      if (!paused || disposed) return;
+      paused = false;
+      for (const run of runs.values()) {
+        if (run.status === "running" && run.tick) run.timer = setInterval(run.tick, options.delayMs ?? 350);
+      }
+    },
     async reconnectStream(ctx: { conversationId: string; executionId: string; after: string; signal: AbortSignal }) {
       return attach(lookup(ctx.conversationId, ctx.executionId), ctx.after, ctx.signal);
     },
