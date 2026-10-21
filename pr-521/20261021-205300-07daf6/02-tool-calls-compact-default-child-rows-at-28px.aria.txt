@@ -1,0 +1,203 @@
+- navigation
+  - link "Persona home" [ref=e2]
+  - button "Search Persona examples" [ref=e5]
+  - link "Persona on GitHub" [ref=e3]
+- main
+  - sectionheader
+    - heading "V5 preview" [level=1, ref=e6]
+    - paragraph
+      - StaticText "A look at what’s coming: quieter activity, simpler tool details, approval outcomes, and a refreshed composer. Try the opt-in defaults, then make them your own."
+  - complementary "Preview settings"
+    - StaticText "EARLY PREVIEW"
+    - paragraph
+      - link "Control widgets from your app" [ref=e9]
+      - StaticText " · "
+      - link "Compare five assistant configurations" [ref=e10]
+    - paragraph
+      - StaticText "Sample data · No API key needed"
+    - generic
+      - LabelText
+        - StaticText "Scenario"
+        - combobox "Scenario" [expanded=false, ref=e11]: Reasoning & tools
+          - MenuListPopup
+            - option "Reasoning & tools" [selected, ref=e31]
+            - option "Request & Response" [ref=e32]
+            - option "Welcome & composer" [ref=e33]
+            - option "Running & failed tools" [ref=e34]
+            - option "Loading & follow-ups" [ref=e35]
+            - option "Errors & retry" [ref=e36]
+            - option "Message actions" [ref=e37]
+            - option "Artifacts" [ref=e38]
+            - option "Approval decisions & outcomes" [ref=e39]
+            - option "Approval · custom renderer" [ref=e40]
+            - option "Embedded · transparent flex host" [ref=e41]
+            - option "Scroll control · live activity" [ref=e42]
+            - option "Long conversation & scroll" [ref=e43]
+      - LabelText
+        - StaticText "Defaults"
+        - combobox "Defaults" [expanded=false, ref=e12]: V5 preview
+          - MenuListPopup
+            - option "V5 preview" [selected, ref=e44]
+            - option "V4 current" [ref=e45]
+      - LabelText
+        - StaticText "Theme"
+        - combobox "Theme" [expanded=false, ref=e13]: Dark
+          - MenuListPopup
+            - option "Dark" [selected, ref=e46]
+            - option "Light" [ref=e47]
+      - LabelText
+        - StaticText "Brand"
+        - combobox "Brand" [expanded=false, ref=e14]: Persona default
+          - MenuListPopup
+            - option "Persona default" [selected, ref=e48]
+            - option "Editorial · warm neutral" [ref=e49]
+            - option "Studio · violet" [ref=e50]
+            - option "Terminal · green" [ref=e51]
+      - LabelText
+        - StaticText "Header icon"
+        - combobox "Header icon" [expanded=false, ref=e15]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e52]
+            - option "Bot" [ref=e53]
+            - option "Sparkles" [ref=e54]
+            - option "Custom image · sample logo" [ref=e55]
+            - option "Hidden" [ref=e56]
+      - LabelText
+        - StaticText "Icon background"
+        - combobox "Icon background" [expanded=false, ref=e16]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e57]
+            - option "Transparent" [ref=e58]
+            - option "Filled" [ref=e59]
+      - LabelText
+        - StaticText "Icon padding"
+        - combobox "Icon padding" [expanded=false, ref=e17]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e60]
+            - option "None" [ref=e61]
+            - option "4px" [ref=e62]
+            - option "6px" [ref=e63]
+            - option "10px" [ref=e64]
+      - LabelText
+        - StaticText "Activity style"
+        - combobox "Activity style" [expanded=false, ref=e18]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e65]
+            - option "Compact rows" [ref=e66]
+            - option "Cards" [ref=e67]
+      - LabelText
+        - StaticText "Resolved approvals"
+        - combobox "Resolved approvals" [expanded=false, ref=e19]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e68]
+            - option "Compact activity" [ref=e69]
+            - option "Retained card" [ref=e70]
+            - option "Legacy trace" [ref=e71]
+      - LabelText
+        - StaticText "Tool grouping"
+        - combobox "Tool grouping" [expanded=false, ref=e20]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e72]
+            - option "Separate calls" [ref=e73]
+            - option "Documentation review · custom hook" [ref=e74]
+      - LabelText
+        - StaticText "Tool details"
+        - combobox "Tool details" [expanded=false, ref=e21]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e75]
+            - option "Auto-expand while streaming" [ref=e76]
+            - option "Summary only" [ref=e77]
+      - LabelText
+        - StaticText "Status icons"
+        - combobox "Status icons" [expanded=false, ref=e22]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e78]
+            - option "Always" [ref=e79]
+            - option "Active / attention only" [ref=e80]
+            - option "Never" [ref=e81]
+      - LabelText
+        - StaticText "Suggestion edges"
+        - combobox "Suggestion edges" [expanded=false, ref=e23]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e82]
+            - option "Clip" [ref=e83]
+            - option "Fade" [ref=e84]
+      - LabelText
+        - StaticText "Error display"
+        - combobox "Error display" [expanded=false, ref=e24]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e85]
+            - option "Alert block" [ref=e86]
+            - option "Message bubble" [ref=e87]
+      - LabelText
+        - StaticText "Artifacts"
+        - combobox "Artifacts" [expanded=false, ref=e25]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e88]
+            - option "Enabled" [ref=e89]
+            - option "Disabled" [ref=e90]
+      - LabelText
+        - StaticText "Top fade"
+        - combobox "Top fade" [expanded=false, ref=e26]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e91]
+            - option "On" [ref=e92]
+            - option "Off" [ref=e93]
+      - LabelText
+        - StaticText "Scroll glyph"
+        - combobox "Scroll glyph" [expanded=false, ref=e27]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e94]
+            - option "Arrow" [ref=e95]
+            - option "Dots" [ref=e96]
+            - option "Custom animation" [ref=e97]
+      - LabelText
+        - StaticText "Jump motion"
+        - combobox "Jump motion" [expanded=false, ref=e28]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e98]
+            - option "Smooth" [ref=e99]
+            - option "Instant" [ref=e100]
+      - LabelText
+        - StaticText "Jump duration"
+        - combobox "Jump duration" [expanded=false, ref=e29]: Default (220 ms)
+          - MenuListPopup
+            - option "Default (220 ms)" [selected, ref=e101]
+            - option "0 ms (instant)" [ref=e102]
+            - option "150 ms" [ref=e103]
+            - option "350 ms" [ref=e104]
+            - option "600 ms" [ref=e105]
+            - option "1000 ms" [ref=e106]
+      - LabelText
+        - StaticText "Scroll transition"
+        - combobox "Scroll transition" [expanded=false, ref=e30]: Default
+          - MenuListPopup
+            - option "Default" [selected, ref=e107]
+            - option "Fade" [ref=e108]
+            - option "Instant" [ref=e109]
+    - button "Run stream" [ref=e7]
+    - button "Reset scene" [ref=e8]
+    - group
+      - DisclosureTriangle "Configuration" [expanded=false]
+        - StaticText "Configuration"
+  - region "Live Persona preview" [ref=e4]
+    - generic
+      - StaticText "Chat Assistant"
+      - button "Clear chat" [ref=e110]
+      - generic
+        - paragraph
+          - StaticText "Check the theme documentation and show me what you find."
+        - button "Thought for 6s" [expanded=false, ref=e114]
+          - StaticText "Thought for 6s"
+        - generic
+          - button "Searched docs, read files" [expanded=true, ref=e115]
+          - generic
+            - button "Searched docs" [expanded=false, ref=e117]
+            - button "Read a file" [expanded=false, ref=e118]
+        - generic
+          - button "Copy message" [ref=e116]
+      - generic
+        - form
+          - textbox "How can I help..." [ref=e111]
+          - button "Start voice recognition" [ref=e112]
+          - button "Send message" [ref=e113]

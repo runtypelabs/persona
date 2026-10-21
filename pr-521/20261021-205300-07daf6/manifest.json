@@ -1,0 +1,40 @@
+{
+  "runId": "20261021-205300-07daf6",
+  "entries": [
+    {
+      "feature": "tool-calls",
+      "label": "Compact default child rows at 28px",
+      "note": null,
+      "files": [
+        "02-tool-calls-compact-default-child-rows-at-28px.png",
+        "02-tool-calls-compact-default-child-rows-at-28px.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:54:20.059Z",
+      "head": "866f4358b196ea156813030cea4ceb9d41e430e1",
+      "diffHash": "5c5110850d98"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "Compact V5 nested rows with resolved theme",
+      "note": null,
+      "files": [
+        "01-tool-calls-compact-v5-nested-rows-with-resolved-theme.gif",
+        "01-tool-calls-compact-v5-nested-rows-with-resolved-theme.webm",
+        "01-tool-calls-compact-v5-nested-rows-with-resolved-theme.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:54:21.018Z",
+      "head": "866f4358b196ea156813030cea4ceb9d41e430e1",
+      "diffHash": "5c5110850d98"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "tool-calls",
+      "pass": true,
+      "skipped": false,
+      "note": "Live V5 default preview measures 28px child rows with 2px vertical padding; parent remains 32px. Browser tests cover the resolved default theme, 44px touch targets, V4 parity, authored heights/padding, multiline growth, and 12 disclosure-scroll cases. Local sample injection needs no network request; SDK streaming is outside this spacing proof."
+    }
+  ]
+}
