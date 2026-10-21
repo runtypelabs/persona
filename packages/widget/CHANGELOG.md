@@ -1,5 +1,16 @@
 # @runtypelabs/persona
 
+## 4.31.0
+
+### Minor Changes
+
+- 1e1e316: Expose preprocessStreamingMarkdown so custom message renderers can opt into the same incomplete Markdown display repairs as the built-in renderer while preserving completed text.
+
+### Patch Changes
+
+- a39d1bf: Stop active replies, voice capture, and dictation when entering the browser's back/forward cache while preserving the mounted widget and draft for restoration. Cancel pending reply continuations and voice restoration so queued work cannot restart after Back.
+- 6f112fd: Stabilize incomplete emphasis, inline code, links, and images while streaming Markdown without changing the final response.
+
 ## 4.30.0
 
 ### Minor Changes
