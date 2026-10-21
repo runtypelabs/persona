@@ -1,5 +1,13 @@
 # @runtypelabs/persona
 
+## 4.32.1
+
+### Patch Changes
+
+- caed99b: Make nested V5 tool rows compact by default while preserving parent summary spacing, larger touch targets, multiline labels, and explicit theme overrides.
+- 078f066: Use descriptive activity labels for `search_docs` and `read_file` by default, including grouped summaries and their individual tool rows.
+- 3cfd33c: Keep V5's plain assistant replies free of brand-generated shadows and borders. Explicitly styled assistant bubbles can still use padding, backgrounds, and brand shadow tokens; V4 cards and other surfaces retain their existing elevation behavior.
+
 ## 4.32.0
 
 ### Minor Changes
