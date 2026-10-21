@@ -9,7 +9,7 @@ Measurements from the October 18, 2026 reasoning layout, shared panel theme, too
 
 | File | Gzip kB | Existing limit kB |
 | --- | ---: | ---: |
-| `index.global.js` | 165.15 | 166 |
+| `index.global.js` | 166.44 | 167 |
 | `launcher.global.js` | 17.44 | 19.75 |
 | `widget.css` | 23.66 | 24 |
 | `install.global.js` | 3.00 | 3 |
