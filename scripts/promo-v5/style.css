@@ -138,3 +138,23 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
 :root[data-font="mono"] { --head-font: var(--mono); --head-weight: 700; --head-size: 66px; --head-leading: 0.98; --head-tracking: -0.05em; --head-case: uppercase; }
 :root[data-font="grotesk"] { --head-font: "Space Grotesk", sans-serif; --head-weight: 700; --head-size: 68px; --head-leading: 1.0; --head-tracking: -0.03em; }
 :root[data-font="geist"] { --head-font: "Geist", sans-serif; --head-weight: 600; --head-size: 68px; --head-leading: 1.02; --head-tracking: -0.035em; }
+
+/* ── 4:5 portrait cut (?format=portrait, 1080×1350) ── */
+.portrait-break { display: none; }
+:root[data-format="portrait"] .portrait-break { display: inline; }
+:root[data-format="portrait"] body, :root[data-format="portrait"] #stage { width: 1080px; height: 1350px; }
+:root[data-format="portrait"] .hud-block { left: 64px; top: 60px; }
+:root[data-format="portrait"] { --head-size: 58px; }
+:root[data-format="portrait"] .intro-lockup { left: 72px; top: 290px; gap: 28px; }
+:root[data-format="portrait"] #intro-logo { width: 470px; }
+:root[data-format="portrait"] .tagline-main { font-size: 72px; }
+:root[data-format="portrait"] .tagline-sub { font-size: 30px; }
+:root[data-format="portrait"] .device.intro-device { width: 720px; height: 600px; }
+:root[data-format="portrait"] .device { width: 500px; height: 880px; }
+:root[data-format="portrait"] .wlayer > .whost { zoom: 1.05; }
+:root[data-format="portrait"] .intro-device .wlayer > .whost { zoom: 1.18; }
+:root[data-format="portrait"] .code-card { width: 440px; padding: 24px 26px; font-size: 16.5px; }
+:root[data-format="portrait"] .code-card .code-line .hl { inset: 0 -26px; }
+:root[data-format="portrait"] .panel { width: 900px; height: 720px; }
+:root[data-format="portrait"] #outro-logo { width: 700px; }
+:root[data-format="portrait"] .outro-row { flex-direction: column; gap: 22px; }

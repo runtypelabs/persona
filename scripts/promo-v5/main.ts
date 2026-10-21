@@ -8,6 +8,10 @@ import { frameworks } from "./frameworks";
 
 registerIcons(assistantIcons);
 
+// ?format=portrait renders the 4:5 (1080×1350) LinkedIn cut; layouts below branch on it.
+const PORTRAIT = new URLSearchParams(location.search).get("format") === "portrait";
+document.documentElement.dataset.format = PORTRAIT ? "portrait" : "landscape";
+
 // ── math ────────────────────────────────────────────────────────────────────
 const clamp = (v: number, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
@@ -213,7 +217,7 @@ function glowColor(t: number) {
 }
 
 // ── scene 3: five assistant styles, each sending a prompt ───────────────────
-const PANEL_GAP = 1100;
+const PANEL_GAP = PORTRAIT ? 1000 : 1100;
 const chats: Record<string, { prompt: string; reply: string }> = {
   chatgpt: { prompt: "Plan a launch for Persona v5", reply: "Here’s a tight plan:\n\n1. **Tease** it with a short demo video\n2. **Point** people at the v5 preview\n3. **Ship** `v5Defaults` to everyone" },
   claude: { prompt: "Draft the v5 announcement", reply: "**The Persona v5 preview is here.** Quieter activity, a refreshed composer, and six brand fields that restyle everything." },
@@ -241,13 +245,13 @@ ARRIVE.forEach((a, i) => focusKeys.push([a, i * PANEL_GAP - 30], [a + DWELL, i *
 const lastDwell = ARRIVE[4] + DWELL;
 focusKeys.push([14.25, 2 * PANEL_GAP]);
 const s3Focus = track(focusKeys);
-const s3Z = track([[7.55, -520], [8.1, -130], [lastDwell, -170], [14.25, -4300]]);
+const s3Z = track([[7.55, -520], [8.1, -130], [lastDwell, -170], [14.25, PORTRAIT ? -2600 : -4300]]);
 const s3RY = track([[7.55, -30], [8.15, -16], [lastDwell, -12], [14.25, -2]]);
 const s3RX = track([[7.55, 9], [lastDwell, 6], [14.25, 2]]);
 
 function renderS3(t: number) {
   const f = s3Focus(t);
-  cam3.style.transform = `translate3d(0, 70px, ${s3Z(t).toFixed(2)}px) rotateX(${s3RX(t).toFixed(3)}deg) rotateY(${s3RY(t).toFixed(3)}deg) translate3d(${(-f).toFixed(2)}px, 0, 0)`;
+  cam3.style.transform = `translate3d(0, ${PORTRAIT ? 110 : 70}px, ${s3Z(t).toFixed(2)}px) rotateX(${s3RX(t).toFixed(3)}deg) rotateY(${s3RY(t).toFixed(3)}deg) translate3d(${(-f).toFixed(2)}px, 0, 0)`;
   panels.forEach((p, i) => {
     p.panel.style.transform = `translate3d(${p.x}px, 0, ${p.z}px) translate(-50%, -50%)`;
     const { prompt, reply } = chats[p.id];
@@ -279,14 +283,15 @@ function renderS3(t: number) {
 // ── scene 4: any framework ─────────────────────────────────────────────────
 const cam4 = $("#cam4");
 const TILE_W = 236, TILE_H = 220, TILE_GAP = 26;
+const TILE_COLS = PORTRAIT ? 3 : 6, TILE_ROWS = PORTRAIT ? 4 : 2;
 const tiles = [...frameworks.map(fw => ({ html: `${fw.svg}<span>${fw.name}</span>`, cls: fw.id === "eve" ? "tile wide" : fw.id === "mastra" ? "tile mastra" : "tile" })),
   { html: "<b>+</b><span>any SSE<br />backend</span>", cls: "tile more" }].map((spec, i) => {
   const tile = el("div", spec.cls, spec.html);
   cam4.append(tile);
-  const c = i % 6, r = Math.floor(i / 6);
-  return { tile, c, r, x: (c - 2.5) * (TILE_W + TILE_GAP), y: (r - 0.5) * (TILE_H + TILE_GAP) + 70 };
+  const c = i % TILE_COLS, r = Math.floor(i / TILE_COLS);
+  return { tile, c, r, x: (c - (TILE_COLS - 1) / 2) * (TILE_W + TILE_GAP), y: (r - (TILE_ROWS - 1) / 2) * (TILE_H + TILE_GAP) + (PORTRAIT ? 120 : 70) };
 });
-const s4RY = track([[T.s4In, 26], [T.s4Out, -10]]);
+const s4RY = track(PORTRAIT ? [[T.s4In, 18], [T.s4Out, -8]] : [[T.s4In, 26], [T.s4Out, -10]]);
 const s4RX = track([[T.s4In, 24], [15.2, 15], [T.s4Out, 10]]);
 const s4Z = track([[T.s4In, -700], [15.1, -260], [T.s4Out, -60]]);
 
@@ -296,14 +301,14 @@ function renderS4(t: number) {
   if (vis <= 0) return;
   cam4.style.transform = `translate3d(0, 0, ${s4Z(t).toFixed(2)}px) rotateX(${s4RX(t).toFixed(3)}deg) rotateY(${s4RY(t).toFixed(3)}deg)`;
   // A teal highlight sweeps across the grid once the tiles have landed.
-  const sweep = lerp(-1.5, 7.5, prog(t, 15.5, 16.6));
+  const sweep = lerp(-1.5, PORTRAIT ? 6.5 : 7.5, prog(t, 15.5, 16.6));
   tiles.forEach(({ tile, c, r, x, y }, i) => {
     const d = T.s4In + 0.15 + (c + r) * 0.07;
     const p = prog(t, d, d + 0.55), e = easeOutBack(p);
     const float = Math.sin(t * 2.1 + i * 0.9) * 10;
     tile.style.transform = `translate3d(${x}px, ${y}px, ${(lerp(-500, 0, easeOut3(p)) + float).toFixed(2)}px) rotateX(${lerp(-95, 0, e).toFixed(2)}deg) translate(-50%, -50%)`;
     tile.style.opacity = String(clamp(p * 2.5));
-    const glow = clamp(1 - Math.abs(c + r * 0.5 - sweep) / 1.2);
+    const glow = clamp(1 - Math.abs(c + r * (PORTRAIT ? 1 : 0.5) - sweep) / 1.2);
     tile.style.borderColor = glow > 0.01 ? `rgba(38, 254, 220, ${(0.12 + 0.75 * glow).toFixed(3)})` : "";
     tile.style.color = glow > 0.01 ? `rgb(${mixHex("#fef9f1", "#26fedc", glow).join(",")})` : "";
   });
@@ -311,10 +316,10 @@ function renderS4(t: number) {
 
 // ── master timeline ────────────────────────────────────────────────────────
 const cam2 = $("#cam2"), device = $("#device");
-const s2RY = track([[2.35, 40], [2.85, 26], [7.25, 13], [7.62, 6]]);
+const s2RY = track(PORTRAIT ? [[2.35, 26], [2.85, 18], [7.25, 9], [7.62, 4]] : [[2.35, 40], [2.85, 26], [7.25, 13], [7.62, 6]]);
 const s2RX = track([[2.35, 14], [2.85, 9], [7.62, 4]]);
 const s2Z = track([[2.35, -900], [2.9, -330], [7.25, -170], [7.62, -110]]);
-const s2X = track([[2.35, 260], [2.9, 120], [7.25, -40], [7.6, 1800]]);
+const s2X = track(PORTRAIT ? [[2.35, 100], [2.9, 50], [7.25, -20], [7.6, 1400]] : [[2.35, 260], [2.9, 120], [7.25, -40], [7.6, 1800]]);
 const s2Y = track([[2.35, 40], [7.62, -10]]);
 
 function setOpacity(sel: string, o: number) { const e = $(sel); e.style.opacity = String(clamp(o)); e.style.visibility = o <= 0.001 ? "hidden" : "visible"; }
@@ -332,8 +337,8 @@ function renderIntro(t: number) {
   const lock = $("#intro-lockup");
   lock.style.transform = `translateY(-50%) translateX(${lerp(0, -14, drift) - exit * 160}px) scale(${lerp(1, 1.02, drift)})`;
   lock.style.filter = exit > 0 ? `blur(${(exit * 10).toFixed(2)}px)` : "none";
-  cam1.style.transform = `translate3d(0, 0, ${(lerp(-60, 30, drift) + exit * 700).toFixed(2)}px) rotateX(${lerp(7, 4, drift).toFixed(3)}deg) rotateY(${lerp(-22, -14, drift).toFixed(3)}deg)`;
-  introDevice.style.transform = `translate3d(470px, 10px, 0) translate(-50%, -50%)`;
+  cam1.style.transform = `translate3d(0, 0, ${(lerp(-60, 30, drift) + exit * 700).toFixed(2)}px) rotateX(${lerp(PORTRAIT ? 14 : 7, PORTRAIT ? 9 : 4, drift).toFixed(3)}deg) rotateY(${lerp(PORTRAIT ? -12 : -22, PORTRAIT ? -6 : -14, drift).toFixed(3)}deg)`;
+  introDevice.style.transform = PORTRAIT ? `translate3d(0, 320px, 0) translate(-50%, -50%)` : `translate3d(470px, 10px, 0) translate(-50%, -50%)`;
   introDevice.style.filter = exit > 0 ? `blur(${(exit * 8).toFixed(2)}px)` : "none";
 }
 
@@ -343,8 +348,14 @@ function renderS2(t: number) {
   if (vis <= 0) return;
   cam2.style.transform = `translate3d(0, 0, ${s2Z(t).toFixed(2)}px) rotateX(${s2RX(t).toFixed(3)}deg) rotateY(${s2RY(t).toFixed(3)}deg) translate3d(${(-s2X(t)).toFixed(2)}px, ${s2Y(t).toFixed(2)}px, 0)`;
   // Anchored at the top so the brand block unfolds downward, away from the headline.
-  card.style.transform = `translate3d(-500px, -230px, 170px) translate(-50%, 0)`;
-  device.style.transform = `translate3d(400px, 90px, 0) rotateY(-6deg) translate(-50%, -50%)`;
+  if (PORTRAIT) {
+    // Diagonal, never overlapping: Chrome mis-sorts the widget's composer over an intersecting card.
+    card.style.transform = `translate3d(-305px, -10px, 170px) translate(-50%, 0)`;
+    device.style.transform = `translate3d(285px, 30px, 0) rotateY(-6deg) translate(-50%, -50%)`;
+  } else {
+    card.style.transform = `translate3d(-500px, -230px, 170px) translate(-50%, 0)`;
+    device.style.transform = `translate3d(400px, 90px, 0) rotateY(-6deg) translate(-50%, -50%)`;
+  }
   renderCode(t);
   renderLayers(t);
 }
@@ -388,7 +399,7 @@ function renderBg(t: number, focus: number) {
   const glow = $("#glow");
   const amp = 0.18 + 0.05 * Math.sin(t * 2.2);
   glow.style.background = `radial-gradient(closest-side, rgba(${r},${g},${b},${amp}), rgba(${r},${g},${b},0.04) 55%, transparent)`;
-  glow.style.transform = `translate(${t < T.s2In ? 340 : t < T.s3In ? 160 : 0}px, 0) scale(${lerp(0.9, 1.15, (Math.sin(t * 0.9) + 1) / 2)})`;
+  glow.style.transform = `translate(${PORTRAIT ? 0 : t < T.s2In ? 340 : t < T.s3In ? 160 : 0}px, ${PORTRAIT && t < T.s2In ? 280 : 0}px) scale(${lerp(0.9, 1.15, (Math.sin(t * 0.9) + 1) / 2)})`;
 }
 
 // Persona's own CSS animations/transitions run on virtual time: each one is

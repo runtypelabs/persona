@@ -4,6 +4,7 @@
 // then:
 //   node capture.mjs --stills 0.5,2.2,6        (PNG stills for review)
 //   node capture.mjs --fps 60 --scale 2 --out persona-v5.mp4
+//   4:5 cut: add --url "http://localhost:5199/?format=portrait" --width 1080 --height 1350
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -17,11 +18,12 @@ const url = args.url ?? "http://localhost:5199/";
 const scale = Number(args.scale ?? 1);
 const fps = Number(args.fps ?? 60);
 const duration = Number(args.duration ?? 20);
+const width = Number(args.width ?? 1920), height = Number(args.height ?? 1080);
 const outDir = args.dir ?? "out";
 mkdirSync(outDir, { recursive: true });
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? "/opt/pw-browsers/chromium", args: ["--force-color-profile=srgb", "--disable-lcd-text", "--font-render-hinting=none"] });
-const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: scale, reducedMotion: "no-preference" });
+const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: scale, reducedMotion: "no-preference" });
 page.on("console", (m) => { if (m.type() === "error") console.error("[page]", m.text()); });
 page.on("pageerror", (e) => console.error("[pageerror]", e.message));
 await page.goto(url);
@@ -43,7 +45,7 @@ const out = args.out ?? "persona-v5-preview.mp4";
 const total = Math.round(fps * duration);
 const ff = spawn("ffmpeg", [
   "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", String(fps), "-c:v", "png", "-i", "-",
-  "-vf", "scale=1920:1080:flags=lanczos,format=yuv420p",
+  "-vf", `scale=${width}:${height}:flags=lanczos,format=yuv420p`,
   "-c:v", "libx264", "-preset", "slow", "-crf", String(args.crf ?? 16), "-profile:v", "high", "-level", "4.2",
   "-r", String(fps), "-movflags", "+faststart", out,
 ], { stdio: ["pipe", "inherit", "inherit"] });
