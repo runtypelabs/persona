@@ -4,6 +4,70 @@ import { expect, test } from "@playwright/test";
 import { createTheme, themeToCssVariables } from "../../packages/widget/src/utils/tokens";
 import type { DeepPartial, PersonaTheme } from "../../packages/widget/src/types/theme";
 
+test("V5 nested tool rows stay compact without shrinking parent or touch controls", async ({ page, browser }) => {
+  const markup = `<main data-persona-root data-persona-defaults="v5" style="font:14px/1.5 sans-serif">
+    <div class="persona-tool-bubble persona-activity-row" data-persona-tool-group>
+      <button id="parent" class="persona-activity-header">Searched docs, read files</button>
+      <div data-persona-tool-group-stack>
+        <div class="persona-activity-group-child"><div class="persona-tool-bubble persona-activity-row">
+          <button id="child" class="persona-activity-header"><span class="persona-activity-label">Read a file</span></button>
+        </div></div>
+      </div>
+    </div>
+    <div class="persona-tool-bubble persona-activity-row"><button id="standalone" class="persona-activity-header">Searched docs</button></div>
+  </main>`;
+  const css = readFileSync(resolve(__dirname, "../../packages/widget/src/styles/widget.css"), "utf8");
+  const apply = async (target: typeof page, components: DeepPartial<PersonaTheme>["components"] = {}) => {
+    const variables = themeToCssVariables(createTheme({ components }, { future: { v5Defaults: true }, validate: false }));
+    await target.locator("main").evaluate((root, values) => {
+      const element = root as HTMLElement;
+      element.style.cssText = "font:14px/1.5 sans-serif";
+      for (const [key, value] of Object.entries(values)) element.style.setProperty(key, value);
+    }, variables);
+  };
+  await page.setContent(markup);
+  await page.addStyleTag({ content: css });
+  await apply(page);
+  const child = page.locator("#child");
+  await expect(child).toHaveCSS("height", "28px");
+  await expect(child).toHaveCSS("padding-top", "2px");
+  for (const id of ["parent", "standalone"]) await expect(page.locator(`#${id}`)).toHaveCSS("height", "32px");
+  await page.locator("main").evaluate(root => root.setAttribute("data-persona-defaults", "v4"));
+  await expect(child).toHaveCSS("height", "32px");
+  await expect(child).toHaveCSS("padding-top", "4px");
+  await page.locator("main").evaluate(root => root.setAttribute("data-persona-defaults", "v5"));
+  await apply(page, { activity: { rowHeight: "40px" } });
+  await expect(child).toHaveCSS("height", "40px");
+  await apply(page, { toolBubble: { rowHeight: "36px" } });
+  await expect(child).toHaveCSS("height", "36px");
+  await child.evaluate(header => {
+    header.classList.add("persona-theme-padding");
+    (header as HTMLElement).style.setProperty("--persona-theme-padding", "10px 12px");
+  });
+  await expect(child).toHaveCSS("padding", "10px 12px");
+  await child.evaluate(header => {
+    header.classList.remove("persona-theme-padding");
+    (header as HTMLElement).style.width = "100px";
+    header.textContent = "Read a file with a long descriptive tool label";
+  });
+  await apply(page);
+  expect((await child.boundingBox())!.height).toBeGreaterThan(28);
+  expect(await child.evaluate(header => header.scrollHeight <= header.clientHeight)).toBe(true);
+
+  const touchContext = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+  try {
+    const touch = await touchContext.newPage();
+    await touch.setContent(markup);
+    await touch.addStyleTag({ content: css });
+    await apply(touch);
+    expect(await touch.evaluate(() => matchMedia("(any-pointer: coarse)").matches)).toBe(true);
+    await expect(touch.locator("#child")).toHaveCSS("height", "44px");
+    await expect(touch.locator("#parent")).toHaveCSS("height", "32px");
+    await apply(touch, { activity: { rowHeight: "48px" } });
+    await expect(touch.locator("#child")).toHaveCSS("height", "48px");
+  } finally { await touchContext.close(); }
+});
+
 // Actual browser CSS inheritance is intentional: jsdom leaves nested var()
 // expressions unresolved. Rendering/legacy style projection has unit coverage.
 test("activity panel inheritance, explicit zero, live resets and independent surfaces", async ({ page }) => {

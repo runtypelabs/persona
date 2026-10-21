@@ -6990,8 +6990,17 @@
   margin-inline-start: 0;
   padding: var(--persona-components-activity-bodyPadding, 16px 0);
 }
-.persona-turn-activity-body .persona-tool-bubble.persona-activity-row {
+.persona-turn-activity-body .persona-tool-bubble.persona-activity-row,
+[data-persona-defaults="v5"] [data-persona-tool-group-stack] .persona-tool-bubble.persona-activity-row {
   --persona-activity-height: var(--persona-components-toolBubble-rowHeight, var(--persona-components-activity-rowHeight, 28px));
+}
+[data-persona-defaults="v5"] [data-persona-tool-group-stack] .persona-activity-header:not(.persona-theme-padding) {
+  padding-block: 2px;
+}
+@media (any-pointer: coarse) {
+  [data-persona-defaults="v5"] [data-persona-tool-group-stack] .persona-tool-bubble.persona-activity-row {
+    --persona-activity-height: var(--persona-components-toolBubble-rowHeight, var(--persona-components-activity-rowHeight, 44px));
+  }
 }
 .persona-turn-activity-body .persona-reasoning-bubble.persona-activity-row {
   --persona-activity-height: var(--persona-components-reasoningBubble-rowHeight, var(--persona-components-activity-rowHeight, 28px));

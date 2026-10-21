@@ -603,7 +603,8 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
   },
   launcher: CIRCLE_LAUNCHER_TOKENS,
   activity: {
-    rowHeight: "32px", labelSize: "13px", iconSize: "16px", indent: "0px",
+    // CSS owns contextual parent, nested, and coarse-pointer row heights.
+    labelSize: "13px", iconSize: "16px", indent: "0px",
     transcriptGap: "0px", responseGap: "12px",
     groupIndent: "16px", groupGap: "2px", groupPadding: "2px 0",
     bodyPadding: "4px 0", bodyFontWeight: "400", sectionGap: "8px", bodySurface: "transparent",
