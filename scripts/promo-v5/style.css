@@ -141,20 +141,35 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
 
 /* ── 4:5 portrait cut (?format=portrait, 1080×1350) ── */
 .portrait-break { display: none; }
-:root[data-format="portrait"] .portrait-break { display: inline; }
+:root:is([data-format="portrait"], [data-format="square"]) .portrait-break { display: inline; }
 :root[data-format="portrait"] body, :root[data-format="portrait"] #stage { width: 1080px; height: 1350px; }
-:root[data-format="portrait"] .hud-block { left: 64px; top: 60px; }
-:root[data-format="portrait"] { --head-size: 58px; }
-:root[data-format="portrait"] .intro-lockup { left: 72px; top: 290px; gap: 28px; }
-:root[data-format="portrait"] #intro-logo { width: 470px; }
-:root[data-format="portrait"] .tagline-main { font-size: 72px; }
-:root[data-format="portrait"] .tagline-sub { font-size: 30px; }
+:root:is([data-format="portrait"], [data-format="square"]) .hud-block { left: 64px; top: 60px; }
+:root:is([data-format="portrait"], [data-format="square"]) { --head-size: 58px; }
+:root:is([data-format="portrait"], [data-format="square"]) .intro-lockup { left: 72px; top: 290px; gap: 28px; }
+:root:is([data-format="portrait"], [data-format="square"]) #intro-logo { width: 470px; }
+:root:is([data-format="portrait"], [data-format="square"]) .tagline-main { font-size: 72px; }
+:root:is([data-format="portrait"], [data-format="square"]) .tagline-sub { font-size: 30px; }
 :root[data-format="portrait"] .device.intro-device { width: 720px; height: 600px; }
 :root[data-format="portrait"] .device { width: 500px; height: 880px; }
-:root[data-format="portrait"] .wlayer > .whost { zoom: 1.05; }
-:root[data-format="portrait"] .intro-device .wlayer > .whost { zoom: 1.18; }
-:root[data-format="portrait"] .code-card { width: 440px; padding: 24px 26px; font-size: 16.5px; }
-:root[data-format="portrait"] .code-card .code-line .hl { inset: 0 -26px; }
+:root:is([data-format="portrait"], [data-format="square"]) .wlayer > .whost { zoom: 1.05; }
+:root:is([data-format="portrait"], [data-format="square"]) .intro-device .wlayer > .whost { zoom: 1.18; }
+:root:is([data-format="portrait"], [data-format="square"]) .code-card { width: 440px; padding: 24px 26px; font-size: 16.5px; }
+:root:is([data-format="portrait"], [data-format="square"]) .code-card .code-line .hl { inset: 0 -26px; }
 :root[data-format="portrait"] .panel { width: 900px; height: 720px; }
-:root[data-format="portrait"] #outro-logo { width: 700px; }
-:root[data-format="portrait"] .outro-row { flex-direction: column; gap: 22px; }
+:root:is([data-format="portrait"], [data-format="square"]) #outro-logo { width: 700px; }
+:root:is([data-format="portrait"], [data-format="square"]) .outro-row { flex-direction: column; gap: 22px; }
+
+/* ── 1:1 square cut (?format=square, 1080×1080): the stacked layouts, shorter ── */
+:root[data-format="square"] body, :root[data-format="square"] #stage { width: 1080px; height: 1080px; }
+:root[data-format="square"] .intro-lockup { left: 72px; top: 240px; gap: 22px; }
+:root[data-format="square"] #intro-logo { width: 380px; }
+:root[data-format="square"] .intro-lockup .pill { font-size: 18px; padding: 9px 16px; }
+:root[data-format="square"] .tagline-main { font-size: 60px; }
+:root[data-format="square"] .tagline-sub { font-size: 26px; }
+:root[data-format="square"] .device.intro-device { width: 600px; height: 560px; }
+:root[data-format="square"] .intro-device .wlayer > .whost { zoom: 1.05; }
+:root[data-format="square"] .device { width: 500px; height: 700px; }
+:root[data-format="square"] .panel { width: 900px; height: 600px; }
+:root[data-format="square"] #outro-logo { width: 620px; }
+:root[data-format="square"] .outro-lockup { gap: 34px; }
+:root[data-format="square"] .built-by { bottom: 56px; }

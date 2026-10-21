@@ -5,6 +5,7 @@
 //   node capture.mjs --stills 0.5,2.2,6        (PNG stills for review)
 //   node capture.mjs --fps 60 --scale 2 --out persona-v5.mp4
 //   4:5 cut: add --url "http://localhost:5199/?format=portrait" --width 1080 --height 1350
+//   1:1 cut: add --url "http://localhost:5199/?format=square" --width 1080 --height 1080
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
