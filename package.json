@@ -30,6 +30,7 @@
     "@changesets/cli": "^2.31.0",
     "@playwright/test": "^1.62.1",
     "@types/ws": "^8.18.2",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "concurrently": "^8.2.2",
     "oxlint": "^1.87.0",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929",

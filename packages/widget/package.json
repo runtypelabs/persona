@@ -184,7 +184,7 @@
     "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:styles": "node scripts/build-styles.mjs",
     "lint": "oxlint",
-    "typecheck": "pnpm run check:runtype-types && tsrs --noEmit",
+    "typecheck": "pnpm run check:runtype-types && node ../../scripts/typecheck.mjs --noEmit",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
