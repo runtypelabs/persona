@@ -70,6 +70,9 @@ function defaultsConfig(s: State): AgentWidgetConfig {
     apiUrl: "/promo-local", persistState: false,
     future: { v5Defaults: s.v5 },
     ...(s.brand ? { brand: s.brand } : { colorScheme: "dark" as const }),
+    // Off-screen workaround (not in the code card): brand `elevation` currently
+    // gives V5's flat, unpadded assistant replies a card shadow and border.
+    ...(s.brand && s.v5 ? { theme: { components: { message: { assistant: { shadow: "none", border: "transparent" } } } } } : {}),
     launcher: { enabled: false, fullHeight: true, title: "Docs assistant", subtitle: "Persona · sample data" },
     welcome: { variant: "none" }, suggestions: { starters: { items: [] } },
     copy: { inputPlaceholder: "Ask about theming…" },
