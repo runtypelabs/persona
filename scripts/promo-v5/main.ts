@@ -356,14 +356,6 @@ function renderHud(sel: string, t: number, a: number, b: number) {
   h1.style.clipPath = `inset(0 ${((1 - hp) * 100).toFixed(2)}% -20% 0)`;
 }
 
-// Official Runtype mark: an 8×8 grid of faint cells with nine solid cells forming the "r".
-const R_CELLS = [[3, 3], [5, 3], [6, 3], [3, 4], [4, 4], [7, 4], [3, 5], [3, 6], [3, 7]];
-$("#runtype-mark").innerHTML = `<svg viewBox="0 0 8 8" aria-label="Runtype">${Array.from({ length: 64 }, (_, i) => {
-  const c = i % 8, r = Math.floor(i / 8), solid = R_CELLS.findIndex(([x, y]) => x === c && y === r);
-  return `<rect x="${c + 0.1}" y="${r + 0.1}" width="0.8" height="0.8" fill="currentColor" fill-opacity="0.124"${solid >= 0 ? ` data-solid="${solid}"` : ""}/>`;
-}).join("")}</svg>`;
-const solidCells = [...document.querySelectorAll<SVGRectElement>("#runtype-mark [data-solid]")];
-
 function renderOutro(t: number) {
   const a = T.outroIn;
   const vis = easeOut3(prog(t, a, a + 0.3));
@@ -379,11 +371,6 @@ function renderOutro(t: number) {
   reveal("#outro-row", t, a + 0.25);
   reveal("#outro-url", t, a + 0.38);
   reveal("#built-by", t, a + 0.6);
-  // The "r" lights up cell by cell, Runtype's own dot-matrix reveal.
-  solidCells.forEach((cell) => {
-    const k = Number(cell.dataset.solid);
-    cell.setAttribute("fill-opacity", (lerp(0.124, 1, easeOut3(prog(t, a + 0.85 + k * 0.045, a + 1.05 + k * 0.045)))).toFixed(3));
-  });
   // Slow push-in through the hold.
   $("#outro").querySelector<HTMLElement>(".outro-lockup")!.style.transform = `scale(${lerp(1, 1.035, prog(t, a, DURATION))})`;
 }
