@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import pageHtml from "../v5-preview.html?raw";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AgentWidgetMessage } from "@runtypelabs/persona";
+import type { AgentWidgetConfig, AgentWidgetMessage } from "@runtypelabs/persona";
 const mocks = vi.hoisted(() => ({ init: vi.fn(), inject: vi.fn(), destroy: vi.fn(), upsertArtifact: vi.fn() }));
 vi.mock("@runtypelabs/persona", () => ({ initAgentWidget: mocks.init }));
 vi.mock("./examples-nav", () => ({ renderExamplesShell: vi.fn() }));
@@ -149,12 +149,24 @@ describe("V5 preview", () => {
     choose("scene", "welcome");
     expect(document.querySelector(".v5-embedded-frame")).toBeNull();
   });
-  it("compares V4 and opts into descriptive labels without changing the default", async () => {
+  it("compares V4 and opts into a documentation review summary without changing the default", async () => {
     await start();
+    expect(mocks.init.mock.lastCall?.[0].config.toolCall?.renderGroupedSummary).toBeUndefined();
     choose("version", "v4");
     expect(mocks.init.mock.lastCall?.[0].config.future.v5Defaults).toBe(false);
     choose("group", "descriptive");
-    expect(mocks.init.mock.lastCall?.[0].config.toolCall.renderGroupedSummary).toBeTypeOf("function");
+    const render: NonNullable<NonNullable<AgentWidgetConfig["toolCall"]>["renderGroupedSummary"]> = mocks.init.mock.lastCall?.[0].config.toolCall.renderGroupedSummary;
+    const context: Parameters<typeof render>[0] = {
+      toolCalls: [ { id: "search", name: "search_docs", status: "complete" }, { id: "read", name: "read_file", status: "complete" } ],
+      messages: [], defaultSummary: "Searched docs, read files", streaming: false, isLatestGroup: true, isCurrentRunGroup: true, config: {},
+    };
+    expect(render(context)).toBe("Reviewed 2 documentation sources");
+    expect(render({ ...context, toolCalls: [{ ...context.toolCalls[0], status: "running" }] })).toBe("Reviewing 1 documentation source");
+    for (const extra of [{ error: "Failed" }, { interrupted: true }, { approvalStatus: "pending" as const }, { name: "run_command" }]) {
+      expect(render({ ...context, toolCalls: [{ ...context.toolCalls[0], ...extra }] })).toBeNull();
+    }
+    choose("group", "default");
+    expect(mocks.init.mock.lastCall?.[0].config.toolCall?.renderGroupedSummary).toBeUndefined();
   });
   it("shows follow-ups after the loading sample and cancels stale transitions", async () => {
     vi.useFakeTimers();

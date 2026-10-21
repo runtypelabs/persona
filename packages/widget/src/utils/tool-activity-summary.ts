@@ -3,10 +3,11 @@ import type { AgentWidgetConfig, AgentWidgetToolCall } from "../types";
 // Exact documented names only. Ambiguous names such as search_events or
 // search_nodes need provider metadata, which tool messages do not carry.
 const categories = [
+  ["search_docs", "Searching docs", "Searched docs", "search"],
   ["web_search|web_search_preview|WebSearch", "Searching the web", "Searched the web", "globe"],
   ["web_fetch|WebFetch", "Reading web pages", "Read web pages", "globe", "single"],
   ["file_search|search_files|Glob", "Searching files", "Searched files", "search"],
-  ["read_text_file|read_multiple_files|Read", "Reading files", "Read files", "file-text", "single"],
+  ["read_file|read_text_file|read_multiple_files|Read", "Reading files", "Read files", "file-text", "single"],
   ["write_file|edit_file|apply_patch|Write|Edit|NotebookEdit", "Editing files", "Edited files", "pencil", "single"],
   ["list_directory|list_directory_with_sizes|directory_tree", "Browsing files", "Browsed files", "folder"],
   ["Grep", "Searching code", "Searched code", "search"],

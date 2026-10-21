@@ -6,8 +6,6 @@ import { renderExamplesShell } from "./examples-nav";
 import { bindControlsToggle } from "./controls-toggle";
 import { renderScrollToBottomIcon } from "./scroll-to-bottom-icon";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
-// Reuse the documented application-level hook; this is not a library default.
-import { renderToolActivitySummary } from "../../../examples/ai-sdk-next/app/lib/tool-activity-summary";
 
 renderExamplesShell();
 bindControlsToggle(document.querySelector<HTMLButtonElement>("#v5-settings-toggle")!);
@@ -36,6 +34,16 @@ let timers: ReturnType<typeof setTimeout>[] = [];
 let epoch = Date.now();
 let serial = 0;
 const order = new Map<string, number>();
+
+// In this local workflow, each documentation call is one source to review.
+// Keep attention and unfamiliar calls on Persona's built-in status summary.
+const renderDocumentationReviewSummary: NonNullable<NonNullable<AgentWidgetConfig["toolCall"]>["renderGroupedSummary"]> = ({ toolCalls, messages }) => {
+  if (!toolCalls.length || messages.some(message => message.approval && message.approval.status !== "approved") ||
+    toolCalls.some(tool => !["search_docs", "read_file"].includes(tool.name ?? "") || tool.success === false || tool.error ||
+      tool.interrupted || tool.superseded || (tool.approvalStatus && tool.approvalStatus !== "approved"))) return null;
+  const action = toolCalls.some(tool => tool.status !== "complete") ? "Reviewing" : "Reviewed";
+  return `${action} ${toolCalls.length} documentation ${toolCalls.length === 1 ? "source" : "sources"}`;
+};
 
 // Application-owned renderer: each invocation owns its listeners until Persona
 // aborts the render signal. Approval and execution are deliberately separate.
@@ -227,7 +235,7 @@ function configuration(): AgentWidgetConfig {
       toolCallDisplay: display,
       reasoningDisplay: { ...activityStyle, ...(icons === "default" ? {} : { iconVisibility: icons }) },
     },
-    ...(grouping === "descriptive" ? { toolCall: { renderGroupedSummary: renderToolActivitySummary } } : {}),
+    ...(grouping === "descriptive" ? { toolCall: { renderGroupedSummary: renderDocumentationReviewSummary } } : {}),
   };
 }
 function reset() {

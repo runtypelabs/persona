@@ -6,6 +6,7 @@ const tool = (name: string, extra: Partial<AgentWidgetToolCall> = {}): AgentWidg
 
 describe("semantic tool activity", () => {
   it.each([
+    ["search_docs", "Searched docs"], ["read_file", "Read a file"],
     ["web_search", "Searched the web"], ["web_search_preview", "Searched the web"], ["WebSearch", "Searched the web"],
     ["web_fetch", "Read a web page"], ["WebFetch", "Read a web page"],
     ["file_search", "Searched files"], ["search_files", "Searched files"], ["Glob", "Searched files"],
@@ -21,6 +22,12 @@ describe("semantic tool activity", () => {
     ["TodoWrite", "Updated the plan"], ["TaskCreate", "Updated the plan"], ["TaskUpdate", "Updated the plan"],
     ["sql_db_query", "Queried the database"], ["search_gmail", "Searched email"],
   ])("maps exact alias %s", (name, label) => expect(toolActivityLabel(tool(name))).toBe(label));
+
+  it("summarizes documentation searches and file reads without a custom hook", () => {
+    expect(summarizeToolActivity([tool("search_docs"), tool("read_file")])).toBe("Searched docs, read files");
+    expect(summarizeToolActivity([tool("search_docs", { status: "running" }), tool("read_file", { status: "pending" })])).toBe("Searching docs, reading files");
+    expect(toolActivityLabel(tool("read_file", { status: "running" }))).toBe("Reading a file");
+  });
 
   it.each(["search_events", "search_nodes", "read_graph", "open_nodes", "read", "search", "git_commit", "my_web_search", "web_search_custom"])("keeps ambiguous %s generic", name => {
     expect(toolActivityLabel(tool(name))).toMatch(/^Used /);
@@ -127,6 +134,7 @@ describe("semantic tool activity", () => {
 });
 
  it.each([
+   ["search_docs", "search"], ["read_file", "file-text"],
    ["web_search", "globe"], ["Read", "file-text"], ["edit_file", "pencil"], ["Bash", "terminal"],
    ["sql_db_query", "database"], ["search_events", "wrench"], ["my_web_search", "wrench"],
  ])("maps the completed icon for %s without guessing", (name, icon) => expect(toolActivityIcon(tool(name))).toBe(icon));
