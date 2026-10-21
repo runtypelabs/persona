@@ -1,0 +1,13 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e8]
+  - generic
+    - paragraph
+    - paragraph
+      - StaticText "You said: "
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e9]
+      - button "Start voice recognition" [disabled, ref=e10]
+      - button "Stop generating" [ref=e11]

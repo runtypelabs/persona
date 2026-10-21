@@ -1,0 +1,82 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "dark",
+  "voice": null,
+  "requests": [
+    {
+      "at": 273,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Keep this reply plain",
+            "createdAt": "2026-10-21T20:48:59.360Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 254,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1792615739360
+      }
+    },
+    {
+      "at": 254,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvil4kww_8x4z1dun",
+        "timestamp": 1792615739360
+      }
+    },
+    {
+      "at": 256,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvil4kww_b5bwjhyd",
+        "role": "user",
+        "content": "Keep this reply plain",
+        "createdAt": "2026-10-21T20:48:59.360Z",
+        "sequence": 1792615739114,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 1386,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1792615739623-9fc3cbea5156",
+        "role": "assistant",
+        "content": "You said: **Keep this reply plain**. This reply is scripted by the verify fixture.",
+        "createdAt": "2026-10-21T20:48:59.623Z",
+        "streaming": false,
+        "sequence": 1792615739379,
+        "agentMetadata": {
+          "textBlockId": "turn-1-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 1506,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvil4kww_8x4z1dun",
+        "timestamp": 1792615740612,
+        "outcome": "success"
+      }
+    }
+  ]
+}

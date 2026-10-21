@@ -1,0 +1,54 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "dark",
+  "voice": null,
+  "requests": [
+    {
+      "at": 273,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Keep this reply plain",
+            "createdAt": "2026-10-21T20:48:59.360Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 254,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1792615739360
+      }
+    },
+    {
+      "at": 254,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvil4kww_8x4z1dun",
+        "timestamp": 1792615739360
+      }
+    },
+    {
+      "at": 256,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvil4kww_b5bwjhyd",
+        "role": "user",
+        "content": "Keep this reply plain",
+        "createdAt": "2026-10-21T20:48:59.360Z",
+        "sequence": 1792615739114,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    }
+  ]
+}

@@ -1,0 +1,260 @@
+{
+  "runId": "20261021-204734-972eec",
+  "entries": [
+    {
+      "feature": "launcher-and-theme",
+      "label": "V5 default dark baseline",
+      "note": "Captured before selecting Studio.",
+      "files": [
+        "02-launcher-and-theme-v5-studio-dark.png",
+        "02-launcher-and-theme-v5-studio-dark.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:47:44.426Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "V5 Studio dark verified",
+      "note": null,
+      "files": [
+        "03-launcher-and-theme-v5-studio-dark-verified.png",
+        "03-launcher-and-theme-v5-studio-dark-verified.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:47:56.340Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "V5 Studio light",
+      "note": null,
+      "files": [
+        "04-launcher-and-theme-v5-studio-light.png",
+        "04-launcher-and-theme-v5-studio-light.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:47:56.539Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "V5 Terminal light",
+      "note": null,
+      "files": [
+        "05-launcher-and-theme-v5-terminal-light.png",
+        "05-launcher-and-theme-v5-terminal-light.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:47:56.739Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "V5 Terminal dark",
+      "note": null,
+      "files": [
+        "06-launcher-and-theme-v5-terminal-dark.png",
+        "06-launcher-and-theme-v5-terminal-dark.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:47:56.940Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "V4 Terminal dark elevated replies",
+      "note": null,
+      "files": [
+        "07-launcher-and-theme-v4-terminal-dark-elevated-replies.png",
+        "07-launcher-and-theme-v4-terminal-dark-elevated-replies.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:47:57.136Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "V4 Studio dark elevated replies",
+      "note": null,
+      "files": [
+        "08-launcher-and-theme-v4-studio-dark-elevated-replies.png",
+        "08-launcher-and-theme-v4-studio-dark-elevated-replies.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:47:57.310Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "V5 Studio and Terminal compared with V4",
+      "note": null,
+      "files": [
+        "01-launcher-and-theme-v5-studio-and-terminal-compared-with-v4.gif",
+        "01-launcher-and-theme-v5-studio-and-terminal-compared-with-v4.webm",
+        "01-launcher-and-theme-v5-studio-and-terminal-compared-with-v4.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/v5-preview.html",
+      "at": "2026-10-21T20:47:57.806Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Custom padded assistant bubble with brand shadow",
+      "note": null,
+      "files": [
+        "10-launcher-and-theme-custom-padded-assistant-bubble-with-brand-shadow.png",
+        "10-launcher-and-theme-custom-padded-assistant-bubble-with-brand-shadow.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=light&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22density%22%3A%22comfortable%22%2C%22elevation%22%3A%22raised%22%7D%2C%22theme%22%3A%7B%22components%22%3A%7B%22message%22%3A%7B%22assistant%22%3A%7B%22background%22%3A%22semantic.colors.container%22%2C%22padding%22%3A%2212px+16px%22%2C%22borderRadius%22%3A%2212px%22%2C%22border%22%3A%22semantic.colors.border%22%2C%22borderWidth%22%3A%221px%22%2C%22shadow%22%3A%22palette.shadows.sm%22%7D%7D%7D%7D%7D",
+      "at": "2026-10-21T20:48:39.144Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Custom bubble during streaming",
+      "note": "1 request(s) crossed the network boundary, 3 controller event(s)",
+      "files": [
+        "11-launcher-and-theme-custom-bubble-completed-conversation.page.json"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=light&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22density%22%3A%22comfortable%22%2C%22elevation%22%3A%22raised%22%7D%2C%22theme%22%3A%7B%22components%22%3A%7B%22message%22%3A%7B%22assistant%22%3A%7B%22background%22%3A%22semantic.colors.container%22%2C%22padding%22%3A%2212px+16px%22%2C%22borderRadius%22%3A%2212px%22%2C%22border%22%3A%22semantic.colors.border%22%2C%22borderWidth%22%3A%221px%22%2C%22shadow%22%3A%22palette.shadows.sm%22%7D%7D%7D%7D%7D",
+      "at": "2026-10-21T20:48:39.226Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Custom padded assistant bubble follows raised elevation",
+      "note": null,
+      "files": [
+        "09-launcher-and-theme-custom-padded-assistant-bubble-follows-raised-el.gif",
+        "09-launcher-and-theme-custom-padded-assistant-bubble-follows-raised-el.webm",
+        "09-launcher-and-theme-custom-padded-assistant-bubble-follows-raised-el.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=light&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22density%22%3A%22comfortable%22%2C%22elevation%22%3A%22raised%22%7D%2C%22theme%22%3A%7B%22components%22%3A%7B%22message%22%3A%7B%22assistant%22%3A%7B%22background%22%3A%22semantic.colors.container%22%2C%22padding%22%3A%2212px+16px%22%2C%22borderRadius%22%3A%2212px%22%2C%22border%22%3A%22semantic.colors.border%22%2C%22borderWidth%22%3A%221px%22%2C%22shadow%22%3A%22palette.shadows.sm%22%7D%7D%7D%7D%7D",
+      "at": "2026-10-21T20:48:39.390Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Plain V5 assistant after a real send",
+      "note": null,
+      "files": [
+        "13-launcher-and-theme-plain-v5-assistant-after-a-real-send.png",
+        "13-launcher-and-theme-plain-v5-assistant-after-a-real-send.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=dark&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22elevation%22%3A%22raised%22%2C%22density%22%3A%22compact%22%7D%7D",
+      "at": "2026-10-21T20:49:00.382Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Plain V5 during streaming",
+      "note": "1 request(s) crossed the network boundary, 3 controller event(s)",
+      "files": [
+        "14-launcher-and-theme-plain-v5-completed-conversation.page.json"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=dark&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22elevation%22%3A%22raised%22%2C%22density%22%3A%22compact%22%7D%7D",
+      "at": "2026-10-21T20:49:00.514Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Plain V5 assistant at compact density with raised brand",
+      "note": null,
+      "files": [
+        "12-launcher-and-theme-plain-v5-assistant-at-compact-density-with-raise.gif",
+        "12-launcher-and-theme-plain-v5-assistant-at-compact-density-with-raise.webm",
+        "12-launcher-and-theme-plain-v5-assistant-at-compact-density-with-raise.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=dark&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22elevation%22%3A%22raised%22%2C%22density%22%3A%22compact%22%7D%7D",
+      "at": "2026-10-21T20:49:00.755Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Plain V5 reply finished",
+      "note": null,
+      "files": [
+        "15-launcher-and-theme-plain-v5-reply-finished.png",
+        "15-launcher-and-theme-plain-v5-reply-finished.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=dark&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22elevation%22%3A%22raised%22%2C%22density%22%3A%22compact%22%7D%7D",
+      "at": "2026-10-21T20:49:09.019Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Plain V5 finished request and events",
+      "note": "1 request(s) crossed the network boundary, 5 controller event(s)",
+      "files": [
+        "16-launcher-and-theme-plain-v5-finished-request-and-events.page.json"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=dark&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22elevation%22%3A%22raised%22%2C%22density%22%3A%22compact%22%7D%7D",
+      "at": "2026-10-21T20:49:09.118Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Custom padded assistant reply finished",
+      "note": null,
+      "files": [
+        "18-launcher-and-theme-custom-padded-assistant-reply-finished.png",
+        "18-launcher-and-theme-custom-padded-assistant-reply-finished.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=light&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22density%22%3A%22comfortable%22%2C%22elevation%22%3A%22raised%22%7D%2C%22theme%22%3A%7B%22components%22%3A%7B%22message%22%3A%7B%22assistant%22%3A%7B%22background%22%3A%22semantic.colors.container%22%2C%22padding%22%3A%2212px+16px%22%2C%22borderRadius%22%3A%2212px%22%2C%22border%22%3A%22semantic.colors.border%22%2C%22borderWidth%22%3A%221px%22%2C%22shadow%22%3A%22palette.shadows.sm%22%7D%7D%7D%7D%7D",
+      "at": "2026-10-21T20:49:23.337Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Custom bubble finished request and events",
+      "note": "1 request(s) crossed the network boundary, 5 controller event(s)",
+      "files": [
+        "19-launcher-and-theme-custom-bubble-finished-request-and-events.page.json"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=light&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22density%22%3A%22comfortable%22%2C%22elevation%22%3A%22raised%22%7D%2C%22theme%22%3A%7B%22components%22%3A%7B%22message%22%3A%7B%22assistant%22%3A%7B%22background%22%3A%22semantic.colors.container%22%2C%22padding%22%3A%2212px+16px%22%2C%22borderRadius%22%3A%2212px%22%2C%22border%22%3A%22semantic.colors.border%22%2C%22borderWidth%22%3A%221px%22%2C%22shadow%22%3A%22palette.shadows.sm%22%7D%7D%7D%7D%7D",
+      "at": "2026-10-21T20:49:23.414Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Custom assistant bubble complete send",
+      "note": null,
+      "files": [
+        "17-launcher-and-theme-custom-assistant-bubble-complete-send.gif",
+        "17-launcher-and-theme-custom-assistant-bubble-complete-send.webm",
+        "17-launcher-and-theme-custom-assistant-bubble-complete-send.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?theme=light&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22brand%22%3A%7B%22density%22%3A%22comfortable%22%2C%22elevation%22%3A%22raised%22%7D%2C%22theme%22%3A%7B%22components%22%3A%7B%22message%22%3A%7B%22assistant%22%3A%7B%22background%22%3A%22semantic.colors.container%22%2C%22padding%22%3A%2212px+16px%22%2C%22borderRadius%22%3A%2212px%22%2C%22border%22%3A%22semantic.colors.border%22%2C%22borderWidth%22%3A%221px%22%2C%22shadow%22%3A%22palette.shadows.sm%22%7D%7D%7D%7D%7D",
+      "at": "2026-10-21T20:49:23.579Z",
+      "head": "d0c15abc9d45559e81b7e959fff73710df422484",
+      "diffHash": "46e038b27465"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "launcher-and-theme",
+      "pass": true,
+      "skipped": false,
+      "note": "V5 Studio/Terminal light and dark preserve plain assistant prose; V4 dark retains elevated cards. Real sends verify plain compact replies and custom padded bubbles with brand shadows, each with one request and completed assistant/run events. V4 light and custom dark bubbles covered by unit tests only; other launcher/layout entry points not driven."
+    }
+  ]
+}

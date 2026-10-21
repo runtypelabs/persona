@@ -1,0 +1,82 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 175,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Show a padded assistant bubble",
+            "createdAt": "2026-10-21T20:49:21.751Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 166,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1792615761751
+      }
+    },
+    {
+      "at": 166,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvil526v_8x0ci4o5",
+        "timestamp": 1792615761751
+      }
+    },
+    {
+      "at": 170,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvil526v_f3oa10ts",
+        "role": "user",
+        "content": "Show a padded assistant bubble",
+        "createdAt": "2026-10-21T20:49:21.751Z",
+        "sequence": 1792615761592,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 1405,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1792615762006-4aa07a8f6df328",
+        "role": "assistant",
+        "content": "You said: **Show a padded assistant bubble**. This reply is scripted by the verify fixture.",
+        "createdAt": "2026-10-21T20:49:22.006Z",
+        "streaming": false,
+        "sequence": 1792615761761,
+        "agentMetadata": {
+          "textBlockId": "turn-1-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 1532,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvil526v_8x0ci4o5",
+        "timestamp": 1792615763117,
+        "outcome": "success"
+      }
+    }
+  ]
+}

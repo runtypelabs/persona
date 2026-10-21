@@ -1,0 +1,16 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e14]
+  - generic
+    - paragraph
+      - StaticText "Show a padded assistant bubble"
+    - generic
+      - paragraph
+        - StaticText "You said: "
+      - button "Copy message" [ref=e18]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e15]
+      - button "Start voice recognition" [ref=e16]
+      - button "Send message" [ref=e17]
