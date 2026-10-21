@@ -102,6 +102,32 @@ const layers = states.map((s) => {
   return layer;
 });
 
+// Intro / thumbnail widget: V5 defaults, untouched, mid-conversation.
+const introWidget = initAgentWidget({ target: $("#intro-host"), config: { ...defaultsConfig(states[1]), launcher: { enabled: false, fullHeight: true, title: "Assistant" }, copy: { inputPlaceholder: "Ask anything…" } } });
+{
+  const epoch = Date.parse("2026-10-21T16:00:00Z");
+  let sequence = 0;
+  const inject = (m: Partial<AgentWidgetMessage> & Pick<AgentWidgetMessage, "id">) => introWidget.injectTestMessage({
+    type: "message", message: { role: "assistant", content: "", createdAt: new Date(epoch + sequence * 100).toISOString(), sequence: sequence++, ...m },
+  });
+  const tool = (id: string, name: string, args: Record<string, unknown>, result: string) =>
+    inject({ id, variant: "tool", toolCall: { id, name, status: "complete", success: true, startedAt: epoch, durationMs: 900, args, result } });
+  inject({ id: "user", role: "user", content: "What is possible?" });
+  inject({ id: "reason", variant: "reasoning", reasoning: { id: "reason", status: "complete", startedAt: epoch, durationMs: 3200, chunks: ["Exploring what Persona can do."] } });
+  tool("t1", "search_docs", { query: "Persona capabilities" }, "Streaming, tools, approvals, artifacts, voice.");
+  tool("t2", "list_examples", { framework: "any" }, "Found 35 live demos.");
+  tool("t3", "render_component", { name: "Showcase" }, "Rendered.");
+  inject({ id: "final", content: "Anything is possible." });
+  // Open the grouped tool calls with the real disclosure, as a reader would.
+  // Messages render asynchronously, so retry until the group header exists.
+  const openGroup = (tries: number) => {
+    const header = $("#intro-host").querySelector<HTMLButtonElement>('button[aria-controls^="activity-details-tool-group"]');
+    if (header?.getAttribute("aria-expanded") === "false") header.click();
+    else if (!header && tries > 0) setTimeout(() => openGroup(tries - 1), 100);
+  };
+  openGroup(30);
+}
+
 // Code card: stable line ids; values type over when the state changes.
 type Seg = [cls: string, text: string];
 type CodeLine = { id: string; brand?: boolean; prefix: Seg[]; value?: (s: State) => string; kind?: "bool" | "str"; suffix?: Seg[] };
@@ -294,33 +320,18 @@ const reveal = (sel: string, t: number, a: number, dy = 24) => {
   e.style.opacity = String(p); e.style.transform = `translateY(${lerp(dy, 0, p)}px)`;
 };
 
+const cam1 = $("#cam1"), introDevice = $("#intro-device");
+// Fully composed from frame 0 so the first frame works as the thumbnail; only the camera drifts.
 function renderIntro(t: number) {
-  const root = $("#intro");
-  const lock = root.querySelector<HTMLElement>(".intro-lockup")!;
   const exit = easeIn3(prog(t, T.introOut - 0.3, T.introOut));
-  lock.style.transform = `scale(${lerp(0.94, 1.0, easeOut3(prog(t, 0, 2.2))) * lerp(1, 1.9, exit)})`;
-  lock.style.filter = exit > 0 ? `blur(${(exit * 10).toFixed(2)}px)` : "none";
   setOpacity("#intro", 1 - exit);
-  const svg = root.querySelector("svg")!;
-  svg.querySelector<SVGPathElement>(".logo-bubble")!.style.strokeDashoffset = String(1 - easeOut3(prog(t, 0.02, 0.42)));
-  svg.querySelector<SVGLineElement>(".logo-bar")!.style.strokeDashoffset = String(1 - easeOut3(prog(t, 0.18, 0.42)));
-  svg.querySelectorAll<SVGCircleElement>(".logo-dot").forEach((d, i) => {
-    const p = prog(t, 0.3 + i * 0.05, 0.48 + i * 0.05);
-    d.style.transformBox = "fill-box"; d.style.transformOrigin = "center";
-    d.style.transform = `scale(${p <= 0 ? 0 : easeOutBack(p)})`;
-  });
-  for (const sel of [".logo-spark", ".logo-js"]) svg.querySelector<SVGElement>(sel)!.style.opacity = String(easeOut3(prog(t, 0.4, 0.6)));
-  const wp = easeOutExpo(prog(t, 0.12, 0.62));
-  const word = svg.querySelector<SVGPathElement>(".logo-word")!;
-  word.style.opacity = String(wp);
-  word.style.transform = `translateX(${lerp(-3, 0, wp)}px)`;
-  reveal("#intro-pill", t, 0.5, 30);
-  // What it is, spelled out: the main line wipes on, the sub line follows.
-  const main = root.querySelector<HTMLElement>(".tagline-main")!;
-  const mp = easeOutExpo(prog(t, 0.8, 1.45));
-  main.style.clipPath = `inset(-10% ${((1 - mp) * 100).toFixed(2)}% -20% 0)`;
-  main.style.transform = `translateY(${lerp(14, 0, mp)}px)`;
-  reveal(".tagline-sub", t, 1.15, 16);
+  const drift = easeInOut3(prog(t, 0, T.introOut));
+  const lock = $("#intro-lockup");
+  lock.style.transform = `translateY(-50%) translateX(${lerp(0, -14, drift) - exit * 160}px) scale(${lerp(1, 1.02, drift)})`;
+  lock.style.filter = exit > 0 ? `blur(${(exit * 10).toFixed(2)}px)` : "none";
+  cam1.style.transform = `translate3d(0, 0, ${(lerp(-60, 30, drift) + exit * 700).toFixed(2)}px) rotateX(${lerp(7, 4, drift).toFixed(3)}deg) rotateY(${lerp(-22, -14, drift).toFixed(3)}deg)`;
+  introDevice.style.transform = `translate3d(470px, 10px, 0) translate(-50%, -50%)`;
+  introDevice.style.filter = exit > 0 ? `blur(${(exit * 8).toFixed(2)}px)` : "none";
 }
 
 function renderS2(t: number) {
@@ -387,7 +398,7 @@ function renderBg(t: number, focus: number) {
   const glow = $("#glow");
   const amp = 0.18 + 0.05 * Math.sin(t * 2.2);
   glow.style.background = `radial-gradient(closest-side, rgba(${r},${g},${b},${amp}), rgba(${r},${g},${b},0.04) 55%, transparent)`;
-  glow.style.transform = `translate(${t > T.s2In && t < T.s3In ? 160 : 0}px, 0) scale(${lerp(0.9, 1.15, (Math.sin(t * 0.9) + 1) / 2)})`;
+  glow.style.transform = `translate(${t < T.s2In ? 340 : t < T.s3In ? 160 : 0}px, 0) scale(${lerp(0.9, 1.15, (Math.sin(t * 0.9) + 1) / 2)})`;
 }
 
 // Persona's own CSS animations/transitions run on virtual time: each one is
@@ -426,4 +437,5 @@ document.fonts.ready.then(() => { seek(0); window.__ready = true; });
 
 // Preview mode: ?t=3.2 freezes on a frame.
 const params = new URLSearchParams(location.search);
+if (params.has("font")) document.documentElement.dataset.font = params.get("font")!;
 if (params.has("t")) document.fonts.ready.then(() => setTimeout(() => window.__seek(Number(params.get("t"))), 600));

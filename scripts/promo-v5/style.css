@@ -38,8 +38,14 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
 .logo-wrap { color: var(--paper); line-height: 0; }
 .persona-logo { display: block; width: 100%; height: auto; overflow: visible; }
 .logo-bubble, .logo-bar { stroke-dasharray: 1; }
-.intro-lockup, .outro-lockup { display: flex; flex-direction: column; align-items: center; gap: 44px; }
-#intro-logo { width: 900px; }
+.outro-lockup { display: flex; flex-direction: column; align-items: center; gap: 44px; }
+/* Intro doubles as the thumbnail: copy on the left, the default v5 widget on the right. */
+.intro-lockup { position: absolute; left: 128px; top: 50%; transform-origin: 0 50%; display: flex; flex-direction: column; align-items: flex-start; gap: 36px; }
+#intro-logo { width: 600px; }
+.intro-lockup .tagline { align-items: flex-start; gap: 26px; margin-top: 4px; }
+.intro-lockup .tagline-main, .intro-lockup .tagline-sub { text-align: left; }
+.intro-3d { position: absolute; inset: 0; }
+.device.intro-device { width: 620px; height: 660px; }
 #outro-logo { width: 760px; }
 .pill { display: inline-flex; align-items: center; gap: 14px; padding: 12px 22px; border: 1.5px solid var(--teal);
   color: var(--teal); font: 600 22px/1 var(--mono); letter-spacing: 0.2em; background: rgba(38, 254, 220, 0.06); }
@@ -90,7 +96,7 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
 .hud-block { position: absolute; left: 100px; top: 64px; opacity: 0; white-space: nowrap; }
 .kicker { display: flex; align-items: center; gap: 16px; font: 600 22px/1 var(--mono); letter-spacing: 0.2em; color: var(--teal); }
 .kicker-num { padding: 6px 9px; border: 1.5px solid var(--teal); letter-spacing: 0.05em; }
-.hud-block h1 { margin: 24px 0 0; font: 800 60px/1.04 var(--display); letter-spacing: -0.02em; color: var(--paper);
+.hud-block h1 { margin: 24px 0 0; font: var(--head-weight) var(--head-size)/var(--head-leading) var(--head-font); letter-spacing: var(--head-tracking); text-transform: var(--head-case); color: var(--paper);
   text-shadow: 0 6px 40px rgba(0, 0, 0, 0.7); }
 
 /* ── Outro ── */
@@ -111,8 +117,10 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
 
 /* ── Intro tagline ── */
 .tagline { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-top: 6px; }
-.tagline-main { font: 800 54px/1.05 var(--display); letter-spacing: -0.015em; color: var(--paper); }
-.tagline-sub { font: 500 22px/1 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+/* Mirrors the persona-chat.dev hero: JetBrains Mono 700 caps, -0.05em, teal accent line. */
+.tagline-main { font: 700 80px/0.95 var(--mono); letter-spacing: -0.05em; text-transform: uppercase; color: var(--paper); text-align: center; }
+.tagline-main .accent { color: var(--teal); }
+.tagline-sub { font: 400 32px/1.4 "Geist", sans-serif; letter-spacing: 0; color: #b9b5ab; }
 
 /* ── Framework tiles ── */
 .tile { width: 236px; height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
@@ -124,3 +132,11 @@ body { width: 1920px; height: 1080px; font-family: "Geist", "Inter", sans-serif;
 .tile.more { border-style: dashed; border-color: rgba(38, 254, 220, 0.5); background: rgba(38, 254, 220, 0.05); }
 .tile.more b { font: 700 54px/1 var(--mono); color: var(--teal); }
 .tile.more span { color: var(--teal); text-align: center; line-height: 1.35; }
+
+/* Headline face; ?font=<name> swaps it for comparison renders. */
+:root { --head-font: var(--mono); --head-weight: 700; --head-size: 66px; --head-leading: 0.98; --head-tracking: -0.05em; --head-case: uppercase; }
+:root[data-font="syne"] { --head-font: var(--display); --head-weight: 800; --head-size: 60px; --head-leading: 1.04; --head-tracking: -0.02em; --head-case: none; }
+:root[data-font="syne-600"] { --head-weight: 600; --head-size: 62px; --head-tracking: 0; }
+:root[data-font="mono"] { --head-font: var(--mono); --head-weight: 700; --head-size: 66px; --head-leading: 0.98; --head-tracking: -0.05em; --head-case: uppercase; }
+:root[data-font="grotesk"] { --head-font: "Space Grotesk", sans-serif; --head-weight: 700; --head-size: 68px; --head-leading: 1.0; --head-tracking: -0.03em; }
+:root[data-font="geist"] { --head-font: "Geist", sans-serif; --head-weight: 600; --head-size: 68px; --head-leading: 1.02; --head-tracking: -0.035em; }

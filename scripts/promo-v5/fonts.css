@@ -13,3 +13,6 @@
 @font-face { font-family: 'Segoe UI'; font-weight: 100 900; src: local('Inter'); }
 @font-face { font-family: 'Segoe Sans'; font-weight: 100 900; src: local('Inter'); }
 @font-face { font-family: 'Runtype Wordmark'; src: url('./fonts/runtype-wordmark-v1.woff2') format('woff2'); font-style: normal; font-weight: 400; font-display: block; unicode-range: U+0065, U+006E, U+0070, U+0072, U+0074-0075, U+0079; }
+@font-face { font-family: 'Space Grotesk'; font-weight: 500; font-display: block; src: url('./fonts/SpaceGrotesk-500.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-weight: 700; font-display: block; src: url('./fonts/SpaceGrotesk-700.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-weight: 400; font-display: block; src: url('./fonts/SpaceGrotesk-400.woff2') format('woff2'); }

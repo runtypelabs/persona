@@ -9,13 +9,18 @@
   <div id="stage">
     <div id="bg"><div id="floor"></div><div id="glow"></div></div>
 
-    <section id="intro" class="layer center">
-      <div class="intro-lockup">
+    <section id="intro" class="layer">
+      <div class="intro-3d scene3d">
+        <div class="cam" id="cam1">
+          <div class="device intro-device" id="intro-device"><div class="wlayer"><div class="whost" id="intro-host"></div></div></div>
+        </div>
+      </div>
+      <div class="intro-lockup" id="intro-lockup">
         <div class="logo-wrap" id="intro-logo"></div>
         <div class="pill" id="intro-pill"><span class="pill-dot"></span>V5 PREVIEW</div>
         <div class="tagline" id="intro-tagline">
-          <div class="tagline-main">The agent UI library in vanilla JS.</div>
-          <div class="tagline-sub">For any site or app · Open source · MIT</div>
+          <div class="tagline-main">The VanillaJS<br /><span class="accent">Agent UI Library</span></div>
+          <div class="tagline-sub">For any site or app. Open source, MIT licensed.</div>
         </div>
       </div>
     </section>
