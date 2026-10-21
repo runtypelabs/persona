@@ -2885,6 +2885,12 @@ export const createAgentExperience = (
     // DOM grows so the resize observer cannot pull the opened details away.
     markReaderEngaged();
     pauseAutoScroll();
+    const anchor = anchorState;
+    if (anchor) cancelSmoothScroll();
+    const finishDisclosure = anchor && activityUi?.holdScroll(
+      bubble, body, anchor, measureContentHeight, setAnchorSpacerHeight,
+      BOTTOM_THRESHOLD, () => anchorState === anchor
+    );
     const bubbleType = headerButton.getAttribute('data-bubble-type');
     if (bubble.classList.contains("persona-activity-row")) {
       activityLifecycle?.manual(messageId);
@@ -2911,6 +2917,7 @@ export const createAgentExperience = (
       approvalDetailsExpansionState.set(messageId, !expanded);
       approvalUi.updateApprovalDetailsUI(messageId, bubble, config, approvalDetailsExpansionState);
     }
+    finishDisclosure?.();
     // Invalidate cached wrapper so next render rebuilds with current expansion state
     messageCache.delete(messageId);
   };
@@ -5090,6 +5097,7 @@ export const createAgentExperience = (
     initialSpacerHeight: number;
     contentHeightAtAnchor: number;
     spacerHeight: number;
+    pending: number;
   } | null = null;
   let anchorRAF: number | null = null;
   // Seeded send-detection so restored history doesn't read as a fresh send.
@@ -5745,7 +5753,7 @@ export const createAgentExperience = (
   // arrow pointing at nothing. Trim to what the reader's current position
   // actually needs plus the anti-bounce slack (shrink-only, like the drain).
   const trimAnchorSpacerToRest = () => {
-    if (!anchorState || anchorState.spacerHeight <= 0) return;
+    if (!anchorState || anchorState.spacerHeight <= 0 || anchorState.pending) return;
     const contentHeight = measureContentHeight(anchorState.spacerHeight);
     const required = Math.max(
       0,
@@ -5825,6 +5833,7 @@ export const createAgentExperience = (
       });
 
       anchorState = {
+        pending: 0,
         initialSpacerHeight: spacerHeight,
         contentHeightAtAnchor: contentHeight,
         spacerHeight
@@ -5868,6 +5877,7 @@ export const createAgentExperience = (
       slack: BOTTOM_THRESHOLD
     });
     anchorState = {
+      pending: 0,
       initialSpacerHeight: spacerHeight,
       contentHeightAtAnchor: contentHeight,
       spacerHeight
@@ -5894,7 +5904,7 @@ export const createAgentExperience = (
       scheduleAutoScroll(!isStreaming);
       return;
     }
-    if (anchorState && anchorState.initialSpacerHeight > 0) {
+    if (anchorState && anchorState.initialSpacerHeight > 0 && !anchorState.pending) {
       const currentContentHeight = body.scrollHeight - anchorState.spacerHeight;
       const next = computeShrunkSpacerHeight({
         initialSpacerHeight: anchorState.initialSpacerHeight,
@@ -9205,7 +9215,7 @@ export const createAgentExperience = (
     currentTurnAnchored = reading.anchored;
     anchoredMessageId = reading.anchoredId;
     readerEngagedThisTurn = reading.readerEngaged;
-    anchorState = reading.anchor ? { ...reading.anchor } : null;
+    anchorState = reading.anchor ? { ...reading.anchor, pending: 0 } : null;
     setAnchorSpacerHeight(reading.anchor?.spacerHeight ?? 0);
     if (reading.following) autoFollow.resume(); else autoFollow.pause();
     newMessagesSincePause = reading.unread;

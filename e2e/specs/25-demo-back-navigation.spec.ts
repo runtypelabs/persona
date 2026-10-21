@@ -89,6 +89,7 @@ for (const demo of [
 
 test("V5 preview cancels synthetic stream timers on cached navigation", async ({ page }) => {
   await page.goto("/v5-preview.html");
+  await expect(page.locator("#v5-host").getByRole("textbox")).toBeVisible();
   await page.locator("#v5-scene").selectOption("streaming");
   await page.locator("#v5-stream").click();
   await expect(page.locator("#v5-stream")).toBeDisabled();
@@ -96,5 +97,7 @@ test("V5 preview cancels synthetic stream timers on cached navigation", async ({
   await expect(page.locator("#v5-stream")).toBeEnabled();
   await expect(page.locator("#v5-host").getByRole("textbox")).toBeEnabled();
   await page.locator("#v5-stream").click();
-  await expect(page.locator("#v5-status")).toContainText("Complete.");
+  await expect(page.locator("#v5-status")).toHaveText("Streaming…");
+  await expect(page.locator("#v5-stream")).toBeEnabled();
+  await expect(page.locator("#v5-status")).toBeEmpty();
 });

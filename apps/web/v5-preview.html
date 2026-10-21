@@ -17,7 +17,7 @@
       <aside class="v5-controls" aria-label="Preview settings">
         <div class="v5-eyebrow">EARLY PREVIEW</div>
         <p><a href="/embedded-host.html">Control widgets from your app</a> · <a href="/assistant-composers.html">Compare five assistant configurations</a></p>
-        <p>Runs entirely in your browser with sample data. No API key needed. These defaults are still evolving.</p>
+        <p>Sample data · No API key needed</p>
         <button type="button" id="v5-settings-toggle" class="controls-toggle" aria-expanded="false" aria-controls="v5-settings">Preview settings</button>
         <div id="v5-settings" class="v5-settings">
           <label>Scenario<select id="v5-scene">
@@ -67,9 +67,7 @@
         <details class="v5-config"><summary>Configuration</summary><pre id="v5-config"></pre><p id="v5-hook-note" hidden>Descriptive labels use an explicit tool-name mapping through <code>toolCall.renderGroupedSummary</code>. Unknown tools keep the built-in summary.</p><p id="v5-scroll-hook-note" hidden>The custom <code>features.scrollToBottom.renderIcon</code> glyph uses the Web Animations API. It pauses while hidden or reduced motion is enabled and cleans up on abort. <a href="https://github.com/runtypelabs/persona/blob/main/apps/web/src/scroll-to-bottom-icon.ts">Example source</a></p><p id="v5-approval-hook-note" hidden>The custom <code>renderApproval</code> hook shows permission and execution separately. It releases button listeners when its render signal is aborted.</p></details>
       </aside>
       <section class="v5-preview-pane" aria-label="Live Persona preview">
-        <div class="v5-preview-caption"><span id="v5-caption">V5 defaults</span><span>Interactive · local samples</span></div>
         <div class="v5-widget-frame"><div id="v5-host"></div></div>
-        <p class="v5-preview-tip">Expand a tool to read its details. Hover or focus a Request / Response block to copy it. You can also type a message for a local sample reply.</p>
       </section>
     </div>
   </main>

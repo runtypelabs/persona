@@ -108,12 +108,12 @@ function approvalScene() {
   }
   inject({ id: "approval-try", content: "**Try it yourself** · Allow once starts a simulated search. Deny leaves it unexecuted. Reset the scene to try again." });
   approvalSample("interactive", "pending");
-  status.textContent = "Try Allow once or Deny below. Scroll up for running, completed, failed, denied, and unknown samples. Nothing leaves your browser.";
 }
 function cancelStream() {
   timers.forEach(clearTimeout);
   timers = [];
   streamButton.disabled = false;
+  status.textContent = "";
 }
 function suspendStream() {
   cancelStream();
@@ -124,7 +124,6 @@ function suspendStream() {
       ...(message.reasoning?.status === "streaming" ? { reasoning: { ...message.reasoning, status: "complete" } } : {}),
     });
   }
-  status.textContent = "Paused when leaving this page. Run the stream to try again.";
 }
 function configuration(): AgentWidgetConfig {
   const v5 = select("version").value === "v5";
@@ -167,13 +166,14 @@ function configuration(): AgentWidgetConfig {
         ...(resolvedDisplay === "default" ? {} : { resolvedDisplay }),
         onDecision: async (data, decision) => {
           if (decision === "approved") {
+            status.textContent = "Searching…";
             const id = `approval-tool-${data.approvalId}`;
             tool(id, data.toolName, { status: "running", durationMs: undefined, chunks: ["Searching sample pages…"] });
             timers.push(setTimeout(() => {
               tool(id, data.toolName, { result: "Found three sample pages." });
-              status.textContent = "Local search completed. Reset the scene to try another decision.";
+              status.textContent = "";
             }, 1800));
-          } else status.textContent = "Permission denied. The sample search did not run.";
+          } else status.textContent = "";
           // An explicit local response keeps the demo independent of any API.
           return new Response(null, { status: 204 });
         },
@@ -240,10 +240,9 @@ function reset() {
   frame.dataset.scheme = select("theme").value;
   const config = configuration();
   widget = initAgentWidget({ target: host, config });
-  if (select("scene").value === "scroll-control") widget.on("run:finished", ({ outcome }) => {
-    status.textContent = outcome === "cancel" ? "Stopped. The idle glyph returns; jump to latest or scroll to compare visibility."
-      : outcome === "error" ? "The local response failed. The idle glyph returns; Run stream to try again."
-      : "Response complete. The idle glyph returns. Jump to latest hides the control; scroll up to reveal it.";
+  widget.on("run:started", () => { status.textContent = "Streaming…"; });
+  widget.on("run:finished", ({ outcome }) => {
+    status.textContent = outcome === "error" ? "Response failed. Try again." : "";
   });
   const brandSummary = document.querySelector<HTMLElement>("#v5-brand-summary")!;
   brandSummary.hidden = !config.brand;
@@ -254,7 +253,6 @@ function reset() {
   document.querySelector<HTMLElement>("#v5-approval-hook-note")!.hidden = select("scene").value !== "approval-custom";
   document.querySelector<HTMLElement>("#v5-scroll-hook-note")!.hidden = select("scroll-glyph").value !== "custom";
   streamButton.textContent = select("scene").value.startsWith("approval") ? "Replay approvals" : "Run stream";
-  document.querySelector("#v5-caption")!.textContent = `${select("version").value.toUpperCase()} ${select("theme").value} · ${select("scene").selectedOptions[0].textContent} · ${select("brand").selectedOptions[0].textContent}`;
 }
 function inject(message: Partial<AgentWidgetMessage> & Pick<AgentWidgetMessage, "id">) {
   if (!order.has(message.id)) order.set(message.id, serial++);
@@ -295,7 +293,6 @@ function loadScene() {
       inject({ id: `scroll-user-${i}`, role: "user", content: `Explain step ${i + 1}.` });
       inject({ id: `scroll-answer-${i}`, content: "Keep each step small and reviewable. Start with a clear goal, explore the options, and verify the result.\n\nThis earlier response stays readable while new content arrives below. Use Run stream to compare the scroll glyph and visibility transition." });
     }
-    status.textContent = "Run stream to start a real local SSE response below. Jump to latest, scroll upward, or press Esc to stop. Open the event log to compare its control.";
     return;
   }
   if (scene.startsWith("approval")) { approvalScene(); return; }
@@ -303,7 +300,6 @@ function loadScene() {
     inject({ id: "user", role: "user", content: "Help me compare the theme options." });
     inject({ id: "partial", content: "You can customize colors, typography, and spacing. Here is what I found before the connection ended…" });
     inject({ id: "sample-error", dispatchError: true, content: "The sample connection was interrupted before the answer finished. Your partial response is preserved above. Retry will produce a complete local response.\n\nThis is a simulated error with extra detail to demonstrate disclosure. No network request failed and no message is sent to a model." });
-    status.textContent = "Compare the V4 bubble and V5 alert block. Retry runs a local response; reset to restore the error.";
     return;
   }
   if (scene === "actions") {
@@ -311,7 +307,6 @@ function loadScene() {
     inject({ id: "earlier-answer", content: "Start with colors, typography, and spacing." });
     inject({ id: "next-user", role: "user", content: "How can I review the result?" });
     inject({ id: "latest-answer", content: "Compare light and dark themes, then try a narrow screen. The latest answer keeps its actions available; hover or focus the earlier answer to find its actions." });
-    status.textContent = "Compare earlier and latest answer actions. Run the stream to inspect actions while a response is being written.";
     return;
   }
   if (scene === "artifacts") {
@@ -322,18 +317,15 @@ function loadScene() {
     // A restored/server-supplied reference exercises the renderer gate even
     // when the controller's artifact APIs are disabled.
     inject({ id: "artifact-card", rawContent: JSON.stringify({ component: "PersonaArtifactCard", props: { artifactId: "theme-checklist", title: "Theme checklist", artifactType: "markdown", status: "complete", markdown } }) });
-    status.textContent = "Artifacts are enabled by default in V5; V4 requires Enabled. This sample uses collapsed cards. Choose Disabled to compare transcript behavior.";
     return;
   }
   if (scene === "streaming") {
     inject({ id: "user", role: "user", content: "Show me the new streaming defaults." });
     inject({ id: "final", content: "The response is ready. Try the follow-up row below, then run the stream to see the waiting indicator. Typing a new question clears these suggestions." });
     showFollowUps();
-    status.textContent = "Run the stream to compare V5’s label with V4’s dots. This full-height preview uses the fullscreen suggestion limit.";
     return;
   }
   if (scene === "welcome") {
-    status.textContent = "Try a suggestion or type a message. Replies are simulated locally.";
     return;
   }
   if (scene !== "long") inject({ id: "user", role: "user", content: "Check the theme documentation and show me what you find." });
@@ -359,7 +351,6 @@ function loadScene() {
   } else {
     inject({ id: "final", content: "The theme guide and examples are ready. You can override the activity tokens to match your application." });
   }
-  status.textContent = scene === "states" ? "Sample running and failed states. Expand a call to inspect its output." : scene === "details" ? "The first tool is open. The service-status tool demonstrates a response without a request." : "Open a group, then a tool. Manual expansion preserves your reading position.";
 }
 function runStream() {
   if (select("scene").value === "scroll-control") {
@@ -369,7 +360,6 @@ function runStream() {
     input.value = "Continue the guide while I read the earlier responses.";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     host.querySelector<HTMLButtonElement>("[data-persona-composer-submit]")?.click();
-    status.textContent = "A local SSE response is generating below. Jump to latest hides the control; scroll up to reveal it. Press Esc or Stop to finish early.";
     return;
   }
   if (select("scene").value.startsWith("approval")) { loadScene(); return; }
@@ -377,17 +367,19 @@ function runStream() {
   if (select("scene").value === "actions") {
     loadScene();
     streamButton.disabled = true;
+    status.textContent = "Streaming…";
     inject({ id: "latest-answer", content: "Comparing the available theme options…", streaming: true });
     timers.push(setTimeout(() => {
       inject({ id: "latest-answer", content: "The comparison is ready. Message actions are available again.", streaming: false });
       streamButton.disabled = false;
+      status.textContent = "";
     }, 4000));
     return;
   }
   if (select("scene").value === "streaming") {
     reset();
     streamButton.disabled = true;
-    status.textContent = "Waiting for the first text, then streaming a local response…";
+    status.textContent = "Streaming…";
     inject({ id: "user", role: "user", content: "Show me the new streaming defaults." });
     inject({ id: "loading-answer", content: "", streaming: true });
     timers.push(setTimeout(() => inject({ id: "loading-answer", content: "Here is a locally simulated response", streaming: true }), 2400));
@@ -395,13 +387,13 @@ function runStream() {
       inject({ id: "loading-answer", content: "Here is a locally simulated response. You can explore the suggested next questions, or type your own.", streaming: false });
       showFollowUps();
       streamButton.disabled = false;
-      status.textContent = "Complete. Follow-ups are available again. Type to dismiss them, or compare V4.";
+      status.textContent = "";
     }, 4200));
     return;
   }
   reset();
   streamButton.disabled = true;
-  status.textContent = "Streaming sample activity. Open details manually, or try auto-expand.";
+  status.textContent = "Streaming…";
   inject({ id: "user", role: "user", content: "Find the theme guide and read the configuration options." });
   reasoning(true);
   const later = (ms: number, action: () => void) => timers.push(setTimeout(action, ms));
@@ -409,7 +401,7 @@ function runStream() {
   later(1600, () => tool("search", "search_docs", { status: "running", args: { query: "Persona themes" }, chunks: ["Searching the documentation…"], durationMs: undefined }));
   later(2600, () => tool("search", "search_docs", { args: { query: "Persona themes" }, chunks: ["Searching the documentation…"], result: "Found the theme guide." }));
   later(2900, () => tool("read", "read_file", { status: "running", args: { path: "docs/theme-guide.md" }, chunks: ["Reading the guide…"], durationMs: undefined }));
-  later(4100, () => { tool("read", "read_file", { args: { path: "docs/theme-guide.md" }, result: "The guide describes palette, typography, and layout tokens." }); inject({ id: "final", content: "The documentation is ready. Expand either tool to inspect the Request and Response." }); streamButton.disabled = false; status.textContent = "Stream complete. Reset the scene or change a setting to compare."; });
+  later(4100, () => { tool("read", "read_file", { args: { path: "docs/theme-guide.md" }, result: "The guide describes palette, typography, and layout tokens." }); inject({ id: "final", content: "The documentation is ready. Expand either tool to inspect the Request and Response." }); streamButton.disabled = false; status.textContent = ""; });
 }
 for (const control of document.querySelectorAll<HTMLSelectElement>(".v5-controls select")) control.addEventListener("change", loadScene);
 streamButton.addEventListener("click", runStream);
