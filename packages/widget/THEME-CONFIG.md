@@ -72,6 +72,38 @@ The header identity icon stays transparent by default. Set
 `theme.components.header.iconBackground` to opt into a filled badge; its automatic
 padding still applies. V4 retains matching accent fills for these elements.
 
+V5 assistant replies remain plain, unpadded text at every brand density and
+elevation. Brand density adjusts type and spacing; it does not turn replies into
+bubbles. To style assistant replies as padded bubbles, set their component tokens
+explicitly. Referencing `palette.shadows.sm` makes their shadow follow the brand's
+`flat`, `subtle`, or `raised` elevation:
+
+```typescript
+config: {
+  future: { v5Defaults: true },
+  brand: { density: 'comfortable', elevation: 'raised' },
+  theme: {
+    components: {
+      message: {
+        assistant: {
+          background: 'semantic.colors.container',
+          padding: '12px 16px',
+          borderRadius: '12px',
+          border: 'semantic.colors.border',
+          borderWidth: '1px',
+          shadow: 'palette.shadows.sm'
+        }
+      }
+    }
+  }
+}
+```
+
+Bubble padding is independent of brand density; choose tighter or roomier padding
+for your layout. An explicit shadow value (including `none`) overrides the brand
+shadow. V4 assistant cards, V5 user bubbles, and welcome cards continue to follow
+brand elevation as before.
+
 When `colorScheme` is omitted, a valid `neutral` with relative luminance below
 0.18 selects dark mode; a lighter neutral selects light mode. Explicit
 `colorScheme: 'light'`, `'dark'`, or `'auto'` takes precedence. With `'auto'`, the

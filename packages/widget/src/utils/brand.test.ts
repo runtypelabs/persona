@@ -73,6 +73,56 @@ describe('brand derivation', () => {
     expect(theme.components?.panel?.modes?.floating?.border).toContain('var(--persona-border)');
     expect(theme.components?.panel?.shadow).toBe(theme.palette?.shadows?.xl);
   });
+  describe.each(['light', 'dark'] as const)('%s message presentation', (colorScheme) => {
+    const elevations = [
+      ['flat', 'none'],
+      ['subtle', '0 2px 8px rgba(0, 0, 0, 0.08)'],
+      ['raised', '0 12px 32px rgba(0, 0, 0, 0.18)'],
+    ] as const;
+    it.each(elevations)('keeps V5 prose plain with %s elevation at every density', (elevation, shadow) => {
+      for (const density of ['compact', 'comfortable', 'spacious'] as const) {
+        const config = { colorScheme, future: { v5Defaults: true }, brand: { elevation, density } };
+        const vars = getCssVariables(getActiveTheme(config));
+        expect(vars['--persona-message-assistant-shadow']).toBe('none');
+        expect(vars['--persona-message-assistant-border']).toBe('transparent');
+        expect(vars['--persona-message-assistant-padding']).toBe('0px');
+        // These existing surfaces still follow elevation; this is not a global
+        // rule that every default of `none` must opt out of brand styling.
+        expect(vars['--persona-message-user-shadow']).toBe(shadow);
+        expect(getActiveTheme(config).components.introCard?.shadow).toBe(shadow);
+        const v4 = getCssVariables(getActiveTheme({ ...config, future: { v5Defaults: false } }));
+        expect(v4['--persona-message-assistant-shadow']).toBe(shadow);
+        expect(v4['--persona-message-assistant-border']).not.toBe('transparent');
+      }
+    });
+    it.each(elevations)('lets custom padded bubbles follow %s elevation', (elevation, shadow) => {
+      for (const [density, padding] of [['compact', '8px'], ['comfortable', '12px'], ['spacious', '16px']] as const) {
+        const theme = { components: { message: { assistant: {
+          background: 'semantic.colors.container', padding, borderRadius: '12px',
+          border: 'semantic.colors.border', borderWidth: '1px', shadow: 'palette.shadows.sm',
+        } } } };
+        // Shared overrides and dark-only overrides both remain authoritative.
+        for (const overrides of colorScheme === 'dark' ? [{ theme }, { darkTheme: theme }] : [{ theme }]) {
+          const vars = getCssVariables(getActiveTheme({
+            colorScheme, future: { v5Defaults: true }, brand: { elevation, density }, ...overrides,
+          }));
+          expect(vars['--persona-message-assistant-shadow']).toBe(shadow);
+          expect(vars['--persona-message-assistant-padding']).toBe(padding);
+          expect(vars['--persona-message-assistant-border']).not.toBe('transparent');
+          expect(vars['--persona-message-assistant-border-width']).toBe('1px');
+        }
+      }
+    });
+    it('preserves explicit assistant shadows and borders over brand elevation', () => {
+      const vars = getCssVariables(getActiveTheme({
+        colorScheme, future: { v5Defaults: true }, brand: { elevation: 'raised' },
+        theme: { components: { message: { assistant: { shadow: '0 1px 2px red', border: '#123456' } } } },
+        ...(colorScheme === 'dark' ? { darkTheme: { components: { message: { assistant: { shadow: 'none', border: '#abcdef' } } } } } : {}),
+      }));
+      expect(vars['--persona-message-assistant-shadow']).toBe(colorScheme === 'dark' ? 'none' : '0 1px 2px red');
+      expect(vars['--persona-message-assistant-border']).toBe(colorScheme === 'dark' ? '#abcdef' : '#123456');
+    });
+  });
   it.each([false, true])('keeps neutral-derived surfaces and elevation coherent (%s)', (v5Defaults) => {
     const theme = getActiveTheme({ future: { v5Defaults }, brand: { neutral: '#161b22', radius: 'none', elevation: 'flat' } });
     const vars = getCssVariables(theme);
