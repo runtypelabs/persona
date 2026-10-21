@@ -9,3 +9,5 @@ Reveal highlights survive streaming updates for their configured duration, and r
 Revealing keeps automatic following paused even when centering reaches the bottom, and a newer reveal cancels any pending centering from the previous call.
 
 Reader input cancels reveal scrolling and its pending centering pass without removing the highlight.
+
+Revealing a tool also cancels an earlier smooth jump to the latest message so it cannot resume following or override the reveal.

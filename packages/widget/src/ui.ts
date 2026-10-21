@@ -13231,6 +13231,8 @@ export const createAgentExperience = (
       if (options.expand !== false) openHeader(header);
 
       markReaderEngaged();
+      // A prior jump owns a separate animation whose completion resumes follow.
+      latestScroll.cancel();
       pauseAutoScroll();
       const revealGeneration = revealScrollGeneration;
       const anchor = header ?? bubble;

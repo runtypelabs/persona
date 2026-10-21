@@ -175,6 +175,28 @@ describe("revealToolCall", () => {
     expect(body.scrollTop).toBe(600);
   });
 
+  it("cancels an earlier jump to latest and keeps following paused", () => {
+    setup(false);
+    controller.update({ features: {
+      scrollBehavior: { mode: "follow" },
+      scrollToBottom: { scrollBehavior: "smooth", scrollDurationMs: 800 },
+    } });
+    vi.advanceTimersByTime(1000);
+    const { body, grow } = installScrollMetrics();
+    body.scrollTop = 0;
+    body.dispatchEvent(new Event("scroll"));
+    mount.querySelector<HTMLElement>("[data-persona-scroll-to-bottom]")!.dispatchEvent(new MouseEvent("click"));
+    vi.advanceTimersByTime(80);
+    expect(body.scrollTop).toBeGreaterThan(0);
+    controller.revealToolCall("call-1", { expand: false });
+    vi.advanceTimersByTime(1000);
+    expect(body.scrollTop).toBe(0);
+    grow();
+    injectTool("call-2", 2, "running", ["More streamed output"]);
+    vi.advanceTimersByTime(500);
+    expect(body.scrollTop).toBe(0);
+  });
+
   it.each([
     ["wheel", 80, false],
     ["wheel", 250, false],
