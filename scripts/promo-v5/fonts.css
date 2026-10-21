@@ -1,0 +1,15 @@
+@font-face { font-family: 'Geist'; font-weight: 400; font-style: normal; font-display: block; src: url('./fonts/Geist-400.woff2') format('woff2'); }
+@font-face { font-family: 'Geist'; font-weight: 500; font-style: normal; font-display: block; src: url('./fonts/Geist-500.woff2') format('woff2'); }
+@font-face { font-family: 'Geist'; font-weight: 600; font-style: normal; font-display: block; src: url('./fonts/Geist-600.woff2') format('woff2'); }
+@font-face { font-family: 'Gelasio'; font-weight: 400; font-style: normal; font-display: block; src: url('./fonts/Gelasio-400.woff2') format('woff2'); }
+@font-face { font-family: 'Gelasio'; font-weight: 500; font-style: normal; font-display: block; src: url('./fonts/Gelasio-500.woff2') format('woff2'); }
+@font-face { font-family: 'Newsreader'; font-weight: 400; font-style: normal; font-display: block; src: url('./fonts/Newsreader-400.woff2') format('woff2'); }
+@font-face { font-family: 'Newsreader'; font-weight: 500; font-style: normal; font-display: block; src: url('./fonts/Newsreader-500.woff2') format('woff2'); }
+@font-face { font-family: 'Syne'; font-weight: 600; font-style: normal; font-display: block; src: url('./fonts/Syne-600.woff2') format('woff2'); }
+@font-face { font-family: 'Syne'; font-weight: 700; font-style: normal; font-display: block; src: url('./fonts/Syne-700.woff2') format('woff2'); }
+@font-face { font-family: 'Syne'; font-weight: 800; font-style: normal; font-display: block; src: url('./fonts/Syne-800.woff2') format('woff2'); }
+/* System faces the presets name but this Linux capture box lacks. */
+@font-face { font-family: 'Georgia'; font-weight: 300 700; src: url('./fonts/Gelasio-400.woff2') format('woff2'); }
+@font-face { font-family: 'Segoe UI'; font-weight: 100 900; src: local('Inter'); }
+@font-face { font-family: 'Segoe Sans'; font-weight: 100 900; src: local('Inter'); }
+@font-face { font-family: 'Runtype Wordmark'; src: url('./fonts/runtype-wordmark-v1.woff2') format('woff2'); font-style: normal; font-weight: 400; font-display: block; unicode-range: U+0065, U+006E, U+0070, U+0072, U+0074-0075, U+0079; }
