@@ -29,7 +29,9 @@ test("V5 nested tool rows stay compact without shrinking parent or touch control
   await page.addStyleTag({ content: css });
   await apply(page);
   const child = page.locator("#child");
-  await expect(child).toHaveCSS("height", "28px");
+  await expect(child).toHaveCSS("height", "24px");
+  await expect(child).toHaveCSS("line-height", "18px");
+  await expect(child.locator(".persona-activity-label")).toHaveCSS("font-size", "13px");
   await expect(child).toHaveCSS("padding-top", "2px");
   for (const id of ["parent", "standalone"]) await expect(page.locator(`#${id}`)).toHaveCSS("height", "32px");
   await page.locator("main").evaluate(root => root.setAttribute("data-persona-defaults", "v4"));
@@ -51,7 +53,7 @@ test("V5 nested tool rows stay compact without shrinking parent or touch control
     header.textContent = "Read a file with a long descriptive tool label";
   });
   await apply(page);
-  expect((await child.boundingBox())!.height).toBeGreaterThan(28);
+  expect((await child.boundingBox())!.height).toBeGreaterThan(24);
   expect(await child.evaluate(header => header.scrollHeight <= header.clientHeight)).toBe(true);
 
   const touchContext = await browser.newContext({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
