@@ -7,6 +7,11 @@ type Settings = { animation: "instant" | "height"; duration: number; easing: str
 type Running = { effect: Animation; expanded: boolean; settings: string; finish: () => void };
 const running = new WeakMap<HTMLElement, Running>();
 
+/** Observe this disclosure's height effect without waiting for looping children. */
+export function afterDisclosureAnimation(bubble: HTMLElement, finish: () => void): void {
+  running.get(bubble)?.effect.finished?.then(finish, finish) ?? finish();
+}
+
 export function disclosureSettings(config?: AgentWidgetConfig): Settings {
   const options = config?.expansion;
   return {
