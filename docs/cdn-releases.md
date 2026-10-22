@@ -16,8 +16,8 @@ The automatic release and manual **Publish to R2 CDN** workflow share one publis
 
 The publisher:
 
-1. Downloads the exact published npm artifact, avoiding a second build from a different revision.
-2. Uploads and verifies `/persona/<version>/` in R2 and checks every file through its public CDN URL before updating `/latest/`. Existing versioned files must match byte-for-byte; otherwise publishing fails without replacing them. Cached CDN errors or different public bytes also block promotion.
+1. Downloads the exact published npm artifact, avoiding a second build from a different revision. It retries for up to ten minutes because npm's publish-time scanning can delay availability after a successful publish. If the package is still unavailable, the workflow stops before changing the CDN. Once npm serves the release, choose **Re-run failed jobs** or manually dispatch **Publish to R2 CDN** with the same exact release tag. Do not rerun all jobs in **Release**: npm publication would find nothing new to publish, so its outputs can skip the CDN job.
+2. Uploads and verifies `/persona/<version>/` in R2 and checks every file through its public CDN URL before updating `/latest/`. Existing versioned files must match byte-for-byte; otherwise publishing fails without replacing them. Cached CDN errors, different public bytes, or missing public CORS headers on JavaScript files also block promotion.
 3. Uses `public, max-age=31536000, immutable` for new versioned objects, and `public, max-age=3600, s-maxage=86400, must-revalidate` for `/latest/` objects. Moving URLs can be reused for one hour in browsers and one day at the edge; each release purges the edge copy. The small installer resolves its larger dependencies to its own immutable release, so a cached installer remains compatible. Browser caches may delay an update for up to an hour; CDN purges cannot evict them.
 4. Purges only the uploaded `/persona/latest/` URLs, then checks the entry, installer, launcher, stream chunk, and stylesheet for matching bytes and cache headers bounded by those TTLs. Failure is reported as a failed deployment. Temporary `no-cache`/`no-store` responses are also accepted with a warning, allowing a fixed release to be deployed while the emergency bypass remains active; they do not confirm that the permanent performance policy is restored.
 
@@ -31,6 +31,8 @@ Required repository configuration:
 - Secret: `CLOUDFLARE_API_TOKEN`, scoped to **Zone / Cache Purge / Purge** for that zone. This token does not need permission to change cache rules.
 
 Publishing `/latest/` fails before uploading if the purge configuration is missing. Cloudflare settings must also respect object Cache-Control: remove any matching rule or Browser Cache TTL override that assigns a long TTL to `/persona/latest/`. Configure the scoped cache rule's Edge TTL and Browser TTL to **Respect origin**, and make sure a later rule does not override it. For immediate recovery before origin metadata is corrected, a last-matching rule may bypass edge caching for `https://cdn.runtype.com/persona/latest/*`; pair it with a Cache Response Rule that adds `no-cache` for browsers. Verify the actual response headers, since bypassing the edge alone does not guarantee browser revalidation. See [Cloudflare's cache rule settings](https://developers.cloudflare.com/cache/how-to/cache-rules/settings/).
+
+Public Persona assets must return `Access-Control-Allow-Origin: *` even when the request has no `Origin` header. An origin-dependent CORS header can leave prefetched JavaScript cached without permission for a later dynamic import. A Response Header Transform Rule scoped to `https://cdn.runtype.com/persona/*` sets this header consistently; it only covers the public library assets. The publisher checks origin-less JavaScript responses before promoting a release.
 
 ## Recovering stale latest assets
 

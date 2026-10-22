@@ -60,15 +60,20 @@ test('public version verification checks every file and rejects cached errors an
   const urls = [];
   await verifyVersioned(hashes, '4.32.1', async url => {
     urls.push(url);
-    return new Response(url.split('/4.32.1/')[1]);
+    return new Response(url.split('/4.32.1/')[1], { headers: { 'Access-Control-Allow-Origin': '*' } });
   });
   assert.deepEqual(urls, names.map(name => `https://cdn.runtype.com/persona/4.32.1/${name}`));
   for (const status of [404, 503]) {
     await assert.rejects(verifyVersioned(hashes, '4.32.1', async url =>
-      url.endsWith('/chunks/lazy.js') ? new Response('error', { status }) : new Response(url.split('/4.32.1/')[1]),
+      url.endsWith('/chunks/lazy.js') ? new Response('error', { status }) : new Response(url.split('/4.32.1/')[1], { headers: { 'Access-Control-Allow-Origin': '*' } }),
     ), new RegExp(`chunks/lazy.js: HTTP ${status}`));
   }
   await assert.rejects(verifyVersioned(hashes, '4.32.1', async () => new Response('stale')), /different bytes/);
+  for (const allowOrigin of ['', 'https://one-customer.example']) {
+    await assert.rejects(verifyVersioned(hashes, '4.32.1', async url =>
+      new Response(url.split('/4.32.1/')[1], { headers: { 'Access-Control-Allow-Origin': allowOrigin } }),
+    ), /lacks public CORS/);
+  }
 });
 
 test('publishes and verifies versioned assets before latest; reruns preserve immutable bytes', async () => {
@@ -92,7 +97,7 @@ test('publishes and verifies versioned assets before latest; reruns preserve imm
     };
     const fetchImpl = async (url) => {
       if (url.includes('/4.32.1/')) publicChecks.push(url);
-      return url.includes('purge_cache') ? Response.json({ success: true }) : new Response(url.split('/').at(-1), { headers: { 'Cache-Control': LATEST_CACHE } });
+      return url.includes('purge_cache') ? Response.json({ success: true }) : new Response(url.split('/').at(-1), { headers: { 'Cache-Control': LATEST_CACHE, 'Access-Control-Allow-Origin': '*' } });
     };
     const options = { dist, version: '4.32.1', latest: true, env, run, fetchImpl };
     await publish(options);
