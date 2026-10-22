@@ -104,7 +104,7 @@ jobs:
               break
             fi
             if [ "$attempt" = 31 ]; then
-              echo "Published package is still unavailable after ten minutes; leaving the CDN unchanged. Rerun this workflow once npm serves the release."
+              echo "Published package is still unavailable after ten minutes; leaving the CDN unchanged. Once npm serves the release, use Re-run failed jobs or manually dispatch Publish to R2 CDN with tag @runtypelabs/persona@$RELEASE_VERSION."
               exit 1
             fi
             echo "Waiting for npm release availability (attempt $attempt/31)."
