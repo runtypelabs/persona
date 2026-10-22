@@ -17,9 +17,9 @@ The automatic release and manual **Publish to R2 CDN** workflow share one publis
 The publisher:
 
 1. Downloads the exact published npm artifact, avoiding a second build from a different revision.
-2. Uploads and verifies `/persona/<version>/` before updating `/latest/`. Existing versioned files must match byte-for-byte; otherwise publishing fails without replacing them.
+2. Uploads and verifies `/persona/<version>/` in R2 and checks every file through its public CDN URL before updating `/latest/`. Existing versioned files must match byte-for-byte; otherwise publishing fails without replacing them. Cached CDN errors or different public bytes also block promotion.
 3. Uses `public, max-age=31536000, immutable` for new versioned objects, and `no-cache, max-age=0, must-revalidate` for `/latest/` objects.
-4. Purges only the uploaded `/persona/latest/` URLs, then checks the entry, installer, stream chunk, and stylesheet for matching bytes and safe cache headers. Failure is reported as a failed deployment.
+4. Purges only the uploaded `/persona/latest/` URLs, then checks the entry, installer, launcher, stream chunk, and stylesheet for matching bytes and safe cache headers. Failure is reported as a failed deployment.
 
 Both automatic and manual publishers use the same concurrency group. Prereleases and versions older than the highest stable release tag cannot replace `/latest/`.
 

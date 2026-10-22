@@ -52,7 +52,7 @@ export async function purgeLatest(files, { zoneId, token, fetchImpl = fetch }) {
 }
 
 export async function verifyLatest(hashes, fetchImpl = fetch) {
-  for (const name of ['install.global.js', 'index.global.js', 'client-stream.js', 'widget.css']) {
+  for (const name of ['install.global.js', 'index.global.js', 'launcher.global.js', 'client-stream.js', 'widget.css']) {
     const response = await fetchImpl(`${CDN}/persona/latest/${name}`);
     const cache = response.headers.get('cache-control') ?? '';
     if (!response.ok || !/(?:no-cache|no-store)/i.test(cache) || /(?:^|,)\s*(?:s-maxage|max-age)\s*=\s*[1-9]\d*/i.test(cache)) {
@@ -60,6 +60,18 @@ export async function verifyLatest(hashes, fetchImpl = fetch) {
     }
     const hash = createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
     if (hash !== hashes.get(name)) throw new Error(`CDN still serves different bytes for ${name} after purge`);
+  }
+}
+
+export async function verifyVersioned(hashes, version, fetchImpl = fetch) {
+  // Check the URLs browsers actually load, including every lazy chunk. R2
+  // equality alone cannot detect cached CDN errors or response transformations.
+  for (const [name, expected] of hashes) {
+    const url = `${CDN}/persona/${version}/${name}`;
+    const response = await fetchImpl(url);
+    if (!response.ok) throw new Error(`Versioned CDN response failed for ${url}: HTTP ${response.status}`);
+    const hash = createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
+    if (hash !== expected) throw new Error(`Versioned CDN serves different bytes for ${url}`);
   }
 }
 
@@ -96,6 +108,7 @@ export async function publish({ dist, version, latest, env = process.env, run = 
   } finally {
     await rm(existing, { recursive: true, force: true });
   }
+  await verifyVersioned(hashes, version, fetchImpl);
   if (latest) {
     await aws(['s3', 'cp', dist, `s3://${env.R2_BUCKET}/persona/latest/`, '--recursive', '--cache-control', LATEST_CACHE, '--no-progress', '--only-show-errors']);
     await purgeLatest(hashes.keys(), { zoneId: env.CLOUDFLARE_ZONE_ID, token: env.CLOUDFLARE_API_TOKEN, fetchImpl });
