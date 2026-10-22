@@ -1,0 +1,43 @@
+# CDN releases and cache recovery
+
+Pin production embeds to an exact release, for example:
+
+```html
+<script src="https://cdn.runtype.com/persona/4.32.1/install.global.js"></script>
+```
+
+For a direct global install, use the same release directory for `index.global.js` and `widget.css`. Versioned releases also exist on npm CDNs. Replace the version above when intentionally upgrading.
+
+New first-party `/persona/latest/` installer, launcher, and global bundles embed their package version and load dependencies from `/persona/<version>/`. A cached entry therefore keeps loading its matching release after a deployment. Explicit versioned paths, custom hosts, and installer URL overrides retain their existing behavior. Older bundles published before this fix still require a pinned embed or a browser cache refresh.
+
+## Publishing
+
+The automatic release and manual **Publish to R2 CDN** workflow share one publisher. The manual workflow accepts an exact npm release tag such as `@runtypelabs/persona@4.32.1`; it runs the publisher from the selected workflow branch and downloads that version's npm tarball. It does not rebuild the historical tag.
+
+The publisher:
+
+1. Downloads the exact published npm artifact, avoiding a second build from a different revision.
+2. Uploads and verifies `/persona/<version>/` before updating `/latest/`. Existing versioned files must match byte-for-byte; otherwise publishing fails without replacing them.
+3. Uses `public, max-age=31536000, immutable` for new versioned objects, and `no-cache, max-age=0, must-revalidate` for `/latest/` objects.
+4. Purges only the uploaded `/persona/latest/` URLs, then checks the entry, installer, stream chunk, and stylesheet for matching bytes and safe cache headers. Failure is reported as a failed deployment.
+
+Both automatic and manual publishers use the same concurrency group. Prereleases and versions older than the highest stable release tag cannot replace `/latest/`.
+
+Required repository configuration:
+
+- Existing secrets: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
+- Optional variable: `R2_BUCKET` (defaults to `cdn-assets`).
+- Variable: `CLOUDFLARE_ZONE_ID`, the zone serving `cdn.runtype.com`.
+- Secret: `CLOUDFLARE_API_TOKEN`, scoped to **Zone / Cache Purge / Purge** for that zone. This token does not need permission to change cache rules.
+
+Publishing `/latest/` fails before uploading if the purge configuration is missing. Cloudflare settings must also respect object Cache-Control: remove any matching rule or Browser Cache TTL override that assigns a long TTL to `/persona/latest/`. Configure the scoped cache rule's Edge TTL and Browser TTL to **Respect origin**, and make sure a later rule does not override it. See [Cloudflare's cache rule settings](https://developers.cloudflare.com/cache/how-to/cache-rules/settings/).
+
+## Recovering stale latest assets
+
+1. Move affected embeds to an exact version, including CSS. An edge purge cannot evict files already cached in a visitor's browser.
+2. Correct Cloudflare rules that override `/persona/latest/` cache headers. Keep immutable caching for versioned paths.
+3. Configure the purge credential and run the manual publisher for the current stable npm release. It applies origin metadata, purges the mutable URLs, and verifies what the public CDN returns.
+4. If an existing versioned release differs from the npm artifact, publish a new package version; do not overwrite an immutable release. An interrupted upload is also rejected if its files are incomplete, so inspect the failed deployment before retrying with a new version.
+5. Verify a chat turn with the deployed assets. Confirm that the script entry's dependencies use a single immutable release directory and that `/latest/` no longer returns a long max-age.
+
+A cache-busting query is useful for diagnosis but does not repair the cache keys used by existing customers. Republishing without a purge and corrected cache policy is insufficient.

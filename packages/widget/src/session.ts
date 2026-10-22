@@ -265,10 +265,9 @@ export class SessionHistoryError extends Error {
 }
 
 /**
- * Build the user-facing detail shown when a dispatch fails. This fires on real network/server errors
- * (connection refused, CORS, 4xx/5xx, malformed stream): not just an
- * un-wired proxy, so the copy stays honest about the failure and surfaces the
- * underlying reason to help with debugging.
+ * Dispatch can fail in transport, stream parsing, lazy modules or application
+ * callbacks. Only recognized fetch failures should suggest connectivity;
+ * unknown/internal failures must not send users to debug a healthy backend.
  *
  * Callers can override the copy via `config.errorMessage` (a static string or
  * a function of the error). An override that returns an empty string yields ""
@@ -283,9 +282,17 @@ function buildDispatchErrorContent(
   if (typeof override === "string") return override;
   if (typeof override === "function") return override(err);
 
-  const base =
-    "Sorry: I couldn't reach the assistant. The chat service didn't respond. Please check that your proxy or backend is running and reachable, then try again.";
-  return err.message ? `${base}\n\n_Details: ${err.message}_` : base;
+  // Fetch rejects with TypeError too, so the error class cannot distinguish
+  // an offline browser from an internal fault such as a missing function.
+  const detail = err.message.trim();
+  const networkFailure = /^(Failed to fetch|fetch failed|Load failed|NetworkError when attempting to fetch resource\.?)$/i.test(detail);
+  const backendFailure = /^(Chat backend|Agent execution) request failed: \d{3}\b/.test(detail);
+  const base = networkFailure
+    ? "Sorry: I couldn't reach the assistant. Please check your connection and try again."
+    : backendFailure
+      ? "Sorry: the chat service couldn't complete the request. Please try again."
+      : "Sorry: the chat encountered an unexpected error. Please reload the page and try again.";
+  return detail ? `${base}\n\n_Details: ${detail}_` : base;
 }
 
 /**

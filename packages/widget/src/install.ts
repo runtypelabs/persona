@@ -4,7 +4,7 @@
  * if configuration is provided via window.siteAgentConfig
  */
 
-export {};
+import { pinCdnRelease } from "./utils/cdn-release";
 
 import type { BrandConfig } from "./types/theme";
 import { delayInstallLoading } from "./utils/install-loading";
@@ -201,7 +201,7 @@ declare global {
   const getInstallerBase = (): string | null => {
     if (!installerSrc) return null;
     try {
-      const url = new URL(installerSrc, document.baseURI);
+      const url = new URL(pinCdnRelease(installerSrc), document.baseURI);
       if (url.protocol !== "http:" && url.protocol !== "https:") return null;
       return url.origin + url.pathname.slice(0, url.pathname.lastIndexOf("/"));
     } catch {

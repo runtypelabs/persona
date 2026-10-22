@@ -24,6 +24,7 @@ import { createLauncherSurface } from "./components/launcher";
 import { applyLauncherThemeVariables } from "./utils/theme";
 import { DEFAULT_LAUNCHER_CONFIG, DEFAULT_LAUNCHER_V5 } from "./defaults";
 import { setIconsExtraLoader } from "./icons-extra-loader";
+import { pinCdnRelease } from "./utils/cdn-release";
 import type { AgentWidgetConfig } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -33,7 +34,7 @@ import type { AgentWidgetConfig } from "./types";
 // ---------------------------------------------------------------------------
 const launcherScriptSrc: string | null =
   typeof document !== "undefined"
-    ? ((document.currentScript as HTMLScriptElement | null)?.src ?? null)
+    ? pinCdnRelease((document.currentScript as HTMLScriptElement | null)?.src ?? "") || null
     : null;
 
 setIconsExtraLoader(() => {

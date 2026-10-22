@@ -10,6 +10,7 @@
 // `vi.runAllTimersAsync()` to drive it forward deterministically.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { version } from "../package.json";
 
 const PERSONA_EVENTS = [
   "persona:script-load",
@@ -464,11 +465,11 @@ describe("install.ts: CDN base derivation", () => {
     return { cssHref: css?.href ?? null, scripts };
   }
 
-  it("derives asset URLs from the installer's own script directory (first-party CDN)", async () => {
+  it("pins first-party latest installer assets to the embedded release", async () => {
     setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
     const { cssHref, scripts } = await installedUrls({});
-    expect(cssHref).toBe("https://cdn.runtype.com/persona/latest/widget.css");
-    expect(scripts).toContain("https://cdn.runtype.com/persona/latest/launcher.global.js");
+    expect(cssHref).toBe(`https://cdn.runtype.com/persona/${version}/widget.css`);
+    expect(scripts).toContain(`https://cdn.runtype.com/persona/${version}/launcher.global.js`);
   });
 
   it("keeps npm-CDN siblings on the installer's own pinned range (no @latest skew)", async () => {
@@ -478,13 +479,13 @@ describe("install.ts: CDN base derivation", () => {
     expect(scripts).toContain("https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4/dist/launcher.global.js");
   });
 
-  it("the full bundle URL follows the installer directory on the eager path", async () => {
+  it("pins the full bundle on the eager first-party latest path", async () => {
     setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
     markCssLoaded();
     await install({ config: { apiUrl: "/api", launcher: { enabled: false } } });
     await flush();
     const scripts = Array.from(document.head.querySelectorAll("script")).map((s) => s.src);
-    expect(scripts).toContain("https://cdn.runtype.com/persona/latest/index.global.js");
+    expect(scripts).toContain(`https://cdn.runtype.com/persona/${version}/index.global.js`);
   });
 
   it("falls back to jsDelivr@latest when currentScript is unavailable", async () => {

@@ -28,8 +28,8 @@ import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-hi
  * effects alongside screenshots. Not registered in examples-nav.
  */
 
-type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "browser-history" | "turn-activity";
-const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "browser-history", "turn-activity"];
+type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "internal-error" | "browser-history" | "turn-activity";
+const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "internal-error", "browser-history", "turn-activity"];
 
 const params = new URLSearchParams(window.location.search);
 const scenarioParam = params.get("scenario") ?? "echo";
@@ -302,6 +302,9 @@ const baseConfig: AgentWidgetConfig = {
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
   customFetch: async (url, init, payload) => {
     requests.push({ at: now(), url: String(url), body: payload });
+    if (scenario === "internal-error") {
+      throw new TypeError("t.streamGeneration is not a function");
+    }
     if (scenario === "error") {
       return new Response(JSON.stringify({ error: "Scripted failure from the verify fixture" }), {
         status: 500,

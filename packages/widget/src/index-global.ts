@@ -37,12 +37,13 @@ export type { StreamAnimationPlugin, StreamAnimationContext } from "./types";
 // ---------------------------------------------------------------------------
 
 import { setWebMcpPolyfillLoader } from "./webmcp-bridge";
+import { pinCdnRelease } from "./utils/cdn-release";
 
 // Capture at module-evaluation time: `document.currentScript` is null once
 // execution leaves the script's initial synchronous run.
 const widgetScriptSrc: string | null =
   typeof document !== "undefined"
-    ? ((document.currentScript as HTMLScriptElement | null)?.src ?? null)
+    ? pinCdnRelease((document.currentScript as HTMLScriptElement | null)?.src ?? "") || null
     : null;
 
 /**
