@@ -16,7 +16,7 @@ The automatic release and manual **Publish to R2 CDN** workflow share one publis
 
 The publisher:
 
-1. Downloads the exact published npm artifact, avoiding a second build from a different revision.
+1. Downloads the exact published npm artifact, avoiding a second build from a different revision. It retries for up to ten minutes because npm's publish-time scanning can delay availability after a successful publish. If the package is still unavailable, the workflow stops before changing the CDN; rerun it after npm serves the release.
 2. Uploads and verifies `/persona/<version>/` in R2 and checks every file through its public CDN URL before updating `/latest/`. Existing versioned files must match byte-for-byte; otherwise publishing fails without replacing them. Cached CDN errors or different public bytes also block promotion.
 3. Uses `public, max-age=31536000, immutable` for new versioned objects, and `public, max-age=3600, s-maxage=86400, must-revalidate` for `/latest/` objects. Moving URLs can be reused for one hour in browsers and one day at the edge; each release purges the edge copy. The small installer resolves its larger dependencies to its own immutable release, so a cached installer remains compatible. Browser caches may delay an update for up to an hour; CDN purges cannot evict them.
 4. Purges only the uploaded `/persona/latest/` URLs, then checks the entry, installer, launcher, stream chunk, and stylesheet for matching bytes and cache headers bounded by those TTLs. Failure is reported as a failed deployment. Temporary `no-cache`/`no-store` responses are also accepted with a warning, allowing a fixed release to be deployed while the emergency bypass remains active; they do not confirm that the permanent performance policy is restored.

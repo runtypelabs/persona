@@ -92,18 +92,23 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN" || { echo "Set the CLOUDFLARE_API_TOKEN repository secret with Cache Purge permission"; exit 1; }
 
       # Use the exact npm artifact, never a second build of a moving branch.
-      # A short retry handles registry propagation immediately after publishing.
+      # npm publish-time scanning can delay availability by several minutes.
+      # Wait up to ten minutes without rebuilding or promoting missing assets.
       - name: Download published widget
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           mkdir -p cdn-package cdn-dist
-          for attempt in 1 2 3 4 5; do
-            if npm pack "@runtypelabs/persona@$RELEASE_VERSION" --ignore-scripts --registry=https://registry.npmjs.org --pack-destination cdn-package; then
+          for attempt in {1..31}; do
+            if npm pack "@runtypelabs/persona@$RELEASE_VERSION" --ignore-scripts --prefer-online --registry=https://registry.npmjs.org --pack-destination cdn-package; then
               break
             fi
-            if [ "$attempt" = 5 ]; then exit 1; fi
-            sleep 10
+            if [ "$attempt" = 31 ]; then
+              echo "Published package is still unavailable after ten minutes; leaving the CDN unchanged. Rerun this workflow once npm serves the release."
+              exit 1
+            fi
+            echo "Waiting for npm release availability (attempt $attempt/31)."
+            sleep 20
           done
           tar -xzf cdn-package/*.tgz -C cdn-dist --strip-components=2 package/dist
 
