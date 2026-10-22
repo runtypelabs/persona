@@ -149,6 +149,8 @@ initAgentWidget({
 
 **Or with a script tag** (no build step): the same config via `window.siteAgentConfig`, and the installer loads the widget and its CSS for you. Swap in the same `launcher` field for docked or fullscreen.
 
+For production embeds, pin an exact release when you need controlled upgrades and rollback. First-party CDN releases are available at `https://cdn.runtype.com/persona/<version>/`. See [CDN releases and cache recovery](./docs/cdn-releases.md) for cache policies and deployment checks.
+
 ```html
 <script>
   window.siteAgentConfig = {

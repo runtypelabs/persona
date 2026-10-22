@@ -8,7 +8,7 @@
     "lint": "pnpm --filter @runtypelabs/persona lint && pnpm --filter @runtypelabs/persona-proxy lint",
     "typecheck": "pnpm --filter @runtypelabs/persona typecheck && pnpm --filter @runtypelabs/persona-proxy typecheck && pnpm --filter web typecheck",
     "test": "pnpm test:run",
-    "test:run": "pnpm check:persona-wire && pnpm --filter @runtypelabs/persona test:run && pnpm --filter @runtypelabs/persona-proxy test:run && pnpm --filter web test:run && pnpm --filter echo-express --filter echo-hono --filter echo-script-tag --filter echo-sveltekit --filter ai-sdk-next --filter eve-next --filter flue-next --filter cloudflare-agents --filter langgraph-next --filter openai-agents-next --filter runtype-hono-proxy --filter bento-slides --filter webmcp-typed-tools test",
+    "test:run": "node --test scripts/cdn/publish.test.mjs && pnpm check:persona-wire && pnpm --filter @runtypelabs/persona test:run && pnpm --filter @runtypelabs/persona-proxy test:run && pnpm --filter web test:run && pnpm --filter echo-express --filter echo-hono --filter echo-script-tag --filter echo-sveltekit --filter ai-sdk-next --filter eve-next --filter flue-next --filter cloudflare-agents --filter langgraph-next --filter openai-agents-next --filter runtype-hono-proxy --filter bento-slides --filter webmcp-typed-tools test",
     "verify": "pnpm build && pnpm lint && pnpm typecheck && pnpm test:run",
     "sync:persona-wire": "node scripts/sync-persona-wire.mjs",
     "check:persona-wire": "node scripts/sync-persona-wire.mjs --check",

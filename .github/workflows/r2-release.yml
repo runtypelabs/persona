@@ -1,10 +1,15 @@
-name: Publish to R2 CDN (Manual)
+name: Publish to R2 CDN
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Git tag to publish (e.g. @runtypelabs/persona@1.44.0)'
+        description: 'Git tag to publish (e.g. @runtypelabs/persona@4.32.1)'
         required: true
         type: string
 
@@ -22,33 +27,29 @@ jobs:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_BUCKET: ${{ vars.R2_BUCKET || 'cdn-assets' }}
+      CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
           fetch-depth: 0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.1
         with:
           node-version: "24"
-          cache: "pnpm"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build widget
-        run: pnpm build:widget
-
-      - name: Extract version
+      - name: Validate release version
         id: version
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          VERSION=$(node -p "require('./packages/widget/package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Extracted version: $VERSION"
+          node --input-type=module <<'JS'
+          import { appendFileSync } from 'node:fs';
+          import { validateVersion } from './scripts/cdn/publish.mjs';
+          const version = validateVersion(process.env.RELEASE_TAG.replace(/^@runtypelabs\/persona@/, ''));
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          JS
 
       - name: Check if should update latest
         id: check-latest
@@ -84,29 +85,39 @@ jobs:
             echo "should_update=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Upload versioned release to R2
-        id: upload-versioned
-        uses: ryand56/r2-upload-action@33ebb7a494b3a8a3c5ed2ea6bbdc72e707090317 # v1.5
-        with:
-          r2-account-id: ${{ env.R2_ACCOUNT_ID }}
-          r2-access-key-id: ${{ env.R2_ACCESS_KEY_ID }}
-          r2-secret-access-key: ${{ env.R2_SECRET_ACCESS_KEY }}
-          r2-bucket: ${{ env.R2_BUCKET }}
-          source-dir: packages/widget/dist
-          destination-dir: persona/${{ steps.version.outputs.version }}
-
-      - name: Upload latest to R2
-        id: upload-latest
+      - name: Check publishing credentials
         if: steps.check-latest.outputs.should_update == 'true'
-        uses: ryand56/r2-upload-action@33ebb7a494b3a8a3c5ed2ea6bbdc72e707090317 # v1.5
-        with:
-          r2-account-id: ${{ env.R2_ACCOUNT_ID }}
-          r2-access-key-id: ${{ env.R2_ACCESS_KEY_ID }}
-          r2-secret-access-key: ${{ env.R2_SECRET_ACCESS_KEY }}
-          r2-bucket: ${{ env.R2_BUCKET }}
-          source-dir: packages/widget/dist
-          destination-dir: persona/latest
-          keep-file-fresh: true
+        run: |
+          test -n "$CLOUDFLARE_ZONE_ID" || { echo "Set the CLOUDFLARE_ZONE_ID repository variable"; exit 1; }
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "Set the CLOUDFLARE_API_TOKEN repository secret with Cache Purge permission"; exit 1; }
+
+      # Use the exact npm artifact, never a second build of a moving branch.
+      # A short retry handles registry propagation immediately after publishing.
+      - name: Download published widget
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p cdn-package cdn-dist
+          for attempt in 1 2 3 4 5; do
+            if npm pack "@runtypelabs/persona@$RELEASE_VERSION" --ignore-scripts --registry=https://registry.npmjs.org --pack-destination cdn-package; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then exit 1; fi
+            sleep 10
+          done
+          tar -xzf cdn-package/*.tgz -C cdn-dist --strip-components=2 package/dist
+
+      - name: Publish and verify CDN assets
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          SHOULD_UPDATE_LATEST: ${{ steps.check-latest.outputs.should_update }}
+        run: |
+          aws --version
+          if [ "$SHOULD_UPDATE_LATEST" = true ]; then
+            node scripts/cdn/publish.mjs cdn-dist "$RELEASE_VERSION" --latest
+          else
+            node scripts/cdn/publish.mjs cdn-dist "$RELEASE_VERSION"
+          fi
 
       - name: Summary
         env:

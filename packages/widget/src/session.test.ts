@@ -1070,6 +1070,47 @@ describe('AgentWidgetSession - dispatch error fallback', () => {
     expect(session.getStatus()).toBe('idle');
   });
 
+  it('does not blame the backend for an internal stream TypeError after a successful response', async () => {
+    const response = new Response('data: {}\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+    const fault = new TypeError('t.streamGeneration is not a function');
+    vi.spyOn(response.body!, 'getReader').mockImplementation(() => { throw fault; });
+    global.fetch = vi.fn().mockResolvedValue(response);
+    const errors: Error[] = [];
+    const session = new AgentWidgetSession({ apiUrl: 'http://example.invalid/chat' }, {
+      onMessagesChanged: () => {}, onStatusChanged: () => {}, onStreamingChanged: () => {},
+      onError: error => errors.push(error),
+    });
+    await session.sendMessage('Hello');
+    const content = lastAssistantMessage(session)?.content;
+    expect(content).toContain('the chat encountered an unexpected error');
+    expect(content).toContain('t.streamGeneration is not a function');
+    expect(content).not.toContain('backend');
+    expect(content).not.toContain("couldn't reach");
+    expect(errors).toContain(fault);
+    expect(session.isStreaming()).toBe(false);
+  });
+
+  it.each(['Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.', 'fetch failed'])(
+    'recognizes the browser fetch TypeError: %s', async (message) => {
+      failFetchWith(new TypeError(message));
+      const session = new AgentWidgetSession({ apiUrl: 'http://example.invalid/chat' }, {
+        onMessagesChanged: () => {}, onStatusChanged: () => {}, onStreamingChanged: () => {},
+      });
+      await session.sendMessage('Hello');
+      expect(lastAssistantMessage(session)?.content).toContain("I couldn't reach the assistant");
+    },
+  );
+
+  it('describes a server rejection without claiming the server was unreachable', async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response('unavailable', { status: 503 }));
+    const session = new AgentWidgetSession({ apiUrl: 'http://example.invalid/chat' }, {
+      onMessagesChanged: () => {}, onStatusChanged: () => {}, onStreamingChanged: () => {},
+    });
+    await session.sendMessage('Hello');
+    expect(lastAssistantMessage(session)?.content).toContain("chat service couldn't complete the request");
+    expect(lastAssistantMessage(session)?.content).toContain('_Details: Chat backend request failed: 503_');
+  });
+
   it('uses a static errorMessage override verbatim', async () => {
     failFetchWith(new Error('boom'));
     const session = new AgentWidgetSession(
