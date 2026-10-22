@@ -30,7 +30,7 @@ Required repository configuration:
 - Variable: `CLOUDFLARE_ZONE_ID`, the zone serving `cdn.runtype.com`.
 - Secret: `CLOUDFLARE_API_TOKEN`, scoped to **Zone / Cache Purge / Purge** for that zone. This token does not need permission to change cache rules.
 
-Publishing `/latest/` fails before uploading if the purge configuration is missing. Cloudflare settings must also respect object Cache-Control: remove any matching rule or Browser Cache TTL override that assigns a long TTL to `/persona/latest/`. Configure the scoped cache rule's Edge TTL and Browser TTL to **Respect origin**, and make sure a later rule does not override it. See [Cloudflare's cache rule settings](https://developers.cloudflare.com/cache/how-to/cache-rules/settings/).
+Publishing `/latest/` fails before uploading if the purge configuration is missing. Cloudflare settings must also respect object Cache-Control: remove any matching rule or Browser Cache TTL override that assigns a long TTL to `/persona/latest/`. Configure the scoped cache rule's Edge TTL and Browser TTL to **Respect origin**, and make sure a later rule does not override it. For immediate recovery before origin metadata is corrected, a last-matching rule may bypass edge caching for `https://cdn.runtype.com/persona/latest/*`; pair it with a Cache Response Rule that adds `no-cache` for browsers. Verify the actual response headers, since bypassing the edge alone does not guarantee browser revalidation. See [Cloudflare's cache rule settings](https://developers.cloudflare.com/cache/how-to/cache-rules/settings/).
 
 ## Recovering stale latest assets
 
