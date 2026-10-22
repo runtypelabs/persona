@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 export const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
-export const LATEST_CACHE = 'no-cache, max-age=0, must-revalidate';
+export const LATEST_CACHE = 'public, max-age=3600, s-maxage=86400, must-revalidate';
 const CDN = 'https://cdn.runtype.com';
 const exec = promisify(execFile);
 
@@ -51,15 +51,31 @@ export async function purgeLatest(files, { zoneId, token, fetchImpl = fetch }) {
   }
 }
 
+function safeLatestCache(cache) {
+  const directives = cache.toLowerCase().split(',').map(part => part.trim().split(/\s*=\s*/));
+  const has = name => directives.some(([key]) => key === name);
+  if (has('immutable') || has('private') || has('stale-while-revalidate') || has('stale-if-error')) return false;
+  for (const [key, value] of directives) {
+    const limit = key === 'max-age' ? 3600 : key === 's-maxage' ? 86400 : undefined;
+    if (limit !== undefined && (!/^\d+$/.test(value ?? '') || Number(value) > limit)) return false;
+  }
+  // Permit the conservative emergency policy while a pinned release is being
+  // rolled out. Restore caching only after its public assets are verified.
+  return has('no-cache') || has('no-store') || (has('public') && has('max-age'));
+}
+
 export async function verifyLatest(hashes, fetchImpl = fetch) {
   for (const name of ['install.global.js', 'index.global.js', 'launcher.global.js', 'client-stream.js', 'widget.css']) {
     const response = await fetchImpl(`${CDN}/persona/latest/${name}`);
     const cache = response.headers.get('cache-control') ?? '';
-    if (!response.ok || !/(?:no-cache|no-store)/i.test(cache) || /(?:^|,)\s*(?:s-maxage|max-age)\s*=\s*[1-9]\d*/i.test(cache)) {
+    if (!response.ok || !safeLatestCache(cache)) {
       throw new Error(`Unsafe CDN response for ${name}: HTTP ${response.status}, Cache-Control: ${cache}. Check Cloudflare cache rules and Browser Cache TTL overrides.`);
     }
     const hash = createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
     if (hash !== hashes.get(name)) throw new Error(`CDN still serves different bytes for ${name} after purge`);
+    if (/(?:no-cache|no-store)/i.test(cache)) {
+      console.warn(`CDN ${name} is verified but still uses emergency revalidation; restore the bounded cache policy after rollout.`);
+    }
   }
 }
 

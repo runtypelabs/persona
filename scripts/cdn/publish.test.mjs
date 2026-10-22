@@ -37,8 +37,16 @@ test('verification rejects stale bytes and TTL overrides on the mutable URL', as
   const hashes = new Map(names.map(name => [name, hash]));
   const response = (body, cache) => async () => new Response(body, { headers: { 'Cache-Control': cache } });
   await verifyLatest(hashes, response('new', LATEST_CACHE));
+  await verifyLatest(hashes, response('new', 'no-cache, max-age=0, must-revalidate'));
+  await verifyLatest(hashes, response('new', `no-cache, ${LATEST_CACHE}`));
   await assert.rejects(verifyLatest(hashes, response('old', LATEST_CACHE)), /different bytes/);
-  for (const cache of ['public, max-age=31536000', 'no-cache, max-age=31536000', '']) {
+  for (const cache of [
+    'public, max-age=31536000', 'no-cache, max-age=31536000', '',
+    'public, max-age=3601', 'public, max-age=3600, s-maxage=86401',
+    'public, max-age=3600, max-age=31536000', 'public, max-age=-1',
+    'public, max-age=invalid', 'public', 'private, max-age=3600',
+    `${LATEST_CACHE}, immutable`, `${LATEST_CACHE}, stale-while-revalidate=31536000`,
+  ]) {
     await assert.rejects(verifyLatest(hashes, response('new', cache)), /Unsafe CDN response/);
   }
   await assert.rejects(verifyLatest(hashes, async url => new Response(
