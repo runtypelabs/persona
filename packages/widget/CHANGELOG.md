@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 4.32.2
+
+### Patch Changes
+
+- 4460a7c: Pin assets loaded by first-party CDN latest scripts to the script's own release so cached entries cannot load incompatible newer chunks. Distinguish recognized network and server failures from unexpected chat errors without blaming the backend for internal faults.
+
 ## 4.32.1
 
 ### Patch Changes
