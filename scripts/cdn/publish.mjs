@@ -88,6 +88,11 @@ export async function verifyVersioned(hashes, version, fetchImpl = fetch) {
     if (!response.ok) throw new Error(`Versioned CDN response failed for ${url}: HTTP ${response.status}`);
     const hash = createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
     if (hash !== expected) throw new Error(`Versioned CDN serves different bytes for ${url}`);
+    // Prefetches can omit Origin and seed the browser cache before import().
+    // Public modules must allow CORS even on those origin-less responses.
+    if (/\.m?js$/.test(name) && response.headers.get('access-control-allow-origin') !== '*') {
+      throw new Error(`Versioned CDN lacks public CORS for ${url}. Set Access-Control-Allow-Origin: * on public Persona assets, including responses without an Origin request header.`);
+    }
   }
 }
 
