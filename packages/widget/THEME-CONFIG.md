@@ -821,6 +821,66 @@ and type are written as inline `var()` chains on the bubble; `maxWidth` caps the
 message row's content track. `layout.messages.<role>.maxWidth` (and
 `width: "full"`) is per-install config and still wins over the token.
 
+#### Operator bubble (`components.message.operator.*`)
+
+`role: "operator"` messages (a human speaking on the agent's side, such as a
+support takeover) render on the assistant's side with their own bubble. The
+defaults are derived from the theme primary and container, so `brand` themes
+and dark schemes follow without extra config.
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `operator.background` | `--persona-components-message-operator-background` | `color-mix(in srgb, var(--persona-primary) 6%, var(--persona-container))` |
+| `operator.text` | `--persona-components-message-operator-text` | `semantic.colors.text` |
+| `operator.border` | `--persona-components-message-operator-border` | `color-mix(in srgb, var(--persona-primary) 20%, var(--persona-container))` |
+| `operator.borderWidth` | `--persona-components-message-operator-borderWidth` | `1px` |
+| `operator.borderRadius` | `--persona-components-message-operator-borderRadius` | `palette.radius.lg` (v5: `palette.radius.xl`) |
+| `operator.shadow` | `--persona-components-message-operator-shadow` | `palette.shadows.sm` (v5: `none`) |
+
+`operator` also takes the geometry tokens above (`--persona-message-operator-*`).
+They fall back to the layout preset, not to the assistant's values, so the v5
+flat assistant does not flatten the operator bubble: under
+`future.v5Defaults` the operator keeps a bubble with `padding: 8px 14px`,
+`fontSize: 14px` and `lineHeight: 1.5`. `maxWidth` falls back to
+`assistant.maxWidth`, and operator rows use `layout.messages.assistant` for
+width config.
+
+### Message meta (`components.messageMeta.*`)
+
+The row a message's `meta` renders under its bubble: an author label, toned
+badges and a note line (see
+[MESSAGE-INJECTION.md](./docs/MESSAGE-INJECTION.md#message-meta-label-badges-and-note)).
+Every token is optional. Unset, the light colors below come from the
+stylesheet, and the built-in dark layer sets 900-tone badge fills with
+300-tone text and 400-tone notes. Badge tones are `neutral`, `success`,
+`warning` and `danger`; a neutral note uses `foreground`.
+
+| Token | Default |
+|-------|---------|
+| `foreground` | `semantic.colors.textMuted` (label and neutral note) |
+| `fontSize` | `0.75rem` |
+| `gap` | `0.375rem` |
+| `badge.borderRadius` | `palette.radius.sm` |
+| `badge.padding` | `0 0.375rem` |
+| `badge.fontSize` | `0.625rem` |
+| `badge.neutral.background` / `.foreground` | `gray.100` / `gray.700` |
+| `badge.success.background` / `.foreground` | `success.100` / `success.700` |
+| `badge.warning.background` / `.foreground` | `warning.100` / `warning.800` |
+| `badge.danger.background` / `.foreground` | `error.100` / `error.700` |
+| `note.success` / `note.warning` / `note.danger` | `success.700` / `warning.700` / `error.600` |
+
+Each token is emitted as `--persona-components-messageMeta-<path>` (for
+example `--persona-components-messageMeta-badge-danger-background`).
+
+```typescript
+theme: {
+  components: {
+    message: { operator: { background: '#eee9ff', border: '#d6ccff' } },
+    messageMeta: { badge: { success: { background: '#dcfce7', foreground: '#166534' } } },
+  },
+}
+```
+
 ### Message actions (`components.messageActions.*`)
 
 The hover-revealed action row under a message (copy, vote, read aloud). Every
@@ -2831,7 +2891,7 @@ messageActions: {
 | `id` | — | Unique within `custom`; becomes `data-action="custom:<id>"` |
 | `label` | — | Accessible name and tooltip |
 | `iconName` | `"ellipsis"` | Lucide icon name from the Persona registry |
-| `roles` | `["assistant"]` | Which message roles show it. Listing `"user"` brings up the user actions row on its own, without `showEdit` or `showQuote` |
+| `roles` | `["assistant"]` | Which message roles show it: `"user"`, `"assistant"` or `"operator"`. Listing `"user"` brings up the user actions row on its own, without `showEdit` or `showQuote` |
 | `onSelect` | — | `(message: AgentWidgetMessage) => void` |
 
 Custom actions follow the same `enabled`, `visibility`, `align`, and `layout`

@@ -18,7 +18,7 @@ The primary method for injecting messages into the conversation.
 
 ```typescript
 interface InjectMessageOptions {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'operator';
   content: string;              // User-facing (UI display)
   llmContent?: string;          // LLM-facing (defaults to content)
   contentParts?: ContentPart[]; // Multi-modal (highest priority for LLM)
@@ -27,6 +27,7 @@ interface InjectMessageOptions {
   createdAt?: string;           // ISO timestamp
   sequence?: number;            // Sort order
   streaming?: boolean;          // For streaming updates
+  meta?: AgentWidgetMessageMeta; // Label, badges and note under the bubble
 }
 ```
 
@@ -150,6 +151,111 @@ widgetHandle.injectAssistantMessage({
 });
 ```
 
+## Operator Messages (Human Takeover)
+
+Use `role: 'operator'` for a human speaking on the agent's side of the
+conversation, such as a support agent who takes over an SMS, WhatsApp or Slack
+thread. Operator messages:
+
+- Render on the assistant's side with their own bubble, styled by
+  `theme.components.message.operator` (see [THEME-CONFIG.md](../THEME-CONFIG.md)).
+  The defaults tint the container with the theme primary, so `brand` themes
+  follow without extra config.
+- Are display-only. They are never sent to the model, in any transport (proxy,
+  agent, or client token), so the model never sees an operator's words as its
+  own `assistant` turn. To give the model that context, inject a separate
+  `system` or `assistant` message with the `llmContent` you want it to see.
+- Get the copy action and any custom action that lists `'operator'` in
+  `roles`. They never get upvote, downvote, read-aloud or regenerate, and copy
+  does not report feedback to the API.
+- Use `layout.messages.avatar.operatorAvatar` when avatars are shown (default:
+  the letter "O").
+- Do not fire `assistant:message` or `assistant:complete`.
+
+```javascript
+widgetHandle.injectMessage({
+  id: 'msg_42',
+  role: 'operator',
+  content: "Hi, this is Sam from support. I've refunded your order.",
+  createdAt: '2026-10-24T10:15:00.000Z',
+});
+```
+
+## Message Meta (Label, Badges and Note)
+
+Any message can carry `meta`, which renders under the bubble:
+
+```typescript
+type AgentWidgetMessageMeta = {
+  label?: string;                                   // Author label, e.g. "Human"
+  badges?: Array<{ label: string; tone?: Tone }>;   // Status badges, in order
+  note?: { text: string; tone?: Tone };             // One line under the row
+};
+type Tone = 'neutral' | 'success' | 'warning' | 'danger'; // default 'neutral'
+```
+
+- It works on every role and on the default renderer. Custom
+  `renderUserMessage` / `renderAssistantMessage` renderers receive the message
+  and own their own markup.
+- All text is set as plain text, never parsed as HTML. An unknown tone renders
+  as `neutral`.
+- Inject the same `id` again with a new `meta` to update it in place, for
+  example when a delivery status changes. Omitting `meta` keeps the current
+  one; `meta: {}` clears it.
+- It is display-only and never sent to the model.
+- Badge and note colors come from `theme.components.messageMeta` (see
+  [THEME-CONFIG.md](../THEME-CONFIG.md)).
+
+**Timestamps:** Persona already shows timestamps through
+`layout.messages.timestamp` (`show`, `position`, `format`), so meta has no
+timestamp field. Pass a `format` function for relative times. If you want the
+time in the row under the bubble instead, put it in a neutral badge.
+
+### Example: Read-Only Messaging Thread
+
+This maps a channel transcript (inbound end-user messages, agent replies, and
+human takeover replies with delivery status) onto Persona:
+
+```javascript
+const TONES = { failed: 'danger', bounced: 'danger', delivered: 'success', sent: 'success', pending: 'warning' };
+
+const toPersonaMessage = (msg) => {
+  const inbound = msg.direction === 'inbound';
+  const human = !inbound && msg.metadata?.source === 'human_operator';
+  const status = msg.metadata?.deliveryStatus;
+  const error = msg.metadata?.deliveryError;
+  return {
+    id: msg.id,
+    role: inbound ? 'user' : human ? 'operator' : 'assistant',
+    content: msg.content,
+    createdAt: msg.createdAt,
+    meta: {
+      label: inbound ? 'User' : human ? 'Human' : 'Agent',
+      badges: status ? [{ label: status, tone: TONES[status] ?? 'neutral' }] : [],
+      note: error ? { text: error, tone: 'danger' } : undefined,
+    },
+  };
+};
+
+const widgetHandle = initAgentWidget({
+  target: '#thread',
+  config: {
+    launcher: { enabled: false },
+    layout: {
+      showFooter: false, // read-only: no composer
+      messages: {
+        timestamp: { show: true, format: (date) => formatRelative(date) },
+      },
+    },
+  },
+});
+
+// Initial load and every live update (new message or status change) take the
+// same path: injecting an existing id updates that bubble in place.
+widgetHandle.injectMessageBatch(messages.map(toPersonaMessage));
+onThreadUpdate((msg) => widgetHandle.injectMessage(toPersonaMessage(msg)));
+```
+
 ## Component Directive Injection
 
 When you have a renderer registered via `componentRegistry.register(...)`, you can inject an assistant message that renders that component: exactly the same path Persona uses for streamed `{ "text": "...", "component": "...", "props": {...} }` directives.
@@ -260,6 +366,7 @@ widgetHandle.injectAssistantMessage({
    - `assistant` for responses and information display
    - `user` for simulating user actions (use sparingly)
    - `system` for context injection that should influence LLM behavior
+   - `operator` for a human speaking on the agent's side (display-only, never sent to the LLM)
 
 4. **Leverage streaming**: For operations that take time, use streaming updates to keep users informed
 
