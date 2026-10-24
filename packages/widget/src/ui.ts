@@ -6957,10 +6957,23 @@ export const createAgentExperience = (
     // "the assistant is already visibly responding": otherwise the transcript
     // goes blank for the whole tool phase. When those rows are shown, their own
     // bubble carries the loading animation and the standalone dots stay hidden.
+    //
+    // A pending `ask_user_question` call is visible only once its question has
+    // rendered: a plugin bubble mounted for it this pass, or the built-in sheet
+    // mounted for its tool call. Until then (arguments still streaming, a plugin
+    // returning null for a partial payload, the sheet waiting on the pause) it
+    // renders nothing, so it must not hide the dots either.
+    const isUnrenderedAskRow = (msg: AgentWidgetMessage): boolean =>
+      !(msg.toolCall?.id && liveAskToolIds.has(msg.toolCall.id)) &&
+      !askPluginHydrate.some((entry) => entry.messageId === msg.id);
     const isHiddenActivityRow = (msg: AgentWidgetMessage): boolean =>
-      (msg.variant === "tool" && !showToolCalls) ||
-      (msg.variant === "reasoning" && !showReasoning) ||
-      isDroppedCompletedRow(msg);
+      isAskUserQuestionMessage(msg) &&
+      msg.agentMetadata?.askUserQuestionAnswered !== true &&
+      config.features?.askUserQuestion?.enabled !== false
+        ? isUnrenderedAskRow(msg)
+        : (msg.variant === "tool" && !showToolCalls) ||
+          (msg.variant === "reasoning" && !showReasoning) ||
+          isDroppedCompletedRow(msg);
     const hasStreamingAssistantMessage = messages.some(
       (msg) => msg.role === "assistant" && msg.streaming && !isHiddenActivityRow(msg)
     );
