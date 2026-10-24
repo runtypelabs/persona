@@ -2,6 +2,9 @@ import { getLoadingLabelRuntimeSync } from "../loading-label-runtime-loader";
 import { createElement, createNode } from "../utils/dom";
 import {
   AgentWidgetMessage,
+  AgentWidgetMessageRole,
+  AgentWidgetMessageMeta,
+  AgentWidgetMessageMetaTone,
   AgentWidgetMessageLayoutConfig,
   AgentWidgetAvatarConfig,
   AgentWidgetTimestampConfig,
@@ -577,40 +580,47 @@ export const renderLoadingIndicatorWithFallback = (
  */
 const createAvatar = (
   avatarConfig: AgentWidgetAvatarConfig,
-  role: "user" | "assistant"
+  role: AgentWidgetMessageRole
 ): HTMLElement => {
   const avatar = createElement(
     "div",
     "persona-flex-shrink-0 persona-w-8 persona-h-8 persona-rounded-full persona-flex persona-items-center persona-justify-center persona-text-sm"
   );
 
-  const avatarContent = role === "user" 
-    ? avatarConfig.userAvatar 
-    : avatarConfig.assistantAvatar;
+  const isOperator = role === "operator";
+  const avatarContent = role === "user"
+    ? avatarConfig.userAvatar
+    : isOperator
+      ? avatarConfig.operatorAvatar
+      : avatarConfig.assistantAvatar;
+
+  // The operator avatar is a neutral outlined chip, apart from the solid
+  // user and assistant fills.
+  const applyFill = () => {
+    avatar.classList.add(
+      ...(isOperator
+        ? ["persona-bg-persona-container", "persona-text-persona-text", "persona-border"]
+        : [role === "user" ? "persona-bg-persona-accent" : "persona-bg-persona-primary", "persona-text-white"])
+    );
+  };
 
   if (avatarContent) {
     // Check if it's a URL or emoji/text
     if (avatarContent.startsWith("http") || avatarContent.startsWith("/") || avatarContent.startsWith("data:")) {
       const img = createElement("img") as HTMLImageElement;
       img.src = avatarContent;
-      img.alt = role === "user" ? "User" : "Assistant";
+      img.alt = role === "user" ? "User" : isOperator ? "Operator" : "Assistant";
       img.className = "persona-w-full persona-h-full persona-rounded-full persona-object-cover";
       avatar.appendChild(img);
     } else {
       // Emoji or text
       avatar.textContent = avatarContent;
-      avatar.classList.add(
-        role === "user" ? "persona-bg-persona-accent" : "persona-bg-persona-primary",
-        "persona-text-white"
-      );
+      applyFill();
     }
   } else {
     // Default avatar
-    avatar.textContent = role === "user" ? "U" : "A";
-    avatar.classList.add(
-      role === "user" ? "persona-bg-persona-accent" : "persona-bg-persona-primary",
-      "persona-text-white"
-    );
+    avatar.textContent = role === "user" ? "U" : isOperator ? "O" : "A";
+    applyFill();
   }
 
   return avatar;
@@ -644,13 +654,29 @@ const createTimestamp = (
   return timestamp;
 };
 
+/** Assistant color utilities an operator bubble replaces with its own tokens. */
+const OPERATOR_DROPPED_CLASSES = new Set([
+  "persona-bg-persona-container",
+  "persona-text-persona-text",
+  "persona-border-persona-message-border",
+]);
+
 /**
  * Get bubble classes based on layout preset
  */
 export const getBubbleClasses = (
-  role: "user" | "assistant" | "system",
+  role: AgentWidgetMessageRole,
   layout: AgentWidgetMessageLayoutConfig["layout"] = "bubble"
 ): string[] => {
+  // Operator bubbles share the assistant's geometry per layout; only the role
+  // class changes, and the colors come from the operator tokens instead.
+  if (role === "operator") {
+    return getBubbleClasses("assistant", layout).flatMap((name) =>
+      name === "persona-message-assistant-bubble"
+        ? ["persona-message-operator-bubble"]
+        : OPERATOR_DROPPED_CLASSES.has(name) ? [] : [name]
+    );
+  }
   const baseClasses = ["persona-message-bubble"];
 
   switch (layout) {
@@ -763,7 +789,7 @@ export const applyBubbleGeometry = (
   tokens?: MessageGeometryTokens
 ): void => {
   if (!tokens) return;
-  const key = role === "user" ? "user" : "assistant";
+  const key = role === "user" || role === "operator" ? role : "assistant";
   const preset = BUBBLE_GEOMETRY_DEFAULTS[layout ?? "bubble"] ?? BUBBLE_GEOMETRY_DEFAULTS.bubble;
   if (tokens.padding) {
     bubble.style.padding = `var(--persona-message-${key}-padding, ${preset.padding})`;
@@ -787,13 +813,14 @@ export const customMessageActionDataAction = (id: string): string =>
 
 /**
  * Host-contributed actions this message's role qualifies for. Assistant-only by
- * default, matching every built-in except edit and quote.
+ * default, matching every built-in except edit and quote; an action reaches
+ * operator messages only when its `roles` lists `"operator"`.
  */
 export const customMessageActionsForRole = (
   actionsConfig: AgentWidgetMessageActionsConfig | undefined,
   role: AgentWidgetMessage["role"]
 ): AgentWidgetCustomMessageAction[] => {
-  if (role !== "user" && role !== "assistant") return [];
+  if (role !== "user" && role !== "assistant" && role !== "operator") return [];
   return (actionsConfig?.custom ?? []).filter((action) =>
     (action.roles ?? ["assistant"]).includes(role)
   );
@@ -1000,17 +1027,24 @@ export const createStandardBubble = (
   bubble.id = `bubble-${message.id}`;
   bubble.setAttribute("data-message-id", message.id);
 
-  bubble.setAttribute("data-persona-theme-zone", message.role === "user" ? "user-message" : "assistant-message");
+  const isOperator = message.role === "operator";
+  bubble.setAttribute(
+    "data-persona-theme-zone",
+    message.role === "user" ? "user-message" : isOperator ? "operator-message" : "assistant-message"
+  );
 
   const defaultMessageTokens = resolveThemeDefaults(options?.widgetConfig?.future).components.message;
   const messageTokens = options?.widgetConfig?.theme?.components?.message;
+  const darkMessageTokens = options?.widgetConfig?.darkTheme?.components?.message;
   applyBubbleGeometry(
     bubble,
     message.role,
     layout,
     message.role === "user"
-      ? { ...defaultMessageTokens.user, ...messageTokens?.user, ...options?.widgetConfig?.darkTheme?.components?.message?.user }
-      : { ...defaultMessageTokens.assistant, ...messageTokens?.assistant, ...options?.widgetConfig?.darkTheme?.components?.message?.assistant }
+      ? { ...defaultMessageTokens.user, ...messageTokens?.user, ...darkMessageTokens?.user }
+      : isOperator
+        ? { ...defaultMessageTokens.operator, ...messageTokens?.operator, ...darkMessageTokens?.operator }
+        : { ...defaultMessageTokens.assistant, ...messageTokens?.assistant, ...darkMessageTokens?.assistant }
   );
 
   // Apply component-level color overrides via CSS variables
@@ -1019,13 +1053,18 @@ export const createStandardBubble = (
     bubble.style.color =
       message.role === "user"
         ? "var(--persona-primary, var(--persona-text))"
-        : "var(--persona-message-assistant-text, var(--persona-text))";
+        : isOperator
+          ? "var(--persona-components-message-operator-text, var(--persona-text))"
+          : "var(--persona-message-assistant-text, var(--persona-text))";
   } else if (message.role === "user") {
     bubble.style.backgroundColor = 'var(--persona-message-user-bg, var(--persona-accent))';
     bubble.style.color = 'var(--persona-message-user-text, white)';
   } else if (message.role === "assistant") {
     bubble.style.backgroundColor = 'var(--persona-message-assistant-bg, var(--persona-container))';
     bubble.style.color = 'var(--persona-message-assistant-text, var(--persona-text))';
+  } else if (isOperator) {
+    bubble.style.backgroundColor = 'var(--persona-components-message-operator-background, var(--persona-container))';
+    bubble.style.color = 'var(--persona-components-message-operator-text, var(--persona-text))';
   }
 
   const imageParts = getMessageImageParts(message);
@@ -1293,9 +1332,11 @@ export const createStandardBubble = (
     bubble.appendChild(createStopReasonNotice(message.stopReason, stopReasonNoticeText));
   }
 
-  // Add message actions for assistant messages (only when not streaming and has content)
+  // Add message actions for assistant and operator messages (only when not
+  // streaming and has content). Operator rows get copy and opted-in custom
+  // actions only: feedback, read-aloud and regenerate are about model output.
   const shouldShowActions =
-    message.role === "assistant" &&
+    (message.role === "assistant" || isOperator) &&
     !message.streaming &&
     // A voice caption (the voice model's own speech) is display-only.
     !message.voiceCaption &&
@@ -1321,7 +1362,17 @@ export const createStandardBubble = (
       shouldShowUserActions
         ? // A user bubble never hosts the assistant-only controls.
           { ...actionsConfig, showCopy: false, showUpvote: false, showDownvote: false, showReadAloud: false }
-        : actionsConfig,
+        : isOperator
+          ? {
+              ...actionsConfig,
+              showUpvote: false,
+              showDownvote: false,
+              showReadAloud: false,
+              showRegenerate: false,
+              showEdit: false,
+              showQuote: false,
+            }
+          : actionsConfig,
       actionCallbacks,
       eligibility,
       options?.widgetConfig?.future?.v5Defaults === true && actionsConfig.visibility === undefined
@@ -1331,7 +1382,7 @@ export const createStandardBubble = (
 
   // If no avatar needed, return bubble directly
   if (!showAvatar || message.role === "system") {
-    return bubble;
+    return withMessageMeta(bubble, message);
   }
 
   // Create wrapper with avatar
@@ -1350,7 +1401,71 @@ export const createStandardBubble = (
     wrapper.append(avatar, bubble);
   }
 
-  return wrapper;
+  return withMessageMeta(wrapper, message);
+};
+
+const MESSAGE_META_TONES = ["success", "warning", "danger"];
+
+/** A known tone, or `neutral` for anything else (including untyped host input). */
+const metaTone = (tone: unknown): AgentWidgetMessageMetaTone =>
+  MESSAGE_META_TONES.includes(tone as string) ? (tone as AgentWidgetMessageMetaTone) : "neutral";
+
+const hasText = (value: unknown): value is string => typeof value === "string" && value.trim() !== "";
+
+/**
+ * Build the row under a bubble from `message.meta`: author label, badges, and
+ * an optional note line. Returns null when the meta has nothing to show. Every
+ * string is set with `textContent`, so host text is never parsed as HTML.
+ */
+export const createMessageMeta = (
+  messageId: string,
+  meta: AgentWidgetMessageMeta | undefined
+): HTMLElement[] | null => {
+  const badges = (Array.isArray(meta?.badges) ? meta.badges : []).filter((badge) => hasText(badge?.label));
+  const label = hasText(meta?.label) ? meta.label : null;
+  const nodes: HTMLElement[] = [];
+  if (label || badges.length) {
+    nodes.push(
+      createNode(
+        "div",
+        { className: "persona-message-meta", attrs: { "data-message-meta-for": messageId } },
+        label ? createNode("span", { className: "persona-message-meta-label", text: label }) : null,
+        ...badges.map((badge) =>
+          createNode("span", {
+            className: "persona-message-meta-badge",
+            attrs: { "data-tone": metaTone(badge.tone) },
+            text: badge.label,
+          })
+        )
+      )
+    );
+  }
+  if (hasText(meta?.note?.text)) {
+    nodes.push(
+      createNode("div", {
+        className: "persona-message-meta-note",
+        attrs: { "data-tone": metaTone(meta.note.tone) },
+        text: meta.note.text,
+      })
+    );
+  }
+  return nodes.length ? nodes : null;
+};
+
+/**
+ * Stack the meta row under a rendered bubble (or avatar wrapper). Messages
+ * without meta return the element unchanged, so their DOM is exactly what it
+ * was before meta existed.
+ */
+const withMessageMeta = (element: HTMLElement, message: AgentWidgetMessage): HTMLElement => {
+  const metaNodes = createMessageMeta(message.id, message.meta);
+  if (!metaNodes) return element;
+  const stack = createNode("div", {
+    className: "persona-message-stack",
+    attrs: { id: `stack-${message.id}`, "data-message-stack-for": message.id },
+  });
+  stack.append(element, ...metaNodes);
+  return stack;
 };
 
 /**

@@ -616,7 +616,7 @@ export type AgentWidgetReplayedToolResult = {
  * from its own stored transcript there.
  */
 export type AgentWidgetRequestPayloadMessage = {
-  role: AgentWidgetMessageRole | "tool";
+  role: AgentWidgetModelMessageRole | "tool";
   content: MessageContent;
   createdAt: string;
   /** Optional assistant phase for backend adapters that replay provider history. */
@@ -1391,7 +1391,7 @@ export type AgentWidgetMessageActionsConfig = {
 };
 
 /** Which roles a custom message action appears on. */
-export type AgentWidgetCustomMessageActionRole = "user" | "assistant";
+export type AgentWidgetCustomMessageActionRole = "user" | "assistant" | "operator";
 
 /** One host-contributed message action. */
 export type AgentWidgetCustomMessageAction = {
@@ -7191,6 +7191,11 @@ export type AgentWidgetAvatarConfig = {
   userAvatar?: string;
   /** URL or emoji for assistant avatar */
   assistantAvatar?: string;
+  /**
+   * URL or emoji for operator (human takeover) avatar. Defaults to the letter
+   * "O" on a neutral fill.
+   */
+  operatorAvatar?: string;
 };
 
 /**
@@ -7246,7 +7251,10 @@ export type AgentWidgetMessageLayoutConfig = {
   groupConsecutive?: boolean;
   /** Width behavior for user-authored message rows */
   user?: AgentWidgetMessageRoleLayout;
-  /** Width behavior for assistant-authored message rows and assistant UI variants */
+  /**
+   * Width behavior for assistant-authored message rows and assistant UI
+   * variants. Operator rows sit on the same side and use it too.
+   */
   assistant?: AgentWidgetMessageRoleLayout;
   /**
    * Custom renderer for user messages
@@ -9093,7 +9101,78 @@ type ConfigPatch<T> = T extends (...args: never[]) => unknown
       ? { [K in keyof T]?: ConfigPatch<T[K]> }
       : T;
 
-export type AgentWidgetMessageRole = "user" | "assistant" | "system";
+/**
+ * Who authored a message.
+ *
+ * - `user`: the end user.
+ * - `assistant`: the agent (model output).
+ * - `system`: context for the model, rendered like an assistant row.
+ * - `operator`: a human speaking on the agent's side of the conversation, such
+ *   as a support agent who has taken over the thread. It renders on the
+ *   assistant's side with its own bubble style (`theme.components.message.operator`).
+ *   Operator messages are display-only: they are never sent to the model, so
+ *   they never reach a request payload as `assistant` turns.
+ */
+export type AgentWidgetMessageRole = "user" | "assistant" | "system" | "operator";
+
+/**
+ * Roles that reach a model request. `operator` is display-only, so it is not
+ * one of them.
+ */
+export type AgentWidgetModelMessageRole = Exclude<AgentWidgetMessageRole, "operator">;
+
+/**
+ * Tone of a {@link AgentWidgetMessageMeta} badge or note. Each tone maps to its
+ * own theme tokens (`theme.components.messageMeta`), and an unknown value
+ * renders as `neutral`.
+ */
+export type AgentWidgetMessageMetaTone = "neutral" | "success" | "warning" | "danger";
+
+/** One badge in the row under a message bubble. */
+export type AgentWidgetMessageMetaBadge = {
+  /** Badge text. Rendered as plain text, never as HTML. */
+  label: string;
+  /** @default "neutral" */
+  tone?: AgentWidgetMessageMetaTone;
+};
+
+/** A one-line note under the meta row, such as a delivery error. */
+export type AgentWidgetMessageMetaNote = {
+  /** Note text. Rendered as plain text, never as HTML. */
+  text: string;
+  /** @default "neutral" */
+  tone?: AgentWidgetMessageMetaTone;
+};
+
+/**
+ * Host-supplied details rendered under a message bubble: an author label,
+ * status badges, and a note line. Works on any role and on the default
+ * renderer only (custom `renderUserMessage` / `renderAssistantMessage`
+ * renderers own their own markup). All text is set with `textContent`, so it
+ * is never parsed as HTML. Display-only: it is never sent to the model.
+ *
+ * Re-inject the message with the same `id` to update it (for example, when a
+ * delivery status changes). Pass `meta: {}` to clear it.
+ *
+ * @example
+ * widget.injectMessage({
+ *   id: "msg_42",
+ *   role: "operator",
+ *   content: "I've refunded your order.",
+ *   meta: {
+ *     label: "Human",
+ *     badges: [{ label: "delivered", tone: "success" }],
+ *   },
+ * });
+ */
+export type AgentWidgetMessageMeta = {
+  /** Author label shown first in the row, for example "Human" or "Agent". */
+  label?: string;
+  /** Badges shown after the label, in order. */
+  badges?: AgentWidgetMessageMetaBadge[];
+  /** A note line shown under the row. */
+  note?: AgentWidgetMessageMetaNote;
+};
 
 export type AgentWidgetReasoning = {
   id: string;
@@ -9220,7 +9299,7 @@ export type AgentWidgetTurnActivityConfig = {
  * Represents a message in the chat conversation.
  *
  * @property id - Unique message identifier
- * @property role - Message role: "user", "assistant", or "system"
+ * @property role - Message role: "user", "assistant", "system", or "operator"
  * @property content - Message text content (for display)
  * @property contentParts - Original multi-modal content parts (for API requests)
  * @property createdAt - ISO timestamp when message was created
@@ -9240,6 +9319,11 @@ export type AgentWidgetMessage = {
   role: AgentWidgetMessageRole;
   content: string;
   createdAt: string;
+  /**
+   * Host-supplied label, badges and note rendered under the bubble. Display
+   * only; see {@link AgentWidgetMessageMeta}.
+   */
+  meta?: AgentWidgetMessageMeta;
   /**
    * Original multi-modal content parts for this message.
    * When present, this is sent to the API instead of `content`.
@@ -9391,7 +9475,8 @@ export type InjectMessageOptions = {
   /** Mark assistant content as dispatch failure detail for `errorDisplay`. */
   dispatchError?: boolean;
   /**
-   * Message role: "assistant", "user", or "system"
+   * Message role: "assistant", "user", "system", or "operator". Operator
+   * messages are display-only and never sent to the model.
    */
   role: AgentWidgetMessageRole;
 
@@ -9465,6 +9550,13 @@ export type InjectMessageOptions = {
    * raw directive.
    */
   rawContent?: string;
+
+  /**
+   * Label, badges and note rendered under the bubble. Re-injecting the same
+   * `id` with a new `meta` re-renders it; omitting `meta` keeps the current
+   * one, and `meta: {}` clears it. See {@link AgentWidgetMessageMeta}.
+   */
+  meta?: AgentWidgetMessageMeta;
 };
 
 /**

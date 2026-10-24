@@ -62,6 +62,7 @@ describe('brand derivation', () => {
     const theme = deriveBrandTheme({ density });
     expect(theme.semantic?.typography?.fontSize).toBe(size);
     expect(theme.components?.header?.minHeight).toBe(height);
+    expect(theme.components?.message?.operator?.fontSize).toBe(size);
   });
   it.each([['none', '0px'], ['sm', '4px'], ['md', '8px'], ['lg', '16px']] as const)('maps %s radius while preserving circles', (radius, value) => {
     const theme = deriveBrandTheme({ radius });

@@ -580,8 +580,76 @@ export interface MessageTokens {
     /** Assistant bubble box-shadow (token ref or raw CSS, e.g. `none`). */
     shadow?: string;
   };
+  /**
+   * Operator bubble: a human speaking on the agent's side (`role: "operator"`).
+   * Renders on the assistant's side. Defaults tint the container with the
+   * theme primary (`--persona-primary`), so `brand` themes follow without
+   * extra config. Geometry keys fall back to the layout preset, not to the
+   * assistant's geometry.
+   */
+  operator?: MessageGeometryTokens & {
+    /** @default "color-mix(in srgb, var(--persona-primary) 6%, var(--persona-container))" */
+    background?: TokenReference<'color'>;
+    /** @default semantic.colors.text */
+    text?: TokenReference<'color'>;
+    /** @default palette.radius.lg */
+    borderRadius?: TokenReference<'radius'>;
+    /** @default "color-mix(in srgb, var(--persona-primary) 20%, var(--persona-container))" */
+    border?: TokenReference<'color'>;
+    /** Border width; set to 0px to drop it. @default "1px" */
+    borderWidth?: string;
+    /** Operator bubble box-shadow (token ref or raw CSS, e.g. `none`). */
+    shadow?: string;
+  };
   /** Border color between messages in the thread. */
   border?: TokenReference<'color'>;
+}
+
+/** One message-meta tone: badge fill and text pair. */
+export interface MessageMetaBadgeToneTokens {
+  background?: TokenReference<'color'>;
+  foreground?: TokenReference<'color'>;
+}
+
+/**
+ * The row under a bubble set by `message.meta`: author label, badges and a
+ * note line. Emitted as `--persona-components-messageMeta-*`. Unset keys use
+ * the light defaults below (a 100-tone badge fill with a 700/800-tone text);
+ * the built-in dark layer sets 900-tone fills with 300-tone text and 400-tone
+ * notes.
+ */
+export interface MessageMetaTokens {
+  /** Label text color. @default semantic.colors.textMuted */
+  foreground?: TokenReference<'color'>;
+  /** Row type size. @default "0.75rem" */
+  fontSize?: string;
+  /** Gap between the label and badges, and above the row. @default "0.375rem" */
+  gap?: string;
+  badge?: {
+    /** @default palette.radius.sm */
+    borderRadius?: TokenReference<'radius'>;
+    /** @default "0 0.375rem" */
+    padding?: string;
+    /** @default "0.625rem" */
+    fontSize?: string;
+    /** @default gray.100 fill, gray.700 text */
+    neutral?: MessageMetaBadgeToneTokens;
+    /** @default success.100 fill, success.700 text */
+    success?: MessageMetaBadgeToneTokens;
+    /** @default warning.100 fill, warning.800 text */
+    warning?: MessageMetaBadgeToneTokens;
+    /** @default error.100 fill, error.700 text */
+    danger?: MessageMetaBadgeToneTokens;
+  };
+  /** Note text color per tone. A neutral note uses `foreground`. */
+  note?: {
+    /** @default success.700 */
+    success?: TokenReference<'color'>;
+    /** @default warning.700 */
+    warning?: TokenReference<'color'>;
+    /** @default error.600 */
+    danger?: TokenReference<'color'>;
+  };
 }
 
 /**
@@ -1336,6 +1404,8 @@ export interface ComponentTokens {
   message: MessageTokens;
   /** Hover-revealed per-message action row (copy, vote, read aloud). */
   messageActions?: MessageActionsTokens;
+  /** Label, badges and note under a bubble (`message.meta`). */
+  messageMeta?: MessageMetaTokens;
   /** Welcome / intro card shown above the message list. */
   introCard?: IntroCardTokens;
   /** Markdown surfaces (chat + artifact pane). */

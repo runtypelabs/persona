@@ -97,3 +97,24 @@ the session_end After above):
 | `dist/index.cjs` | 215.92 kB | 216.06 kB | 216 → 216.25 kB |
 
 `index.global.js` stays within its existing budgets (164.05 kB gzip).
+
+## Operator role and message meta
+
+The `operator` message role (a human on the agent's side, with its own bubble
+tokens) and per-message `meta` (label, toned badges and a note under the
+bubble) add the operator bubble and meta styles to `widget.css`, the operator
+defaults to the shared token tables, and the meta renderer to the message
+bubble. Raises (gzip, decimal kB, and Brotli, binary KiB; Before is main
+c2e2bb1e):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` | 166.72 kB | 167.52 kB | 167 → 168 kB |
+| `dist/widget.css` | 24.23 kB | 24.69 kB | 24.5 → 24.75 kB |
+| `dist/theme-editor.js` | 40.49 kB | 40.54 kB | 40.5 → 40.75 kB |
+| `dist/widget.css` (Brotli) | 19.99 KiB | 20.32 KiB | 20 → 20.5 KiB |
+
+`index.global.js` stays within its 133 KiB Brotli budget (132.27 → 132.83 KiB),
+and the launcher stays within both of its budgets (17.53 → 17.67 kB gzip).
+Light meta colors live in the stylesheet's `var()` fallbacks rather than the
+token tables, so only the dark layer carries meta defaults in JavaScript.

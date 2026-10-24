@@ -61,7 +61,9 @@ type HistoryAgentMetadata = AgentMessageMetadata & {
   historyDisplayUnavailable?: true;
 };
 
-const WIDGET_ROLES: readonly string[] = ["user", "assistant", "system"];
+// `operator` never comes from the Runtype API, but a custom history provider
+// may return it for a human-takeover transcript.
+const WIDGET_ROLES: readonly string[] = ["user", "assistant", "system", "operator"];
 
 /** Anchor for a page with no real timestamps and no older bound. */
 const SYNTHETIC_EPOCH_MS = 0;

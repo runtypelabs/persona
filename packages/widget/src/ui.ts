@@ -1408,8 +1408,9 @@ export const createAgentExperience = (
   const messageActionCallbacks: MessageActionCallbacks = {
     onCopy: (message: AgentWidgetMessage) => {
       eventBus.emit("message:copy", message);
-      // Send copy feedback to API if in client token mode
-      if (session?.isClientTokenMode()) {
+      // Send copy feedback to API if in client token mode. Operator messages
+      // are host-injected and unknown to the API, so they never report.
+      if (session?.isClientTokenMode() && message.role !== "operator") {
         session.submitMessageFeedback(message.id, 'copy').catch((error) => {
           if (config.debug) {
             // eslint-disable-next-line no-console
@@ -6097,21 +6098,24 @@ export const createAgentExperience = (
     wrapper: HTMLElement,
     role: AgentWidgetMessage["role"]
   ): void => {
+    // Operator rows sit on the assistant's side and share its layout config.
     const sizingRole = role === "user" ? "user" : "assistant";
     const roleLayout = config.layout?.messages?.[sizingRole];
     const width = roleLayout?.width ?? "content";
     // Only an explicit config value is stamped inline; the 85%/100% defaults
     // live in widget.css so `components.message.<role>.maxWidth` can win.
+    const fullMaxWidth = role === "operator"
+      ? "var(--persona-message-operator-max-width, var(--persona-message-assistant-max-width, 100%))"
+      : `var(--persona-message-${sizingRole}-max-width, 100%)`;
     const maxWidth =
-      roleLayout?.maxWidth ?? (width === "full"
-        ? `var(--persona-message-${sizingRole}-max-width, 100%)`
-        : undefined);
+      roleLayout?.maxWidth ?? (width === "full" ? fullMaxWidth : undefined);
 
     wrapper.classList.add("persona-message-row");
     wrapper.classList.remove(
       "persona-message-row-user",
       "persona-message-row-assistant",
       "persona-message-row-system",
+      "persona-message-row-operator",
       "persona-message-width-content",
       "persona-message-width-full"
     );

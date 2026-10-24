@@ -2490,7 +2490,8 @@ export class AgentWidgetSession {
       streaming = false,
       voiceProcessing,
       voiceCaption,
-      rawContent
+      rawContent,
+      meta
     } = options;
 
     // Generate appropriate ID based on role
@@ -2500,7 +2501,7 @@ export class AgentWidgetSession {
         ? generateUserMessageId()
         : role === "assistant"
           ? generateAssistantMessageId()
-          : `system-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+          : `${role === "operator" ? "operator" : "system"}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
     return {
       id: messageId,
@@ -2515,6 +2516,7 @@ export class AgentWidgetSession {
       ...(voiceProcessing !== undefined && { voiceProcessing }),
       ...(voiceCaption && { voiceCaption }),
       ...(rawContent !== undefined && { rawContent }),
+      ...(meta !== undefined && { meta }),
       ...(options.dispatchError !== undefined && { dispatchError: options.dispatchError })
     };
 

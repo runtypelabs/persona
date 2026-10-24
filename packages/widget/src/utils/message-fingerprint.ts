@@ -27,6 +27,7 @@ export type FingerprintableMessage = {
   reasoning?: { chunks?: string[]; status?: string; [key: string]: unknown };
   contentParts?: unknown[];
   stopReason?: string;
+  meta?: unknown;
 };
 
 export type MessageCacheEntry = {
@@ -88,6 +89,10 @@ export function computeMessageFingerprint(
     message.contentParts?.length ?? 0,
     message.stopReason ?? "",
     message.toolCall?.actionTitle ?? "",
+    // Host meta is small and replaced on upsert (a delivery status flips with
+    // the same text), so the whole value is part of the key. Not memoized: a
+    // host may mutate the object in place before re-injecting it.
+    message.meta ? JSON.stringify(message.meta) : "",
     configVersion,
   ].join("\x00");
 }

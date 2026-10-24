@@ -171,6 +171,22 @@ const DARK_COMPONENTS_BASE: DeepPartial<PersonaTheme> = {
         default: { background: 'palette.colors.gray.800', foreground: 'palette.colors.gray.300' },
       },
     },
+    // Message meta badges follow the event-stream chips: 900-tone fill with
+    // a 300-tone text. Note lines move to the 400 tones, which keep AA on a
+    // dark surface where the light 600/700 tones do not.
+    messageMeta: {
+      badge: {
+        neutral: { background: 'palette.colors.gray.800', foreground: 'palette.colors.gray.300' },
+        success: { background: 'palette.colors.success.900', foreground: 'palette.colors.success.300' },
+        warning: { background: 'palette.colors.warning.900', foreground: 'palette.colors.warning.300' },
+        danger: { background: 'palette.colors.error.900', foreground: 'palette.colors.error.300' },
+      },
+      note: {
+        success: 'palette.colors.success.400',
+        warning: 'palette.colors.warning.400',
+        danger: 'palette.colors.error.400',
+      },
+    },
     history: {
       // error-400: the light-surface error-600 red lands ~3:1 on dark
       // surfaces, under the 4.5:1 AA floor for the 14px destructive labels.
@@ -250,6 +266,14 @@ export const DARK_COMPONENTS_V5: DeepPartial<PersonaTheme> = {
         ...DARK_COMPONENTS_BASE.components?.eventStream?.badge,
         step: { background: 'palette.colors.gray.100', foreground: 'palette.colors.gray.700' },
         default: { background: 'palette.colors.gray.100', foreground: 'palette.colors.gray.700' },
+      },
+    },
+    // V5's dark gray ramp is inverted, so the neutral pair reads from the low end.
+    messageMeta: {
+      ...DARK_COMPONENTS_BASE.components?.messageMeta,
+      badge: {
+        ...DARK_COMPONENTS_BASE.components?.messageMeta?.badge,
+        neutral: { background: 'palette.colors.gray.100', foreground: 'palette.colors.gray.700' },
       },
     },
   },

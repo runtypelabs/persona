@@ -182,6 +182,44 @@ describe('AgentWidgetSession - Message Injection', () => {
     });
   });
 
+  describe('operator role', () => {
+    it('injects an operator message with its own id prefix', () => {
+      const result = session.injectMessage({ role: 'operator', content: 'Sam from support here.' });
+
+      expect(result.role).toBe('operator');
+      expect(result.id).toMatch(/^operator-/);
+      expect(messages.map((message) => message.role)).toEqual(['operator']);
+    });
+  });
+
+  describe('message meta', () => {
+    it('carries meta on an injected message and omits the key when unset', () => {
+      const withMeta = session.injectMessage({
+        id: 'm1',
+        role: 'assistant',
+        content: 'Hi',
+        meta: { label: 'Agent', badges: [{ label: 'sent', tone: 'success' }] },
+      });
+      const without = session.injectMessage({ id: 'm2', role: 'user', content: 'Hello' });
+
+      expect(withMeta.meta).toEqual({ label: 'Agent', badges: [{ label: 'sent', tone: 'success' }] });
+      expect('meta' in without).toBe(false);
+    });
+
+    it('upserts meta on re-injection, keeps it when omitted and clears it with {}', () => {
+      session.injectMessage({ id: 'op1', role: 'operator', content: 'Refunded.', meta: { badges: [{ label: 'pending', tone: 'warning' }] } });
+      session.injectMessage({ id: 'op1', role: 'operator', content: 'Refunded.', meta: { badges: [{ label: 'delivered', tone: 'success' }] } });
+      expect(messages).toHaveLength(1);
+      expect(messages[0].meta).toEqual({ badges: [{ label: 'delivered', tone: 'success' }] });
+
+      session.injectMessage({ id: 'op1', role: 'operator', content: 'Refunded.' });
+      expect(messages[0].meta).toEqual({ badges: [{ label: 'delivered', tone: 'success' }] });
+
+      session.injectMessage({ id: 'op1', role: 'operator', content: 'Refunded.', meta: {} });
+      expect(messages[0].meta).toEqual({});
+    });
+  });
+
   describe('message ordering', () => {
     it('should maintain chronological order', () => {
       session.injectMessage({

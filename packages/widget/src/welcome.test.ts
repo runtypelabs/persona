@@ -279,6 +279,11 @@ describe("resolveConversationState", () => {
     expect(isWelcomeVisible(resolveWelcomeConfig(config({ welcome: { dismiss: "on-first-message" } })), [message])).toBe(false);
   });
 
+  it("treats a visible operator message as activity", () => {
+    expect(resolveConversationState([{ ...assistantMessage, role: "operator", content: "Sam here" }])).toBe("active");
+    expect(resolveConversationState([{ ...assistantMessage, role: "operator", content: "  " }])).toBe("empty");
+  });
+
   it("flips to active on the first user message", () => {
     expect(resolveConversationState([userMessage])).toBe("active");
     expect(resolveConversationState([assistantMessage, userMessage])).toBe(

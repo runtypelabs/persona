@@ -2171,6 +2171,13 @@
   );
 }
 
+.persona-message-row[data-message-role="operator"] > * {
+  max-width: var(
+    --persona-message-row-max-width,
+    var(--persona-message-operator-max-width, var(--persona-message-assistant-max-width, 85%))
+  );
+}
+
 .persona-message-row[data-message-width="content"] > * {
   flex: 0 1 auto;
 }
@@ -3086,6 +3093,99 @@
   box-shadow: var(--persona-message-assistant-shadow, 0 1px 2px 0 rgb(0 0 0 / 0.05));
 }
 
+/* Operator bubble: a human on the agent's side (role "operator"). Renders on
+   the assistant's side; the defaults tint the container with the primary. */
+.persona-message-operator-bubble {
+  border-radius: var(--persona-components-message-operator-borderRadius, var(--persona-radius-lg, 0.5rem));
+  border-color: var(--persona-components-message-operator-border, var(--persona-border, #e5e7eb));
+  border-width: var(--persona-components-message-operator-borderWidth, 1px);
+}
+
+[data-persona-root] .persona-message-operator-bubble.persona-shadow-sm {
+  box-shadow: var(--persona-components-message-operator-shadow, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+}
+
+/* Message meta (message.meta): label, badges and a note under the bubble.
+   Present only on messages that set it; the stack keeps the bubble's row
+   alignment and width behavior. */
+.persona-message-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.persona-message-row[data-message-role="user"] > .persona-message-stack {
+  align-items: flex-end;
+}
+
+.persona-message-row[data-message-width="full"] > .persona-message-stack {
+  align-items: stretch;
+}
+
+.persona-message-stack > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.persona-message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--persona-components-messageMeta-gap, 0.375rem);
+  margin-top: var(--persona-components-messageMeta-gap, 0.375rem);
+}
+
+.persona-message-meta,
+.persona-message-meta-note {
+  font-size: var(--persona-components-messageMeta-fontSize, 0.75rem);
+  line-height: 1.25;
+  color: var(--persona-components-messageMeta-foreground, var(--persona-text-muted, #6b7280));
+}
+
+.persona-message-meta-badge {
+  border-radius: var(--persona-components-messageMeta-badge-borderRadius, var(--persona-radius-sm, 0.125rem));
+  padding: var(--persona-components-messageMeta-badge-padding, 0 0.375rem);
+  font-size: var(--persona-components-messageMeta-badge-fontSize, 0.625rem);
+  line-height: 1rem;
+  font-weight: 500;
+  white-space: nowrap;
+  background-color: var(--persona-components-messageMeta-badge-neutral-background, #f3f4f6);
+  color: var(--persona-components-messageMeta-badge-neutral-foreground, #374151);
+}
+
+.persona-message-meta-badge[data-tone="success"] {
+  background-color: var(--persona-components-messageMeta-badge-success-background, #dcfce7);
+  color: var(--persona-components-messageMeta-badge-success-foreground, #15803d);
+}
+
+.persona-message-meta-badge[data-tone="warning"] {
+  background-color: var(--persona-components-messageMeta-badge-warning-background, #fef9c3);
+  color: var(--persona-components-messageMeta-badge-warning-foreground, #854d0e);
+}
+
+.persona-message-meta-badge[data-tone="danger"] {
+  background-color: var(--persona-components-messageMeta-badge-danger-background, #fee2e2);
+  color: var(--persona-components-messageMeta-badge-danger-foreground, #b91c1c);
+}
+
+.persona-message-meta-note {
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.persona-message-meta-note[data-tone="success"] {
+  color: var(--persona-components-messageMeta-note-success, #15803d);
+}
+
+.persona-message-meta-note[data-tone="warning"] {
+  color: var(--persona-components-messageMeta-note-warning, #a16207);
+}
+
+.persona-message-meta-note[data-tone="danger"] {
+  color: var(--persona-components-messageMeta-note-danger, #dc2626);
+}
+
 [data-persona-root] .persona-message-user-bubble.persona-shadow-sm {
   box-shadow: var(--persona-message-user-shadow);
 }
@@ -3244,7 +3344,8 @@
   text-decoration: underline;
 }
 
-[data-persona-root] .persona-message-assistant-bubble a {
+[data-persona-root] .persona-message-assistant-bubble a,
+[data-persona-root] .persona-message-operator-bubble a {
   color: var(--persona-md-link-color, var(--persona-accent, #0f0f0f));
 }
 
@@ -3329,6 +3430,8 @@
 
 .persona-message-assistant-bubble p,
 .persona-message-assistant-bubble li,
+.persona-message-operator-bubble p,
+.persona-message-operator-bubble li,
 .persona-error-detail p,
 .persona-error-detail li {
   color: inherit;

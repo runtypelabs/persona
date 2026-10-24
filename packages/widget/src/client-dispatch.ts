@@ -1,7 +1,7 @@
 import { computeClientToolsFingerprint } from "./webmcp-bridge";
 import type { RuntypeClientInitResponse } from "./generated/runtype-openapi-contract";
 import type {
-  AgentWidgetMessage, AgentWidgetRequestPayload, AgentWidgetAgentRequestPayload,
+  AgentWidgetMessage, AgentWidgetModelMessageRole, AgentWidgetRequestPayload, AgentWidgetAgentRequestPayload,
   AgentWidgetContextProvider, AgentWidgetRequestMiddleware, AgentWidgetCustomFetch,
   ClientSession, ClientChatRequest, ComposerOptionsPayload, WidgetHistoryInternals, ClientFeedbackRequest, ClientFeedbackType, ClientToolDefinition,
 } from "./types";
@@ -49,7 +49,18 @@ export interface ClientDispatchHost extends ClientResumeHost {
   streamResponse: (body: ReadableStream<Uint8Array>, onEvent: SSEHandler, assistantMessageId?: string, seedContent?: string, signal?: AbortSignal) => Promise<void>;
 }
 
-const hasValidContent = (message: AgentWidgetMessage): boolean => {
+/** A message whose role the model accepts. */
+type ModelMessage = AgentWidgetMessage & { role: AgentWidgetModelMessageRole };
+
+/**
+ * Whether a message belongs in a model request. Every payload builder gates on
+ * this, so a display-only message is dropped from all of them at once.
+ */
+const hasValidContent = (message: AgentWidgetMessage): message is ModelMessage => {
+  // Operator messages (a human on the agent's side, e.g. a support takeover)
+  // are display-only. Sending them as `assistant` would put words in the
+  // model's mouth, and the API accepts no other role for them.
+  if (message.role === "operator") return false;
   // Display-only voice captions are never conversation.
   if (message.voiceCaption) return false;
   if (isLocalOnlyMessage(message)) return false;
@@ -78,14 +89,14 @@ const sortByCreatedAt = (messages: AgentWidgetMessage[]): AgentWidgetMessage[] =
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
 // Only replay explicit known assistant phase metadata; other widget metadata is private.
-const payloadPhase = (message: AgentWidgetMessage) => {
+const payloadPhase = (message: ModelMessage) => {
   const phase = message.agentMetadata?.providerPhase ?? message.agentMetadata?.phase;
   return message.role === "assistant" && (phase === "commentary" || phase === "partial_answer" || phase === "final_answer")
     ? { phase } : {};
 };
 
 // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
-const toPayloadMessage = (message: AgentWidgetMessage) => ({
+const toPayloadMessage = (message: ModelMessage) => ({
   role: message.role,
   content: message.contentParts ?? message.llmContent ?? message.rawContent ?? message.content,
   createdAt: message.createdAt,

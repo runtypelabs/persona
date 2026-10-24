@@ -104,7 +104,7 @@ export const deriveBrandTheme = (brand?: BrandConfig, scheme: 'light' | 'dark' =
   if (brand.density && density) {
     const [size, height, gap] = density;
     theme.semantic = { ...theme.semantic, typography: { ...theme.semantic?.typography, fontSize: `${size}px` } };
-    theme.components = { ...theme.components, header: { ...theme.components?.header, minHeight: `${height}px`, padding: `${gap}px 16px`, minimalPadding: `${gap}px 16px` }, history: { railHeader: { minHeight: `${height}px` } }, composer: { ...theme.components?.composer, fontSize: `${size}px`, padding: `${gap}px`, gap: `${gap / 2}px` }, message: { ...theme.components?.message, gap: `${gap}px`, user: { ...theme.components?.message?.user, fontSize: `${size}px` }, assistant: { fontSize: `${size}px` } } };
+    theme.components = { ...theme.components, header: { ...theme.components?.header, minHeight: `${height}px`, padding: `${gap}px 16px`, minimalPadding: `${gap}px 16px` }, history: { railHeader: { minHeight: `${height}px` } }, composer: { ...theme.components?.composer, fontSize: `${size}px`, padding: `${gap}px`, gap: `${gap / 2}px` }, message: { ...theme.components?.message, gap: `${gap}px`, user: { ...theme.components?.message?.user, fontSize: `${size}px` }, assistant: { fontSize: `${size}px` }, operator: { fontSize: `${size}px` } } };
   }
   if (brand.elevation && ['flat', 'subtle', 'raised'].includes(brand.elevation)) {
     const flat = brand.elevation === 'flat';

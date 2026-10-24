@@ -186,6 +186,8 @@ const hasConversationActivity = (
 ): boolean =>
   messages.some((message) =>
     message.role === "user" ||
+    // A human operator speaking is conversation, even before any agent turn.
+    (message.role === "operator" && message.content.trim() !== "") ||
     (message.role === "assistant" && (
       message.content.trim() ||
       message.contentParts?.some((part) => part.type !== "text" || part.text.trim()) ||
