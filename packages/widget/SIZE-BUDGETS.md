@@ -97,3 +97,20 @@ the session_end After above):
 | `dist/index.cjs` | 215.92 kB | 216.06 kB | 216 → 216.25 kB |
 
 `index.global.js` stays within its existing budgets (164.05 kB gzip).
+
+## Operator role
+
+The `operator` message role (a human on the agent's side, with its own bubble
+tokens) adds the operator bubble styles to `widget.css`, the operator defaults
+to the shared token tables, and the operator branches to the message bubble.
+Raises, each to the smallest budget that fits (gzip, decimal kB, and Brotli,
+binary KiB; Before is main c2e2bb1e):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` | 166.72 kB | 167.19 kB | 167 → 167.2 kB |
+| `dist/theme-editor.js` | 40.49 kB | 40.55 kB | 40.5 → 40.6 kB |
+| `dist/widget.css` (Brotli) | 19.99 KiB | 20.07 KiB | 20 → 20.1 KiB |
+
+`widget.css` stays within its 24.5 kB gzip budget (24.23 → 24.32 kB), and
+`index.global.js` stays within its 133 KiB Brotli budget (132.62 KiB).

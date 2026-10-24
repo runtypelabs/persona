@@ -160,6 +160,20 @@ describe("4.22.0 defaults parity (flag off)", () => {
       expect(actual.themeCssVariables[key], key).toBe(value);
       delete resolvedActual.themeCssVariables[key];
     }
+    // Operator bubbles only render for messages that use the operator role,
+    // so every token they emit is additive and none may exist in the baseline.
+    const additivePrefixes = [
+      "--persona-components-message-operator-",
+      "--persona-message-operator-",
+    ];
+    expect(actual.themeCssVariables["--persona-components-message-operator-background"]).toBe(
+      "color-mix(in srgb, var(--persona-primary) 6%, var(--persona-container))"
+    );
+    for (const key of Object.keys(resolvedActual.themeCssVariables)) {
+      if (!additivePrefixes.some((prefix) => key.startsWith(prefix))) continue;
+      expect(baseline.themeCssVariables).not.toHaveProperty(key);
+      delete resolvedActual.themeCssVariables[key];
+    }
     // Deliberately lengthen hover timing in both V4 and V5 without rewriting
     // the historical fixture. Keyboard focus and the scan window are unchanged.
     expect(baseline.mergedDefaultConfig.tooltip.delayMs).toBe(200);

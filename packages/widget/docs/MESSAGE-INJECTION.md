@@ -18,7 +18,7 @@ The primary method for injecting messages into the conversation.
 
 ```typescript
 interface InjectMessageOptions {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'operator';
   content: string;              // User-facing (UI display)
   llmContent?: string;          // LLM-facing (defaults to content)
   contentParts?: ContentPart[]; // Multi-modal (highest priority for LLM)
@@ -150,6 +150,113 @@ widgetHandle.injectAssistantMessage({
 });
 ```
 
+## Operator Messages (Human Takeover)
+
+Use `role: 'operator'` for a human speaking on the agent's side of the
+conversation, such as a support agent who takes over an SMS, WhatsApp or Slack
+thread. Operator messages:
+
+- Render on the assistant's side with their own bubble, styled by
+  `theme.components.message.operator` (see [THEME-CONFIG.md](../THEME-CONFIG.md)).
+  The bubble fits its content, even when the assistant is `width: "full"`.
+  The v4 defaults tint the container with the theme primary; the v5 defaults
+  outline the bubble instead, and a `brand` accent tints the outline.
+- Are display-only. The widget leaves them out of every request it builds
+  (proxy, agent, or client token): the API accepts only `user`, `assistant`
+  and `system` turns, and a server-backed thread already builds model context
+  from its own history, so a client replay would duplicate those turns. If
+  your backend does not hold the operator's words and the model needs them,
+  inject a separate `system` message with the `llmContent` you want it to see.
+- Get the copy action and any custom action that lists `'operator'` in
+  `roles`. They never get upvote, downvote, read-aloud or regenerate, and copy
+  does not report feedback to the API.
+- Use `layout.messages.avatar.operatorAvatar` when avatars are shown (default:
+  the letter "O").
+- Do not fire `assistant:message` or `assistant:complete`.
+
+```javascript
+widgetHandle.injectMessage({
+  id: 'msg_42',
+  role: 'operator',
+  content: "Hi, this is Sam from support. I've refunded your order.",
+  createdAt: '2026-10-24T10:15:00.000Z',
+});
+```
+
+### Example: Read-Only Messaging Thread
+
+This maps a channel transcript (inbound end-user messages, agent replies, and
+human takeover replies) onto Persona, and draws each reply's delivery status
+under its text with a `renderMessage` plugin. The plugin takes the default
+bubble and adds an empty slot marked `data-preserve-runtime`. Persona keeps
+that node as it is on later renders, so the host owns its contents: fill it
+when it is created and update it in place when the status changes.
+
+```javascript
+const statuses = new Map(); // message id -> delivery status
+
+const fillStatus = (slot, status) => {
+  slot.textContent = status ?? '';
+  slot.dataset.status = status ?? '';
+};
+
+const deliveryStatus = {
+  id: 'delivery-status',
+  renderMessage: ({ message, defaultRenderer }) => {
+    if (message.role !== 'operator' && message.role !== 'assistant') return null;
+    const bubble = defaultRenderer();
+    const slot = document.createElement('div');
+    slot.className = 'thread-status';
+    slot.setAttribute('data-preserve-runtime', 'true');
+    slot.setAttribute('data-status-for', message.id);
+    fillStatus(slot, statuses.get(message.id));
+    // Under the text, above the action bar when the message has one.
+    bubble.insertBefore(slot, bubble.querySelector(':scope > .persona-message-actions'));
+    return bubble;
+  },
+};
+
+const toPersonaMessage = (msg) => {
+  const inbound = msg.direction === 'inbound';
+  const human = !inbound && msg.metadata?.source === 'human_operator';
+  return {
+    id: msg.id,
+    role: inbound ? 'user' : human ? 'operator' : 'assistant',
+    content: msg.content,
+    createdAt: msg.createdAt,
+  };
+};
+
+const widgetHandle = initAgentWidget({
+  target: '#thread',
+  config: {
+    launcher: { enabled: false },
+    plugins: [deliveryStatus],
+    layout: {
+      showFooter: false, // read-only: no composer
+      messages: { timestamp: { show: true } },
+    },
+  },
+});
+
+const show = (msg) => {
+  statuses.set(msg.id, msg.metadata?.deliveryStatus);
+  // Injecting an existing id updates that bubble in place.
+  widgetHandle.injectMessage(toPersonaMessage(msg));
+  // The slot survives the update, so refresh what it shows.
+  const slot = document.querySelector(`[data-status-for="${msg.id}"]`);
+  if (slot) fillStatus(slot, statuses.get(msg.id));
+};
+
+messages.forEach(show);
+onThreadUpdate(show); // a new message or a status change
+```
+
+Style `.thread-status` in your page (or with the plugin kit's `injectStyles`
+when the widget uses Shadow DOM, and query the slot from that shadow root). A
+framework host can render into the slot the same way, for example with a
+React portal.
+
 ## Component Directive Injection
 
 When you have a renderer registered via `componentRegistry.register(...)`, you can inject an assistant message that renders that component: exactly the same path Persona uses for streamed `{ "text": "...", "component": "...", "props": {...} }` directives.
@@ -260,6 +367,7 @@ widgetHandle.injectAssistantMessage({
    - `assistant` for responses and information display
    - `user` for simulating user actions (use sparingly)
    - `system` for context injection that should influence LLM behavior
+   - `operator` for a human speaking on the agent's side (display-only, left out of every request)
 
 4. **Leverage streaming**: For operations that take time, use streaming updates to keep users informed
 

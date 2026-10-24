@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   createStandardBubble,
   createMessageActions,
+  getBubbleClasses,
   createMessageInlineMentions,
   isSafeImageSrc,
   isSafeMediaSrc,
@@ -984,5 +985,144 @@ describe("createMessageActions: chromeless action buttons", () => {
     expect(buttons).toHaveLength(1);
     expect(buttons[0].getAttribute("data-action")).toBe("custom:share");
     expect(buttons[0].className).toBe("persona-message-action-btn");
+  });
+});
+
+describe("createStandardBubble: operator role", () => {
+  const actions = {
+    enabled: true,
+    showCopy: true,
+    showUpvote: true,
+    showDownvote: true,
+    showReadAloud: true,
+    showRegenerate: true,
+    visibility: "hover",
+    align: "right",
+    layout: "pill-inside",
+  } as const;
+
+  it.each(["bubble", "minimal", "flat"] as const)(
+    "gets its own bubble class, never the assistant's, in the %s layout",
+    (layout) => {
+      const classes = getBubbleClasses("operator", layout);
+      expect(classes).toContain("persona-message-operator-bubble");
+      expect(classes).not.toContain("persona-message-assistant-bubble");
+      expect(classes).not.toContain("persona-message-user-bubble");
+      // Same side as the assistant: never pushed to the user's edge.
+      expect(classes).not.toContain("persona-ml-auto");
+    }
+  );
+
+  it("paints from the operator tokens and marks its own theme zone", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ id: "op-1", role: "operator", content: "Hi, Sam here." }),
+      ({ text }) => text
+    );
+    expect(bubble.style.backgroundColor).toBe(
+      "var(--persona-components-message-operator-background, var(--persona-container))"
+    );
+    expect(bubble.style.color).toBe(
+      "var(--persona-components-message-operator-text, var(--persona-text))"
+    );
+    expect(bubble.getAttribute("data-persona-theme-zone")).toBe("operator-message");
+  });
+
+  it("keeps the existing roles' bubbles unchanged", () => {
+    const assistant = createStandardBubble(makeMessage({ id: "a", content: "Answer" }), ({ text }) => text);
+    const user = createStandardBubble(makeMessage({ id: "u", role: "user", content: "Q" }), ({ text }) => text);
+    expect(assistant.getAttribute("data-persona-theme-zone")).toBe("assistant-message");
+    expect(assistant.style.backgroundColor).toBe(
+      "var(--persona-message-assistant-bg, var(--persona-container))"
+    );
+    expect(user.getAttribute("data-persona-theme-zone")).toBe("user-message");
+    expect(user.style.backgroundColor).toBe("var(--persona-message-user-bg, var(--persona-accent))");
+  });
+
+  it("keeps the operator background in the flat layout, where assistant prose stays transparent", () => {
+    const operator = createStandardBubble(
+      makeMessage({ id: "flat-op", role: "operator", content: "Sam here." }),
+      ({ text }) => text,
+      { layout: "flat" }
+    );
+    const assistant = createStandardBubble(
+      makeMessage({ id: "flat-a", content: "Answer" }),
+      ({ text }) => text,
+      { layout: "flat" }
+    );
+    expect(operator.style.backgroundColor).toBe(
+      "var(--persona-components-message-operator-background, var(--persona-container))"
+    );
+    expect(operator.style.color).toBe(
+      "var(--persona-components-message-operator-text, var(--persona-text))"
+    );
+    // The fill needs side padding; flat assistant prose has none.
+    expect(operator.classList.contains("persona-px-3")).toBe(true);
+    expect(assistant.style.backgroundColor).toBe("transparent");
+    expect(assistant.classList.contains("persona-px-3")).toBe(false);
+  });
+
+  it("uses operator geometry tokens with the v5 defaults, not the flat assistant's", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ id: "op-geo", role: "operator", content: "Hi" }),
+      ({ text }) => text, undefined, undefined, undefined,
+      { widgetConfig: { future: { v5Defaults: true } } as AgentWidgetConfig }
+    );
+    expect(bubble.style.padding).toBe("var(--persona-message-operator-padding, 0.75rem 1.25rem)");
+    expect(bubble.style.padding).not.toContain("assistant");
+  });
+
+  it("offers copy but no model feedback, read-aloud or regenerate controls", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ id: "op-actions", role: "operator", content: "I refunded it." }),
+      ({ text }) => text,
+      undefined,
+      actions,
+      undefined,
+      { actionEligibility: { canRegenerate: true } }
+    );
+    const rendered = Array.from(bubble.querySelectorAll("[data-action]")).map((button) =>
+      button.getAttribute("data-action")
+    );
+    expect(rendered).toEqual(["copy"]);
+  });
+
+  it("shows a custom action only when it opts into the operator role", () => {
+    const custom = [
+      { id: "assistant-only", label: "Assistant only", onSelect: () => {} },
+      { id: "flag", label: "Flag", roles: ["operator" as const], onSelect: () => {} },
+    ];
+    const bubble = createStandardBubble(
+      makeMessage({ id: "op-custom", role: "operator", content: "Hello" }),
+      ({ text }) => text,
+      undefined,
+      { ...actions, showCopy: false, custom }
+    );
+    const rendered = Array.from(bubble.querySelectorAll("[data-action]")).map((button) =>
+      button.getAttribute("data-action")
+    );
+    expect(rendered).toEqual(["custom:flag"]);
+  });
+
+  it("renders an operator avatar on the assistant side", () => {
+    const wrapper = createStandardBubble(
+      makeMessage({ id: "op-avatar", role: "operator", content: "Hello" }),
+      ({ text }) => text,
+      { avatar: { show: true, position: "left" } }
+    );
+    expect(wrapper.classList.contains("persona-message-with-avatar")).toBe(true);
+    expect(wrapper.classList.contains("persona-flex-row-reverse")).toBe(false);
+    const avatar = wrapper.firstElementChild as HTMLElement;
+    expect(avatar.textContent).toBe("O");
+    expect(avatar.classList.contains("persona-bg-persona-container")).toBe(true);
+    expect(avatar.classList.contains("persona-bg-persona-primary")).toBe(false);
+
+    const custom = createStandardBubble(
+      makeMessage({ id: "op-avatar-url", role: "operator", content: "Hello" }),
+      ({ text }) => text,
+      { avatar: { show: true, operatorAvatar: "https://example.com/sam.png" } }
+    );
+    const img = custom.querySelector("img");
+    expect(img?.getAttribute("src")).toBe("https://example.com/sam.png");
+    expect(img?.getAttribute("alt")).toBe("Operator");
   });
 });

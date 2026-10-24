@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "167 kB",
+    "limit": "167.2 kB",
     "gzip": true
   },
   {
@@ -38,7 +38,7 @@
   {
     "name": "Opt-in · theme-editor headless subpath (theme-editor.js)",
     "path": "dist/theme-editor.js",
-    "limit": "40.5 kB",
+    "limit": "40.6 kB",
     "gzip": true
   },
   {

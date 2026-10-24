@@ -2500,7 +2500,7 @@ export class AgentWidgetSession {
         ? generateUserMessageId()
         : role === "assistant"
           ? generateAssistantMessageId()
-          : `system-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+          : `${role === "operator" ? "operator" : "system"}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
     return {
       id: messageId,

@@ -2171,6 +2171,13 @@
   );
 }
 
+.persona-message-row[data-message-role="operator"] > * {
+  max-width: var(
+    --persona-message-row-max-width,
+    var(--persona-message-operator-max-width, var(--persona-message-assistant-max-width, 85%))
+  );
+}
+
 .persona-message-row[data-message-width="content"] > * {
   flex: 0 1 auto;
 }
@@ -3086,6 +3093,18 @@
   box-shadow: var(--persona-message-assistant-shadow, 0 1px 2px 0 rgb(0 0 0 / 0.05));
 }
 
+/* Operator bubble: a human on the agent's side (role "operator"). Renders on
+   the assistant's side; V4 tints the container with the primary, V5 outlines it. */
+.persona-message-operator-bubble {
+  border-radius: var(--persona-components-message-operator-borderRadius, var(--persona-radius-lg, 0.5rem));
+  border-color: var(--persona-components-message-operator-border, var(--persona-border, #e5e7eb));
+  border-width: var(--persona-components-message-operator-borderWidth, 1px);
+}
+
+[data-persona-root] .persona-message-operator-bubble.persona-shadow-sm {
+  box-shadow: var(--persona-components-message-operator-shadow, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+}
+
 [data-persona-root] .persona-message-user-bubble.persona-shadow-sm {
   box-shadow: var(--persona-message-user-shadow);
 }
@@ -3244,7 +3263,8 @@
   text-decoration: underline;
 }
 
-[data-persona-root] .persona-message-assistant-bubble a {
+[data-persona-root] .persona-message-assistant-bubble a,
+[data-persona-root] .persona-message-operator-bubble a {
   color: var(--persona-md-link-color, var(--persona-accent, #0f0f0f));
 }
 
@@ -3329,6 +3349,8 @@
 
 .persona-message-assistant-bubble p,
 .persona-message-assistant-bubble li,
+.persona-message-operator-bubble p,
+.persona-message-operator-bubble li,
 .persona-error-detail p,
 .persona-error-detail li {
   color: inherit;

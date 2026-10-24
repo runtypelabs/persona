@@ -279,6 +279,22 @@ describe("resolveConversationState", () => {
     expect(isWelcomeVisible(resolveWelcomeConfig(config({ welcome: { dismiss: "on-first-message" } })), [message])).toBe(false);
   });
 
+  it("treats a visible operator message as activity", () => {
+    expect(resolveConversationState([{ ...assistantMessage, role: "operator", content: "Sam here" }])).toBe("active");
+    expect(resolveConversationState([{ ...assistantMessage, role: "operator", content: "  " }])).toBe("empty");
+  });
+
+  it("treats a media-only operator message as activity", () => {
+    const operator = { ...assistantMessage, role: "operator" as const, content: "" };
+    for (const part of [
+      { type: "image" as const, image: "https://example.com/receipt.png" },
+      { type: "file" as const, data: "https://example.com/receipt.pdf", mimeType: "application/pdf", filename: "receipt.pdf" },
+    ]) {
+      expect(resolveConversationState([{ ...operator, contentParts: [part] }])).toBe("active");
+    }
+    expect(resolveConversationState([{ ...operator, contentParts: [{ type: "text", text: " " }] }])).toBe("empty");
+  });
+
   it("flips to active on the first user message", () => {
     expect(resolveConversationState([userMessage])).toBe("active");
     expect(resolveConversationState([assistantMessage, userMessage])).toBe(

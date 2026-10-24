@@ -182,6 +182,17 @@ describe("mapWireMessages: role filtering", () => {
     ]);
     expect(mapped.map((message) => message.id)).toEqual(["a", "d", "e"]);
   });
+
+  it("keeps operator messages from a custom history provider", () => {
+    const mapped = mapWireMessages([
+      { id: "a", role: "user", content: "hi", displayAvailable: true },
+      { id: "b", role: "operator", content: "Sam from support", displayAvailable: true },
+    ]);
+    expect(mapped.map((message) => [message.id, message.role])).toEqual([
+      ["a", "user"],
+      ["b", "operator"],
+    ]);
+  });
 });
 
 describe("mapWireMessages: timestamp synthesis", () => {
