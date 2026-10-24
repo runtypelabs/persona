@@ -9110,8 +9110,8 @@ type ConfigPatch<T> = T extends (...args: never[]) => unknown
  * - `operator`: a human speaking on the agent's side of the conversation, such
  *   as a support agent who has taken over the thread. It renders on the
  *   assistant's side with its own bubble style (`theme.components.message.operator`).
- *   Operator messages are display-only: they are never sent to the model, so
- *   they never reach a request payload as `assistant` turns.
+ *   Operator messages are display-only: the widget leaves them out of every
+ *   request payload, so they never reach the API as `assistant` turns.
  */
 export type AgentWidgetMessageRole = "user" | "assistant" | "system" | "operator";
 
@@ -9120,59 +9120,6 @@ export type AgentWidgetMessageRole = "user" | "assistant" | "system" | "operator
  * one of them.
  */
 export type AgentWidgetModelMessageRole = Exclude<AgentWidgetMessageRole, "operator">;
-
-/**
- * Tone of a {@link AgentWidgetMessageMeta} badge or note. Each tone maps to its
- * own theme tokens (`theme.components.messageMeta`), and an unknown value
- * renders as `neutral`.
- */
-export type AgentWidgetMessageMetaTone = "neutral" | "success" | "warning" | "danger";
-
-/** One badge in the row under a message bubble. */
-export type AgentWidgetMessageMetaBadge = {
-  /** Badge text. Rendered as plain text, never as HTML. */
-  label: string;
-  /** @default "neutral" */
-  tone?: AgentWidgetMessageMetaTone;
-};
-
-/** A one-line note under the meta row, such as a delivery error. */
-export type AgentWidgetMessageMetaNote = {
-  /** Note text. Rendered as plain text, never as HTML. */
-  text: string;
-  /** @default "neutral" */
-  tone?: AgentWidgetMessageMetaTone;
-};
-
-/**
- * Host-supplied details rendered under a message bubble: an author label,
- * status badges, and a note line. Works on any role and on the default
- * renderer only (custom `renderUserMessage` / `renderAssistantMessage`
- * renderers own their own markup). All text is set with `textContent`, so it
- * is never parsed as HTML. Display-only: it is never sent to the model.
- *
- * Re-inject the message with the same `id` to update it (for example, when a
- * delivery status changes). Pass `meta: {}` to clear it.
- *
- * @example
- * widget.injectMessage({
- *   id: "msg_42",
- *   role: "operator",
- *   content: "I've refunded your order.",
- *   meta: {
- *     label: "Human",
- *     badges: [{ label: "delivered", tone: "success" }],
- *   },
- * });
- */
-export type AgentWidgetMessageMeta = {
-  /** Author label shown first in the row, for example "Human" or "Agent". */
-  label?: string;
-  /** Badges shown after the label, in order. */
-  badges?: AgentWidgetMessageMetaBadge[];
-  /** A note line shown under the row. */
-  note?: AgentWidgetMessageMetaNote;
-};
 
 export type AgentWidgetReasoning = {
   id: string;
@@ -9319,11 +9266,6 @@ export type AgentWidgetMessage = {
   role: AgentWidgetMessageRole;
   content: string;
   createdAt: string;
-  /**
-   * Host-supplied label, badges and note rendered under the bubble. Display
-   * only; see {@link AgentWidgetMessageMeta}.
-   */
-  meta?: AgentWidgetMessageMeta;
   /**
    * Original multi-modal content parts for this message.
    * When present, this is sent to the API instead of `content`.
@@ -9476,7 +9418,7 @@ export type InjectMessageOptions = {
   dispatchError?: boolean;
   /**
    * Message role: "assistant", "user", "system", or "operator". Operator
-   * messages are display-only and never sent to the model.
+   * messages are display-only and never included in a request.
    */
   role: AgentWidgetMessageRole;
 
@@ -9550,13 +9492,6 @@ export type InjectMessageOptions = {
    * raw directive.
    */
   rawContent?: string;
-
-  /**
-   * Label, badges and note rendered under the bubble. Re-injecting the same
-   * `id` with a new `meta` re-renders it; omitting `meta` keeps the current
-   * one, and `meta: {}` clears it. See {@link AgentWidgetMessageMeta}.
-   */
-  meta?: AgentWidgetMessageMeta;
 };
 
 /**

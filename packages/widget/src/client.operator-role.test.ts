@@ -4,8 +4,9 @@ import type { AgentWidgetConfig, AgentWidgetMessage } from "./types";
 
 /**
  * Operator messages (a human on the agent's side, e.g. a support takeover)
- * are display-only. Every request builder must drop them, so they never reach
- * the model as `assistant` turns and never fail the API's role validation.
+ * are display-only. Every request builder must drop them: the API accepts only
+ * user, assistant and system turns, and a server-backed thread already holds
+ * the operator turns in its own history.
  */
 
 const sseComplete = () =>
@@ -46,7 +47,6 @@ const transcript = (): AgentWidgetMessage[] => [
     content: "Hi, this is Sam from support. I've refunded it.",
     llmContent: "operator llm content",
     createdAt: "2026-01-01T00:00:02.000Z",
-    meta: { label: "Human", badges: [{ label: "delivered", tone: "success" }] },
   },
   { id: "u2", role: "user", content: "Thanks!", createdAt: "2026-01-01T00:00:03.000Z" },
 ];
@@ -57,8 +57,6 @@ const expectNoOperator = (messages: unknown) => {
   expect(list.map((message) => message.role)).toEqual(["user", "assistant", "user"]);
   expect(JSON.stringify(list)).not.toContain("support");
   expect(JSON.stringify(list)).not.toContain("operator");
-  // Meta is display-only on every role.
-  expect(list.some((message) => "meta" in message)).toBe(false);
 };
 
 describe("operator role: outgoing request payloads", () => {

@@ -58,8 +58,9 @@ type ModelMessage = AgentWidgetMessage & { role: AgentWidgetModelMessageRole };
  */
 const hasValidContent = (message: AgentWidgetMessage): message is ModelMessage => {
   // Operator messages (a human on the agent's side, e.g. a support takeover)
-  // are display-only. Sending them as `assistant` would put words in the
-  // model's mouth, and the API accepts no other role for them.
+  // are display-only. The API accepts only user, assistant and system turns,
+  // and a server-backed thread builds model context from its own history,
+  // which already holds the operator turns, so a replay would duplicate them.
   if (message.role === "operator") return false;
   // Display-only voice captions are never conversation.
   if (message.voiceCaption) return false;

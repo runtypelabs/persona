@@ -974,7 +974,7 @@ when the two homes disagree, in debug mode or not. Removal waits for 5.0.
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `initialMessages` | `AgentWidgetMessage[]` | Seed the conversation transcript with initial messages. `role` is `'user'`, `'assistant'`, `'system'` or `'operator'` (a human on the agent's side; display-only, never sent to the model). Any message can carry `meta` (`{ label?, badges?: { label, tone? }[], note?: { text, tone? } }`) rendered under the bubble; see [MESSAGE-INJECTION.md](./MESSAGE-INJECTION.md#message-meta-label-badges-and-note). |
+| `initialMessages` | `AgentWidgetMessage[]` | Seed the conversation transcript with initial messages. `role` is `'user'`, `'assistant'`, `'system'` or `'operator'` (a human on the agent's side; display-only, left out of every request). See [MESSAGE-INJECTION.md](./MESSAGE-INJECTION.md#operator-messages-human-takeover). |
 | `persistState` | `boolean \| AgentWidgetPersistStateConfig` | Persist widget state across page navigations. `true` uses defaults (sessionStorage). |
 | `storageAdapter` | `AgentWidgetStorageAdapter` | Custom storage adapter with `load()`, `save(state)`, and `clear()` methods. |
 | `onStateLoaded` | `(state: AgentWidgetStoredState) => AgentWidgetStoredState \| { state: AgentWidgetStoredState; open?: boolean }` | Transform state after loading from storage but before widget initialization. Return `{ state, open: true }` to also open the panel. |

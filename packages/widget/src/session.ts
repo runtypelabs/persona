@@ -2490,8 +2490,7 @@ export class AgentWidgetSession {
       streaming = false,
       voiceProcessing,
       voiceCaption,
-      rawContent,
-      meta
+      rawContent
     } = options;
 
     // Generate appropriate ID based on role
@@ -2516,7 +2515,6 @@ export class AgentWidgetSession {
       ...(voiceProcessing !== undefined && { voiceProcessing }),
       ...(voiceCaption && { voiceCaption }),
       ...(rawContent !== undefined && { rawContent }),
-      ...(meta !== undefined && { meta }),
       ...(options.dispatchError !== undefined && { dispatchError: options.dispatchError })
     };
 

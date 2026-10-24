@@ -849,41 +849,17 @@ but they always fit their content, even when the assistant is
 `width: "full"`. The `flat` layout clears the user and assistant fills but
 keeps the operator background.
 
-### Message meta (`components.messageMeta.*`)
-
-The row a message's `meta` renders under its bubble: an author label, toned
-badges and a note line (see
-[MESSAGE-INJECTION.md](./docs/MESSAGE-INJECTION.md#message-meta-label-badges-and-note)).
-Every token is optional. Unset, the light colors below come from the
-stylesheet, and the built-in dark layer sets 900-tone badge fills with
-300-tone text and 400-tone notes. Badge tones are `neutral`, `success`,
-`warning` and `danger`; a neutral note uses `foreground`.
-
-| Token | Default |
-|-------|---------|
-| `foreground` | `semantic.colors.textMuted` (label and neutral note) |
-| `fontSize` | `0.75rem` |
-| `gap` | `0.375rem` |
-| `badge.borderRadius` | `palette.radius.sm` |
-| `badge.padding` | `0 0.375rem` |
-| `badge.fontSize` | `0.625rem` |
-| `badge.neutral.background` / `.foreground` | `gray.100` / `gray.700` |
-| `badge.success.background` / `.foreground` | `success.100` / `success.700` |
-| `badge.warning.background` / `.foreground` | `warning.100` / `warning.800` |
-| `badge.danger.background` / `.foreground` | `error.100` / `error.700` |
-| `note.success` / `note.warning` / `note.danger` | `success.700` / `warning.700` / `error.600` |
-
-Each token is emitted as `--persona-components-messageMeta-<path>` (for
-example `--persona-components-messageMeta-badge-danger-background`).
-
 ```typescript
 theme: {
   components: {
     message: { operator: { background: '#eee9ff', border: '#d6ccff' } },
-    messageMeta: { badge: { success: { background: '#dcfce7', foreground: '#166534' } } },
   },
 }
 ```
+
+To draw badges under a message (delivery status, an author label, an error),
+use a `renderMessage` plugin slot; see
+[MESSAGE-INJECTION.md](./docs/MESSAGE-INJECTION.md#example-read-only-messaging-thread).
 
 ### Message actions (`components.messageActions.*`)
 

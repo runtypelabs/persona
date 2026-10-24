@@ -71,15 +71,6 @@ describe("computeMessageFingerprint", () => {
     expect(fp1).not.toBe(fp2);
   });
 
-  it("changes when meta changes with identical text (delivery status update)", () => {
-    const fp1 = computeMessageFingerprint(makeMessage({ meta: { badges: [{ label: "pending", tone: "warning" }] } }), 0);
-    const fp2 = computeMessageFingerprint(makeMessage({ meta: { badges: [{ label: "sent", tone: "success" }] } }), 0);
-    const fp3 = computeMessageFingerprint(makeMessage({ meta: { badges: [{ label: "sent", tone: "success" }] } }), 0);
-    expect(fp1).not.toBe(fp2);
-    expect(fp2).toBe(fp3);
-    expect(computeMessageFingerprint(makeMessage(), 0)).not.toBe(fp2);
-  });
-
   it("changes when variant changes", () => {
     const fp1 = computeMessageFingerprint(makeMessage({ variant: undefined }), 0);
     const fp2 = computeMessageFingerprint(makeMessage({ variant: "reasoning" }), 0);

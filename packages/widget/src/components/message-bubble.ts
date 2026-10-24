@@ -3,8 +3,6 @@ import { createElement, createNode } from "../utils/dom";
 import {
   AgentWidgetMessage,
   AgentWidgetMessageRole,
-  AgentWidgetMessageMeta,
-  AgentWidgetMessageMetaTone,
   AgentWidgetMessageLayoutConfig,
   AgentWidgetAvatarConfig,
   AgentWidgetTimestampConfig,
@@ -1362,9 +1360,8 @@ export const createStandardBubble = (
       // A custom action opted into `"user"` brings the row up on its own.
       customMessageActionsForRole(actionsConfig, "user").length > 0);
 
-  let actions: HTMLElement | undefined;
   if ((shouldShowActions || shouldShowUserActions) && actionsConfig) {
-    actions = createMessageActions(
+    const actions = createMessageActions(
       message,
       shouldShowUserActions
         ? // A user bubble never hosts the assistant-only controls.
@@ -1389,7 +1386,7 @@ export const createStandardBubble = (
 
   // If no avatar needed, return bubble directly
   if (!showAvatar || message.role === "system") {
-    return withMessageMeta(bubble, message, actions);
+    return bubble;
   }
 
   // Create wrapper with avatar
@@ -1408,81 +1405,7 @@ export const createStandardBubble = (
     wrapper.append(avatar, bubble);
   }
 
-  return withMessageMeta(wrapper, message, actions);
-};
-
-const MESSAGE_META_TONES = ["success", "warning", "danger"];
-
-/** A known tone, or `neutral` for anything else (including untyped host input). */
-const metaTone = (tone: unknown): AgentWidgetMessageMetaTone =>
-  MESSAGE_META_TONES.includes(tone as string) ? (tone as AgentWidgetMessageMetaTone) : "neutral";
-
-const hasText = (value: unknown): value is string => typeof value === "string" && value.trim() !== "";
-
-/**
- * Build the row under a bubble from `message.meta`: author label, badges, and
- * an optional note line. Returns null when the meta has nothing to show. Every
- * string is set with `textContent`, so host text is never parsed as HTML.
- */
-export const createMessageMeta = (
-  messageId: string,
-  meta: AgentWidgetMessageMeta | undefined
-): HTMLElement[] | null => {
-  const badges = (Array.isArray(meta?.badges) ? meta.badges : []).filter((badge) => hasText(badge?.label));
-  const label = hasText(meta?.label) ? meta.label : null;
-  const nodes: HTMLElement[] = [];
-  if (label || badges.length) {
-    nodes.push(
-      createNode(
-        "div",
-        { className: "persona-message-meta", attrs: { "data-message-meta-for": messageId } },
-        label ? createNode("span", { className: "persona-message-meta-label", text: label }) : null,
-        ...badges.map((badge) =>
-          createNode("span", {
-            className: "persona-message-meta-badge",
-            attrs: { "data-tone": metaTone(badge.tone) },
-            text: badge.label,
-          })
-        )
-      )
-    );
-  }
-  if (hasText(meta?.note?.text)) {
-    nodes.push(
-      createNode("div", {
-        className: "persona-message-meta-note",
-        attrs: { "data-tone": metaTone(meta.note.tone) },
-        text: meta.note.text,
-      })
-    );
-  }
-  return nodes.length ? nodes : null;
-};
-
-/**
- * Stack the meta row under a rendered bubble (or avatar wrapper). Messages
- * without meta return the element unchanged, so their DOM is exactly what it
- * was before meta existed. An in-flow action bar (any visibility but hover)
- * moves below the meta, so the meta sits directly under the message text; a
- * hover bar overlays the bubble and stays inside it.
- */
-const withMessageMeta = (
-  element: HTMLElement,
-  message: AgentWidgetMessage,
-  actions?: HTMLElement
-): HTMLElement => {
-  const metaNodes = createMessageMeta(message.id, message.meta);
-  if (!metaNodes) return element;
-  const stack = createNode("div", {
-    className: "persona-message-stack",
-    attrs: { id: `stack-${message.id}`, "data-message-stack-for": message.id },
-  });
-  const trailing =
-    actions && actions.style.display !== "none" && !actions.classList.contains("persona-message-actions-hover")
-      ? [actions]
-      : [];
-  stack.append(element, ...metaNodes, ...trailing);
-  return stack;
+  return wrapper;
 };
 
 /**

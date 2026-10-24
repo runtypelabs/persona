@@ -160,9 +160,8 @@ describe("4.22.0 defaults parity (flag off)", () => {
       expect(actual.themeCssVariables[key], key).toBe(value);
       delete resolvedActual.themeCssVariables[key];
     }
-    // Operator bubbles and message meta only render for messages that use the
-    // operator role or set `meta`, so every token they emit is additive and
-    // none may exist in the baseline.
+    // Operator bubbles only render for messages that use the operator role,
+    // so every token they emit is additive and none may exist in the baseline.
     const additivePrefixes = [
       "--persona-components-message-operator-",
       "--persona-message-operator-",

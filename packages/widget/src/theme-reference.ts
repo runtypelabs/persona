@@ -145,13 +145,7 @@ export const THEME_TOKEN_DOCS = {
         assistant:
           'background, text, borderRadius, border (optional), shadow (optional).',
         operator:
-          'Human operator bubble (role "operator", e.g. a support takeover), on the assistant side. background (default: container tinted 6% with the primary), text (semantic.colors.text), borderRadius, border (container tinted 20% with the primary), borderWidth (1px), shadow, plus padding, maxWidth, fontSize, fontFamily, lineHeight.',
-      },
-      messageMeta: {
-        description:
-          'The row under a bubble set by message.meta: author label, badges and a note line.',
-        properties:
-          'foreground (label color, semantic.colors.textMuted), fontSize (0.75rem), gap (0.375rem), badge.borderRadius (palette.radius.sm), badge.padding, badge.fontSize (0.625rem), badge.<tone>.background and badge.<tone>.foreground, note.success, note.warning and note.danger (note text color; a neutral note uses foreground). Badge tones: neutral, success, warning, danger. Light defaults pair a 100-tone fill with a 700/800-tone text; the built-in dark layer flips to 900/300.',
+          'Human operator bubble (role "operator", e.g. a support takeover), on the assistant side. background (default: container tinted 6% with the primary), text (semantic.colors.text), borderRadius, border (container tinted 20% with the primary), borderWidth (1px), shadow, plus padding, maxWidth, fontSize, fontFamily, lineHeight. V5 outlines it instead: transparent background, semantic.colors.border border.',
       },
       markdown: {
         description: 'Markdown rendering in messages and artifact pane.',
