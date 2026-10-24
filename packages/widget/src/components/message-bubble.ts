@@ -1031,6 +1031,9 @@ export const createStandardBubble = (
   bubble.setAttribute("data-message-id", message.id);
 
   const isOperator = message.role === "operator";
+  // The V5 operator is outlined, not filled, so every layout needs the border
+  // style that only the bubble layout's classes carry.
+  if (isOperator && options?.widgetConfig?.future?.v5Defaults === true) bubble.classList.add("persona-border");
   bubble.setAttribute(
     "data-persona-theme-zone",
     message.role === "user" ? "user-message" : isOperator ? "operator-message" : "assistant-message"

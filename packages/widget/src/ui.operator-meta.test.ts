@@ -228,6 +228,56 @@ describe("message meta keeps the row geometry", () => {
     }
   );
 
+  it("resets a stacked always-visible row action bar to the stack edges", async () => {
+    const { mount, controller } = makeController({
+      messageActions: { enabled: true, showCopy: true, visibility: "always", layout: "row-inside" },
+    });
+    controller.injectAssistantMessage({ id: "meta", content: "Refund sent.", meta: { label: "Agent" } });
+    await settle();
+    const bar = row(mount, "meta")!.querySelector<HTMLElement>(
+      ":scope > .persona-message-stack > .persona-message-actions-row"
+    )!;
+    expect(bar).not.toBeNull();
+    const style = getComputedStyle(bar);
+    expect([style.marginLeft, style.marginRight, style.marginBottom]).toEqual(["0px", "0px", "0px"]);
+    expect([style.paddingLeft, style.paddingRight, style.paddingBottom]).toEqual(["0px", "0px", "0px"]);
+    expect(style.backgroundImage).not.toContain("gradient");
+  });
+
+  it.each(["bubble", "flat", "minimal"] as const)(
+    "outlines the V5 operator bubble in the %s layout",
+    async (layout) => {
+      const { mount, controller } = makeController({
+        future: { v5Defaults: true },
+        layout: { messages: { layout } },
+      });
+      controller.injectMessage({ id: "op1", role: "operator", content: "Sam here." });
+      await settle();
+      const bubble = row(mount, "op1")!.querySelector<HTMLElement>("#bubble-op1")!;
+      const style = getComputedStyle(bubble);
+      expect(style.borderTopStyle).toBe("solid");
+      // Width and color come from the operator tokens (V5: 1px, the neutral border).
+      // Width and fill come from the V5 operator tokens on the themed ancestor.
+      const token = (name: string) => {
+        for (let node: HTMLElement | null = bubble; node; node = node.parentElement) {
+          const value = node.style.getPropertyValue(name).trim();
+          if (value) return value;
+        }
+        return "";
+      };
+      expect(token("--persona-components-message-operator-borderWidth")).toBe("1px");
+      expect(token("--persona-components-message-operator-background")).toBe("transparent");
+    }
+  );
+
+  it.each(["flat", "minimal"] as const)("keeps the V4 %s operator borderless", async (layout) => {
+    const { mount, controller } = makeController({ layout: { messages: { layout } } });
+    controller.injectMessage({ id: "op1", role: "operator", content: "Sam here." });
+    await settle();
+    const bubble = row(mount, "op1")!.querySelector<HTMLElement>("#bubble-op1")!;
+    expect(getComputedStyle(bubble).borderTopStyle).not.toBe("solid");
+  });
+
   it("leaves content-width bubbles shrink-wrapped next to an avatar with meta", async () => {
     const { mount, controller } = makeController({
       layout: { messages: { avatar: { show: true } } },

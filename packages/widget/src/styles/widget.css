@@ -3133,8 +3133,9 @@
 }
 
 /* An in-flow action bar moved under the meta row aligns to the stack, not to
-   the bubble padding it was built for. */
-.persona-message-stack > .persona-message-actions-row {
+   the bubble padding it was built for. Matches the always-visible row rule's
+   specificity plus the stack, so it wins regardless of source order. */
+.persona-message-stack > .persona-message-actions:not(.persona-message-actions-hover).persona-message-actions-row {
   align-self: stretch;
   margin: 0.5rem 0 0;
   padding: 0.5rem 0 0;
