@@ -58,6 +58,19 @@ describe('brand derivation', () => {
     expect(getColorScheme({ brand: { neutral: '#111111' }, colorScheme: 'light' })).toBe('light');
     expect(getColorScheme({ brand: { neutral: '#ffffff' }, colorScheme: 'dark' })).toBe('dark');
   });
+  it.each(['light', 'dark'] as const)('outlines the V5 operator bubble instead of filling it in %s mode', (colorScheme) => {
+    const stock = getCssVariables(getActiveTheme({ colorScheme, future: { v5Defaults: true } }));
+    expect(stock['--persona-components-message-operator-background']).toBe('transparent');
+    expect(stock['--persona-components-message-operator-border']).toBe(stock['--persona-border']);
+    expect(stock['--persona-components-message-operator-borderWidth']).toBe('1px');
+    // A brand accent tints the outline; the bubble stays unfilled.
+    const branded = getCssVariables(getActiveTheme({ colorScheme, future: { v5Defaults: true }, brand: { accent: '#4c00ff', density: 'compact' } }));
+    expect(branded['--persona-components-message-operator-background']).toBe('transparent');
+    expect(branded['--persona-components-message-operator-border']).toBe('color-mix(in srgb, var(--persona-primary) 35%, var(--persona-border))');
+    // V4 keeps its primary-tinted fill.
+    const v4 = getCssVariables(getActiveTheme({ colorScheme }));
+    expect(v4['--persona-components-message-operator-background']).toBe('color-mix(in srgb, var(--persona-primary) 6%, var(--persona-container))');
+  });
   it.each([['compact', '13px', '44px'], ['comfortable', '14px', '48px'], ['spacious', '15px', '52px']] as const)('maps %s density', (density, size, height) => {
     const theme = deriveBrandTheme({ density });
     expect(theme.semantic?.typography?.fontSize).toBe(size);

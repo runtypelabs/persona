@@ -181,16 +181,22 @@ export const resolveWelcomeConfig = (
  * system context do not. Configured `welcome.message` is separate UI chrome,
  * so an intentional greeting never activates the conversation by itself.
  */
+const hasVisibleContent = (message: AgentWidgetMessage): boolean =>
+  Boolean(
+    message.content.trim() ||
+    message.contentParts?.some((part) => part.type !== "text" || part.text.trim())
+  );
+
 const hasConversationActivity = (
   messages: readonly AgentWidgetMessage[] = []
 ): boolean =>
   messages.some((message) =>
     message.role === "user" ||
-    // A human operator speaking is conversation, even before any agent turn.
-    (message.role === "operator" && message.content.trim() !== "") ||
+    // A human operator speaking is conversation, even before any agent turn,
+    // including a media-only message (an image, file, audio or video part).
+    (message.role === "operator" && hasVisibleContent(message)) ||
     (message.role === "assistant" && (
-      message.content.trim() ||
-      message.contentParts?.some((part) => part.type !== "text" || part.text.trim()) ||
+      hasVisibleContent(message) ||
       message.toolCall || message.tools?.length || message.reasoning || message.approval
     ))
   );

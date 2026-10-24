@@ -6098,17 +6098,19 @@ export const createAgentExperience = (
     wrapper: HTMLElement,
     role: AgentWidgetMessage["role"]
   ): void => {
-    // Operator rows sit on the assistant's side and share its layout config.
+    // Operator rows sit on the assistant's side and share its max width, but
+    // always shrink-wrap: a full-column operator bubble reads as an input.
     const sizingRole = role === "user" ? "user" : "assistant";
     const roleLayout = config.layout?.messages?.[sizingRole];
-    const width = roleLayout?.width ?? "content";
+    const configuredWidth = roleLayout?.width ?? "content";
+    const width = role === "operator" ? "content" : configuredWidth;
     // Only an explicit config value is stamped inline; the 85%/100% defaults
     // live in widget.css so `components.message.<role>.maxWidth` can win.
     const fullMaxWidth = role === "operator"
       ? "var(--persona-message-operator-max-width, var(--persona-message-assistant-max-width, 100%))"
       : `var(--persona-message-${sizingRole}-max-width, 100%)`;
     const maxWidth =
-      roleLayout?.maxWidth ?? (width === "full" ? fullMaxWidth : undefined);
+      roleLayout?.maxWidth ?? (configuredWidth === "full" ? fullMaxWidth : undefined);
 
     wrapper.classList.add("persona-message-row");
     wrapper.classList.remove(

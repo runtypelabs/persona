@@ -2201,6 +2201,10 @@
 
 .persona-message-row[data-message-width="full"]
   > .persona-message-with-avatar
+  > .persona-message-bubble,
+.persona-message-row[data-message-width="full"]
+  > .persona-message-stack
+  > .persona-message-with-avatar
   > .persona-message-bubble {
   flex: 1 1 auto;
   width: auto;
@@ -3126,6 +3130,16 @@
 .persona-message-stack > * {
   min-width: 0;
   max-width: 100%;
+}
+
+/* An in-flow action bar moved under the meta row aligns to the stack, not to
+   the bubble padding it was built for. */
+.persona-message-stack > .persona-message-actions-row {
+  align-self: stretch;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0 0;
+  border-radius: 0;
+  background: none;
 }
 
 .persona-message-meta {

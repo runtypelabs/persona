@@ -671,11 +671,14 @@ export const getBubbleClasses = (
   // Operator bubbles share the assistant's geometry per layout; only the role
   // class changes, and the colors come from the operator tokens instead.
   if (role === "operator") {
-    return getBubbleClasses("assistant", layout).flatMap((name) =>
+    const classes = getBubbleClasses("assistant", layout).flatMap((name) =>
       name === "persona-message-assistant-bubble"
         ? ["persona-message-operator-bubble"]
         : OPERATOR_DROPPED_CLASSES.has(name) ? [] : [name]
     );
+    // Flat drops the assistant's fill, not the operator's: the operator keeps
+    // its background, so it needs the minimal layout's side padding.
+    return layout === "flat" ? [...classes, "persona-px-3"] : classes;
   }
   const baseClasses = ["persona-message-bubble"];
 
@@ -1047,15 +1050,15 @@ export const createStandardBubble = (
         : { ...defaultMessageTokens.assistant, ...messageTokens?.assistant, ...darkMessageTokens?.assistant }
   );
 
-  // Apply component-level color overrides via CSS variables
-  if (layout === "flat") {
+  // Apply component-level color overrides via CSS variables. Flat clears the
+  // user and assistant fills; an operator keeps its own background token so it
+  // stays apart from the assistant prose on the same side.
+  if (layout === "flat" && !isOperator) {
     bubble.style.backgroundColor = "transparent";
     bubble.style.color =
       message.role === "user"
         ? "var(--persona-primary, var(--persona-text))"
-        : isOperator
-          ? "var(--persona-components-message-operator-text, var(--persona-text))"
-          : "var(--persona-message-assistant-text, var(--persona-text))";
+        : "var(--persona-message-assistant-text, var(--persona-text))";
   } else if (message.role === "user") {
     bubble.style.backgroundColor = 'var(--persona-message-user-bg, var(--persona-accent))';
     bubble.style.color = 'var(--persona-message-user-text, white)';
@@ -1356,8 +1359,9 @@ export const createStandardBubble = (
       // A custom action opted into `"user"` brings the row up on its own.
       customMessageActionsForRole(actionsConfig, "user").length > 0);
 
+  let actions: HTMLElement | undefined;
   if ((shouldShowActions || shouldShowUserActions) && actionsConfig) {
-    const actions = createMessageActions(
+    actions = createMessageActions(
       message,
       shouldShowUserActions
         ? // A user bubble never hosts the assistant-only controls.
@@ -1382,7 +1386,7 @@ export const createStandardBubble = (
 
   // If no avatar needed, return bubble directly
   if (!showAvatar || message.role === "system") {
-    return withMessageMeta(bubble, message);
+    return withMessageMeta(bubble, message, actions);
   }
 
   // Create wrapper with avatar
@@ -1401,7 +1405,7 @@ export const createStandardBubble = (
     wrapper.append(avatar, bubble);
   }
 
-  return withMessageMeta(wrapper, message);
+  return withMessageMeta(wrapper, message, actions);
 };
 
 const MESSAGE_META_TONES = ["success", "warning", "danger"];
@@ -1455,16 +1459,26 @@ export const createMessageMeta = (
 /**
  * Stack the meta row under a rendered bubble (or avatar wrapper). Messages
  * without meta return the element unchanged, so their DOM is exactly what it
- * was before meta existed.
+ * was before meta existed. An in-flow action bar (any visibility but hover)
+ * moves below the meta, so the meta sits directly under the message text; a
+ * hover bar overlays the bubble and stays inside it.
  */
-const withMessageMeta = (element: HTMLElement, message: AgentWidgetMessage): HTMLElement => {
+const withMessageMeta = (
+  element: HTMLElement,
+  message: AgentWidgetMessage,
+  actions?: HTMLElement
+): HTMLElement => {
   const metaNodes = createMessageMeta(message.id, message.meta);
   if (!metaNodes) return element;
   const stack = createNode("div", {
     className: "persona-message-stack",
     attrs: { id: `stack-${message.id}`, "data-message-stack-for": message.id },
   });
-  stack.append(element, ...metaNodes);
+  const trailing =
+    actions && actions.style.display !== "none" && !actions.classList.contains("persona-message-actions-hover")
+      ? [actions]
+      : [];
+  stack.append(element, ...metaNodes, ...trailing);
   return stack;
 };
 

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
@@ -155,6 +156,22 @@ describe("operator role and message meta in the transcript", () => {
     expect(badges(mount, "op1")).toEqual(["sent:success"]);
   });
 
+  it("shrink-wraps operator rows even when the assistant is full width", async () => {
+    const { mount, controller } = makeController({
+      layout: { messages: { assistant: { width: "full" } } },
+    });
+    controller.injectAssistantMessage({ id: "a1", content: "Let me check." });
+    controller.injectMessage({ id: "op1", role: "operator", content: "Sam here." });
+    await settle();
+    expect(row(mount, "a1")!.getAttribute("data-message-width")).toBe("full");
+    const operatorRow = row(mount, "op1")!;
+    expect(operatorRow.getAttribute("data-message-width")).toBe("content");
+    // It keeps the assistant's full-width cap, so a long message can still fill the column.
+    expect(operatorRow.style.getPropertyValue("--persona-message-row-max-width")).toBe(
+      "var(--persona-message-operator-max-width, var(--persona-message-assistant-max-width, 100%))"
+    );
+  });
+
   it("never parses meta text as HTML in the live transcript", async () => {
     const { mount, controller } = makeController();
     controller.injectAssistantMessage({
@@ -169,5 +186,54 @@ describe("operator role and message meta in the transcript", () => {
     expect(wrapper.querySelector(".persona-message-meta-label")?.textContent).toBe(
       "<img src=x onerror=alert(1)>"
     );
+  });
+});
+
+describe("message meta keeps the row geometry", () => {
+  let stylesheet: HTMLStyleElement;
+
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+    stylesheet = document.createElement("style");
+    stylesheet.textContent = readFileSync("src/styles/widget.css", "utf8");
+    document.head.append(stylesheet);
+  });
+
+  afterEach(() => {
+    controllers.splice(0).forEach((controller) => controller.destroy());
+    mounts.splice(0).forEach((mount) => mount.remove());
+    stylesheet.remove();
+    document.body.innerHTML = "";
+  });
+
+  const bubbleFlex = (mount: HTMLElement, id: string) =>
+    getComputedStyle(row(mount, id)!.querySelector<HTMLElement>(`#bubble-${id}`)!).flexGrow;
+
+  it.each(["assistant", "user"] as const)(
+    "fills a full-width %s row next to an avatar with or without meta",
+    async (role) => {
+      const { mount, controller } = makeController({
+        layout: { messages: { [role]: { width: "full" }, avatar: { show: true } } },
+      });
+      const inject = role === "user"
+        ? controller.injectUserMessage.bind(controller)
+        : controller.injectAssistantMessage.bind(controller);
+      inject({ id: "plain", content: "No meta" });
+      inject({ id: "meta", content: "With meta", meta: { label: "Agent" } });
+      await settle();
+
+      expect(row(mount, "meta")!.querySelector(":scope > .persona-message-stack > .persona-message-with-avatar")).not.toBeNull();
+      expect(bubbleFlex(mount, "plain")).toBe("1");
+      expect(bubbleFlex(mount, "meta")).toBe("1");
+    }
+  );
+
+  it("leaves content-width bubbles shrink-wrapped next to an avatar with meta", async () => {
+    const { mount, controller } = makeController({
+      layout: { messages: { avatar: { show: true } } },
+    });
+    controller.injectAssistantMessage({ id: "meta", content: "With meta", meta: { label: "Agent" } });
+    await settle();
+    expect(bubbleFlex(mount, "meta")).not.toBe("1");
   });
 });

@@ -669,9 +669,12 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
       fontSize: '14px', lineHeight: '1.55',
     },
     // The V5 assistant is flat prose, so the operator keeps a bubble with the
-    // user bubble's V5 geometry to stay visibly distinct on the same side.
+    // user bubble's V5 geometry to stay visibly distinct on the same side. It
+    // is outlined, not filled: the stock near-black primary tints a fill to
+    // the user bubble's gray, so identity never depends on the primary hue.
     operator: {
       ...DEFAULT_COMPONENTS_BASE.message.operator,
+      background: 'transparent', border: 'semantic.colors.border',
       borderRadius: 'palette.radius.xl', shadow: 'none', padding: '8px 14px',
       fontSize: '14px', lineHeight: '1.5',
     },

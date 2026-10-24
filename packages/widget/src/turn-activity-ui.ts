@@ -200,6 +200,8 @@ function compactCommentary(row: HTMLElement, config: AgentWidgetConfig, checkSty
   const bubble = standard?.matches(".persona-message-bubble") ? standard : standard?.querySelector<HTMLElement>(".persona-message-bubble");
   if (!bubble) return;
   bubble.querySelector(":scope > .persona-message-actions")?.remove();
+  // With message meta, an in-flow action bar sits in the stack under the meta.
+  standard?.querySelector(":scope > .persona-message-actions")?.remove();
   bubble.classList.add("persona-turn-commentary");
   for (const [property, token, fallback] of [
     ["background-color", "background", "transparent"], ["padding", "padding", "0px"],

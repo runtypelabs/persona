@@ -1039,6 +1039,29 @@ describe("createStandardBubble: operator role", () => {
     expect(user.style.backgroundColor).toBe("var(--persona-message-user-bg, var(--persona-accent))");
   });
 
+  it("keeps the operator background in the flat layout, where assistant prose stays transparent", () => {
+    const operator = createStandardBubble(
+      makeMessage({ id: "flat-op", role: "operator", content: "Sam here." }),
+      ({ text }) => text,
+      { layout: "flat" }
+    );
+    const assistant = createStandardBubble(
+      makeMessage({ id: "flat-a", content: "Answer" }),
+      ({ text }) => text,
+      { layout: "flat" }
+    );
+    expect(operator.style.backgroundColor).toBe(
+      "var(--persona-components-message-operator-background, var(--persona-container))"
+    );
+    expect(operator.style.color).toBe(
+      "var(--persona-components-message-operator-text, var(--persona-text))"
+    );
+    // The fill needs side padding; flat assistant prose has none.
+    expect(operator.classList.contains("persona-px-3")).toBe(true);
+    expect(assistant.style.backgroundColor).toBe("transparent");
+    expect(assistant.classList.contains("persona-px-3")).toBe(false);
+  });
+
   it("uses operator geometry tokens with the v5 defaults, not the flat assistant's", () => {
     const bubble = createStandardBubble(
       makeMessage({ id: "op-geo", role: "operator", content: "Hi" }),
@@ -1202,5 +1225,45 @@ describe("message meta", () => {
     expect(root.classList.contains("persona-message-stack")).toBe(true);
     expect(root.firstElementChild?.classList.contains("persona-message-with-avatar")).toBe(true);
     expect(root.querySelector(".persona-message-meta-label")?.textContent).toBe("Human");
+  });
+
+  it("puts the meta right under the text, before an always-visible action bar", () => {
+    const root = createStandardBubble(
+      makeMessage({ id: "meta-actions", content: "Refund sent.", meta: { label: "Agent" } }),
+      ({ text }) => text,
+      undefined,
+      { enabled: true, showCopy: true, visibility: "always", align: "right", layout: "pill-inside" }
+    );
+    const children = Array.from(root.children);
+    expect(children.map((child) => child.className.split(" ")[0])).toEqual([
+      "persona-message-bubble",
+      "persona-message-meta",
+      "persona-message-actions",
+    ]);
+    // Still delegated by message id, so the click handler finds it.
+    expect(children[2].getAttribute("data-actions-for")).toBe("meta-actions");
+    expect(root.querySelector(".persona-message-bubble .persona-message-actions")).toBeNull();
+  });
+
+  it("keeps a hover action bar inside the bubble it overlays", () => {
+    const root = createStandardBubble(
+      makeMessage({ id: "meta-hover", content: "Refund sent.", meta: { label: "Agent" } }),
+      ({ text }) => text,
+      undefined,
+      { enabled: true, showCopy: true, visibility: "hover", align: "right", layout: "pill-inside" }
+    );
+    expect(root.lastElementChild?.classList.contains("persona-message-meta")).toBe(true);
+    expect(root.querySelector(".persona-message-bubble > .persona-message-actions")).not.toBeNull();
+  });
+
+  it("leaves the action bar inside the bubble when there is no meta", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ id: "no-meta-actions", content: "Refund sent." }),
+      ({ text }) => text,
+      undefined,
+      { enabled: true, showCopy: true, visibility: "always", align: "right", layout: "pill-inside" }
+    );
+    expect(bubble.classList.contains("persona-message-bubble")).toBe(true);
+    expect(bubble.querySelector(":scope > .persona-message-actions")).not.toBeNull();
   });
 });

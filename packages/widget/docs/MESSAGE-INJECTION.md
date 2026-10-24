@@ -159,8 +159,9 @@ thread. Operator messages:
 
 - Render on the assistant's side with their own bubble, styled by
   `theme.components.message.operator` (see [THEME-CONFIG.md](../THEME-CONFIG.md)).
-  The defaults tint the container with the theme primary, so `brand` themes
-  follow without extra config.
+  The bubble fits its content, even when the assistant is `width: "full"`.
+  The v4 defaults tint the container with the theme primary; the v5 defaults
+  outline the bubble instead, and a `brand` accent tints the outline.
 - Are display-only. They are never sent to the model, in any transport (proxy,
   agent, or client token), so the model never sees an operator's words as its
   own `assistant` turn. To give the model that context, inject a separate
@@ -183,7 +184,8 @@ widgetHandle.injectMessage({
 
 ## Message Meta (Label, Badges and Note)
 
-Any message can carry `meta`, which renders under the bubble:
+Any message can carry `meta`, which renders under the bubble, above an
+always-visible action bar:
 
 ```typescript
 type AgentWidgetMessageMeta = {

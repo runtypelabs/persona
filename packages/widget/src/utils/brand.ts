@@ -61,9 +61,13 @@ export const deriveBrandTheme = (brand?: BrandConfig, scheme: 'light' | 'dark' =
         ? { background: 'semantic.colors.container', foreground: 'semantic.colors.text', iconBackground: 'transparent', iconForeground: 'semantic.colors.text' }
         : { background: ramp[500], foreground: ink, iconBackground: ramp[500], iconForeground: ink },
       approval: { approve: { foreground: ink } },
-      message: { user: v5Defaults
-        ? { background: 'color-mix(in srgb, var(--persona-primary) 12%, var(--persona-container))', text: 'semantic.colors.text' }
-        : { background: ramp[500], text: ink } },
+      message: v5Defaults
+        ? {
+            user: { background: 'color-mix(in srgb, var(--persona-primary) 12%, var(--persona-container))', text: 'semantic.colors.text' },
+            // The V5 operator stays outlined; a brand accent tints the outline.
+            operator: { border: 'color-mix(in srgb, var(--persona-primary) 35%, var(--persona-border))' },
+          }
+        : { user: { background: ramp[500], text: ink } },
     };
   }
   const neutral = parseColor(brand.neutral);
@@ -104,7 +108,7 @@ export const deriveBrandTheme = (brand?: BrandConfig, scheme: 'light' | 'dark' =
   if (brand.density && density) {
     const [size, height, gap] = density;
     theme.semantic = { ...theme.semantic, typography: { ...theme.semantic?.typography, fontSize: `${size}px` } };
-    theme.components = { ...theme.components, header: { ...theme.components?.header, minHeight: `${height}px`, padding: `${gap}px 16px`, minimalPadding: `${gap}px 16px` }, history: { railHeader: { minHeight: `${height}px` } }, composer: { ...theme.components?.composer, fontSize: `${size}px`, padding: `${gap}px`, gap: `${gap / 2}px` }, message: { ...theme.components?.message, gap: `${gap}px`, user: { ...theme.components?.message?.user, fontSize: `${size}px` }, assistant: { fontSize: `${size}px` }, operator: { fontSize: `${size}px` } } };
+    theme.components = { ...theme.components, header: { ...theme.components?.header, minHeight: `${height}px`, padding: `${gap}px 16px`, minimalPadding: `${gap}px 16px` }, history: { railHeader: { minHeight: `${height}px` } }, composer: { ...theme.components?.composer, fontSize: `${size}px`, padding: `${gap}px`, gap: `${gap / 2}px` }, message: { ...theme.components?.message, gap: `${gap}px`, user: { ...theme.components?.message?.user, fontSize: `${size}px` }, assistant: { fontSize: `${size}px` }, operator: { ...theme.components?.message?.operator, fontSize: `${size}px` } } };
   }
   if (brand.elevation && ['flat', 'subtle', 'raised'].includes(brand.elevation)) {
     const flat = brand.elevation === 'flat';

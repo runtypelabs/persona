@@ -830,9 +830,9 @@ and dark schemes follow without extra config.
 
 | Token | CSS variable | Default |
 |-------|--------------|---------|
-| `operator.background` | `--persona-components-message-operator-background` | `color-mix(in srgb, var(--persona-primary) 6%, var(--persona-container))` |
+| `operator.background` | `--persona-components-message-operator-background` | `color-mix(in srgb, var(--persona-primary) 6%, var(--persona-container))` (v5: `transparent`) |
 | `operator.text` | `--persona-components-message-operator-text` | `semantic.colors.text` |
-| `operator.border` | `--persona-components-message-operator-border` | `color-mix(in srgb, var(--persona-primary) 20%, var(--persona-container))` |
+| `operator.border` | `--persona-components-message-operator-border` | `color-mix(in srgb, var(--persona-primary) 20%, var(--persona-container))` (v5: `semantic.colors.border`) |
 | `operator.borderWidth` | `--persona-components-message-operator-borderWidth` | `1px` |
 | `operator.borderRadius` | `--persona-components-message-operator-borderRadius` | `palette.radius.lg` (v5: `palette.radius.xl`) |
 | `operator.shadow` | `--persona-components-message-operator-shadow` | `palette.shadows.sm` (v5: `none`) |
@@ -841,9 +841,13 @@ and dark schemes follow without extra config.
 They fall back to the layout preset, not to the assistant's values, so the v5
 flat assistant does not flatten the operator bubble: under
 `future.v5Defaults` the operator keeps a bubble with `padding: 8px 14px`,
-`fontSize: 14px` and `lineHeight: 1.5`. `maxWidth` falls back to
-`assistant.maxWidth`, and operator rows use `layout.messages.assistant` for
-width config.
+`fontSize: 14px` and `lineHeight: 1.5`. The v5 operator bubble is outlined
+rather than filled, so it stays apart from the filled user bubble whatever the
+primary color; a `brand.accent` tints the outline. `maxWidth` falls back to
+`assistant.maxWidth`, and operator rows take `layout.messages.assistant.maxWidth`,
+but they always fit their content, even when the assistant is
+`width: "full"`. The `flat` layout clears the user and assistant fills but
+keeps the operator background.
 
 ### Message meta (`components.messageMeta.*`)
 
