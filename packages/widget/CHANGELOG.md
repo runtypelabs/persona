@@ -1,5 +1,17 @@
 # @runtypelabs/persona
 
+## 4.33.0
+
+### Minor Changes
+
+- 8ce2c26: Add the `operator` UI role for human replies on the assistant side, with its own theme tokens, readable accessible author label, optional structured author provenance and custom message actions, including attachment-only replies. Preserve provenance through injection, custom history and persistence.
+
+  Keep operator messages out of model requests by default for backends that own conversation history. Add the synchronous `modelMessageTransform` hook so stateless adapters can explicitly convert human contributions into attributed model context once in chronological order. Prevent retry and edit operations from truncating human operator replies.
+
+### Patch Changes
+
+- 91af065: Keep the standalone typing indicator visible while an `ask_user_question` call streams its arguments, until a plugin bubble or the built-in answer sheet actually renders the question. Previously the transcript went blank between the model starting the tool call and the question appearing.
+
 ## 4.32.2
 
 ### Patch Changes
