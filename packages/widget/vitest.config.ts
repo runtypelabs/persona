@@ -72,6 +72,7 @@ export default defineConfig({
     },
   },
   test: {
+    maxWorkers: 4,
     globals: true,
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],

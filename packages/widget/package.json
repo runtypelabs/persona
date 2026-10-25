@@ -206,7 +206,7 @@
     "@types/jsdom": "^30.0.0",
     "@types/node": "^20.12.7",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
-    "@vitest/ui": "^5.0.3",
+    "@vitest/ui": "^5.0.5",
     "acorn": "^8.15.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^28.1.0",
@@ -214,9 +214,9 @@
     "rimraf": "^5.0.5",
     "size-limit": "^12.1.0",
     "terser": "^5.49.0",
-    "tsdown": "^0.23.0",
+    "tsdown": "^0.23.2",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.3",
+    "vitest": "^5.0.5",
     "webmcp-polyfill-v6": "npm:@mcp-b/webmcp-polyfill@6.0.0"
   },
   "engines": {

@@ -119,7 +119,7 @@ const declarations = (entries: Entries): UserConfig => ({
   format: ["esm"],
   minify: false,
   outputOptions: undefined,
-  dts: { generator: "tsgo", emitDtsOnly: true },
+  dts: { generator: "tsgo", tsgo: { moduleUrl: import.meta.resolve("typescript-next") }, emitDtsOnly: true },
   // Lazy subpaths stay package imports, as in the JS build.
   deps: { dts: { neverBundle: SUBPATH_CHUNKS } },
   // INVARIANT: a module .d.ts without an export list implicitly exports every
