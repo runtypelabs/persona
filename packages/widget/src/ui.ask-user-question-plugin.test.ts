@@ -689,3 +689,157 @@ describe("renderAskUserQuestion plugin hook", () => {
     controller.destroy();
   });
 });
+
+describe("typing indicator while ask_user_question arguments stream", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    if (typeof localStorage !== "undefined") localStorage.clear();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  // Streaming transcript updates render once per animation frame; queue the
+  // frames so each injection can be rendered synchronously.
+  let frames = new Map<number, (time: number) => void>();
+  let nextFrameId = 1;
+  const renderFrame = () => {
+    const pending = [...frames.values()];
+    frames.clear();
+    pending.forEach((callback) => callback(0));
+  };
+
+  const mountStreaming = async (config: Record<string, unknown> = {}) => {
+    frames = new Map();
+    vi.stubGlobal("requestAnimationFrame", (callback: (time: number) => void) => {
+      const id = nextFrameId++;
+      frames.set(id, callback);
+      return id;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+    global.fetch = vi.fn().mockImplementation(
+      () => new Promise(() => {})
+    ) as unknown as typeof fetch;
+
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      ...config,
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+
+    controller.submitMessage("hello");
+    await Promise.resolve();
+    await Promise.resolve();
+    return { mount, controller };
+  };
+
+  // Stamped in the future so the rows sort after the submitted user message.
+  const sequence = Date.now() + 60_000;
+  const createdAt = new Date(sequence).toISOString();
+  const fullArgs = {
+    questions: [
+      { question: "Which audience?", options: [{ label: "Hobbyists" }, { label: "Pros" }] },
+    ],
+  };
+
+  const injectStreamingAsk = (
+    controller: ReturnType<typeof createAgentExperience>,
+    { chunks = [], args }: { chunks?: string[]; args?: unknown } = {}
+  ) => {
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "ask-1",
+        role: "assistant",
+        content: "",
+        createdAt,
+        sequence,
+        streaming: true,
+        variant: "tool",
+        toolCall: { id: "ask-1", name: "ask_user_question", status: "running", chunks, args },
+      },
+    });
+    renderFrame();
+  };
+
+  const injectAwaitingAsk = (controller: ReturnType<typeof createAgentExperience>) => {
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "ask-1",
+        role: "assistant",
+        content: "",
+        createdAt,
+        sequence,
+        streaming: false,
+        variant: "tool",
+        toolCall: { id: "ask-1", name: "ask_user_question", status: "complete", chunks: [], args: fullArgs },
+        agentMetadata: { executionId: "exec_123", awaitingLocalTool: true },
+      },
+    });
+    renderFrame();
+  };
+
+  const typingIndicator = (mount: HTMLElement) =>
+    mount.querySelector('[data-typing-indicator="true"]');
+  const askSheet = (mount: HTMLElement) => mount.querySelector("[data-persona-ask-sheet-for]");
+
+  it("keeps the dots until the built-in sheet mounts when no plugin renders the question", async () => {
+    const { mount, controller } = await mountStreaming();
+
+    injectStreamingAsk(controller);
+    expect(askSheet(mount)).toBeNull();
+    expect(typingIndicator(mount)).not.toBeNull();
+
+    injectAwaitingAsk(controller);
+    expect(askSheet(mount)).not.toBeNull();
+    expect(typingIndicator(mount)).toBeNull();
+
+    controller.destroy();
+  });
+
+  it("keeps the dots while the plugin returns null for a partial payload", async () => {
+    const plugin: AgentWidgetPlugin = {
+      id: "partial-asker",
+      renderAskUserQuestion: ({ payload }) => {
+        if (!payload?.questions?.[0]?.options?.length) return null;
+        const root = document.createElement("div");
+        root.setAttribute("data-test-id", "partial-ask");
+        return root;
+      },
+    };
+    const { mount, controller } = await mountStreaming({ plugins: [plugin] });
+
+    injectStreamingAsk(controller, { chunks: ['{"questions":[{"question":"Which'] });
+    expect(mount.querySelector('[data-test-id="partial-ask"]')).toBeNull();
+    expect(askSheet(mount)).toBeNull();
+    expect(typingIndicator(mount)).not.toBeNull();
+
+    injectStreamingAsk(controller, { args: fullArgs });
+    expect(mount.querySelector('[data-test-id="partial-ask"]')).not.toBeNull();
+    expect(typingIndicator(mount)).toBeNull();
+
+    controller.destroy();
+  });
+
+  it.each([true, false])("hides the dots as soon as the plugin renders a bubble (showToolCalls=%s)", async (showToolCalls) => {
+    const plugin: AgentWidgetPlugin = {
+      id: "eager-asker",
+      renderAskUserQuestion: () => {
+        const root = document.createElement("div");
+        root.setAttribute("data-test-id", "eager-ask");
+        return root;
+      },
+    };
+    const { mount, controller } = await mountStreaming({
+      plugins: [plugin],
+      features: { showToolCalls },
+    });
+
+    injectStreamingAsk(controller);
+    expect(mount.querySelector('[data-test-id="eager-ask"]')).not.toBeNull();
+    expect(typingIndicator(mount)).toBeNull();
+
+    controller.destroy();
+  });
+});
