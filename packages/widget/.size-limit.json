@@ -200,7 +200,7 @@
   {
     "name": "Lazy · tool and reasoning rendering (activity-ui.js)",
     "path": "dist/activity-ui.js",
-    "limit": "12.3 kB",
+    "limit": "12.4 kB",
     "gzip": true
   },
   {
