@@ -111,3 +111,18 @@ The `Agent` is injected, so you can attach tools/handoffs or swap the model (inc
 Streaming text plus one fire-and-forget tool call. No WebMCP, no `await` pause, and no `/resume`.
 The Agents SDK has its own handoffs / human-in-the-loop model; see `examples/ai-sdk-webmcp` for a
 backend that genuinely parks a run and resumes it.
+
+## Human support replies
+
+For stateless operator history, install
+[`historicalOperatorContext`](../ai-sdk-next/app/lib/operator-context.ts) as the
+widget's `modelMessageTransform`. It maps a human reply to attributed historical
+user context; leave it unset when server history already owns replay. Preserve
+operator roles and `author` in local/custom history; see
+[context ownership](../../packages/widget/docs/MESSAGE-INJECTION.md#model-context-ownership).
+
+The adapter maps assistant history to SDK `output_text` parts and filters system
+history, so a separate injected system turn is not a portable human-context
+fallback. Its converter is text-only and it has no pause/resume endpoint for
+steering, question answers or approvals. See
+[run-control requirements](../../packages/widget/docs/MESSAGE-INJECTION.md#human-replies-and-run-control).

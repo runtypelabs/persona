@@ -1071,6 +1071,20 @@ export const createStandardBubble = (
     bubble.style.color = 'var(--persona-components-message-operator-text, var(--persona-text))';
   }
 
+  if (isOperator) {
+    const authorLabel = createElement("div", "persona-message-author persona-text-xs persona-font-medium persona-mb-1");
+    const configuredLabel = options?.widgetConfig?.copy?.operatorLabel;
+    const operatorLabel = typeof configuredLabel === "string" && configuredLabel.trim()
+      ? configuredLabel.trim() : "Human operator";
+    const displayName = typeof message.author?.displayName === "string"
+      ? message.author.displayName.trim() : "";
+    authorLabel.textContent = displayName ? `${displayName} · ${operatorLabel}` : operatorLabel;
+    // A visible name is also the accessible name for the human-authored group.
+    bubble.setAttribute("role", "group");
+    bubble.setAttribute("aria-label", authorLabel.textContent);
+    bubble.appendChild(authorLabel);
+  }
+
   const imageParts = getMessageImageParts(message);
   const messageContentText = message.content?.trim() ?? "";
   const isImageOnlyFallbackMessage =
@@ -1344,8 +1358,7 @@ export const createStandardBubble = (
     !message.streaming &&
     // A voice caption (the voice model's own speech) is display-only.
     !message.voiceCaption &&
-    message.content &&
-    message.content.trim() &&
+    (messageContentText.length > 0 || (isOperator && customMessageActionsForRole(actionsConfig, "operator").length > 0)) &&
     actionsConfig?.enabled !== false;
 
   // User bubbles carry actions only when this message is edit- or quote-eligible;
@@ -1369,6 +1382,7 @@ export const createStandardBubble = (
         : isOperator
           ? {
               ...actionsConfig,
+              showCopy: messageContentText.length > 0 && actionsConfig.showCopy !== false,
               showUpvote: false,
               showDownvote: false,
               showReadAloud: false,

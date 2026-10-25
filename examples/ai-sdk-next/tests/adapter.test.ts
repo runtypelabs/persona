@@ -2,6 +2,7 @@ import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
+import { historicalOperatorContext } from "../app/lib/operator-context";
 import { createAISDKPersonaHandler } from "../app/lib/ai-sdk-adapter";
 import { personaMessagesToModelMessages, type PersonaDispatchBody } from "../app/lib/persona-wire";
 import { collectSSE, dispatchRequest, summarizeWire } from "./wire-testing";
@@ -173,5 +174,35 @@ describe("ai-sdk adapter → follow-up suggestions", () => {
     expect(call.tools?.map((t) => t.name)).toContain("suggest_replies");
     expect(call.prompt[0]).toMatchObject({ role: "system" });
     expect(String((call.prompt[0] as { content: string }).content)).toContain("suggest_replies");
+  });
+});
+
+describe("stateless operator context → AI SDK model input", () => {
+  it("delivers the attributed human reply exactly once between conversation turns", async () => {
+    const model = mockModel(textChunks("You're welcome"));
+    const POST = createAISDKPersonaHandler({
+      model,
+      getMessages: body => personaMessagesToModelMessages((body as PersonaDispatchBody).messages),
+    });
+    const createdAt = "2026-10-24T12:00:00Z";
+    const operator = historicalOperatorContext({
+      message: { id: "human-42", role: "operator", content: "Refund confirmed", createdAt, author: { id: "sam", displayName: "Sam", kind: "human" } },
+      content: "Refund confirmed", modelMessage: null,
+    })!;
+    const request = new Request("http://localhost/dispatch", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [
+        { role: "user", content: "Where is my order?", createdAt },
+        { role: "assistant", content: "Checking", createdAt }, operator,
+        { role: "user", content: "Thanks", createdAt },
+      ] }),
+    });
+    const summary = summarizeWire(await collectSSE(await POST(request)));
+    expect(summary.success).toBe(true);
+    const prompt = model.doStreamCalls[0]!.prompt.filter(message => message.role !== "system");
+    expect(prompt.map(message => message.role)).toEqual(["user", "assistant", "user", "user"]);
+    expect(JSON.stringify(prompt[2])).toContain("Historical human support reply");
+    expect(JSON.stringify(prompt[2])).toContain("Sam");
+    expect(JSON.stringify(prompt).match(/Refund confirmed/g)).toHaveLength(1);
   });
 });

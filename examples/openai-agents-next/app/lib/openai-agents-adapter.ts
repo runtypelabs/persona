@@ -154,5 +154,8 @@ function parseToolArguments(args: string | undefined): unknown {
 function toAgentInput(messages: ChatMessage[]): string | AgentInputItem[] {
   const turns = messages.filter((m) => m.role !== "system");
   if (turns.length === 1 && turns[0]!.role === "user") return turns[0]!.content;
-  return turns.map((m) => ({ role: m.role, content: m.content })) as AgentInputItem[];
+  // Assistant history uses output parts; a string here fails the SDK model bridge.
+  return turns.map((message) => message.role === "assistant"
+    ? { role: "assistant", status: "completed", content: [{ type: "output_text", text: message.content }] }
+    : { role: "user", content: message.content });
 }

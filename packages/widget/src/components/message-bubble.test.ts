@@ -1103,6 +1103,35 @@ describe("createStandardBubble: operator role", () => {
     expect(rendered).toEqual(["custom:flag"]);
   });
 
+  it("keeps opted-in actions on media-only human replies without an empty copy control", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ id: "media-human", role: "operator", content: "", contentParts: [{ type: "image", image: "https://example.com/photo.png" }] }),
+      ({ text }) => text,
+      undefined,
+      { ...actions, custom: [{ id: "flag", label: "Flag", roles: ["operator"], onSelect: () => {} }] }
+    );
+    expect(Array.from(bubble.querySelectorAll("[data-action]")).map(button => button.getAttribute("data-action"))).toEqual(["custom:flag"]);
+  });
+
+  it("supports a localized visible and accessible human label", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ role: "operator", content: "Bonjour", author: { displayName: "Sam", kind: "human" } }),
+      ({ text }) => text, undefined, undefined, undefined,
+      { widgetConfig: { copy: { operatorLabel: "Conseiller humain" } } }
+    );
+    expect(bubble.getAttribute("aria-label")).toBe("Sam · Conseiller humain");
+    expect(bubble.querySelector(".persona-message-author")?.textContent).toBe("Sam · Conseiller humain");
+  });
+
+  it("keeps a human label when JavaScript supplies malformed provenance or an empty label", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ role: "operator", content: "Hello", author: { displayName: 42 } as unknown as AgentWidgetMessage["author"] }),
+      ({ text }) => text, undefined, undefined, undefined,
+      { widgetConfig: { copy: { operatorLabel: "  " } } }
+    );
+    expect(bubble.getAttribute("aria-label")).toBe("Human operator");
+  });
+
   it("renders an operator avatar on the assistant side", () => {
     const wrapper = createStandardBubble(
       makeMessage({ id: "op-avatar", role: "operator", content: "Hello" }),

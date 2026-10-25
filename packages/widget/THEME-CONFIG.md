@@ -826,7 +826,9 @@ message row's content track. `layout.messages.<role>.maxWidth` (and
 `role: "operator"` messages (a human speaking on the agent's side, such as a
 support takeover) render on the assistant's side with their own bubble. The
 defaults are derived from the theme primary and container, so `brand` themes
-and dark schemes follow without extra config.
+and dark schemes follow without extra config. A visible “Human operator” label
+identifies the speaker even when avatars are hidden; `author.displayName` adds
+their name and `copy.operatorLabel` localizes the label.
 
 | Token | CSS variable | Default |
 |-------|--------------|---------|

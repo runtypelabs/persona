@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
-import type { AgentWidgetMessage } from "./types";
+import type { AgentWidgetMessage, AgentWidgetStoredState } from "./types";
 import type { AgentWidgetPlugin } from "./plugins/types";
 
 const mounts: HTMLElement[] = [];
@@ -73,6 +73,51 @@ describe("operator role in the transcript", () => {
     // Existing roles are untouched.
     expect(row(mount, "u1")!.classList.contains("persona-justify-end")).toBe(true);
     expect(row(mount, "a1")!.querySelector(".persona-message-assistant-bubble")).not.toBeNull();
+  });
+
+  it("names human replies with avatars off and updates provenance on reinjection", async () => {
+    const { mount, controller } = makeController();
+    controller.injectMessage({ id: "human", role: "operator", content: "Refunded" });
+    await settle();
+    expect(row(mount, "human")!.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("Human operator");
+    controller.injectMessage({ id: "human", role: "operator", content: "Refunded", author: { id: "sam", displayName: "Sam", kind: "human" } });
+    await settle();
+    expect(row(mount, "human")!.querySelector(".persona-message-author")?.textContent).toBe("Sam · Human operator");
+    expect(row(mount, "human")!.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("Sam · Human operator");
+    expect(controller.getMessages().find(message => message.id === "human")?.author).toEqual({ id: "sam", displayName: "Sam", kind: "human" });
+  });
+
+  it("persists and restores structured author provenance", async () => {
+    let state: AgentWidgetStoredState | null = null;
+    const adapter = {
+      load: () => state,
+      save: (value: AgentWidgetStoredState) => { state = JSON.parse(JSON.stringify(value)); },
+      clear: () => { state = null; },
+    };
+    const { controller } = makeController({ persistState: true, storageAdapter: adapter });
+    controller.injectMessage({ id: "saved", role: "operator", content: "Refunded", author: { id: "sam", displayName: "Sam", kind: "human" } });
+    await vi.waitFor(() => expect(state?.messages?.some(message => message.id === "saved")).toBe(true));
+    const { mount, controller: restored } = makeController({ persistState: true, storageAdapter: adapter });
+    await settle();
+    expect(restored.getMessages().find(message => message.id === "saved")?.author).toEqual({ id: "sam", displayName: "Sam", kind: "human" });
+    expect(row(mount, "saved")!.querySelector(".persona-message-author")?.textContent).toBe("Sam · Human operator");
+  });
+
+  it("hides destructive retry and edit before human replies while allowing a subsequent turn", async () => {
+    const { mount, controller } = makeController({ messageActions: { enabled: true, showEdit: true, showRegenerate: true } });
+    controller.injectUserMessage({ id: "before", content: "Question" });
+    controller.injectAssistantMessage({ id: "answer", content: "Answer" });
+    await settle();
+    expect(row(mount, "answer")!.querySelector('[data-action="regenerate"]')).not.toBeNull();
+    controller.injectMessage({ id: "human", role: "operator", content: "Refunded" });
+    await settle();
+    expect(row(mount, "before")!.querySelector('[data-action="edit"]')).toBeNull();
+    expect(row(mount, "answer")!.querySelector('[data-action="regenerate"]')).toBeNull();
+    controller.injectUserMessage({ id: "after", content: "Follow up" });
+    controller.injectAssistantMessage({ id: "next", content: "Next answer" });
+    await settle();
+    expect(row(mount, "after")!.querySelector('[data-action="edit"]')).not.toBeNull();
+    expect(row(mount, "next")!.querySelector('[data-action="regenerate"]')).not.toBeNull();
   });
 
   it("does not report operator messages as assistant messages", async () => {

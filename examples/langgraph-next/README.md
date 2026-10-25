@@ -117,3 +117,17 @@ the adapter reads are identical.
 Streaming chat plus one fire-and-forget tool call. No WebMCP, no `await` pause, and no `/resume`
 endpoint. A tool call the agent must wait on needs server-side state; see
 [`ai-sdk-webmcp`](../ai-sdk-webmcp) for that.
+
+## Human support replies
+
+For stateless operator history, install
+[`historicalOperatorContext`](../ai-sdk-next/app/lib/operator-context.ts) as the
+widget's `modelMessageTransform`. It maps human replies to attributed historical
+user context; omit it when server history already owns replay. See
+[context ownership](../../packages/widget/docs/MESSAGE-INJECTION.md#model-context-ownership)
+for preserving original UI roles and author identity.
+
+This example compiles a fresh graph without a checkpointer, converts transcript
+parts to text and has no pause/resume endpoint. Human steering, question answers
+and tool approvals need separate durable backend control; see
+[run-control requirements](../../packages/widget/docs/MESSAGE-INJECTION.md#human-replies-and-run-control).

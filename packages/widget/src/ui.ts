@@ -112,6 +112,7 @@ import {
   type MessageEditEditor
 } from "./components/message-edit-editor";
 import {
+  canResubmitUserMessage,
   findPrecedingUserMessageId,
   findRetryableAssistantMessageId,
   isEditableUserMessage
@@ -6254,6 +6255,10 @@ export const createAgentExperience = (
         ? findRetryableAssistantMessageId(messages)
         : null;
     const editEnabled = actionsCfg?.showEdit === true && actionsCfg.enabled !== false;
+    let lastOperatorIndex = -1;
+    messages.forEach((message, index) => {
+      if (message.role === "operator") lastOperatorIndex = index;
+    });
     const quoteEnabled = actionsCfg?.showQuote === true && actionsCfg.enabled !== false;
     /** The live editor, re-grafted into its morphed wrapper after the pass. */
     let editHydrate: { messageId: string; element: HTMLElement } | null = null;
@@ -6295,7 +6300,7 @@ export const createAgentExperience = (
       );
     };
 
-    messages.forEach((message) => {
+    messages.forEach((message, messageIndex) => {
       if (isDroppedCompletedRow(message)) {
         return;
       }
@@ -6362,7 +6367,7 @@ export const createAgentExperience = (
         isLastAssistant: message.id === lastAssistantId,
         canRegenerate: retryableAssistantId === message.id &&
           (actionsCfg?.showRegenerate === true || message.dispatchError === true),
-        canEdit: editEnabled && isEditableUserMessage(message),
+        canEdit: editEnabled && messageIndex > lastOperatorIndex && isEditableUserMessage(message),
         canQuote:
           quoteEnabled && !message.variant && (message.content?.trim().length ?? 0) > 0,
       };
@@ -10059,7 +10064,8 @@ export const createAgentExperience = (
   function beginMessageEdit(messageId: string): void {
     if (config.messageActions?.showEdit !== true) return;
     const message = session.getMessages().find((m) => m.id === messageId);
-    if (!message || !isEditableUserMessage(message)) return;
+    if (!message || !isEditableUserMessage(message) ||
+      !canResubmitUserMessage(session.getMessages(), messageId)) return;
     if (editingMessageId === messageId) return;
     cancelMessageEdit();
     editingMessageId = messageId;

@@ -5,6 +5,9 @@ import {
 } from "./runtime/init";
 
 export type {
+  AgentWidgetMessageAuthor,
+  AgentWidgetModelMessageTransform,
+  AgentWidgetModelMessageProjection,
   AgentWidgetDictationConfig,
   DictationProviderConfig,
   DictationPhase,

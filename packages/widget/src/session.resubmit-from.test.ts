@@ -327,3 +327,30 @@ describe("resubmitFrom retry payload fidelity per transport", () => {
     expect(bodies[0].submitMode).toBeUndefined();
   });
 });
+
+describe("human operator resubmission boundary", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    global.fetch = vi.fn(async () => streamResponse()) as unknown as typeof fetch;
+  });
+  it.each(["retry", "edit"] as const)("refuses %s before a human contribution without cancelling or truncating", reason => {
+    const { session, emits } = makeSession();
+    seedTurn(session);
+    session.injectMessage({ id: "human", role: "operator", content: "Refund confirmed", author: { id: "sam", displayName: "Sam", kind: "human" } });
+    const snapshot = session.getMessages();
+    const cancel = vi.spyOn(session, "cancel");
+    emits.length = 0;
+    expect(session.resubmitFrom("u1", { reason, ...(reason === "edit" && { replacement: { text: "Changed", mentionRefs: [], options: {} } }) })).toBe(false);
+    expect(session.getMessages()).toEqual(snapshot);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(emits).toHaveLength(0);
+  });
+
+  it("allows a fresh user turn after the human contribution", () => {
+    const { session } = makeSession();
+    session.injectMessage({ id: "human", role: "operator", content: "Refund confirmed" });
+    session.injectUserMessage({ id: "after", content: "When will it arrive?" });
+    expect(session.resubmitFrom("after", { reason: "retry" })).toBe(true);
+    expect(session.getMessages().some(message => message.id === "human")).toBe(true);
+  });
+});

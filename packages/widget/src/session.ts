@@ -68,7 +68,7 @@ import type {
   ComposerResubmitOptions
 } from "./types";
 import { applyQuoteToContent } from "./utils/composer-quote";
-import { findUserTurnBoundary } from "./utils/resubmit-turn";
+import { canResubmitUserMessage, findUserTurnBoundary } from "./utils/resubmit-turn";
 import { extractComponentDirectiveFromMessage } from "./utils/component-middleware";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import type { VisitorStore, VisitorStoreChange } from "./utils/visitor-store";
@@ -156,6 +156,7 @@ const CONNECTION_CONFIG_KEYS = [
   "parserType",
   "contextProviders",
   "requestMiddleware",
+  "modelMessageTransform",
   "customFetch",
   "backgroundConversations",
   "parseSSEEvent",
@@ -2515,7 +2516,8 @@ export class AgentWidgetSession {
       ...(voiceProcessing !== undefined && { voiceProcessing }),
       ...(voiceCaption && { voiceCaption }),
       ...(rawContent !== undefined && { rawContent }),
-      ...(options.dispatchError !== undefined && { dispatchError: options.dispatchError })
+      ...(options.dispatchError !== undefined && { dispatchError: options.dispatchError }),
+      ...(options.author !== undefined && { author: { ...options.author } })
     };
 
   }
@@ -3015,14 +3017,15 @@ export class AgentWidgetSession {
    * the new attempt gets fresh message ids.
    *
    * Returns false when the id is unknown, is not a user message, or the rebuilt
-   * turn would carry no content; nothing is truncated in that case.
+   * turn would carry no content, or truncation would remove an operator reply;
+   * nothing is truncated in those cases.
    */
   public resubmitFrom(
     messageId: string,
     options: ComposerResubmitOptions
   ): boolean {
     const boundary = findUserTurnBoundary(this.messages, messageId);
-    if (!boundary) return false;
+    if (!boundary || !canResubmitUserMessage(this.messages, messageId)) return false;
 
     // Operate on the STORED message, never a caller-held object: appendMessage
     // keeps a copy (see `ensureSequence`), so the array entry is the only ref

@@ -1,3 +1,4 @@
+import { historicalOperatorContext } from "../../ai-sdk-next/app/lib/operator-context";
 import { Agent } from "@openai/agents";
 import { aisdk } from "@openai/agents-extensions/ai-sdk";
 import { simulateReadableStream } from "ai";
@@ -150,5 +151,36 @@ describe("openai-agents adapter → follow-up suggestions", () => {
     for (const item of payload.suggestions) {
       expect(typeof (item as { label?: unknown }).label).toBe("string");
     }
+  });
+});
+
+describe("stateless operator context → OpenAI Agents model input", () => {
+  it("keeps an attributed human reply as history through the adapter's system filter", async () => {
+    const model = mockModel(["You're welcome"]);
+    const agent = new Agent({ name: "Assistant", instructions: "Reply concisely.", model: aisdk(model) });
+    const POST = createOpenAIAgentsPersonaHandler({ agent, getMessages });
+    const createdAt = "2026-10-24T12:00:00Z";
+    const operator = historicalOperatorContext({
+      message: { id: "human-42", role: "operator", content: "Refund confirmed", createdAt, author: { id: "sam", displayName: "Sam", kind: "human" } },
+      content: "Refund confirmed", modelMessage: null,
+    })!;
+    const request = new Request("http://localhost/dispatch", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: [
+        { role: "system", content: "Legacy system-history fallback is dropped", createdAt },
+        { role: "user", content: "Where is my order?", createdAt },
+        { role: "assistant", content: "Checking", createdAt }, operator,
+        { role: "user", content: "Thanks", createdAt },
+      ] }),
+    });
+    const frames = await collectSSE(await POST(request));
+    const summary = summarizeWire(frames);
+    expect(summary.success, JSON.stringify(frames)).toBe(true);
+    const prompt = model.doStreamCalls[0]!.prompt.filter(message => message.role !== "system");
+    expect(prompt.map(message => message.role)).toEqual(["user", "assistant", "user", "user"]);
+    expect(JSON.stringify(prompt[2])).toContain("Historical human support reply");
+    expect(JSON.stringify(prompt[2])).toContain("Sam");
+    expect(JSON.stringify(prompt).match(/Refund confirmed/g)).toHaveLength(1);
+    expect(JSON.stringify(prompt)).not.toContain("Legacy system-history fallback");
   });
 });

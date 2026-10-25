@@ -974,7 +974,8 @@ when the two homes disagree, in debug mode or not. Removal waits for 5.0.
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `initialMessages` | `AgentWidgetMessage[]` | Seed the conversation transcript with initial messages. `role` is `'user'`, `'assistant'`, `'system'` or `'operator'` (a human on the agent's side; display-only, left out of every request). See [MESSAGE-INJECTION.md](./MESSAGE-INJECTION.md#operator-messages-human-takeover). |
+| `initialMessages` | `AgentWidgetMessage[]` | Seed the conversation transcript with initial messages. `role` is `'user'`, `'assistant'`, `'system'` or `'operator'` (a human on the agent's side; omitted from model requests unless `modelMessageTransform` converts it). See [MESSAGE-INJECTION.md](./MESSAGE-INJECTION.md#operator-messages-human-replies). |
+| `modelMessageTransform` | `AgentWidgetModelMessageTransform` | Synchronously convert each eligible transcript entry into a supported model message or `null`. Receives the full UI message, resolved model content and nullable default projection. Operator entries default to omission; stateless adapters can opt into attributed historical human context. Runs on every dispatch transport after local-only/voice-caption exclusion. See [context ownership](./MESSAGE-INJECTION.md#model-context-ownership). |
 | `persistState` | `boolean \| AgentWidgetPersistStateConfig` | Persist widget state across page navigations. `true` uses defaults (sessionStorage). |
 | `storageAdapter` | `AgentWidgetStorageAdapter` | Custom storage adapter with `load()`, `save(state)`, and `clear()` methods. |
 | `onStateLoaded` | `(state: AgentWidgetStoredState) => AgentWidgetStoredState \| { state: AgentWidgetStoredState; open?: boolean }` | Transform state after loading from storage but before widget initialization. Return `{ state, open: true }` to also open the panel. |

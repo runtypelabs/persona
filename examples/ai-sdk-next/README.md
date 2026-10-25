@@ -370,3 +370,17 @@ counts when your tools guarantee that relationship. For localization, translate
 both states and replace the final `.join(", ")` with your preferred list
 formatter (for example, `Intl.ListFormat`). Metadata need not cross the backend
 boundary: the recipe works with any adapter that supplies stable tool names.
+
+## Human support replies
+
+This stateless showcase installs
+[`historicalOperatorContext`](./app/lib/operator-context.ts) as
+`modelMessageTransform`, so injected operator replies reach model input once as
+attributed historical conversation data. Keep the original UI role and `author`
+in local/custom history. Omit the hook when your backend already replays human
+replies; see [context ownership](../../packages/widget/docs/MESSAGE-INJECTION.md#model-context-ownership).
+
+The example converts transcript parts to text even though the AI SDK supports
+multimodal input. It streams runs without durable takeover, steering or approval
+control; those require separate backend state and authenticated endpoints. See
+[human replies and run control](../../packages/widget/docs/MESSAGE-INJECTION.md#human-replies-and-run-control).
