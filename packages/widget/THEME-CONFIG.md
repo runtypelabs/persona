@@ -821,6 +821,48 @@ and type are written as inline `var()` chains on the bubble; `maxWidth` caps the
 message row's content track. `layout.messages.<role>.maxWidth` (and
 `width: "full"`) is per-install config and still wins over the token.
 
+#### Operator bubble (`components.message.operator.*`)
+
+`role: "operator"` messages (a human speaking on the agent's side, such as a
+support takeover) render on the assistant's side with their own bubble. The
+defaults are derived from the theme primary and container, so `brand` themes
+and dark schemes follow without extra config. A visible “Human operator” label
+identifies the speaker even when avatars are hidden; `author.displayName` adds
+their name and `copy.operatorLabel` localizes the label.
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `operator.background` | `--persona-components-message-operator-background` | `color-mix(in srgb, var(--persona-primary) 6%, var(--persona-container))` (v5: `transparent`) |
+| `operator.text` | `--persona-components-message-operator-text` | `semantic.colors.text` |
+| `operator.border` | `--persona-components-message-operator-border` | `color-mix(in srgb, var(--persona-primary) 20%, var(--persona-container))` (v5: `semantic.colors.border`) |
+| `operator.borderWidth` | `--persona-components-message-operator-borderWidth` | `1px` |
+| `operator.borderRadius` | `--persona-components-message-operator-borderRadius` | `palette.radius.lg` (v5: `palette.radius.xl`) |
+| `operator.shadow` | `--persona-components-message-operator-shadow` | `palette.shadows.sm` (v5: `none`) |
+
+`operator` also takes the geometry tokens above (`--persona-message-operator-*`).
+They fall back to the layout preset, not to the assistant's values, so the v5
+flat assistant does not flatten the operator bubble: under
+`future.v5Defaults` the operator keeps a bubble with `padding: 8px 14px`,
+`fontSize: 14px` and `lineHeight: 1.5`. The v5 operator bubble is outlined
+rather than filled, so it stays apart from the filled user bubble whatever the
+primary color; a `brand.accent` tints the outline. `maxWidth` falls back to
+`assistant.maxWidth`, and operator rows take `layout.messages.assistant.maxWidth`,
+but they always fit their content, even when the assistant is
+`width: "full"`. The `flat` layout clears the user and assistant fills but
+keeps the operator background.
+
+```typescript
+theme: {
+  components: {
+    message: { operator: { background: '#eee9ff', border: '#d6ccff' } },
+  },
+}
+```
+
+To draw badges under a message (delivery status, an author label, an error),
+use a `renderMessage` plugin slot; see
+[MESSAGE-INJECTION.md](./docs/MESSAGE-INJECTION.md#example-read-only-messaging-thread).
+
 ### Message actions (`components.messageActions.*`)
 
 The hover-revealed action row under a message (copy, vote, read aloud). Every
@@ -2831,7 +2873,7 @@ messageActions: {
 | `id` | — | Unique within `custom`; becomes `data-action="custom:<id>"` |
 | `label` | — | Accessible name and tooltip |
 | `iconName` | `"ellipsis"` | Lucide icon name from the Persona registry |
-| `roles` | `["assistant"]` | Which message roles show it. Listing `"user"` brings up the user actions row on its own, without `showEdit` or `showQuote` |
+| `roles` | `["assistant"]` | Which message roles show it: `"user"`, `"assistant"` or `"operator"`. Listing `"user"` brings up the user actions row on its own, without `showEdit` or `showQuote` |
 | `onSelect` | — | `(message: AgentWidgetMessage) => void` |
 
 Custom actions follow the same `enabled`, `visibility`, `align`, and `layout`

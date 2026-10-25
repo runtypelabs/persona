@@ -5,6 +5,9 @@ import {
 } from "./runtime/init";
 
 export type {
+  AgentWidgetMessageAuthor,
+  AgentWidgetModelMessageTransform,
+  AgentWidgetModelMessageProjection,
   AgentWidgetDictationConfig,
   DictationProviderConfig,
   DictationPhase,
@@ -46,6 +49,8 @@ export type {
   ArtifactConfigPayload,
   AgentWidgetInitOptions,
   AgentWidgetMessage,
+  AgentWidgetMessageRole,
+  AgentWidgetModelMessageRole,
   AgentWidgetTurnActivity,
   AgentWidgetTurnActivityConfig,
   AgentWidgetLauncherConfig,
@@ -594,6 +599,8 @@ export type {
   SemanticSpacing,
   SemanticTypography,
   ComponentTokens,
+  MessageTokens,
+  MessageGeometryTokens,
   ComposerOverflowMenuTokens,
   TextStyleTokens,
   AttachmentTokens,

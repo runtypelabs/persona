@@ -580,6 +580,27 @@ export interface MessageTokens {
     /** Assistant bubble box-shadow (token ref or raw CSS, e.g. `none`). */
     shadow?: string;
   };
+  /**
+   * Operator bubble: a human speaking on the agent's side (`role: "operator"`).
+   * Renders on the assistant's side. Defaults tint the container with the
+   * theme primary (`--persona-primary`), so `brand` themes follow without
+   * extra config. Geometry keys fall back to the layout preset, not to the
+   * assistant's geometry.
+   */
+  operator?: MessageGeometryTokens & {
+    /** @default "color-mix(in srgb, var(--persona-primary) 6%, var(--persona-container))" */
+    background?: TokenReference<'color'>;
+    /** @default semantic.colors.text */
+    text?: TokenReference<'color'>;
+    /** @default palette.radius.lg */
+    borderRadius?: TokenReference<'radius'>;
+    /** @default "color-mix(in srgb, var(--persona-primary) 20%, var(--persona-container))" */
+    border?: TokenReference<'color'>;
+    /** Border width; set to 0px to drop it. @default "1px" */
+    borderWidth?: string;
+    /** Operator bubble box-shadow (token ref or raw CSS, e.g. `none`). */
+    shadow?: string;
+  };
   /** Border color between messages in the thread. */
   border?: TokenReference<'color'>;
 }

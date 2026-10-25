@@ -182,6 +182,16 @@ describe('AgentWidgetSession - Message Injection', () => {
     });
   });
 
+  describe('operator role', () => {
+    it('injects an operator message with its own id prefix', () => {
+      const result = session.injectMessage({ role: 'operator', content: 'Sam from support here.' });
+
+      expect(result.role).toBe('operator');
+      expect(result.id).toMatch(/^operator-/);
+      expect(messages.map((message) => message.role)).toEqual(['operator']);
+    });
+  });
+
   describe('message ordering', () => {
     it('should maintain chronological order', () => {
       session.injectMessage({

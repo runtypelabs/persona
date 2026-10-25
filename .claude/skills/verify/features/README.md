@@ -30,6 +30,7 @@ Each feature file has an H1, a paragraph on the user-visible behavior, then thes
 
 - [approvals](./approvals.md): tool approval card, Allow / Deny, resolution and resume.
 - [streaming](./streaming.md): streamed text, Markdown (tables, code), reasoning disclosure, error bubble.
+- [operator](./operator.md): human author labels, attachment actions, retry/edit boundaries, and model-history ownership.
 - [tool-calls](./tool-calls.md): tool bubble lifecycle and the collapsed "Used tool" summary.
 - [launcher-and-theme](./launcher-and-theme.md): floating launcher open/close, inline mount, dark scheme, config overrides.
 - [voice-browser](./voice-browser.md): Web Speech dictation into the composer, auto-submit, browser read-aloud.

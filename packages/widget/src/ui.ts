@@ -112,6 +112,7 @@ import {
   type MessageEditEditor
 } from "./components/message-edit-editor";
 import {
+  canResubmitUserMessage,
   findPrecedingUserMessageId,
   findRetryableAssistantMessageId,
   isEditableUserMessage
@@ -1408,8 +1409,9 @@ export const createAgentExperience = (
   const messageActionCallbacks: MessageActionCallbacks = {
     onCopy: (message: AgentWidgetMessage) => {
       eventBus.emit("message:copy", message);
-      // Send copy feedback to API if in client token mode
-      if (session?.isClientTokenMode()) {
+      // Send copy feedback to API if in client token mode. Operator messages
+      // are host-injected and unknown to the API, so they never report.
+      if (session?.isClientTokenMode() && message.role !== "operator") {
         session.submitMessageFeedback(message.id, 'copy').catch((error) => {
           if (config.debug) {
             // eslint-disable-next-line no-console
@@ -6097,21 +6099,26 @@ export const createAgentExperience = (
     wrapper: HTMLElement,
     role: AgentWidgetMessage["role"]
   ): void => {
+    // Operator rows sit on the assistant's side and share its max width, but
+    // always shrink-wrap: a full-column operator bubble reads as an input.
     const sizingRole = role === "user" ? "user" : "assistant";
     const roleLayout = config.layout?.messages?.[sizingRole];
-    const width = roleLayout?.width ?? "content";
+    const configuredWidth = roleLayout?.width ?? "content";
+    const width = role === "operator" ? "content" : configuredWidth;
     // Only an explicit config value is stamped inline; the 85%/100% defaults
     // live in widget.css so `components.message.<role>.maxWidth` can win.
+    const fullMaxWidth = role === "operator"
+      ? "var(--persona-message-operator-max-width, var(--persona-message-assistant-max-width, 100%))"
+      : `var(--persona-message-${sizingRole}-max-width, 100%)`;
     const maxWidth =
-      roleLayout?.maxWidth ?? (width === "full"
-        ? `var(--persona-message-${sizingRole}-max-width, 100%)`
-        : undefined);
+      roleLayout?.maxWidth ?? (configuredWidth === "full" ? fullMaxWidth : undefined);
 
     wrapper.classList.add("persona-message-row");
     wrapper.classList.remove(
       "persona-message-row-user",
       "persona-message-row-assistant",
       "persona-message-row-system",
+      "persona-message-row-operator",
       "persona-message-width-content",
       "persona-message-width-full"
     );
@@ -6248,6 +6255,10 @@ export const createAgentExperience = (
         ? findRetryableAssistantMessageId(messages)
         : null;
     const editEnabled = actionsCfg?.showEdit === true && actionsCfg.enabled !== false;
+    let lastOperatorIndex = -1;
+    messages.forEach((message, index) => {
+      if (message.role === "operator") lastOperatorIndex = index;
+    });
     const quoteEnabled = actionsCfg?.showQuote === true && actionsCfg.enabled !== false;
     /** The live editor, re-grafted into its morphed wrapper after the pass. */
     let editHydrate: { messageId: string; element: HTMLElement } | null = null;
@@ -6289,7 +6300,7 @@ export const createAgentExperience = (
       );
     };
 
-    messages.forEach((message) => {
+    messages.forEach((message, messageIndex) => {
       if (isDroppedCompletedRow(message)) {
         return;
       }
@@ -6356,7 +6367,7 @@ export const createAgentExperience = (
         isLastAssistant: message.id === lastAssistantId,
         canRegenerate: retryableAssistantId === message.id &&
           (actionsCfg?.showRegenerate === true || message.dispatchError === true),
-        canEdit: editEnabled && isEditableUserMessage(message),
+        canEdit: editEnabled && messageIndex > lastOperatorIndex && isEditableUserMessage(message),
         canQuote:
           quoteEnabled && !message.variant && (message.content?.trim().length ?? 0) > 0,
       };
@@ -10066,7 +10077,8 @@ export const createAgentExperience = (
   function beginMessageEdit(messageId: string): void {
     if (config.messageActions?.showEdit !== true) return;
     const message = session.getMessages().find((m) => m.id === messageId);
-    if (!message || !isEditableUserMessage(message)) return;
+    if (!message || !isEditableUserMessage(message) ||
+      !canResubmitUserMessage(session.getMessages(), messageId)) return;
     if (editingMessageId === messageId) return;
     cancelMessageEdit();
     editingMessageId = messageId;

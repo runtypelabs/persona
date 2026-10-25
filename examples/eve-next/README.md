@@ -94,3 +94,18 @@ pnpm --filter eve-next lint
 ```
 
 Offline tests cover streaming text, tool lifecycle ordering, failed and missing results, follow-up payloads, the current SDK session API, credential handling, error redaction, disconnected response consumers, all three preview documents, and invalid/live-disabled route requests. They do not claim to validate a paid model response or a deployed Eve runtime.
+
+## Human support replies
+
+For stateless operator history, install
+[`historicalOperatorContext`](../ai-sdk-next/app/lib/operator-context.ts) as the
+widget's `modelMessageTransform`. It maps human replies to attributed historical
+user context; omit it when server history already owns replay. See
+[context ownership](../../packages/widget/docs/MESSAGE-INJECTION.md#model-context-ownership)
+for preserving original UI roles and author identity.
+
+Each dispatch starts a fresh Eve session, and the adapter rejects
+`input.requested` because it has no pause/resume endpoint. Its transcript
+converter is text-only. Takeover, steering, question answers and approvals need
+separate backend control; see
+[run-control requirements](../../packages/widget/docs/MESSAGE-INJECTION.md#human-replies-and-run-control).

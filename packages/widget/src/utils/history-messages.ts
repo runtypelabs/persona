@@ -11,6 +11,7 @@ import type {
   AgentMessageMetadata,
   AgentWidgetMessage,
   AgentWidgetMessageRole,
+  AgentWidgetMessageAuthor,
   ContentPart,
 } from "../types";
 import {
@@ -24,6 +25,8 @@ import {
 
 /** One message as served by the client conversation history route. */
 export type HistoryWireMessage = {
+  /** Optional display provenance from a custom history adapter. */
+  author?: AgentWidgetMessageAuthor;
   id: string;
   role: string;
   /** Model content: string (legacy render-safe fallback) or multi-modal parts. */
@@ -61,7 +64,9 @@ type HistoryAgentMetadata = AgentMessageMetadata & {
   historyDisplayUnavailable?: true;
 };
 
-const WIDGET_ROLES: readonly string[] = ["user", "assistant", "system"];
+// `operator` never comes from the Runtype API, but a custom history provider
+// may return it for a human-takeover transcript.
+const WIDGET_ROLES: readonly string[] = ["user", "assistant", "system", "operator"];
 
 /** Anchor for a page with no real timestamps and no older bound. */
 const SYNTHETIC_EPOCH_MS = 0;
@@ -187,13 +192,19 @@ export function mapWireMessages(
     if (!WIDGET_ROLES.includes(message.role)) return;
     const role = message.role as AgentWidgetMessageRole;
     const createdAt = createdAtByIndex[index];
+    const provenance = message.author;
+    const author = provenance && typeof provenance === "object" ? {
+      ...(typeof provenance.id === "string" && { id: provenance.id }),
+      ...(typeof provenance.displayName === "string" && { displayName: provenance.displayName }),
+      ...(["human", "ai", "system"].includes(provenance.kind ?? "") && { kind: provenance.kind }),
+    } : undefined;
 
     // No reconstructable visible form: render nothing, mark the gap.
     if (message.displayAvailable === false) {
       const agentMetadata: HistoryAgentMetadata = {
         historyDisplayUnavailable: true,
       };
-      mapped.push({ id: message.id, role, content: "", createdAt, agentMetadata });
+      mapped.push({ id: message.id, role, ...(author && { author }), content: "", createdAt, agentMetadata });
       return;
     }
 
@@ -201,6 +212,7 @@ export function mapWireMessages(
       mapped.push({
         id: message.id,
         role,
+        ...(author && { author }),
         content: message.displayContent,
         createdAt,
       });
@@ -208,7 +220,7 @@ export function mapWireMessages(
     }
 
     if (typeof message.content === "string") {
-      mapped.push({ id: message.id, role, content: message.content, createdAt });
+      mapped.push({ id: message.id, role, ...(author && { author }), content: message.content, createdAt });
       return;
     }
 
@@ -220,6 +232,7 @@ export function mapWireMessages(
       mapped.push({
         id: message.id,
         role,
+        ...(author && { author }),
         content:
           text || (hasImages(parts) ? IMAGE_ONLY_MESSAGE_FALLBACK_TEXT : ""),
         createdAt,
@@ -228,7 +241,7 @@ export function mapWireMessages(
       return;
     }
 
-    mapped.push({ id: message.id, role, content: "", createdAt });
+    mapped.push({ id: message.id, role, ...(author && { author }), content: "", createdAt });
   });
 
   return mapped;
@@ -240,12 +253,17 @@ export function mapWireMessages(
  * content already IS the projection, so nothing extra needs sending.
  */
 export function divergentDisplayProjection(
-  message: AgentWidgetMessage
+  message: AgentWidgetMessage,
+  modelContent = message.contentParts ?? message.llmContent ?? message.rawContent ?? message.content
 ): string | undefined {
   const display = message.content;
-  if (typeof display !== "string" || display === "") return undefined;
-  const model =
-    message.contentParts ?? message.llmContent ?? message.rawContent ?? display;
+  if (typeof display !== "string") return undefined;
+  const originalModel = message.contentParts ?? message.llmContent ?? message.rawContent ?? display;
+  // Preserve legacy empty-display behavior unless a host conversion introduced
+  // new model-only content (for example attribution on a media-only human reply).
+  if (display === "" && (modelContent === originalModel ||
+    JSON.stringify(modelContent) === JSON.stringify(originalModel))) return undefined;
+  const model = modelContent;
   if (typeof model === "string" && model === display) return undefined;
   return display;
 }

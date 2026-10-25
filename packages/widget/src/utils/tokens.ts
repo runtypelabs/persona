@@ -258,6 +258,11 @@ const DEFAULT_SEMANTIC_BASE: SemanticTokens = {
   },
 };
 
+/** Operator bubble fill: the container tinted with the theme primary. */
+const OPERATOR_BACKGROUND = 'color-mix(in srgb, var(--persona-primary) 6%, var(--persona-container))';
+/** Operator bubble border: a stronger primary tint than the fill. */
+const OPERATOR_BORDER = 'color-mix(in srgb, var(--persona-primary) 20%, var(--persona-container))';
+
 const DEFAULT_COMPONENTS_BASE: ComponentTokens = {
   button: {
     primary: {
@@ -358,6 +363,16 @@ const DEFAULT_COMPONENTS_BASE: ComponentTokens = {
       text: 'semantic.colors.text',
       borderRadius: 'palette.radius.lg',
       border: 'semantic.colors.border',
+      shadow: 'palette.shadows.sm',
+    },
+    operator: {
+      // Operator role (human takeover): a primary-tinted container, so it
+      // reads apart from the assistant on the same side and follows `brand`.
+      background: OPERATOR_BACKGROUND,
+      text: 'semantic.colors.text',
+      borderRadius: 'palette.radius.lg',
+      border: OPERATOR_BORDER,
+      borderWidth: '1px',
       shadow: 'palette.shadows.sm',
     },
     border: 'semantic.colors.border',
@@ -652,6 +667,16 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
       background: 'transparent', border: 'transparent', borderWidth: '0px',
       borderRadius: '0px', shadow: 'none', padding: '0px',
       fontSize: '14px', lineHeight: '1.55',
+    },
+    // The V5 assistant is flat prose, so the operator keeps a bubble with the
+    // user bubble's V5 geometry to stay visibly distinct on the same side. It
+    // is outlined, not filled: the stock near-black primary tints a fill to
+    // the user bubble's gray, so identity never depends on the primary hue.
+    operator: {
+      ...DEFAULT_COMPONENTS_BASE.message.operator,
+      background: 'transparent', border: 'semantic.colors.border',
+      borderRadius: 'palette.radius.xl', shadow: 'none', padding: '8px 14px',
+      fontSize: '14px', lineHeight: '1.5',
     },
   },
   artifact: {
@@ -1513,6 +1538,11 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['message-assistant-font-size', 'components-message-assistant-fontSize'],
     ['message-assistant-font-family', 'components-message-assistant-fontFamily'],
     ['message-assistant-line-height', 'components-message-assistant-lineHeight'],
+    ['message-operator-padding', 'components-message-operator-padding'],
+    ['message-operator-max-width', 'components-message-operator-maxWidth'],
+    ['message-operator-font-size', 'components-message-operator-fontSize'],
+    ['message-operator-font-family', 'components-message-operator-fontFamily'],
+    ['message-operator-line-height', 'components-message-operator-lineHeight'],
   ]);
 
   // Icon button tokens
@@ -1712,6 +1742,7 @@ export const THEME_ZONES = {
   messages: 'Message list area',
   'user-message': 'User message bubble',
   'assistant-message': 'Assistant message bubble',
+  'operator-message': 'Operator message bubble',
   composer: 'Footer / composer area',
   container: 'Main widget container',
   'artifact-pane': 'Artifact sidebar',

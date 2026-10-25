@@ -33,6 +33,16 @@ export function findUserTurnBoundary(
   return { start, end };
 }
 
+/** Destructive resubmission must never remove a human operator contribution. */
+export function canResubmitUserMessage(
+  messages: readonly TurnBoundaryMessage[],
+  messageId: string
+): boolean {
+  const start = messages.findIndex(message => message.id === messageId);
+  return start >= 0 && messages[start].role === "user" &&
+    !messages.slice(start + 1).some(message => message.role === "operator");
+}
+
 /**
  * The user message that a retry of `messageId` (an assistant message) should
  * replay: the nearest preceding user message. Returns null when the assistant
@@ -45,6 +55,7 @@ export function findPrecedingUserMessageId(
   const index = messages.findIndex((message) => message.id === messageId);
   if (index <= 0) return null;
   for (let i = index - 1; i >= 0; i -= 1) {
+    if (messages[i].role === "operator") return null;
     if (messages[i].role === "user") return messages[i].id;
   }
   return null;
@@ -64,7 +75,7 @@ export function findRetryableAssistantMessageId(
 ): string | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
-    if (message.role === "user") return null;
+    if (message.role === "user" || message.role === "operator") return null;
     if (message.streaming) return null;
     if (message.role !== "assistant" || message.variant) continue;
     return findPrecedingUserMessageId(messages, message.id) ? message.id : null;

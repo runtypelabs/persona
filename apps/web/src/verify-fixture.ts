@@ -28,8 +28,8 @@ import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-hi
  * effects alongside screenshots. Not registered in examples-nav.
  */
 
-type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "internal-error" | "browser-history" | "turn-activity";
-const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "internal-error", "browser-history", "turn-activity"];
+type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "internal-error" | "browser-history" | "turn-activity" | "operator";
+const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "internal-error", "browser-history", "turn-activity", "operator"];
 
 const params = new URLSearchParams(window.location.search);
 const scenarioParam = params.get("scenario") ?? "echo";
@@ -298,6 +298,26 @@ const baseConfig: AgentWidgetConfig = {
     future: { v5Defaults: true },
     expansion: { animation: "height" as const, duration: 160 },
     turnActivity: { enabled: true },
+  } : {}),
+  ...(scenario === "operator" ? {
+    // Restored conversation supplied by the host, including an attachment-only
+    // human reply. Subsequent sends and message actions use the real widget UI.
+    initialMessages: [
+      { id: "operator-user", role: "user" as const, content: "Can you replace my damaged order?", createdAt: "2026-01-01T10:00:00Z" },
+      { id: "operator-assistant", role: "assistant" as const, content: "Let me check with support.", createdAt: "2026-01-01T10:00:01Z" },
+      { id: "operator-reply", role: "operator" as const, content: "I have approved your replacement.", author: { id: "support-sam", displayName: "Sam", kind: "human" as const }, createdAt: "2026-01-01T10:00:02Z" },
+      { id: "operator-file", role: "operator" as const, content: "", contentParts: [{ type: "file" as const, data: "data:text/plain;base64,UmVwbGFjZW1lbnQgYXBwcm92ZWQu", mimeType: "text/plain", filename: "replacement-receipt.txt" }], createdAt: "2026-01-01T10:00:03Z" },
+    ],
+    messageActions: {
+      enabled: true, showRegenerate: true, showEdit: true, visibility: "always" as const,
+      custom: [{
+        id: "delivery", label: "Delivery details", roles: ["operator" as const],
+        onSelect: (message: AgentWidgetMessage) => {
+          events.push({ at: now(), type: "fixture:delivery", detail: { messageId: message.id } });
+          status.textContent = `Delivery details: ${message.id}`;
+        },
+      }],
+    },
   } : {}),
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
   customFetch: async (url, init, payload) => {

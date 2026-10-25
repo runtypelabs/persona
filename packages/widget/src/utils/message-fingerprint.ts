@@ -10,6 +10,7 @@
 export type FingerprintableMessage = {
   id: string;
   role: string;
+  author?: { id?: string; displayName?: string; kind?: string };
   content: string;
   streaming?: boolean;
   dispatchError?: boolean;
@@ -65,6 +66,9 @@ export function computeMessageFingerprint(
   return [
     message.id,
     message.role,
+    message.author?.id ?? "",
+    message.author?.displayName ?? "",
+    message.author?.kind ?? "",
     message.content?.length ?? 0,
     message.content?.slice(-32) ?? "",
     message.streaming ? "1" : "0",

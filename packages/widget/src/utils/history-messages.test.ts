@@ -182,6 +182,17 @@ describe("mapWireMessages: role filtering", () => {
     ]);
     expect(mapped.map((message) => message.id)).toEqual(["a", "d", "e"]);
   });
+
+  it("keeps operator messages from a custom history provider", () => {
+    const mapped = mapWireMessages([
+      { id: "a", role: "user", content: "hi", displayAvailable: true },
+      { id: "b", role: "operator", content: "Sam from support", displayAvailable: true },
+    ]);
+    expect(mapped.map((message) => [message.id, message.role])).toEqual([
+      ["a", "user"],
+      ["b", "operator"],
+    ]);
+  });
 });
 
 describe("mapWireMessages: timestamp synthesis", () => {
@@ -280,5 +291,24 @@ describe("mergeWireMessagesById", () => {
       [{ id: "c", role: "user", content: "c", createdAt: at, sequence: 1 }]
     );
     expect(merged.map((message) => message.id)).toEqual(["a", "c", "b"]);
+  });
+});
+
+describe("custom history human provenance", () => {
+  it("discards malformed author fields from a JavaScript history provider", () => {
+    const [message] = mapWireMessages([{ id: "human", role: "operator", content: "Hello", displayAvailable: true,
+      author: { id: 42, displayName: null, kind: "admin" } as unknown as HistoryWireMessage["author"] }]);
+    expect(message.author).toEqual({});
+  });
+  it("preserves human identity with text and attachment histories", () => {
+    const author = { id: "sam", displayName: "Sam", kind: "human" as const };
+    const mapped = mapWireMessages([
+      { id: "human", role: "operator", content: "Refund confirmed", displayAvailable: true, author },
+      { id: "photo", role: "operator", content: [{ type: "image", image: "https://example.com/photo.png" }], displayAvailable: true, author },
+    ]);
+    expect(mapped.map(message => message.author)).toEqual([author, author]);
+    expect(mapped.map(message => message.role)).toEqual(["operator", "operator"]);
+    expect(mapped[1].contentParts).toEqual([{ type: "image", image: "https://example.com/photo.png" }]);
+    expect(mapped[0].author).not.toBe(author);
   });
 });

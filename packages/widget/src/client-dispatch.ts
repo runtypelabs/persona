@@ -1,7 +1,7 @@
 import { computeClientToolsFingerprint } from "./webmcp-bridge";
 import type { RuntypeClientInitResponse } from "./generated/runtype-openapi-contract";
 import type {
-  AgentWidgetMessage, AgentWidgetRequestPayload, AgentWidgetAgentRequestPayload,
+  AgentWidgetMessage, AgentWidgetModelMessageRole, AgentWidgetRequestPayload, AgentWidgetAgentRequestPayload,
   AgentWidgetContextProvider, AgentWidgetRequestMiddleware, AgentWidgetCustomFetch,
   ClientSession, ClientChatRequest, ComposerOptionsPayload, WidgetHistoryInternals, ClientFeedbackRequest, ClientFeedbackType, ClientToolDefinition,
 } from "./types";
@@ -49,6 +49,13 @@ export interface ClientDispatchHost extends ClientResumeHost {
   streamResponse: (body: ReadableStream<Uint8Array>, onEvent: SSEHandler, assistantMessageId?: string, seedContent?: string, signal?: AbortSignal) => Promise<void>;
 }
 
+/** A message whose role the model accepts. */
+type ModelMessage = AgentWidgetMessage & { role: AgentWidgetModelMessageRole };
+
+/**
+ * Whether a message belongs in a model request. Every payload builder gates on
+ * this before the host conversion hook, so local notices cannot enter context.
+ */
 const hasValidContent = (message: AgentWidgetMessage): boolean => {
   // Display-only voice captions are never conversation.
   if (message.voiceCaption) return false;
@@ -72,20 +79,37 @@ const hasValidContent = (message: AgentWidgetMessage): boolean => {
   return false;
 };
 
+/** Reject malformed JS/CDN hook results before constructing a network request. */
+const isModelContent = (content: unknown): boolean => {
+  if (typeof content === "string") return true;
+  if (!Array.isArray(content)) return false;
+  return content.every(part => {
+    if (!part || typeof part !== "object") return false;
+    switch (part.type) {
+      case "text": return typeof part.text === "string";
+      case "image": return typeof part.image === "string";
+      case "audio": return typeof part.audio === "string";
+      case "video": return typeof part.video === "string";
+      case "file": return typeof part.data === "string" && typeof part.mimeType === "string" && typeof part.filename === "string";
+      default: return false;
+    }
+  });
+};
+
 const sortByCreatedAt = (messages: AgentWidgetMessage[]): AgentWidgetMessage[] =>
   messages
     .slice()
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
 // Only replay explicit known assistant phase metadata; other widget metadata is private.
-const payloadPhase = (message: AgentWidgetMessage) => {
+const payloadPhase = (message: ModelMessage) => {
   const phase = message.agentMetadata?.providerPhase ?? message.agentMetadata?.phase;
   return message.role === "assistant" && (phase === "commentary" || phase === "partial_answer" || phase === "final_answer")
     ? { phase } : {};
 };
 
 // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
-const toPayloadMessage = (message: AgentWidgetMessage) => ({
+const toPayloadMessage = (message: ModelMessage) => ({
   role: message.role,
   content: message.contentParts ?? message.llmContent ?? message.rawContent ?? message.content,
   createdAt: message.createdAt,
@@ -480,7 +504,10 @@ export class ClientDispatch {
       }
 
       // Build the standard payload to get context/metadata from middleware
-      const basePayload = await this.#buildPayload(options.messages);
+      // Reuse the conversion: the hook runs once per transcript entry even
+      // though client-token dispatch also builds the middleware/context payload.
+      const modelMessages = new Map(sortByCreatedAt(options.messages).map(message => [message, this.#toModelMessage(message)]));
+      const basePayload = await this.#buildPayload(options.messages, undefined, modelMessages);
 
       // Build the chat request payload with message IDs for feedback tracking
       // Filter out sessionId from metadata if present (it's only for local storage)
@@ -495,19 +522,21 @@ export class ClientDispatch {
       const baseChatRequest: Omit<ClientChatRequest, 'clientTools' | 'clientToolsFingerprint'> = {
         sessionId: session.sessionId,
         // Filter out messages with empty content to prevent validation errors
-        messages: options.messages.filter(hasValidContent).map(m => {
+        messages: sortByCreatedAt(options.messages).flatMap(m => {
+          const projected = modelMessages.get(m);
+          if (!projected) return [];
           // The visitor-visible projection rides along only where it diverges
           // from the model channel, and only on the history-capable plane.
           const displayContent = historyCapable
-            ? divergentDisplayProjection(m)
+            ? divergentDisplayProjection(m, projected.content)
             : undefined;
-          return {
-            id: m.id, // Include message ID for tracking
-            role: m.role,
+          return [{
+            id: m.id, // Include original message identity for tracking
+            role: projected.role,
             // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
-            content: m.contentParts ?? m.llmContent ?? m.rawContent ?? m.content,
+            content: projected.content,
             ...(displayContent !== undefined && { displayContent }),
-          };
+          }];
         }),
         // Include pre-generated assistant message ID if provided
         ...(options.assistantMessageId && { assistantMessageId: options.assistantMessageId }),
@@ -888,6 +917,31 @@ export class ClientDispatch {
     return declared ? { ...agent, model: selected } : agent;
   }
 
+  #toModelMessage(message: AgentWidgetMessage): ReturnType<typeof toPayloadMessage> | null {
+    // These entries must never become model context, even through a host hook.
+    if (!hasValidContent(message)) return null;
+    const content = message.contentParts ?? message.llmContent ?? message.rawContent ?? message.content;
+    const modelMessage = message.role === "operator" ? null : toPayloadMessage(message as ModelMessage);
+    const transform = this.host.config.modelMessageTransform;
+    if (!transform) return modelMessage;
+    const result = transform({ message, content, modelMessage });
+    if (result === null) return null;
+    if (!result || typeof result !== "object" ||
+      !["user", "assistant", "system"].includes(result.role) ||
+      !isModelContent(result.content) ||
+      typeof result.createdAt !== "string") {
+      throw new TypeError("modelMessageTransform must return a supported model message or null");
+    }
+    // Only the established payload fields cross the wire. Host display metadata
+    // (including author) must be mapped intentionally into adapter model context.
+    return {
+      role: result.role,
+      content: result.content,
+      createdAt: result.createdAt,
+      ...(result.role === "assistant" && result.phase && { phase: result.phase }),
+    };
+  }
+
   async #buildAgentPayload(
     messages: AgentWidgetMessage[],
     composerOptions?: ComposerOptionsPayload
@@ -902,10 +956,8 @@ export class ClientDispatch {
     const normalizedMessages = serializeWithToolPairs(
       sortByCreatedAt(messages),
       (message) =>
-        hasValidContent(message) &&
-        (message.role === "user" || message.role === "assistant" || message.role === "system") &&
         (!message.variant || message.variant === "assistant")
-          ? toPayloadMessage(message)
+          ? this.#toModelMessage(message)
           : null
     );
 
@@ -947,7 +999,8 @@ export class ClientDispatch {
 
   async #buildPayload(
     messages: AgentWidgetMessage[],
-    composerOptions?: ComposerOptionsPayload
+    composerOptions?: ComposerOptionsPayload,
+    modelMessages?: Map<AgentWidgetMessage, ReturnType<typeof toPayloadMessage> | null>
   ): Promise<AgentWidgetRequestPayload> {
     // Filter out messages with empty content to prevent validation errors;
     // answered client-tool calls replay as paired toolCalls/toolResults
@@ -955,7 +1008,7 @@ export class ClientDispatch {
     // reads these, so the server stays the replay owner there.
     const normalizedMessages = serializeWithToolPairs(
       sortByCreatedAt(messages),
-      (message) => (hasValidContent(message) ? toPayloadMessage(message) : null)
+      (message) => modelMessages ? modelMessages.get(message) ?? null : this.#toModelMessage(message)
     );
 
     const routed = this.host.routing();

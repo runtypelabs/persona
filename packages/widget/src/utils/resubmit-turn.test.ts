@@ -128,3 +128,16 @@ describe("isEditableUserMessage", () => {
     expect(isEditableUserMessage({ role: "user", content: "" })).toBe(false);
   });
 });
+
+describe("operator retry boundaries", () => {
+  it("does not retry an assistant answer followed by a human reply", () => {
+    expect(findRetryableAssistantMessageId([
+      { id: "u", role: "user" }, { id: "a", role: "assistant" }, { id: "h", role: "operator" },
+    ])).toBeNull();
+  });
+  it("does not cross a human reply to locate the initiating user", () => {
+    const messages = [{ id: "u", role: "user" }, { id: "h", role: "operator" }, { id: "a", role: "assistant" }];
+    expect(findPrecedingUserMessageId(messages, "a")).toBeNull();
+    expect(findRetryableAssistantMessageId(messages)).toBeNull();
+  });
+});

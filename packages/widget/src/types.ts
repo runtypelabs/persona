@@ -616,7 +616,7 @@ export type AgentWidgetReplayedToolResult = {
  * from its own stored transcript there.
  */
 export type AgentWidgetRequestPayloadMessage = {
-  role: AgentWidgetMessageRole | "tool";
+  role: AgentWidgetModelMessageRole | "tool";
   content: MessageContent;
   createdAt: string;
   /** Optional assistant phase for backend adapters that replay provider history. */
@@ -1123,6 +1123,21 @@ export type AgentMessageMetadata = {
   };
 };
 
+/** Ordinary model context only; the serializer owns tool-call/result pairing. */
+export type AgentWidgetModelMessageProjection = Pick<AgentWidgetRequestPayloadMessage, "content" | "createdAt" | "phase"> & {
+  role: AgentWidgetModelMessageRole;
+};
+
+/** Synchronous, per-message conversion before any dispatch transport serializes history. */
+export type AgentWidgetModelMessageTransform = (context: {
+  /** Full UI transcript entry, including identity and human provenance. */
+  message: Readonly<AgentWidgetMessage>;
+  /** Resolved model content: contentParts > llmContent > rawContent > content. */
+  content: MessageContent;
+  /** Normal model projection; null for operator messages. Return null to omit. */
+  modelMessage: AgentWidgetModelMessageProjection | null;
+}) => AgentWidgetModelMessageProjection | null;
+
 export type AgentWidgetRequestMiddlewareContext = {
   payload: AgentWidgetRequestPayload;
   config: AgentWidgetConfig;
@@ -1391,7 +1406,7 @@ export type AgentWidgetMessageActionsConfig = {
 };
 
 /** Which roles a custom message action appears on. */
-export type AgentWidgetCustomMessageActionRole = "user" | "assistant";
+export type AgentWidgetCustomMessageActionRole = "user" | "assistant" | "operator";
 
 /** One host-contributed message action. */
 export type AgentWidgetCustomMessageAction = {
@@ -7191,6 +7206,11 @@ export type AgentWidgetAvatarConfig = {
   userAvatar?: string;
   /** URL or emoji for assistant avatar */
   assistantAvatar?: string;
+  /**
+   * URL or emoji for operator (human takeover) avatar. Defaults to the letter
+   * "O" on a neutral fill.
+   */
+  operatorAvatar?: string;
 };
 
 /**
@@ -7246,7 +7266,10 @@ export type AgentWidgetMessageLayoutConfig = {
   groupConsecutive?: boolean;
   /** Width behavior for user-authored message rows */
   user?: AgentWidgetMessageRoleLayout;
-  /** Width behavior for assistant-authored message rows and assistant UI variants */
+  /**
+   * Width behavior for assistant-authored message rows and assistant UI
+   * variants. Operator rows sit on the same side and use it too.
+   */
   assistant?: AgentWidgetMessageRoleLayout;
   /**
    * Custom renderer for user messages
@@ -8398,6 +8421,8 @@ export type AgentWidgetConfig = {
    */
   getHeaders?: AgentWidgetHeadersFunction;
   copy?: {
+    /** Visible and accessible label for human operator replies. @default "Human operator" */
+    operatorLabel?: string;
     /** @deprecated Use `welcome.title`. */
     welcomeTitle?: string;
     /** @deprecated Use `welcome.subtitle`. */
@@ -8590,6 +8615,16 @@ export type AgentWidgetConfig = {
    * See `docs/context-mentions-plan.md`.
    */
   contextMentions?: AgentWidgetContextMentionConfig;
+  /**
+   * Synchronous model-context conversion for each nonempty conversation entry.
+   * Runs on proxy, agent and client-token dispatch, after local-only notices and
+   * voice captions are excluded. By default operator messages are omitted;
+   * stateless adapters can explicitly map their historical human contributions
+   * into supported model roles. Do not replay contributions already owned by
+   * server history. This does not authorize steering, takeover or tool approval.
+   * Invalid return values fail dispatch. See docs/MESSAGE-INJECTION.md.
+   */
+  modelMessageTransform?: AgentWidgetModelMessageTransform;
   requestMiddleware?: AgentWidgetRequestMiddleware;
   actionParsers?: AgentWidgetActionParser[];
   actionHandlers?: AgentWidgetActionHandler[];
@@ -9093,7 +9128,25 @@ type ConfigPatch<T> = T extends (...args: never[]) => unknown
       ? { [K in keyof T]?: ConfigPatch<T[K]> }
       : T;
 
-export type AgentWidgetMessageRole = "user" | "assistant" | "system";
+/**
+ * Who authored a message.
+ *
+ * - `user`: the end user.
+ * - `assistant`: the agent (model output).
+ * - `system`: context for the model, rendered like an assistant row.
+ * - `operator`: a human speaking on the agent's side of the conversation, such
+ *   as a support agent who has taken over the thread. It renders on the
+ *   assistant's side with its own bubble style (`theme.components.message.operator`).
+ *   Operator messages are omitted from model requests by default. A stateless
+ *   adapter can explicitly convert them with `modelMessageTransform`.
+ */
+export type AgentWidgetMessageRole = "user" | "assistant" | "system" | "operator";
+
+/**
+ * Roles that reach a model request. Human operator UI entries must be explicitly
+ * converted to a supported model role by an adapter.
+ */
+export type AgentWidgetModelMessageRole = Exclude<AgentWidgetMessageRole, "operator">;
 
 export type AgentWidgetReasoning = {
   id: string;
@@ -9216,11 +9269,18 @@ export type AgentWidgetTurnActivityConfig = {
   }) => HTMLElement | string | null | undefined;
 };
 
+/** Display provenance, supplied by the host; never an authorization credential. */
+export type AgentWidgetMessageAuthor = {
+  id?: string;
+  displayName?: string;
+  kind?: "human" | "ai" | "system";
+};
+
 /**
  * Represents a message in the chat conversation.
  *
  * @property id - Unique message identifier
- * @property role - Message role: "user", "assistant", or "system"
+ * @property role - Message role: "user", "assistant", "system", or "operator"
  * @property content - Message text content (for display)
  * @property contentParts - Original multi-modal content parts (for API requests)
  * @property createdAt - ISO timestamp when message was created
@@ -9234,6 +9294,8 @@ export type AgentWidgetTurnActivityConfig = {
  *                      Useful for implementing voice-specific behaviors like auto-reactivation.
  */
 export type AgentWidgetMessage = {
+  /** Preserved by injection, history and persistence; not sent to models automatically. */
+  author?: AgentWidgetMessageAuthor;
   /** Opt-in whole-turn presentation metadata. Does not change model-visible content. */
   turnActivity?: AgentWidgetTurnActivity;
   id: string;
@@ -9388,10 +9450,13 @@ export type AgentWidgetMessage = {
  * }
  */
 export type InjectMessageOptions = {
+  /** Host-supplied display provenance. Does not grant model or backend authority. */
+  author?: AgentWidgetMessageAuthor;
   /** Mark assistant content as dispatch failure detail for `errorDisplay`. */
   dispatchError?: boolean;
   /**
-   * Message role: "assistant", "user", or "system"
+   * Message role: "assistant", "user", "system", or "operator". Operator
+   * messages are omitted from requests unless modelMessageTransform converts them.
    */
   role: AgentWidgetMessageRole;
 

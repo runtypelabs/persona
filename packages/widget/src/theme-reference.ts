@@ -144,6 +144,8 @@ export const THEME_TOKEN_DOCS = {
         user: 'background, text, borderRadius, shadow.',
         assistant:
           'background, text, borderRadius, border (optional), shadow (optional).',
+        operator:
+          'Human operator bubble (role "operator", e.g. a support takeover), on the assistant side. background (default: container tinted 6% with the primary), text (semantic.colors.text), borderRadius, border (container tinted 20% with the primary), borderWidth (1px), shadow, plus padding, maxWidth, fontSize, fontFamily, lineHeight. V5 outlines it instead: transparent background, semantic.colors.border border.',
       },
       markdown: {
         description: 'Markdown rendering in messages and artifact pane.',
@@ -325,7 +327,7 @@ export const THEME_TOKEN_DOCS = {
       header:
         '"default" | "minimal". Options: showIcon, showTitle, showSubtitle, showCloseButton, showClearChat.',
       messages:
-        '"bubble" | "flat" | "minimal". Options: groupConsecutive, avatar (show, position, userAvatar, assistantAvatar), timestamp (show, position).',
+        '"bubble" | "flat" | "minimal". Options: groupConsecutive, avatar (show, position, userAvatar, assistantAvatar, operatorAvatar), timestamp (show, position, format).',
     },
     statusIndicator: {
       description: 'Status text shown below the composer.',

@@ -43,12 +43,14 @@ async function observeMarkdown(page: Page) {
 function expectStableFormatting(frames: MarkdownFrame[]) {
   const final = frames[frames.length - 1].paragraph;
   expect(final.length).toBeGreaterThan(0);
-  for (const [frameIndex, frame] of frames.entries()) {
-    for (const [index, character] of frame.paragraph.entries()) {
-      expect(character, `Frame ${frameIndex}, character ${index}: ${frame.paragraph.map(item => item.char).join("")}`)
-        .toEqual(final[index]);
-    }
-  }
+  // Compare in plain code and assert once: one expect per character is a
+  // Playwright step each, and the Markdown sample records tens of thousands.
+  const same = (a: CharacterStyle, b: CharacterStyle | undefined) => !!b && a.char === b.char && a.weight === b.weight
+    && a.style === b.style && a.bold === b.bold && a.italic === b.italic && a.code === b.code;
+  const drift = frames.flatMap((frame, frameIndex) => frame.paragraph.flatMap((character, index) => same(character, final[index]) ? [] : [{
+    at: `Frame ${frameIndex}, character ${index}: ${frame.paragraph.map(item => item.char).join("")}`, character, final: final[index],
+  }]));
+  expect(drift.slice(0, 5)).toEqual([]);
 }
 
 for (const version of ["v4", "v5"]) {

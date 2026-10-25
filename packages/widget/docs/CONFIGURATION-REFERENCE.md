@@ -366,8 +366,8 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 | Property | Type | Description |
 | --- | --- | --- |
 | `layout` | `'bubble' \| 'flat' \| 'minimal'?` | Message style preset. Default: `'bubble'`. |
-| `avatar` | `{ show?, position?, userAvatar?, assistantAvatar? }?` | Avatar configuration. |
-| `timestamp` | `{ show?, position?, format? }?` | Timestamp configuration. |
+| `avatar` | `{ show?, position?, userAvatar?, assistantAvatar?, operatorAvatar? }?` | Avatar configuration. `operatorAvatar` is for `role: 'operator'` messages (default: the letter "O"). |
+| `timestamp` | `{ show?, position?, format? }?` | Timestamp configuration. Applies to every role; pass `format` for relative times. |
 | `groupConsecutive` | `boolean?` | Group consecutive messages from the same role. |
 | `renderUserMessage` | `(ctx: MessageRenderContext) => HTMLElement?` | Custom user message renderer. |
 | `renderAssistantMessage` | `(ctx: MessageRenderContext) => HTMLElement?` | Custom assistant message renderer. |
@@ -404,7 +404,7 @@ In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because 
 | `align` | `'left' \| 'center' \| 'right'?` | Horizontal alignment. Default: `'right'`. |
 | `layout` | `'pill-inside' \| 'row-inside'?` | Button layout style. Default: `'pill-inside'`. |
 | `onFeedback` | `(feedback: AgentWidgetMessageFeedback) => void?` | Callback on upvote/downvote. Called in addition to automatic submission with `clientToken`. |
-| `onCopy` | `(message: AgentWidgetMessage) => void?` | Callback on copy. Called in addition to automatic tracking with `clientToken`. |
+| `onCopy` | `(message: AgentWidgetMessage) => void?` | Callback on copy. Called in addition to automatic tracking with `clientToken` (operator messages are never reported). |
 
 **`loadingIndicator`**: `AgentWidgetLoadingIndicatorConfig`
 
@@ -974,7 +974,8 @@ when the two homes disagree, in debug mode or not. Removal waits for 5.0.
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `initialMessages` | `AgentWidgetMessage[]` | Seed the conversation transcript with initial messages. |
+| `initialMessages` | `AgentWidgetMessage[]` | Seed the conversation transcript with initial messages. `role` is `'user'`, `'assistant'`, `'system'` or `'operator'` (a human on the agent's side; omitted from model requests unless `modelMessageTransform` converts it). See [MESSAGE-INJECTION.md](./MESSAGE-INJECTION.md#operator-messages-human-replies). |
+| `modelMessageTransform` | `AgentWidgetModelMessageTransform` | Synchronously convert each eligible transcript entry into a supported model message or `null`. Receives the full UI message, resolved model content and nullable default projection. Operator entries default to omission; stateless adapters can opt into attributed historical human context. Runs on every dispatch transport after local-only/voice-caption exclusion. See [context ownership](./MESSAGE-INJECTION.md#model-context-ownership). |
 | `persistState` | `boolean \| AgentWidgetPersistStateConfig` | Persist widget state across page navigations. `true` uses defaults (sessionStorage). |
 | `storageAdapter` | `AgentWidgetStorageAdapter` | Custom storage adapter with `load()`, `save(state)`, and `clear()` methods. |
 | `onStateLoaded` | `(state: AgentWidgetStoredState) => AgentWidgetStoredState \| { state: AgentWidgetStoredState; open?: boolean }` | Transform state after loading from storage but before widget initialization. Return `{ state, open: true }` to also open the panel. |

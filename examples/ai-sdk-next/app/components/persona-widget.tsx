@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { historicalOperatorContext } from "../lib/operator-context";
 import { createAgentExperience, markdownPostprocessor, type AgentWidgetSuggestion } from "@runtypelabs/persona";
 
 const starters: AgentWidgetSuggestion[] = [
@@ -18,6 +19,7 @@ export function PersonaWidget({ apiUrl, conversationId, preview, onTitle }: Pers
     if (!host) return;
     const handle = createAgentExperience(host, {
       apiUrl,
+      modelMessageTransform: historicalOperatorContext,
       persistState: false,
       future: { v5Defaults: true },
       turnActivity: { enabled: true },

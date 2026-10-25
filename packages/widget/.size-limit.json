@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "167 kB",
+    "limit": "167.6 kB",
     "gzip": true
   },
   {
@@ -38,7 +38,7 @@
   {
     "name": "Opt-in · theme-editor headless subpath (theme-editor.js)",
     "path": "dist/theme-editor.js",
-    "limit": "40.5 kB",
+    "limit": "40.6 kB",
     "gzip": true
   },
   {
@@ -170,7 +170,7 @@
   {
     "name": "Lazy · history shell chunk (history-shell.js)",
     "path": "dist/history-shell.js",
-    "limit": "13.75 kB",
+    "limit": "13.8 kB",
     "gzip": true
   },
   {
@@ -212,7 +212,7 @@
   {
     "name": "Lazy · request construction and session initialization (client-dispatch.js)",
     "path": "dist/client-dispatch.js",
-    "limit": "5.5 kB",
+    "limit": "5.65 kB",
     "gzip": true
   },
   {
