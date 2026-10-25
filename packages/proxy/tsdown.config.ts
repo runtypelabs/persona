@@ -9,7 +9,7 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   report: false,
-  dts: { generator: "tsgo" },
+  dts: { generator: "tsgo", tsgo: { moduleUrl: import.meta.resolve("typescript-next") } },
   // Keep tsup's published names: `.js` / `.cjs` with `.d.ts` / `.d.cts`.
   outExtensions: ({ format }) => ({
     js: format === "cjs" ? ".cjs" : ".js",
