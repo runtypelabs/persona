@@ -108,7 +108,7 @@ binary KiB; Before is main c2e2bb1e):
 
 | Output | Before | After | Budget |
 | --- | ---: | ---: | ---: |
-| `dist/index.global.js` | 166.72 kB | 167.5 kB | 167 → 167.5 kB |
+| `dist/index.global.js` | 166.72 kB | 167.54 kB | 167 → 167.6 kB |
 | `dist/theme-editor.js` | 40.49 kB | 40.55 kB | 40.5 → 40.6 kB |
 | `dist/history-shell.js` | within 13.75 kB | 13.79 kB | 13.75 → 13.8 kB |
 | `dist/client-dispatch.js` | within 5.5 kB | 5.63 kB | 5.5 → 5.65 kB |
