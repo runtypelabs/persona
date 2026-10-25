@@ -8,6 +8,7 @@ import type { classify, presentation } from "./utils/turn-activity-display";
 export type TurnActivityDependencies = {
   group: typeof createActivityGroup;
   tools: (options: ActivityGroupOptions) => boolean;
+  breaksToolGroup: (message: AgentWidgetMessage) => boolean;
   classify: typeof classify;
   presentation: typeof presentation;
   hasExplicitThemeStyle: typeof hasExplicitThemeStyle;
@@ -73,8 +74,10 @@ export function render(options: ActivityGroupOptions, deps: TurnActivityDependen
   if (!config.turnActivity?.enabled) { if (!options.runActivity) states.delete(root); return false; }
   // The ordinary tool grouper sees one explicit identity at a time, so it can
   // never absorb another turn. All rendering and disclosure behavior is reused.
-  const lastTool = messages.filter(message => message.variant === "tool" && message.toolCall &&
-    !(options.dropCompletedToolCalls && message.toolCall?.status === "complete" && !message.toolCall.interrupted)).pop()?.id;
+  const visibleTools = messages.filter(message => message.variant === "tool" && message.toolCall &&
+    !(options.dropCompletedToolCalls && message.toolCall?.status === "complete" && !message.toolCall.interrupted));
+  const lastTool = visibleTools[visibleTools.length - 1]?.id;
+  const lastGroupedTool = visibleTools.filter(message => !deps.breaksToolGroup(message)).pop()?.id;
   const classification = new Map(messages.map(message => [message,
     deps.classify(message, config)]));
   let partition: AgentWidgetMessage[] = [];
@@ -87,7 +90,7 @@ export function render(options: ActivityGroupOptions, deps: TurnActivityDependen
       deps.tools({ ...options,
         config: { ...scoped, toolCall: { ...scoped.toolCall, renderGroupedSummary: renderGroupedSummary
           ? context => renderGroupedSummary({ ...context, config, streaming: options.streaming,
-            isLatestGroup: context.isLatestGroup && context.messages.some(message => message.id === lastTool) }) : undefined },
+            isLatestGroup: context.isLatestGroup && context.messages.some(message => message.id === lastGroupedTool) }) : undefined },
           turnActivity: { ...config.turnActivity, enabled: false } },
         messages: partition, streaming: options.streaming && partition.some(message => message.id === lastTool) });
     }
@@ -143,6 +146,7 @@ export function render(options: ActivityGroupOptions, deps: TurnActivityDependen
   const segments: { turn: Turn; firstId: string; wrappers: HTMLElement[] }[] = [];
   let segment: typeof segments[number] | undefined;
   for (const message of messages) {
+    if (deps.breaksToolGroup(message)) { segment = undefined; continue; }
     const row = rows.get(message.id) ?? rows.get(`tool-group-${message.id}`);
     if (!row) continue;
     const metadata = classification.get(message);

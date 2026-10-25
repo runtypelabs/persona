@@ -7,6 +7,14 @@ import { createElement } from "./utils/dom";
 import { applyLoadingLabel } from "./utils/loading-label-deps";
 import { summarizeToolActivity, groupActivityIcon } from "./utils/tool-activity-summary";
 import { activityLayout, createActivityGroup, type createActivityLifecycle } from "./components/activity-row";
+import type { ASK_USER_QUESTION_TOOL_NAME } from "./components/ask-user-question-bubble";
+
+// Typed against the bubble's constant without bundling that module (and partial-json) into this chunk.
+const askUserQuestionTool: typeof ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
+
+/** A question waiting on the person stays a top-level row and ends any tool group. */
+export const breaksToolGroup = (message: AgentWidgetMessage): boolean =>
+  message.variant === "tool" && message.toolCall?.name === askUserQuestionTool;
 
 /** Group visible tool rows only after the activity renderer has loaded. */
 export type ActivityGroupOptions = {
@@ -31,7 +39,7 @@ export function groupToolRows(options: ActivityGroupOptions) {
 
   const renderTurn = turnUi.render;
   if (config.turnActivity?.enabled && renderTurn) return renderTurn(options,
-    { group: createActivityGroup, tools: groupToolRows, classify, presentation, hasExplicitThemeStyle: getActivityStyles().hasExplicitThemeStyle });
+    { group: createActivityGroup, tools: groupToolRows, breaksToolGroup, classify, presentation, hasExplicitThemeStyle: getActivityStyles().hasExplicitThemeStyle });
   const display = config.features?.toolCallDisplay;
   if (display?.grouped) {
     const toolGroups: AgentWidgetMessage[][] = [];
@@ -47,7 +55,7 @@ export function groupToolRows(options: ActivityGroupOptions) {
     };
 
     messages.forEach((message) => {
-      if (message.variant === "tool" && message.toolCall && showToolCalls) {
+      if (message.variant === "tool" && message.toolCall && showToolCalls && !breaksToolGroup(message)) {
         // A tool call hidden by `completedVisibility: "removed"` does not
         // create a visible break in the transcript, so it should not split
         // an otherwise contiguous group.
