@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "167.2 kB",
+    "limit": "167.5 kB",
     "gzip": true
   },
   {
@@ -170,7 +170,7 @@
   {
     "name": "Lazy · history shell chunk (history-shell.js)",
     "path": "dist/history-shell.js",
-    "limit": "13.75 kB",
+    "limit": "13.8 kB",
     "gzip": true
   },
   {
@@ -212,7 +212,7 @@
   {
     "name": "Lazy · request construction and session initialization (client-dispatch.js)",
     "path": "dist/client-dispatch.js",
-    "limit": "5.5 kB",
+    "limit": "5.65 kB",
     "gzip": true
   },
   {

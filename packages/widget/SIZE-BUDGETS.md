@@ -108,9 +108,16 @@ binary KiB; Before is main c2e2bb1e):
 
 | Output | Before | After | Budget |
 | --- | ---: | ---: | ---: |
-| `dist/index.global.js` | 166.72 kB | 167.19 kB | 167 → 167.2 kB |
+| `dist/index.global.js` | 166.72 kB | 167.5 kB | 167 → 167.5 kB |
 | `dist/theme-editor.js` | 40.49 kB | 40.55 kB | 40.5 → 40.6 kB |
+| `dist/history-shell.js` | within 13.75 kB | 13.79 kB | 13.75 → 13.8 kB |
+| `dist/client-dispatch.js` | within 5.5 kB | 5.63 kB | 5.5 → 5.65 kB |
 | `dist/widget.css` (Brotli) | 19.99 KiB | 20.07 KiB | 20 → 20.1 KiB |
 
+The `history-shell.js` and `client-dispatch.js` raises, and most of the
+`index.global.js` one, come from operator provenance (`author`,
+`copy.operatorLabel`), the `modelMessageTransform` hook and its result
+validation, and keeping operator replies through retry and edit.
+
 `widget.css` stays within its 24.5 kB gzip budget (24.23 → 24.32 kB), and
-`index.global.js` stays within its 133 KiB Brotli budget (132.62 KiB).
+`index.global.js` stays within its 133 KiB Brotli budget (132.91 KiB).
