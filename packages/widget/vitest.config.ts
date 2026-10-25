@@ -72,7 +72,7 @@ export default defineConfig({
     },
   },
   test: {
-    maxWorkers: 4,
+    maxWorkers: process.env.CI ? 2 : 4,
     globals: true,
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
