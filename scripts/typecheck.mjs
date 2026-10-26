@@ -1,5 +1,5 @@
-// Typechecks with tsrs, falling back to tsgo on platforms tsrs ships no
-// binary for (Windows, Intel macOS). Arguments are passed through.
+// Typechecks with tsrs, falling back to tsgo if no matching platform binary
+// is installed. Arguments are passed through.
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 
