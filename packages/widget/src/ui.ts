@@ -295,6 +295,7 @@ import {
   resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
 import { isShortReasoning } from "./utils/formatting";
+import { isStandaloneTool, rendersAsQuestion } from "./utils/standalone-tool";
 import { loadApprovalUi, getApprovalUiSync, type ApprovalUiModule } from "./approval-ui-loader";
 import { getWebMcpToolDisplayTitle } from "./webmcp-bridge";
 import type { AgentWidgetPlugin } from "./plugins/types";
@@ -6292,11 +6293,14 @@ export const createAgentExperience = (
       ) {
         return dropReasoningRow(message.reasoning);
       }
+      // A question is marked complete as soon as it starts waiting on the
+      // person, so standalone tools are never removed, pending or answered.
       return (
         dropCompletedToolCalls &&
         message.variant === "tool" &&
         message.toolCall?.status === "complete" &&
-        !message.toolCall.interrupted
+        !message.toolCall.interrupted &&
+        !isStandaloneTool(message, config)
       );
     };
 
@@ -6502,10 +6506,7 @@ export const createAgentExperience = (
         return;
       }
 
-      if (
-        isAskUserQuestionMessage(message) &&
-        config.features?.askUserQuestion?.enabled !== false
-      ) {
+      if (rendersAsQuestion(message, config)) {
         const askPlugin = plugins.find((p) => typeof p.renderAskUserQuestion === "function");
         if (askPlugin && sessionRef.current) {
           const lastFp = lastAskBubbleFingerprint.get(message.id);
@@ -6978,9 +6979,8 @@ export const createAgentExperience = (
       !(msg.toolCall?.id && liveAskToolIds.has(msg.toolCall.id)) &&
       !askPluginHydrate.some((entry) => entry.messageId === msg.id);
     const isHiddenActivityRow = (msg: AgentWidgetMessage): boolean =>
-      isAskUserQuestionMessage(msg) &&
-      msg.agentMetadata?.askUserQuestionAnswered !== true &&
-      config.features?.askUserQuestion?.enabled !== false
+      rendersAsQuestion(msg, config) &&
+      msg.agentMetadata?.askUserQuestionAnswered !== true
         ? isUnrenderedAskRow(msg)
         : (msg.variant === "tool" && !showToolCalls) ||
           (msg.variant === "reasoning" && !showReasoning) ||

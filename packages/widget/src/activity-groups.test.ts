@@ -265,9 +265,12 @@ it.each(['summary', 'stack', 'collapsible'] as const)('supports current-action o
 describe.each(['summary', 'stack', 'collapsible'] as const)('ask_user_question rows in %s tool groups', mode => {
   const question = (id: string, answered = false): AgentWidgetMessage => ({ ...tool(id),
     agentMetadata: { askUserQuestionAnswered: answered }, toolCall: { id, name: ASK_USER_QUESTION_TOOL_NAME, status: 'complete', chunks: [] } });
-  const grouped = (messages: AgentWidgetMessage[]) => {
+  const grouped = (messages: AgentWidgetMessage[], extra: { askUserQuestion?: { enabled: boolean }; removed?: boolean } = {}) => {
     const summary = vi.fn<NonNullable<NonNullable<AgentWidgetConfig['toolCall']>['renderGroupedSummary']>>(() => null);
-    const node = render(messages, { ...config(mode, 'adjacent'), toolCall: { renderGroupedSummary: summary } }, true, messages.map(message => message.id));
+    const settings: AgentWidgetConfig = { ...config(mode, 'adjacent'), toolCall: { renderGroupedSummary: summary } };
+    if (extra.askUserQuestion) settings.features!.askUserQuestion = extra.askUserQuestion;
+    if (extra.removed) settings.features!.toolCallDisplay!.completedVisibility = 'removed';
+    const node = render(messages, settings, true, messages.map(message => message.id));
     return { node, summary, groups: summary.mock.calls.map(([context]) => context.messages.map(message => message.id)) };
   };
   const topLevel = (node: HTMLElement, id: string) => expect(node.querySelector(`[data-wrapper-id="${id}"]`)?.parentElement).toBe(node);
@@ -303,28 +306,50 @@ describe.each(['summary', 'stack', 'collapsible'] as const)('ask_user_question r
   it('still groups ordinary consecutive tool calls', () => {
     expect(grouped([tool('a'), tool('b'), tool('c')]).groups).toEqual([['a', 'b', 'c']]);
   });
+
+  it('groups a question like any tool call when the feature is off', () => {
+    const { node, groups } = grouped([tool('a'), tool('b'), question('q'), tool('c')], { askUserQuestion: { enabled: false } });
+    expect(groups).toEqual([['a', 'b', 'q', 'c']]);
+    // Summary mode folds every grouped row into its one-line summary.
+    expect(node.querySelector(mode === 'summary' ? '[data-wrapper-id="q"]' : '[data-persona-tool-group-row] [data-wrapper-id="q"]'))[mode === 'summary' ? 'toBeNull' : 'toBeTruthy']();
+  });
+
+  it.each([true, false])('under completedVisibility "removed", keeps the completed question only while it renders as a question (enabled: %s)', enabled => {
+    const running = (id: string) => { const message = tool(id); message.toolCall!.status = 'running'; return message; };
+    const { groups } = grouped([running('a'), running('b'), question('q'), running('c'), running('d')],
+      { askUserQuestion: { enabled }, removed: true });
+    expect(groups).toEqual(enabled ? [['a', 'b'], ['c', 'd']] : [['a', 'b', 'c', 'd']]);
+  });
 });
 
-it('keeps ask_user_question rows outside turn activity disclosures and tool groups', async () => {
-  const turn = await import('./turn-activity-ui');
-  const { turnUi } = await import('./activity-ui'); turnUi.render = turn.render;
+describe('ask_user_question rows in turn activity', () => {
   const progress = (message: AgentWidgetMessage) => ({ ...message, turnActivity: { id: 'turn', kind: 'progress' as const } });
   const question: AgentWidgetMessage = progress({ ...tool('q'), toolCall: { id: 'q', name: ASK_USER_QUESTION_TOOL_NAME, status: 'complete', chunks: [] } });
-  const renderTurn = (messages: AgentWidgetMessage[]) => {
+  const renderTurn = async (messages: AgentWidgetMessage[], features?: AgentWidgetConfig['features']) => {
+    const turn = await import('./turn-activity-ui');
+    const { turnUi } = await import('./activity-ui'); turnUi.render = turn.render;
     const summary = vi.fn<NonNullable<NonNullable<AgentWidgetConfig['toolCall']>['renderGroupedSummary']>>(() => null);
     const tempContainer = document.createElement('div');
     const createMessageRow = (id: string) => { const row = document.createElement('div'); row.dataset.wrapperId = id; return row; };
     for (const message of messages) tempContainer.append(createMessageRow(message.id));
-    groupToolRows({ root: tempContainer, config: { turnActivity: { enabled: true }, toolCall: { renderGroupedSummary: summary } }, messages, tempContainer, streaming: true,
+    groupToolRows({ root: tempContainer, config: { features, turnActivity: { enabled: true }, toolCall: { renderGroupedSummary: summary } }, messages, tempContainer, streaming: true,
       runActivity: { run: { runId: 'run', timestamp: Date.now() }, messageIds: new Set(messages.map(message => message.id)) },
       showToolCalls: true, showReasoning: false, dropCompletedToolCalls: false, dropReasoningRow: () => false, createMessageRow,
       activityIds: new Set(), activityLifecycle: createActivityLifecycle(() => {}), toolExpansionState: new Set() });
-    expect(tempContainer.querySelector('[data-wrapper-id="q"]')?.parentElement).toBe(tempContainer);
-    return { disclosures: tempContainer.querySelectorAll('[data-persona-turn-activity]').length,
+    return { topLevel: tempContainer.querySelector('[data-wrapper-id="q"]')?.parentElement === tempContainer,
+      disclosures: tempContainer.querySelectorAll('[data-persona-turn-activity]').length,
       groups: summary.mock.calls.map(([context]) => [context.messages.map(message => message.id), context.isLatestGroup]) };
   };
-  expect(renderTurn([progress(tool('a')), progress(tool('b')), question, progress(tool('c')), progress(tool('d'))]))
-    .toEqual({ disclosures: 2, groups: [[['a', 'b'], false], [['c', 'd'], true]] });
-  expect(renderTurn([progress(tool('a')), progress(tool('b')), question]))
-    .toEqual({ disclosures: 1, groups: [[['a', 'b'], true]] });
+
+  it('keeps ask_user_question rows outside turn activity disclosures and tool groups', async () => {
+    expect(await renderTurn([progress(tool('a')), progress(tool('b')), question, progress(tool('c')), progress(tool('d'))]))
+      .toEqual({ topLevel: true, disclosures: 2, groups: [[['a', 'b'], false], [['c', 'd'], true]] });
+    expect(await renderTurn([progress(tool('a')), progress(tool('b')), question]))
+      .toEqual({ topLevel: true, disclosures: 1, groups: [[['a', 'b'], true]] });
+  });
+
+  it('keeps a question rendered as a tool card inside the turn when the feature is off', async () => {
+    expect(await renderTurn([progress(tool('a')), progress(tool('b')), question, progress(tool('c'))], { askUserQuestion: { enabled: false } }))
+      .toEqual({ topLevel: false, disclosures: 1, groups: [[['a', 'b', 'q', 'c'], true]] });
+  });
 });
