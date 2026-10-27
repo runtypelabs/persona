@@ -72,7 +72,7 @@ it("keeps a manual close/open choice through streaming and completion", async ()
 
 it.each([
   ["instant", false], ["height", false], ["instant", true], ["height", true],
-] as const)("anchors the turn header through %s collapse (reader scrolled: %s)", async (animation, readerScrolled) => {
+] as const)("keeps a long user prompt anchored through %s collapse (reader scrolled: %s)", async (animation, readerScrolled) => {
   // Vitest's global performance and JSDOM frame timestamps can have different
   // origins. Match the browser's shared clock so the 220ms ease stays bounded.
   const requestFrame = globalThis.requestAnimationFrame;
@@ -83,9 +83,9 @@ it.each([
     scrollHeight: { configurable: true, get: () => 3000 },
     clientHeight: { configurable: true, get: () => 400 },
   });
-  // A long user prompt strands the first progress block below the viewport.
-  // Its text is inset from the disclosure header by 44px. Anchoring the text
-  // would put the header 28px above the viewport (644 - 16 vs 600).
+  // A long user prompt puts the first progress block below the viewport. The
+  // prompt keeps the anchor (100 - 16): the disclosure streaming in and
+  // folding away below the fold never moves the reader to its header.
   vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
     if (this.hasAttribute("data-persona-turn-activity")) return 600;
     if (this.closest("[data-persona-turn-activity]")) return 644;
@@ -93,7 +93,7 @@ it.each([
     return 0;
   });
   await start(); await text("p", "Investigating the issue.");
-  await vi.waitFor(() => expect(body.scrollTop).toBe(584));
+  await vi.waitFor(() => expect(body.scrollTop).toBe(84));
   if (readerScrolled) {
     body.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true }));
     body.scrollTop = 800;
@@ -101,9 +101,9 @@ it.each([
   await text("answer", "The answer stays below the header.", "final");
   push("execution_complete", { kind: "agent", success: true }); close();
   await vi.waitFor(() => expect(header().getAttribute("aria-expanded")).toBe("false"));
-  expect(body.scrollTop).toBe(readerScrolled ? 800 : 584);
+  expect(body.scrollTop).toBe(readerScrolled ? 800 : 84);
 
-  // Later render/resize passes must not pull a reader back to the header.
+  // Later render/resize passes must not pull a reader back to the prompt.
   body.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true }));
   body.scrollTop = 800;
   controller.update({ expansion: { animation, duration: 120 } });

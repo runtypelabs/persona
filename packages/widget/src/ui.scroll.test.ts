@@ -1366,6 +1366,19 @@ describe("createAgentExperience streaming scroll", () => {
     expect(spacer?.style.height).toBe("0px");
     expect(spacer?.style.display).toBe("none");
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+    const releasedAt = metrics.getScrollTop();
+
+    // Later streaming, resizes, and stream end must not reinstate the anchor
+    // or its spacer.
+    metrics.setScrollHeight(1500);
+    emitStreamingMessage(controller, "Streaming response, now longer still");
+    raf.flush();
+    resize.trigger();
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    raf.flush();
+    expect(spacer?.style.height).toBe("0px");
+    expect(spacer?.style.display).toBe("none");
+    expect(metrics.getScrollTop()).toBe(releasedAt);
 
     controller.destroy();
   });
@@ -1504,9 +1517,9 @@ describe("createAgentExperience streaming scroll", () => {
     }
   });
 
-  it("anchor-top hands off to the first unread block only when it starts below the fold", () => {
+  it("anchor-top keeps a user message taller than the viewport anchored as the reply arrives", () => {
     const raf = installRafMock();
-    installResizeObserverMock();
+    const resize = installResizeObserverMock();
     const mount = createMount();
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",
@@ -1517,34 +1530,87 @@ describe("createAgentExperience streaming scroll", () => {
     } as any);
 
     const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    // Earlier history fills 0..100; the new question spans 100..1082, more
+    // than twice the 400px viewport.
     const metrics = installScrollMetrics(scrollContainer!, {
-      scrollHeight: 1600,
+      scrollHeight: 1100,
       clientHeight: 400
     });
 
     emitStreamingStatus(controller);
-    emitUserMessage(controller, "user-strand", "Very long question");
+    emitUserMessage(controller, "user-tall", "Very long question ".repeat(200));
     const bubble = scrollContainer!.querySelector<HTMLElement>(
-      '[data-message-id="user-strand"]'
+      '[data-message-id="user-tall"]'
     );
     Object.defineProperty(bubble!, "offsetTop", { value: 100 });
+    Object.defineProperty(bubble!, "offsetHeight", { value: 982 });
     raf.flush();
     expect(metrics.getScrollTop()).toBe(84);
 
-    // The reply's first block starts 500px below the user message: with the
-    // user message pinned it would sit past the fold (16 + 500 > 400 - 96),
-    // so the anchor hands off to the block: target = 600 - 16 = 584. This is
-    // the stranded case the handoff exists for (tall send / tool prelude).
+    // The reply's first block starts 1000px below the question's top, entirely
+    // below the fold. The question keeps the anchor: the reader can finish
+    // reading it, and the jump control says there is output below.
     emitStreamingMessage(controller, "Streaming response");
-    // Streaming updates render on the next animation frame.
     raf.step(1);
     const streamBubble = scrollContainer!.querySelector<HTMLElement>(
       `[data-message-id="${STREAM_MESSAGE_ID}"]`
     );
-    Object.defineProperty(streamBubble!, "offsetTop", { value: 600 });
-    emitStreamingMessage(controller, "Streaming response, longer");
+    Object.defineProperty(streamBubble!, "offsetTop", { value: 1100 });
+    for (const [height, text] of [
+      [1300, "Streaming response, longer"],
+      [1600, "Streaming response, longer still"],
+      [2000, "Streaming response, longer still, with more detail"]
+    ] as const) {
+      metrics.setScrollHeight(height);
+      emitStreamingMessage(controller, text);
+      raf.flush();
+      resize.trigger();
+      expect(metrics.getScrollTop()).toBe(84);
+    }
+
+    const jump = getScrollToBottomButton(mount)!;
+    expect(jump.style.display).toBe("");
+    expect(jump.getAttribute("data-persona-scroll-to-bottom-visible")).toBe("true");
+
+    // Completion does not hand off either.
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: STREAM_MESSAGE_ID,
+        role: "assistant",
+        content: "Streaming response, complete",
+        createdAt: STREAM_CREATED_AT,
+        streaming: false
+      }
+    });
+    controller.injectTestMessage({ type: "status", status: "idle" });
     raf.flush();
-    expect(metrics.getScrollTop()).toBe(584);
+    expect(metrics.getScrollTop()).toBe(84);
+
+    // The jump control reveals the answer and releases the anchor.
+    jump.click();
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+    const releasedAt = metrics.getScrollTop();
+
+    // Later renders and resizes never pull the reader back to the question.
+    emitStreamingStatus(controller);
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "ast-follow-up",
+        role: "assistant",
+        content: "A follow-up block",
+        createdAt: STREAM_CREATED_AT,
+        streaming: true
+      }
+    });
+    metrics.setScrollHeight(2300);
+    raf.flush();
+    resize.trigger();
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(releasedAt);
 
     controller.destroy();
   });
