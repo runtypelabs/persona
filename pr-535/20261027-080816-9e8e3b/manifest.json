@@ -1,0 +1,182 @@
+{
+  "runId": "20261027-080816-9e8e3b",
+  "entries": [
+    {
+      "feature": "anchor-top",
+      "label": "pinned after reply completes",
+      "note": "637px question in a 508px transcript stays 16px from the top; jump-to-latest visible",
+      "files": [
+        "02-anchor-top-pinned-after-reply-completes.png",
+        "02-anchor-top-pinned-after-reply-completes.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&delayMs=60&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:15:49.368Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "long message stays pinned while the answer grows",
+      "note": null,
+      "files": [
+        "01-anchor-top-long-message-stays-pinned-while-the-answer-grows.gif",
+        "01-anchor-top-long-message-stays-pinned-while-the-answer-grows.webm",
+        "01-anchor-top-long-message-stays-pinned-while-the-answer-grows.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&delayMs=60&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:16:06.764Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "jump-to-latest reveals the answer",
+      "note": "after clicking Jump to latest: scrolled to the end of the answer, control hidden",
+      "files": [
+        "03-anchor-top-jump-to-latest-reveals-the-answer.png",
+        "03-anchor-top-jump-to-latest-reveals-the-answer.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&delayMs=60&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:16:07.765Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "long message side effects",
+      "note": "1 request(s) crossed the network boundary, 5 controller event(s)",
+      "files": [
+        "04-anchor-top-long-message-side-effects.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&delayMs=60&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:16:21.388Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "tool reply below the fold, question still pinned",
+      "note": "490px question + tool bubble; answer starts at 571px in a 508px transcript; question stays 16px from top; jump-to-latest visible",
+      "files": [
+        "06-anchor-top-tool-reply-below-the-fold-question-still-pinned.png",
+        "06-anchor-top-tool-reply-below-the-fold-question-still-pinned.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:18:25.418Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "tool-heavy reply does not force a handoff",
+      "note": null,
+      "files": [
+        "05-anchor-top-tool-heavy-reply-does-not-force-a-handoff.gif",
+        "05-anchor-top-tool-heavy-reply-does-not-force-a-handoff.webm",
+        "05-anchor-top-tool-heavy-reply-does-not-force-a-handoff.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:18:33.721Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "jump-to-latest reveals the tool answer",
+      "note": null,
+      "files": [
+        "07-anchor-top-jump-to-latest-reveals-the-tool-answer.png",
+        "07-anchor-top-jump-to-latest-reveals-the-tool-answer.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:18:34.800Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "tool reply side effects",
+      "note": "1 request(s) crossed the network boundary, 6 controller event(s)",
+      "files": [
+        "08-anchor-top-tool-reply-side-effects.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:18:35.733Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "reader position held through the rest of the stream",
+      "note": "after PageDown mid-stream, scrollTop stays 354 while content grows 862->1201px",
+      "files": [
+        "10-anchor-top-reader-position-held-through-the-rest-of-the-str.png",
+        "10-anchor-top-reader-position-held-through-the-rest-of-the-str.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&delayMs=80&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:21:46.684Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "manual navigation is respected, next send re-anchors",
+      "note": null,
+      "files": [
+        "09-anchor-top-manual-navigation-is-respected-next-send-re-anch.gif",
+        "09-anchor-top-manual-navigation-is-respected-next-send-re-anch.webm",
+        "09-anchor-top-manual-navigation-is-respected-next-send-re-anch.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&delayMs=80&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:22:32.988Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "next send creates a new anchor",
+      "note": "second question rests 16px from the top",
+      "files": [
+        "11-anchor-top-next-send-creates-a-new-anchor.png",
+        "11-anchor-top-next-send-creates-a-new-anchor.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&delayMs=80&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:22:33.890Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "manual navigation side effects",
+      "note": "2 request(s) crossed the network boundary, 10 controller event(s)",
+      "files": [
+        "12-anchor-top-manual-navigation-side-effects.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&delayMs=80&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:22:34.777Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "c83cf7cc8c55"
+    },
+    {
+      "feature": "anchor-top",
+      "label": "BEFORE (origin/main): tool reply hands off and scrolls the question away",
+      "note": "same input on origin/main 465d95e: anchor jumps to the answer",
+      "files": [
+        "13-anchor-top-before-origin-main-tool-reply-hands-off-and-scro.png",
+        "13-anchor-top-before-origin-main-tool-reply-hands-off-and-scro.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool&delayMs=250&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-27T08:23:04.277Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "a43adb5621cd"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "anchor-top",
+      "pass": false,
+      "skipped": true,
+      "note": "launcher mode not driven; inline fixture with launcher.fullHeight=true so the transcript scrolls inside the 760px host"
+    }
+  ]
+}

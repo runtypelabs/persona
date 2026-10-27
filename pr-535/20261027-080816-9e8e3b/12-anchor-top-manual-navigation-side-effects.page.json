@@ -1,0 +1,164 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 11557,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Paragraph 1: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 2: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 3: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 4: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 5: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 6: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 7: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 8: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 9: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review.",
+            "createdAt": "2026-10-27T08:21:15.371Z"
+          }
+        ]
+      }
+    },
+    {
+      "at": 44453,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Paragraph 1: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 2: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 3: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 4: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 5: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 6: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 7: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 8: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 9: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review.",
+            "createdAt": "2026-10-27T08:21:15.371Z"
+          },
+          {
+            "role": "assistant",
+            "content": "You said: **Paragraph 1: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 2: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 3: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 4: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 5: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 6: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 7: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 8: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 9: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review.**. This reply is scripted by the verify fixture.",
+            "createdAt": "2026-10-27T08:21:15.744Z"
+          },
+          {
+            "role": "user",
+            "content": "Second question: which item on that checklist takes longest?",
+            "createdAt": "2026-10-27T08:21:48.305Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 11509,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793089275370
+      }
+    },
+    {
+      "at": 11510,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvqf23mz_unpvl8ot",
+        "timestamp": 1793089275371
+      }
+    },
+    {
+      "at": 11530,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvqf23mz_lha7tckf",
+        "role": "user",
+        "content": "Paragraph 1: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 2: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 3: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 4: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 5: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 6: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 7: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 8: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 9: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review.",
+        "createdAt": "2026-10-27T08:21:15.371Z",
+        "sequence": 1793089263954,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 29077,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1793089275744-cc202a58e1bfe",
+        "role": "assistant",
+        "content": "You said: **Paragraph 1: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 2: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 3: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 4: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 5: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 6: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 7: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 8: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 9: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review.**. This reply is scripted by the verify fixture.",
+        "createdAt": "2026-10-27T08:21:15.744Z",
+        "streaming": false,
+        "sequence": 1793089275424,
+        "agentMetadata": {
+          "textBlockId": "turn-1-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 29241,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvqf23mz_unpvl8ot",
+        "timestamp": 1793089293101,
+        "outcome": "success"
+      }
+    },
+    {
+      "at": 44444,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793089308305
+      }
+    },
+    {
+      "at": 44444,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvqf2t1t_zuqc1s3v",
+        "timestamp": 1793089308305
+      }
+    },
+    {
+      "at": 44448,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvqf2t1t_0wh024q3",
+        "role": "user",
+        "content": "Second question: which item on that checklist takes longest?",
+        "createdAt": "2026-10-27T08:21:48.305Z",
+        "sequence": 1793089263955,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 46482,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1793089308642-0a7a0d100ca858",
+        "role": "assistant",
+        "content": "You said: **Second question: which item on that checklist takes longest?**. This reply is scripted by the verify fixture.",
+        "createdAt": "2026-10-27T08:21:48.642Z",
+        "streaming": false,
+        "sequence": 1793089308315,
+        "agentMetadata": {
+          "textBlockId": "turn-1-text",
+          "executionId": "exec_verify_2",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 46646,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvqf2t1t_zuqc1s3v",
+        "timestamp": 1793089310506,
+        "outcome": "success"
+      }
+    }
+  ]
+}

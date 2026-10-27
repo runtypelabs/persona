@@ -1,0 +1,82 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 10929,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Paragraph 1: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 2: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 3: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 4: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 5: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 6: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 7: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 8: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 9: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 10: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 11: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team.",
+            "createdAt": "2026-10-27T08:15:15.914Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 10876,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793088915914
+      }
+    },
+    {
+      "at": 10876,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvqeuea2_n94zpls0",
+        "timestamp": 1793088915914
+      }
+    },
+    {
+      "at": 10897,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvqeuea2_dhntmc8r",
+        "role": "user",
+        "content": "Paragraph 1: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 2: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 3: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 4: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 5: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 6: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 7: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 8: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 9: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 10: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 11: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team.",
+        "createdAt": "2026-10-27T08:15:15.914Z",
+        "sequence": 1793088905123,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 31323,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1793088916219-e97a00b14f502",
+        "role": "assistant",
+        "content": "You said: **Paragraph 1: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 2: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 3: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 4: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 5: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 6: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 7: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 8: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 9: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 10: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 11: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team.**. This reply is scripted by the verify fixture.",
+        "createdAt": "2026-10-27T08:15:16.219Z",
+        "streaming": false,
+        "sequence": 1793088915972,
+        "agentMetadata": {
+          "textBlockId": "turn-1-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 31449,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvqeuea2_n94zpls0",
+        "timestamp": 1793088936487,
+        "outcome": "success"
+      }
+    }
+  ]
+}

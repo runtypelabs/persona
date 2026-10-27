@@ -1,0 +1,23 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e2]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e3]
+    - paragraph
+      - StaticText "Scenario: echo. Replies are scripted in-page; no backend."
+    - generic
+      - paragraph
+        - StaticText "Paragraph 1: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 2: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 3: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 4: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 5: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 6: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 7: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 8: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 9: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review."
+      - generic
+        - paragraph
+          - StaticText "You said: "
+          - strong
+            - StaticText "Paragraph 1: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 2: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 3: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 4: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 5: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 6: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 7: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 8: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review. Paragraph 9: summarize the onboarding checklist for new support staff, including tooling access, shadowing, and the first-week review."
+        - button "Copy message" [ref=e7]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e4]
+      - button "Start voice recognition" [ref=e5]
+      - button "Send message" [ref=e6]
+  - button "Jump to latest" [ref=e1]

@@ -1,0 +1,23 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e2]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e3]
+    - paragraph
+      - StaticText "Scenario: echo. Replies are scripted in-page; no backend."
+    - generic
+      - paragraph
+        - StaticText "Paragraph 1: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 2: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 3: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 4: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 5: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 6: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 7: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 8: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 9: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 10: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 11: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team."
+      - generic
+        - paragraph
+          - StaticText "You said: "
+          - strong
+            - StaticText "Paragraph 1: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 2: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 3: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 4: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 5: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 6: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 7: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 8: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 9: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 10: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team. Paragraph 11: please compare the delivery options, the return policy, and the warranty terms for the order placed last week, and explain which choice is best for a small team."
+        - button "Copy message" [ref=e7]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e4]
+      - button "Start voice recognition" [ref=e5]
+      - button "Send message" [ref=e6]
+  - button "Jump to latest (1 new)" [ref=e1]

@@ -1,0 +1,121 @@
+{
+  "scenario": "tool",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 11897,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Step 1: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 2: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 3: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 4: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 5: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 6: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 7: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 8: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 9: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 10: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 11: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon.",
+            "createdAt": "2026-10-27T08:18:06.284Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 11847,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793089086283
+      }
+    },
+    {
+      "at": 11847,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvqey1qk_d0ov4e7z",
+        "timestamp": 1793089086284
+      }
+    },
+    {
+      "at": 11870,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvqey1qk_9bmp57o6",
+        "role": "user",
+        "content": "Step 1: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 2: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 3: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 4: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 5: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 6: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 7: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 8: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 9: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 10: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon. Step 11: check the weather for the Lisbon office offsite, including wind and rain chances for the outdoor session in the afternoon.",
+        "createdAt": "2026-10-27T08:18:06.284Z",
+        "sequence": 1793089074552,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 13158,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "tool-call_weather",
+        "role": "assistant",
+        "content": "",
+        "createdAt": "2026-10-27T08:18:07.087Z",
+        "streaming": false,
+        "variant": "tool",
+        "agentMetadata": {
+          "executionId": "exec_verify_1",
+          "iteration": 1
+        },
+        "sequence": 1793089086338,
+        "toolCall": {
+          "id": "call_weather",
+          "status": "complete",
+          "name": "get_weather",
+          "success": true,
+          "duration": 840,
+          "args": {
+            "city": "Lisbon",
+            "unit": "celsius"
+          },
+          "startedAt": 1793089087088,
+          "completedAt": 1793089087590,
+          "durationMs": 840,
+          "chunks": [
+            "Fetching forecast…"
+          ],
+          "result": {
+            "city": "Lisbon",
+            "tempC": 22,
+            "conditions": "sunny"
+          }
+        }
+      }
+    },
+    {
+      "at": 15666,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1793089088592-c189a498fff208",
+        "role": "assistant",
+        "content": "It's **22°C and sunny** in Lisbon right now.",
+        "createdAt": "2026-10-27T08:18:08.593Z",
+        "streaming": false,
+        "sequence": 1793089086339,
+        "agentMetadata": {
+          "textBlockId": "turn-2-text",
+          "executionId": "exec_verify_1",
+          "iteration": 1,
+          "turnId": "turn-2",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 16168,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvqey1qk_d0ov4e7z",
+        "timestamp": 1793089090604,
+        "outcome": "success"
+      }
+    }
+  ]
+}
