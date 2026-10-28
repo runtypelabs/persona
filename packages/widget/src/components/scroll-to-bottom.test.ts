@@ -40,6 +40,49 @@ describe("scroll-to-bottom chrome", () => {
     control.destroy();
   });
 
+  it("names a pending approval below with a labelled shield pill, then reverts", () => {
+    const control = createScrollToBottomControl(icon, "transcript");
+    const config: AgentWidgetConfig = { future: { v5Defaults: true } };
+    control.update(config, true, false, 2, true);
+    const el = control.element;
+    expect(el.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+    expect(el.getAttribute("data-persona-scroll-to-bottom-has-label")).toBe("true");
+    expect(el.textContent).toBe("Approval needed");
+    expect(el.querySelector("svg")?.getAttribute("data-icon")).toBe("shield-check");
+    // The label replaces the unread count; assistive tech hears where it leads.
+    expect(el.querySelector<HTMLElement>("[data-persona-scroll-to-bottom-count]")?.style.display).toBe("none");
+    expect(el.getAttribute("aria-label")).toBe("Approval needed below. Jump to latest");
+
+    // Hidden, the approval state never shows.
+    control.update(config, false, false, 0, true);
+    expect(el.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+
+    control.update(config, true, false, 2, false);
+    expect(el.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+    expect(el.getAttribute("data-persona-scroll-to-bottom-has-label")).toBe("false");
+    expect(el.querySelector("svg")?.getAttribute("data-icon")).toBe("arrow-down");
+    expect(el.getAttribute("aria-label")).toBe("Jump to latest (2 new)");
+    control.destroy();
+  });
+
+  it("uses a custom approval label, opts out with an empty one, and tells custom glyphs", () => {
+    const states: string[] = [];
+    const renderIcon = vi.fn((_context: AgentWidgetScrollToBottomIconContext) => ({
+      element: document.createElement("span"),
+      update: (next: AgentWidgetScrollToBottomIconContext) => { states.push(next.state.activity); },
+    }));
+    const control = createScrollToBottomControl(icon, "transcript");
+    control.update({ features: { scrollToBottom: { approvalLabel: "Review request", renderIcon } } }, true, false, 0, true);
+    expect(control.element.textContent).toBe("Review request");
+    expect(renderIcon.mock.calls[0][0].state.activity).toBe("approval-below");
+    control.update({ features: { scrollToBottom: { approvalLabel: "", renderIcon } } }, true, false, 1, true);
+    expect(control.element.getAttribute("data-persona-scroll-to-bottom-has-label")).toBe("false");
+    expect(control.element.getAttribute("aria-label")).toBe("Approval needed below. Jump to latest");
+    control.update({ features: { scrollToBottom: { renderIcon } } }, true, false, 0, false);
+    expect(states.at(-1)).toBe("idle");
+    control.destroy();
+  });
+
   it("makes fading controls inert immediately and returns focus only when owned, including Shadow DOM", () => {
     const host = document.createElement("div"); document.body.appendChild(host);
     const root = host.attachShadow({ mode: "open" });

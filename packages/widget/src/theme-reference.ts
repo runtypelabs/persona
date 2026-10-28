@@ -171,7 +171,7 @@ export const THEME_TOKEN_DOCS = {
       askUserQuestion: 'sheet (background, border, shadow), pill (background, foreground, borderRadius, selectedBackground, selectedForeground), customInput.background. Local features.askUserQuestion.styles still wins; navigation, labels and slide timing remain feature config.',
       attachment: 'image (background, border).',
       scrollToBottom:
-        'Floating scroll-to-bottom affordance shared by transcript and event stream: background, foreground, border, size, borderRadius, shadow, padding, gap, fontSize, iconSize.',
+        'Floating scroll-to-bottom affordance shared by transcript and event stream: background, foreground, border, size, borderRadius, shadow, padding, gap, fontSize, iconSize; approval (background, foreground, border, fontWeight) for the labelled "Approval needed" state, falling back to the control colors.',
       toolBubble: 'shadow, background, borderColor, borderWidth, borderRadius; header (background, foreground, padding), content (background, foreground, padding), codeBlock (background, foreground, borderColor), toggleForeground, labelForeground, loading (primary, secondary, duration). Applies to card and activity-row variants without changing their distinct defaults. CSS duration uses ms/s; legacy numeric milliseconds must convert explicitly. Theme content.padding precedes activity.bodyPadding/toolBubble.bodyPadding fallbacks; explicit legacy axes override only their axis.',
       scrollbar:
         'Shared scrollbar appearance for every scroller: thumb (default semantic.colors.border), track (default transparent).',
@@ -250,7 +250,7 @@ export const THEME_TOKEN_DOCS = {
       description:
         'Shared transcript + event-stream jump-to-latest affordance.',
       properties:
-        'features.scrollToBottom.enabled, features.scrollToBottom.iconName, features.scrollToBottom.label (empty string renders icon-only). Defaults: enabled=true, iconName="arrow-down", label="".',
+        'features.scrollToBottom.enabled, features.scrollToBottom.iconName, features.scrollToBottom.label (empty string renders icon-only), features.scrollToBottom.approvalLabel (shown while a pending approval is below the fold; empty string keeps the regular control). Defaults: enabled=true, iconName="arrow-down", label="", approvalLabel="Approval needed".',
     },
     toolCall: {
       description:

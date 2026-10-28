@@ -1115,6 +1115,77 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
+  describe("approval waiting below an anchored turn", () => {
+    const setup = (approvalTop: number) => {
+      const raf = installRafMock();
+      const mount = createMount();
+      const controller = createAgentExperience(mount, {
+        apiUrl: "/test", future: { v5Defaults: true }, launcher: { enabled: false },
+        approval: { keyboardShortcuts: "focused" },
+        features: { scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 } },
+      } as any);
+      const body = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+      const metrics = installScrollMetrics(body, { scrollHeight: 1600, clientHeight: 400 });
+      // A long question at 100 anchors at 84; the approval card renders at
+      // `approvalTop` (jsdom has no layout, so the geometry is mocked).
+      vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
+        const id = this.getAttribute("data-message-id") ?? this.getAttribute("data-wrapper-id");
+        return id === "user-approve" ? 100 : id === "approval-below" ? approvalTop : 0;
+      });
+      emitStreamingStatus(controller);
+      emitUserMessage(controller, "user-approve", "Long question ".repeat(80));
+      raf.flush();
+      expect(metrics.getScrollTop()).toBe(84);
+      const composer = mount.querySelector<HTMLTextAreaElement>("textarea")!;
+      composer.focus();
+      controller.injectTestMessage({ type: "message", message: {
+        id: "approval-below", role: "assistant", content: "", createdAt: STREAM_CREATED_AT,
+        variant: "approval", approval: { id: "approval-below", agentId: "agent", executionId: "execution", status: "pending", toolName: "Search", description: "Search documentation", parameters: { query: "docs" } },
+      } });
+      raf.flush();
+      const allow = () => mount.querySelector<HTMLButtonElement>('[data-message-id="approval-below"] [data-action="allow"]');
+      return { raf, mount, controller, metrics, composer, allow, jump: getScrollToBottomButton(mount)! };
+    };
+
+    it("names it instead of scrolling or moving focus, then focuses it after the jump", () => {
+      const { raf, controller, metrics, composer, allow, jump } = setup(1200);
+      expect(allow()).not.toBeNull();
+      // The anchor holds, and Enter-to-allow never lands on an unseen card.
+      expect(metrics.getScrollTop()).toBe(84);
+      expect(document.activeElement).toBe(composer);
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+      expect(jump.textContent).toBe("Approval needed");
+      expect(jump.getAttribute("aria-label")).toBe("Approval needed below. Jump to latest");
+
+      jump.click();
+      raf.flush();
+      expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+      expect(document.activeElement).toBe(allow());
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+      controller.destroy();
+    });
+
+    it("leaves a visible approval to the card itself", () => {
+      const { controller, metrics, allow, jump } = setup(300);
+      expect(metrics.getScrollTop()).toBe(84);
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+      expect(document.activeElement).toBe(allow());
+      controller.destroy();
+    });
+
+    it("drops the label once the approval resolves", () => {
+      const { raf, controller, jump } = setup(1200);
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+      controller.injectTestMessage({ type: "message", message: {
+        id: "approval-below", role: "assistant", content: "", createdAt: STREAM_CREATED_AT,
+        variant: "approval", approval: { id: "approval-below", agentId: "agent", executionId: "execution", status: "approved", toolName: "Search", description: "Search documentation", parameters: { query: "docs" } },
+      } });
+      raf.flush();
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+      controller.destroy();
+    });
+  });
+
   it("does not yank a paused reader when content grows without a render event", () => {
     const raf = installRafMock();
     const resize = installResizeObserverMock();

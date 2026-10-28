@@ -376,6 +376,9 @@ if (!workspaceTarget) {
         // Advertise the built-in ask_user_question tool so Copilot can ask
         // structured clarifying questions (answer-pill sheet) mid-task.
         askUserQuestion: { expose: true },
+        // Page tools run in long sequences: fold each run into one collapsible
+        // activity group (the V5 default) so the answer isn't buried under cards.
+        toolCallDisplay: { grouped: true, groupedMode: 'collapsible' },
       },
       approval: {
         ...DEFAULT_WIDGET_CONFIG.approval,

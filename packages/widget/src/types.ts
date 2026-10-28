@@ -2323,7 +2323,8 @@ export type AgentWidgetScrollBehaviorFeature = {
 
 /** Decorative glyph state. Hidden glyphs should pause host-owned animation. */
 export type AgentWidgetScrollToBottomIconState = {
-  activity: "idle" | "generating-below";
+  /** `"approval-below"`: a pending approval is below the fold and the turn waits on it. */
+  activity: "idle" | "generating-below" | "approval-below";
   visible: boolean;
   hovered: boolean;
   focused: boolean;
@@ -2363,6 +2364,15 @@ export type AgentWidgetScrollToBottomFeature = {
    * @default ""
    */
   label?: string;
+  /**
+   * Label shown while a pending approval sits below the fold. The control
+   * widens to a labelled pill with the approval's shield glyph, and the turn
+   * stays put until the reader jumps (anchor-top never scrolls them to it).
+   * Styled by `theme.components.scrollToBottom.approval`. Set to an empty
+   * string to keep the regular control.
+   * @default "Approval needed"
+   */
+  approvalLabel?: string;
   /** Glyph while a live response is arriving below. V4 defaults to arrow; V5 to dots. */
   streamingIndicator?: "dots" | "arrow";
   /** Visibility transition. V4 defaults to none; V5 to fade. Honors reduced motion. */

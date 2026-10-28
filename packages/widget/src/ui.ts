@@ -5486,9 +5486,9 @@ export const createAgentExperience = (
     (getScrollMode() !== "anchor-top" || isActivityWhilePinnedEnabled());
 
   const updateScrollToBottomCountBadge = () => {
-    scrollToBottomControl.update(config,
-      scrollToBottomButton.getAttribute("data-persona-scroll-to-bottom-visible") === "true",
-      isStreamingOutOfView(), newMessagesSincePause);
+    const visible = scrollToBottomButton.getAttribute("data-persona-scroll-to-bottom-visible") === "true";
+    scrollToBottomControl.update(config, visible, isStreamingOutOfView(), newMessagesSincePause,
+      visible && isApprovalBelow());
   };
 
   const resetNewMessagesCount = () => {
@@ -5500,15 +5500,30 @@ export const createAgentExperience = (
   // Spacer air and composer reserve are scrollable, but aren't unread content.
   // Compare the real content bottom with the readable viewport instead. An
   // overlay footer clips that viewport; a block footer sits below it.
-  const isNearLatestContent = () => {
-    const contentHeight = measureContentHeight(anchorState?.spacerHeight ?? 0, false);
+  const readableViewportHeight = () => {
     const bodyRect = body.getBoundingClientRect();
     const footerRect = footer.getBoundingClientRect();
-    const readableHeight = footerRect.height > 0 && footerRect.bottom > bodyRect.top
+    return footerRect.height > 0 && footerRect.bottom > bodyRect.top
       ? Math.min(body.clientHeight, Math.max(0, footerRect.top - bodyRect.top - body.clientTop))
       : body.clientHeight;
-    return contentHeight - body.scrollTop - readableHeight <= BOTTOM_THRESHOLD;
   };
+  const isNearLatestContent = () => {
+    const contentHeight = measureContentHeight(anchorState?.spacerHeight ?? 0, false);
+    return contentHeight - body.scrollTop - readableViewportHeight() <= BOTTOM_THRESHOLD;
+  };
+
+  // A pending approval whose card starts below the readable viewport. The
+  // anchor never scrolls the reader to it, so the jump control names it.
+  const isBelowFold = (element: HTMLElement) =>
+    offsetTopWithinBody(element) > body.scrollTop + readableViewportHeight() - BOTTOM_THRESHOLD;
+  const pendingApprovalBubbles = () => (session?.getMessages() ?? [])
+    .filter((message) => message.variant === "approval" && message.approval?.status === "pending")
+    .map((message) => queryMessageBubble(message.id))
+    .filter((bubble): bubble is HTMLElement => Boolean(bubble?.isConnected));
+  const isApprovalBelow = () => pendingApprovalBubbles().some(isBelowFold);
+  // Set by a jump taken from the "Approval needed" control: once it lands,
+  // focus moves to the approval's primary action, in view.
+  let focusApprovalAfterJump = false;
 
   // Whether the user is currently away from the latest content: drives both
   // the scroll-to-bottom affordance and the new-messages badge. Effective
@@ -5539,7 +5554,7 @@ export const createAgentExperience = (
     const hasOverflow = getScrollBottomOffset(body) > 0;
     const show = !latestScroll.active && hasOverflow && isAwayFromLatest() && transcriptHasMessages();
     if (!show) newMessagesSincePause = 0;
-    scrollToBottomControl.update(config, show, isStreamingOutOfView(), newMessagesSincePause);
+    scrollToBottomControl.update(config, show, isStreamingOutOfView(), newMessagesSincePause, show && isApprovalBelow());
   };
 
   const pauseAutoScroll = () => {
@@ -5609,8 +5624,13 @@ export const createAgentExperience = (
 
   const latestScroll = createScrollToLatest(body, container,
     () => { lastScrollTop = body.scrollTop; },
-    () => { resumeAutoScroll(); scheduleAutoScroll(true); syncScrollToBottomButton(); },
-    () => { autoFollow.pause(); syncScrollToBottomButton(); });
+    () => {
+      resumeAutoScroll(); scheduleAutoScroll(true); syncScrollToBottomButton();
+      if (!focusApprovalAfterJump) return;
+      focusApprovalAfterJump = false;
+      pendingApprovalBubbles()[0]?.querySelector<HTMLButtonElement>('[data-action="allow"]')?.focus({ preventScroll: true });
+    },
+    () => { focusApprovalAfterJump = false; autoFollow.pause(); syncScrollToBottomButton(); });
 
   // Custom smooth scroll animation with easing
   const smoothScrollToBottom = (element: HTMLElement, duration = 500) => {
@@ -7145,7 +7165,12 @@ export const createAgentExperience = (
         wrapper.replaceChildren(bubble);
         wrapper.setAttribute("data-bubble-fp", fingerprint);
         lastApprovalBubbleFingerprint.set(messageId, fingerprint);
-        if (focusDefault) bubble.querySelector<HTMLButtonElement>('[data-action="allow"]')?.focus();
+        // Never park focus (and Enter-to-allow) on a card the reader can't
+        // see: a paused reader below the fold gets the "Approval needed" jump.
+        const following = isFollowEffective() && autoFollow.isFollowing();
+        if (focusDefault && (following || !isBelowFold(wrapper))) {
+          bubble.querySelector<HTMLButtonElement>('[data-action="allow"]')?.focus();
+        }
       }
     }
 
@@ -11186,10 +11211,12 @@ export const createAgentExperience = (
   });
   destroyCallbacks.push(() => body.removeEventListener("wheel", handleWheel));
   scrollToBottomButton.addEventListener("click", () => {
+    const approvalBelow = isApprovalBelow();
     // Jumping to the latest abandons the current anchor: drop the spacer
     // first so "bottom" means the real end of content, not spacer padding
     // that would keep shrinking underneath the reader.
     resetAnchorState();
+    focusApprovalAfterJump = approvalBelow;
     cancelAutoScroll();
     autoFollow.pause();
     latestScroll.start(config);
