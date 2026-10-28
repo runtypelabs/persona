@@ -1,0 +1,124 @@
+{
+  "runId": "20261028-225350-46e7e6",
+  "entries": [
+    {
+      "feature": "approval-jump",
+      "label": "V4 light: Approval needed pill",
+      "note": "approval card below the fold; anchor held at the question; focus stays in the composer",
+      "files": [
+        "01-approval-jump-v4-light-approval-needed-pill.png",
+        "01-approval-jump-v4-light-approval-needed-pill.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=light&delayMs=40&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-28T23:14:05.964Z",
+      "head": "cfbc7d17c848e5a2f99ea5af4e5a89eb3179a3ca",
+      "diffHash": "fd8dd9427887"
+    },
+    {
+      "feature": "approval-jump",
+      "label": "V5 light: Approval needed pill",
+      "note": null,
+      "files": [
+        "02-approval-jump-v5-light-approval-needed-pill.png",
+        "02-approval-jump-v5-light-approval-needed-pill.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=light&delayMs=40&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%2C%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%7D",
+      "at": "2026-10-28T23:14:20.107Z",
+      "head": "cfbc7d17c848e5a2f99ea5af4e5a89eb3179a3ca",
+      "diffHash": "fd8dd9427887"
+    },
+    {
+      "feature": "approval-jump",
+      "label": "V5 dark: Approval needed pill",
+      "note": null,
+      "files": [
+        "03-approval-jump-v5-dark-approval-needed-pill.png",
+        "03-approval-jump-v5-dark-approval-needed-pill.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=dark&delayMs=40&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%2C%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%7D",
+      "at": "2026-10-28T23:14:33.999Z",
+      "head": "cfbc7d17c848e5a2f99ea5af4e5a89eb3179a3ca",
+      "diffHash": "fd8dd9427887"
+    },
+    {
+      "feature": "approval-jump",
+      "label": "V5 light with approval accent tokens",
+      "note": "theme.components.scrollToBottom.approval set to warning palette",
+      "files": [
+        "04-approval-jump-v5-light-with-approval-accent-tokens.png",
+        "04-approval-jump-v5-light-with-approval-accent-tokens.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=light&delayMs=40&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%2C%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22theme%22%3A%7B%22components%22%3A%7B%22scrollToBottom%22%3A%7B%22approval%22%3A%7B%22background%22%3A%22palette.colors.warning.50%22%2C%22foreground%22%3A%22palette.colors.warning.800%22%2C%22border%22%3A%22palette.colors.warning.300%22%7D%7D%7D%7D%7D",
+      "at": "2026-10-28T23:14:48.072Z",
+      "head": "cfbc7d17c848e5a2f99ea5af4e5a89eb3179a3ca",
+      "diffHash": "fd8dd9427887"
+    },
+    {
+      "feature": "approval-jump",
+      "label": "V5 approval below the fold, jump, focus Allow once",
+      "note": null,
+      "files": [
+        "05-approval-jump-v5-approval-below-the-fold-jump-focus-allow-once.gif",
+        "05-approval-jump-v5-approval-below-the-fold-jump-focus-allow-once.webm",
+        "05-approval-jump-v5-approval-below-the-fold-jump-focus-allow-once.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=light&delayMs=60&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%2C%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%7D",
+      "at": "2026-10-28T23:15:17.857Z",
+      "head": "cfbc7d17c848e5a2f99ea5af4e5a89eb3179a3ca",
+      "diffHash": "fd8dd9427887"
+    },
+    {
+      "feature": "approval-jump",
+      "label": "after the jump: Allow once focused and in view",
+      "note": "keyboard focus ring shown after Tab/Shift+Tab",
+      "files": [
+        "06-approval-jump-after-the-jump-allow-once-focused-and-in-view.png",
+        "06-approval-jump-after-the-jump-allow-once-focused-and-in-view.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=light&delayMs=60&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%2C%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%7D",
+      "at": "2026-10-28T23:15:18.657Z",
+      "head": "cfbc7d17c848e5a2f99ea5af4e5a89eb3179a3ca",
+      "diffHash": "fd8dd9427887"
+    },
+    {
+      "feature": "demo-grouping",
+      "label": "V4 six-tool turn, grouping off",
+      "note": "display check: turn injected via controller (WebMCP demos need the live proxy); demo config now sets toolCallDisplay grouped+collapsible",
+      "files": [
+        "07-demo-grouping-v4-six-tool-turn-grouping-off.png",
+        "07-demo-grouping-v4-six-tool-turn-grouping-off.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-28T23:15:44.404Z",
+      "head": "cfbc7d17c848e5a2f99ea5af4e5a89eb3179a3ca",
+      "diffHash": "fd8dd9427887"
+    },
+    {
+      "feature": "demo-grouping",
+      "label": "V4 six-tool turn, grouping on",
+      "note": "display check: turn injected via controller (WebMCP demos need the live proxy); demo config now sets toolCallDisplay grouped+collapsible",
+      "files": [
+        "08-demo-grouping-v4-six-tool-turn-grouping-on.png",
+        "08-demo-grouping-v4-six-tool-turn-grouping-on.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%2C%22features%22%3A%7B%22showToolCalls%22%3Atrue%2C%22showReasoning%22%3Atrue%2C%22toolCallDisplay%22%3A%7B%22grouped%22%3Atrue%2C%22groupedMode%22%3A%22collapsible%22%7D%7D%7D",
+      "at": "2026-10-28T23:15:57.397Z",
+      "head": "cfbc7d17c848e5a2f99ea5af4e5a89eb3179a3ca",
+      "diffHash": "fd8dd9427887"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "demo-grouping",
+      "pass": true,
+      "skipped": false,
+      "note": "V4 with the demos' new toolCallDisplay folds six tool cards into one collapsible row"
+    },
+    {
+      "feature": "approval-jump",
+      "pass": false,
+      "skipped": true,
+      "note": "V4 dark: the fixture renders V4 without a dark theme, so V4 dark matches V4 light; launcher mode not driven"
+    }
+  ]
+}

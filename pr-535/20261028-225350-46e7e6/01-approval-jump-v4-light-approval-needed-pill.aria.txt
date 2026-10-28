@@ -1,0 +1,23 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e2]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e3]
+    - paragraph
+      - StaticText "Scenario: approval. Replies are scripted in-page; no backend."
+    - generic
+      - paragraph
+        - StaticText "Step 1: find the docs page that explains approval theming for the support widget and summarize the token names. Step 2: find the docs page that explains approval theming for the support widget and summarize the token names. Step 3: find the docs page that explains approval theming for the support widget and summarize the token names. Step 4: find the docs page that explains approval theming for the support widget and summarize the token names. Step 5: find the docs page that explains approval theming for the support widget and summarize the token names. Step 6: find the docs page that explains approval theming for the support widget and summarize the token names. Step 7: find the docs page that explains approval theming for the support widget and summarize the token names. Step 8: find the docs page that explains approval theming for the support widget and summarize the token names. Step 9: find the docs page that explains approval theming for the support widget and summarize the token names. Step 10: find the docs page that explains approval theming for the support widget and summarize the token names. Step 11: find the docs page that explains approval theming for the support widget and summarize the token names."
+      - generic
+        - button "Copy message" [ref=e10]
+      - generic
+        - button "Show details" [expanded=false, ref=e7]
+        - button "Allow" [ref=e8]
+        - button "Deny" [ref=e9]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e4]
+      - button "Start voice recognition" [ref=e5]
+      - button "Send message" [ref=e6]
+  - button "Approval needed below. Jump to latest" [ref=e1]

@@ -1,0 +1,23 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e1]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e2]
+    - paragraph
+      - StaticText "Scenario: echo. Replies are scripted in-page; no backend."
+    - generic
+      - paragraph
+      - button "Used tool for 0.8 seconds" [expanded=false, ref=e6]
+      - button "Used tool for 0.9 seconds" [expanded=false, ref=e7]
+      - button "Used tool for 1 seconds" [expanded=false, ref=e8]
+      - button "Used tool for 1.1 seconds" [expanded=false, ref=e9]
+      - button "Used tool for 1.2 seconds" [expanded=false, ref=e10]
+      - button "Used tool for 1.3 seconds" [expanded=false, ref=e11]
+      - generic
+        - button "Copy message" [ref=e12]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e3]
+      - button "Start voice recognition" [ref=e4]
+      - button "Send message" [ref=e5]
