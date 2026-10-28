@@ -1,0 +1,82 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 890,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Line 1: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 2: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 3: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 4: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 5: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 6: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 7: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 8: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 9: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 10: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 11: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 12: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 13: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 14: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 15: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 16: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 17: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 18: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 19: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 20: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 21: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 22: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 23: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 24: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 25: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 26: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 27: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 28: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 29: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 30: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.",
+            "createdAt": "2026-10-28T10:06:35.857Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 767,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793181995855
+      }
+    },
+    {
+      "at": 769,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvry9f80_quw7j77t",
+        "timestamp": 1793181995856
+      }
+    },
+    {
+      "at": 813,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvry9f81_65h8nb80",
+        "role": "user",
+        "content": "Line 1: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 2: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 3: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 4: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 5: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 6: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 7: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 8: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 9: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 10: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 11: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 12: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 13: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 14: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 15: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 16: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 17: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 18: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 19: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 20: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 21: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 22: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 23: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 24: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 25: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 26: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 27: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 28: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 29: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 30: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.",
+        "createdAt": "2026-10-28T10:06:35.857Z",
+        "sequence": 1793181995163,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 8324,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1793181996026-cf14aa55745d3",
+        "role": "assistant",
+        "content": "You said: **Line 1: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 2: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 3: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 4: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 5: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 6: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 7: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 8: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 9: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 10: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 11: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 12: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 13: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 14: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 15: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 16: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 17: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 18: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 19: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 20: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 21: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 22: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 23: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 24: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 25: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 26: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 27: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 28: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 29: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.\nLine 30: a long pasted message, the kind of wall of text or voice transcript that used to fill the whole viewport.**. This reply is scripted by the verify fixture.",
+        "createdAt": "2026-10-28T10:06:36.026Z",
+        "streaming": false,
+        "sequence": 1793181995985,
+        "agentMetadata": {
+          "textBlockId": "turn-1-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 8360,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvry9f80_quw7j77t",
+        "timestamp": 1793182003447,
+        "outcome": "success"
+      }
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "runId": "20261028-100617-b766a6",
+  "entries": [
+    {
+      "feature": "user-message-collapse",
+      "label": "send a long message",
+      "note": null,
+      "files": [
+        "01-user-message-collapse-send-a-long-message.gif",
+        "01-user-message-collapse-send-a-long-message.webm",
+        "01-user-message-collapse-send-a-long-message.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?delayMs=8&config=%7B%22launcher%22%3A%20%7B%22fullHeight%22%3A%20true%7D%2C%20%22future%22%3A%20%7B%22v5Defaults%22%3A%20true%7D%7D",
+      "at": "2026-10-28T10:06:45.007Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "2f8288992747"
+    },
+    {
+      "feature": "user-message-collapse",
+      "label": "collapsed after send",
+      "note": "V5 defaults, no explicit flag: the 30-line message is clipped to 240px with a fade and a Show more button, pinned 16px under the header while the reply streams below",
+      "files": [
+        "02-user-message-collapse-collapsed-after-send.png",
+        "02-user-message-collapse-collapsed-after-send.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?delayMs=8&config=%7B%22launcher%22%3A%20%7B%22fullHeight%22%3A%20true%7D%2C%20%22future%22%3A%20%7B%22v5Defaults%22%3A%20true%7D%7D",
+      "at": "2026-10-28T10:06:45.312Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "2f8288992747"
+    },
+    {
+      "feature": "user-message-collapse",
+      "label": "expanded via show more",
+      "note": "Show more expands the full message downward; the bubble top stays 16px under the header and scrollTop is unchanged (no jump)",
+      "files": [
+        "04-user-message-collapse-expanded-via-show-more.png",
+        "04-user-message-collapse-expanded-via-show-more.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?delayMs=8&config=%7B%22launcher%22%3A%20%7B%22fullHeight%22%3A%20true%7D%2C%20%22future%22%3A%20%7B%22v5Defaults%22%3A%20true%7D%7D",
+      "at": "2026-10-28T10:06:46.649Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "2f8288992747"
+    },
+    {
+      "feature": "user-message-collapse",
+      "label": "show more then show less",
+      "note": null,
+      "files": [
+        "03-user-message-collapse-show-more-then-show-less.gif",
+        "03-user-message-collapse-show-more-then-show-less.webm",
+        "03-user-message-collapse-show-more-then-show-less.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?delayMs=8&config=%7B%22launcher%22%3A%20%7B%22fullHeight%22%3A%20true%7D%2C%20%22future%22%3A%20%7B%22v5Defaults%22%3A%20true%7D%7D",
+      "at": "2026-10-28T10:06:48.088Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "2f8288992747"
+    },
+    {
+      "feature": "user-message-collapse",
+      "label": "collapsed via show less",
+      "note": "Show less collapses back to 240px; the click scrolled the toggle into view first, so the bubble returns to the 16px anchor offset with the toggle visible",
+      "files": [
+        "05-user-message-collapse-collapsed-via-show-less.png",
+        "05-user-message-collapse-collapsed-via-show-less.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?delayMs=8&config=%7B%22launcher%22%3A%20%7B%22fullHeight%22%3A%20true%7D%2C%20%22future%22%3A%20%7B%22v5Defaults%22%3A%20true%7D%7D",
+      "at": "2026-10-28T10:06:48.320Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "2f8288992747"
+    },
+    {
+      "feature": "user-message-collapse",
+      "label": "expanded then jump to latest",
+      "note": null,
+      "files": [
+        "06-user-message-collapse-expanded-then-jump-to-latest.gif",
+        "06-user-message-collapse-expanded-then-jump-to-latest.webm",
+        "06-user-message-collapse-expanded-then-jump-to-latest.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?delayMs=8&config=%7B%22launcher%22%3A%20%7B%22fullHeight%22%3A%20true%7D%2C%20%22future%22%3A%20%7B%22v5Defaults%22%3A%20true%7D%7D",
+      "at": "2026-10-28T10:07:01.469Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "2f8288992747"
+    },
+    {
+      "feature": "user-message-collapse",
+      "label": "reply reached via jump to latest",
+      "note": "With the message expanded, jump-to-latest still drops the anchor and lands on the end of the reply",
+      "files": [
+        "07-user-message-collapse-reply-reached-via-jump-to-latest.png",
+        "07-user-message-collapse-reply-reached-via-jump-to-latest.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?delayMs=8&config=%7B%22launcher%22%3A%20%7B%22fullHeight%22%3A%20true%7D%2C%20%22future%22%3A%20%7B%22v5Defaults%22%3A%20true%7D%7D",
+      "at": "2026-10-28T10:07:01.652Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "2f8288992747"
+    },
+    {
+      "feature": "user-message-collapse",
+      "label": "request and events",
+      "note": "1 request(s) crossed the network boundary, 5 controller event(s)",
+      "files": [
+        "08-user-message-collapse-request-and-events.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?delayMs=8&config=%7B%22launcher%22%3A%20%7B%22fullHeight%22%3A%20true%7D%2C%20%22future%22%3A%20%7B%22v5Defaults%22%3A%20true%7D%7D",
+      "at": "2026-10-28T10:07:01.772Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "2f8288992747"
+    },
+    {
+      "feature": "user-message-collapse",
+      "label": "collapsed in dark scheme",
+      "note": "Dark scheme: the mask fade works on the dark bubble fill and the toggle inherits the bubble text color",
+      "files": [
+        "09-user-message-collapse-collapsed-in-dark-scheme.png",
+        "09-user-message-collapse-collapsed-in-dark-scheme.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?theme=dark&delayMs=8&config=%7B%22launcher%22%3A%20%7B%22fullHeight%22%3A%20true%7D%2C%20%22future%22%3A%20%7B%22v5Defaults%22%3A%20true%7D%7D",
+      "at": "2026-10-28T10:07:25.066Z",
+      "head": "465d95ea6d76d0059c8edd5a8f123eb9ba8402ce",
+      "diffHash": "2f8288992747"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "user-message-collapse",
+      "pass": false,
+      "skipped": true,
+      "note": "Voice transcripts: covered by Vitest (interim stays expanded, final collapses, viewport held); not driven in a browser"
+    }
+  ]
+}
