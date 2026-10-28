@@ -1359,6 +1359,15 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['borderRadius', 'radius'],
   ], '--persona-components-messageActions-');
 
+  // Long user message collapse. widget.css carries the defaults in its var()
+  // fallbacks (the fade and toggle follow the bubble text), so unset stays unset.
+  emitTruthy(cssVars, 'user-collapse-', [
+    ['fadeHeight', 'fade-height'],
+    ['toggleForeground', 'toggle-fg'],
+    ['toggleFontSize', 'toggle-font-size'],
+    ['toggleFontWeight', 'toggle-font-weight'],
+  ], '--persona-components-userMessageCollapse-');
+
   // Intro card aliases: short names the panel inline-styles read directly.
   // The full-path `--persona-components-introCard-*` variables auto-emit above.
   // Default is flat (transparent, no shadow): the greeting renders as plain

@@ -26,6 +26,11 @@ import { createIconButton } from "../utils/buttons";
 import { renderLucideIcon } from "../utils/icons";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "../utils/content";
 import {
+  applyUserCollapseState,
+  createUserCollapseRegion,
+  type UserMessageCollapseRender,
+} from "./user-message-collapse";
+import {
   applyStreamBuffer,
   createSkeletonPlaceholder,
   createStreamCaret,
@@ -998,6 +1003,11 @@ export type CreateStandardBubbleOptions = {
    * Full widget config (needed for loading indicator context)
    */
   widgetConfig?: import("../types").AgentWidgetConfig;
+  /**
+   * Long user message collapse (`features.userMessageCollapse`). When set on
+   * a user bubble, its content is wrapped in a clip region with the toggle.
+   */
+  userCollapse?: UserMessageCollapseRender;
 };
 
 /**
@@ -1238,6 +1248,12 @@ export const createStandardBubble = (
     }
   }
 
+  // Everything a long user message can spill (attachments, chips, text) goes
+  // in the collapse region; the timestamp and actions stay outside the clip.
+  const userCollapse = message.role === "user" ? options?.userCollapse : undefined;
+  const collapseRegion = userCollapse ? createUserCollapseRegion(message.id, userCollapse.maxHeight) : null;
+  const contentParent = collapseRegion ?? bubble;
+
   if (imageParts.length > 0) {
     const imagePreviews = createMessageImagePreviews(
       imageParts,
@@ -1250,7 +1266,7 @@ export const createStandardBubble = (
     );
 
     if (imagePreviews) {
-      bubble.appendChild(imagePreviews);
+      contentParent.appendChild(imagePreviews);
     } else if (shouldHideTextUntilPreviewFails && textContentDiv) {
       textContentDiv.style.display = "";
     }
@@ -1260,7 +1276,7 @@ export const createStandardBubble = (
   if (audioParts.length > 0) {
     const audioPreviews = createMessageAudioPreviews(audioParts);
     if (audioPreviews) {
-      bubble.appendChild(audioPreviews);
+      contentParent.appendChild(audioPreviews);
     }
   }
 
@@ -1268,7 +1284,7 @@ export const createStandardBubble = (
   if (videoParts.length > 0) {
     const videoPreviews = createMessageVideoPreviews(videoParts);
     if (videoPreviews) {
-      bubble.appendChild(videoPreviews);
+      contentParent.appendChild(videoPreviews);
     }
   }
 
@@ -1276,7 +1292,7 @@ export const createStandardBubble = (
   if (fileParts.length > 0) {
     const filePreviews = createMessageFilePreviews(fileParts);
     if (filePreviews) {
-      bubble.appendChild(filePreviews);
+      contentParent.appendChild(filePreviews);
     }
   }
 
@@ -1286,10 +1302,14 @@ export const createStandardBubble = (
     ? null
     : createMessageMentionChips(message.contextMentions);
   if (mentionChips) {
-    bubble.appendChild(mentionChips);
+    contentParent.appendChild(mentionChips);
   }
 
-  bubble.appendChild(contentDiv);
+  contentParent.appendChild(contentDiv);
+  if (collapseRegion && userCollapse) {
+    bubble.appendChild(collapseRegion);
+    applyUserCollapseState(bubble, collapseRegion, message.id, userCollapse);
+  }
 
   // Add timestamp below if configured
   if (showTimestamp && timestampPosition === "below" && message.createdAt) {

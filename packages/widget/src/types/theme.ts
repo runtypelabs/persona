@@ -531,6 +531,22 @@ export interface MessageActionsTokens {
 }
 
 /**
+ * Long user message collapse (`features.userMessageCollapse`). Every key is
+ * optional; unset, the fade and the toggle follow the user bubble's own text
+ * color and type, so they already work on any fill in light and dark schemes.
+ */
+export interface UserMessageCollapseTokens {
+  /** Height of the bottom fade on a collapsed bubble. @default "48px" */
+  fadeHeight?: string;
+  /** "Show more" / "Show less" text color. Defaults to the user bubble text color. */
+  toggleForeground?: TokenReference<'color'>;
+  /** Toggle label type size. @default "0.8125rem" */
+  toggleFontSize?: string;
+  /** Toggle label weight. @default "600" */
+  toggleFontWeight?: string;
+}
+
+/**
  * Bubble geometry and type, per role. Every key is unset by default and each
  * one falls back to the value the message layout preset already produced, so
  * setting none of them changes nothing.
@@ -1368,6 +1384,8 @@ export interface ComponentTokens {
   message: MessageTokens;
   /** Hover-revealed per-message action row (copy, vote, read aloud). */
   messageActions?: MessageActionsTokens;
+  /** Fade and "Show more" toggle on collapsed long user messages. */
+  userMessageCollapse?: UserMessageCollapseTokens;
   /** Welcome / intro card shown above the message list. */
   introCard?: IntroCardTokens;
   /** Markdown surfaces (chat + artifact pane). */

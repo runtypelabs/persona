@@ -3109,6 +3109,52 @@
   box-shadow: var(--persona-message-user-shadow);
 }
 
+/* Long user message collapse (features.userMessageCollapse). The region clips
+   without becoming a scroller (overflow: clip), so the full text stays in the
+   DOM for find, copy and screen readers with no nested scroll area. The fade
+   is a mask rather than a gradient overlay, so it works on any bubble fill in
+   light and dark schemes; the toggle inherits the bubble's text color. */
+.persona-user-collapse-region[data-persona-user-collapse="collapsed"] {
+  max-height: var(--persona-user-collapse-max-height, 240px);
+  overflow: clip;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--persona-user-collapse-fade-height, 48px)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--persona-user-collapse-fade-height, 48px)), transparent);
+}
+
+.persona-user-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.25rem;
+  padding: 0.125rem 0;
+  border: 0;
+  background: none;
+  color: var(--persona-user-collapse-toggle-fg, inherit);
+  font-family: inherit;
+  font-size: var(--persona-user-collapse-toggle-font-size, 0.8125rem);
+  font-weight: var(--persona-user-collapse-toggle-font-weight, 600);
+  line-height: 1.25rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition: text-decoration-color 150ms ease;
+}
+
+.persona-user-collapse-toggle:hover {
+  text-decoration-color: currentColor;
+}
+
+.persona-user-collapse-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-user-collapse-toggle {
+    transition: none;
+  }
+}
+
 [data-persona-root] .persona-tool-bubble.persona-shadow-sm {
   box-shadow: var(--persona-tool-bubble-shadow);
 }

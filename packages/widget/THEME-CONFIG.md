@@ -880,6 +880,33 @@ from the rest of the widget's icon buttons.
 The voted (active) state stays on `semantic.colors.accent` and is not themable
 through this group.
 
+### Long user messages (`components.userMessageCollapse.*`)
+
+With `features.userMessageCollapse.enabled` (on by default under
+`future.v5Defaults`), a user bubble whose rendered content is taller than
+`features.userMessageCollapse.maxHeight` (default `240`, about ten lines) is
+clipped with a bottom fade and a `Show more` / `Show less` button. The fade is a
+mask, not a colored overlay, so it works on any bubble fill in light and dark
+schemes, and the toggle inherits the bubble's text color. Every token is
+optional.
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `fadeHeight` | `--persona-user-collapse-fade-height` | `48px` |
+| `toggleForeground` | `--persona-user-collapse-toggle-fg` | The user bubble text color |
+| `toggleFontSize` | `--persona-user-collapse-toggle-font-size` | `0.8125rem` |
+| `toggleFontWeight` | `--persona-user-collapse-toggle-font-weight` | `600` |
+
+Labels are localized with `copy.showMoreLabel` and `copy.showLessLabel`. The
+clip region carries `data-persona-user-collapse="fit" | "live" | "collapsed" |
+"expanded"` and the button `data-persona-user-collapse-toggle`, for host CSS.
+
+```typescript
+features: { userMessageCollapse: { enabled: true, maxHeight: 200 } },
+copy: { showMoreLabel: 'Mehr anzeigen', showLessLabel: 'Weniger anzeigen' },
+theme: { components: { userMessageCollapse: { fadeHeight: '32px' } } },
+```
+
 ### Voice (`components.voice.*`)
 
 | Token | Default Reference |
@@ -2079,6 +2106,7 @@ Partial V5 palette overrides preserve the remaining dark shades.
 | Turn gap | 12px | 20px; 28px in full-height/fullscreen views |
 | `layout.contentMaxWidth` | Unset | 768px where supported |
 | `statusIndicator.mode` | `"always"` | `"transient"` |
+| `features.userMessageCollapse.enabled` | `false` | `true` (long user messages collapse behind "Show more") |
 | `approval.resolvedDisplay` | `"trace"` | `"row"` |
 | `approval.primaryAction` | `"always-allow"` when enabled | `"allow-once"` |
 | `approval.keyboardShortcuts` | `"legacy"`, requires `enableAlwaysAllow` | `"focused"` |

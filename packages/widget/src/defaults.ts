@@ -266,6 +266,9 @@ export const DEFAULTS_V5: Partial<AgentWidgetConfig> = {
   features: {
     artifacts: { enabled: true },
     scrollToBottom: { streamingIndicator: "dots", transition: "fade", scrollBehavior: "smooth" },
+    // Long sent messages (pasted text, voice transcripts) would otherwise fill
+    // the viewport under the anchor-top pin and push the reply out of view.
+    userMessageCollapse: { enabled: true },
     toolCallDisplay: DEFAULT_TOOL_CALL_DISPLAY_V5,
     reasoningDisplay: DEFAULT_REASONING_DISPLAY_V5,
   },
@@ -382,6 +385,8 @@ export function mergeWithDefaults(
       const csa = config.features?.streamAnimation;
       const dau = defaults.features?.askUserQuestion;
       const cau = config.features?.askUserQuestion;
+      const duc = defaults.features?.userMessageCollapse;
+      const cuc = config.features?.userMessageCollapse;
       const dh = defaults.features?.history;
       const ch = config.features?.history;
       const mergedArtifacts =
@@ -459,6 +464,7 @@ export function mergeWithDefaults(
         ...(mergedStreamAnimation !== undefined ? { streamAnimation: mergedStreamAnimation } : {}),
         ...(mergedAskUserQuestion !== undefined ? { askUserQuestion: mergedAskUserQuestion } : {}),
         ...(mergedHistory !== undefined ? { history: mergedHistory } : {}),
+        ...(duc !== undefined || cuc !== undefined ? { userMessageCollapse: { ...duc, ...cuc } } : {}),
       };
     })(),
     suggestionChips: config.suggestionChips ?? defaults.suggestionChips,

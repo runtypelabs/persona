@@ -272,6 +272,17 @@ import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
 import { MessageTransform, MessageActionCallbacks, MessageActionEligibility } from "./components/message-bubble";
 import {
+  applyUserCollapseState,
+  isUserMessageCollapseEnabled,
+  resolveUserMessageCollapseLabels,
+  resolveUserMessageCollapseMaxHeight,
+  userMessageOverflows,
+  USER_COLLAPSE_REGION_ATTR,
+  USER_COLLAPSE_TOGGLE_ATTR,
+  type UserMessageCollapseRender,
+  type UserMessageCollapseState,
+} from "./components/user-message-collapse";
+import {
   createStandardBubble,
   createTypingIndicator,
   getBubbleClasses,
@@ -971,6 +982,31 @@ export const createAgentExperience = (
   const toolExpansionState = new Set<string>();
   const reasoningExpansionState = new Set<string>();
   const approvalDetailsExpansionState = new Map<string, boolean>();
+  // Long user message collapse, per message id: the measured overflow and the
+  // reader's own toggle (true = expanded). Render state derives from both, so
+  // re-renders and morphs never re-collapse or re-expand a toggled bubble.
+  const userCollapseOverflow = new Map<string, boolean>();
+  const userCollapseToggled = new Map<string, boolean>();
+  // Voice transcripts rendered while interim. Their final render stays
+  // expanded ("settling") so the post-morph sync applies the collapse with
+  // the viewport held, rather than the morph collapsing it underneath.
+  const userCollapseLive = new Set<string>();
+  const resolveUserCollapse = (message: AgentWidgetMessage): UserMessageCollapseRender | undefined => {
+    if (message.role !== "user" || !isUserMessageCollapseEnabled(config)) return undefined;
+    if (message.voiceProcessing) userCollapseLive.add(message.id);
+    const state: UserMessageCollapseState = message.voiceProcessing
+      ? "live"
+      : userCollapseLive.has(message.id)
+        ? "settling"
+        : !userCollapseOverflow.get(message.id)
+          ? "fit"
+          : userCollapseToggled.get(message.id) ? "expanded" : "collapsed";
+    return {
+      state,
+      maxHeight: resolveUserMessageCollapseMaxHeight(config),
+      ...resolveUserMessageCollapseLabels(config),
+    };
+  };
   const applyTooltipTiming = (): void => {
     configureTooltipTiming({
       delayMs: config.tooltip?.delayMs ?? DEFAULT_TOOLTIP_DELAY_MS,
@@ -2862,6 +2898,28 @@ export const createAgentExperience = (
       pauseAutoScroll();
     }
   }, { capture: true });
+
+  // "Show more" / "Show less" on a long user message. Toggling is reading
+  // intent like a tool disclosure: it pauses follow and never re-anchors.
+  messagesWrapper.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const toggle = target.closest<HTMLButtonElement>(`button[${USER_COLLAPSE_TOGGLE_ATTR}]`);
+    const bubble = toggle?.closest<HTMLElement>("[data-message-id]");
+    const region = bubble?.querySelector<HTMLElement>(`[${USER_COLLAPSE_REGION_ATTR}]`);
+    const messageId = bubble?.getAttribute("data-message-id");
+    if (!toggle || !bubble || !region || !messageId) return;
+    event.preventDefault();
+    markReaderEngaged();
+    pauseAutoScroll();
+    const expanded = toggle.getAttribute("aria-expanded") !== "true";
+    userCollapseToggled.set(messageId, expanded);
+    applyUserCollapseChange(bubble, region, messageId, {
+      state: expanded ? "expanded" : "collapsed",
+      maxHeight: resolveUserMessageCollapseMaxHeight(config),
+      ...resolveUserMessageCollapseLabels(config),
+    }, "toggle");
+  });
 
   // Add event delegation for reasoning and tool bubble expansion
   // This handles clicks even after idiomorph morphs the DOM
@@ -5935,6 +5993,94 @@ export const createAgentExperience = (
     syncScrollToBottomButton();
   };
 
+  // Re-applies a user bubble's collapse state in place, holding the viewport.
+  // A toggle holds the bubble's top (a collapse whose top scrolled out of view
+  // brings it back to the anchor offset, so the toggle stays in view). A measurement
+  // change holds what the reader sees: the top when it is in view, otherwise
+  // the bubble's bottom edge, so the content below never moves. While
+  // anchored, the spacer is re-reserved first so a shrink can't clamp
+  // scrollTop, then trimmed to the held position with a fresh drain baseline.
+  const applyUserCollapseChange = (
+    bubble: HTMLElement,
+    region: HTMLElement,
+    messageId: string,
+    render: UserMessageCollapseRender,
+    intent: "toggle" | "measure"
+  ) => {
+    messageCache.delete(messageId);
+    const holdViewport = intent === "toggle" || !(isFollowEffective() && autoFollow.isFollowing());
+    if (!holdViewport) {
+      applyUserCollapseState(bubble, region, messageId, render);
+      return;
+    }
+    const bodyTop = body.getBoundingClientRect().top;
+    const before = bubble.getBoundingClientRect();
+    const anchor = anchorState;
+    if (anchor) {
+      cancelSmoothScroll();
+      setAnchorSpacerHeight(anchor.spacerHeight + bubble.offsetHeight);
+    }
+    applyUserCollapseState(bubble, region, messageId, render);
+    const after = bubble.getBoundingClientRect();
+    const prevTop = before.top - bodyTop;
+    const shift = intent === "toggle"
+      ? after.top - bodyTop - (render.state === "collapsed" && prevTop < 0 ? getAnchorTopOffset() : prevTop)
+      : prevTop >= 0 ? after.top - before.top : after.bottom - before.bottom;
+    const target = Math.max(0, body.scrollTop + shift);
+    if (anchor && anchorState === anchor) {
+      setAnchorSpacerHeight(target + body.clientHeight + BOTTOM_THRESHOLD - measureContentHeight(anchor.spacerHeight));
+      anchor.initialSpacerHeight = anchor.spacerHeight;
+      anchor.contentHeightAtAnchor = body.scrollHeight - anchor.spacerHeight;
+    }
+    if (Math.abs(target - body.scrollTop) >= 1) {
+      isAutoScrolling = true;
+      body.scrollTop = target;
+      lastScrollTop = body.scrollTop;
+      isAutoScrolling = false;
+    }
+    syncScrollToBottomButton();
+  };
+
+  // Measures every built-in user bubble's real rendered height (markdown,
+  // code, wrapping, attachments) after a morph or resize and collapses the
+  // ones that overflow. Unlaid regions (a closed panel, jsdom) measure 0 and
+  // keep their state until a later pass can measure them.
+  const syncUserMessageCollapse = () => {
+    if (!isUserMessageCollapseEnabled(config)) return;
+    const maxHeight = resolveUserMessageCollapseMaxHeight(config);
+    for (const region of Array.from(
+      messagesWrapper.querySelectorAll<HTMLElement>(`[${USER_COLLAPSE_REGION_ATTR}]`)
+    )) {
+      const bubble = region.closest<HTMLElement>("[data-message-id]");
+      const messageId = bubble?.getAttribute("data-message-id");
+      if (!bubble || !messageId) continue;
+      const naturalHeight = region.scrollHeight;
+      if (naturalHeight > 0) {
+        userCollapseOverflow.set(messageId, userMessageOverflows(naturalHeight, maxHeight));
+      }
+      const overflows = userCollapseOverflow.get(messageId) ?? false;
+      const current = region.getAttribute(USER_COLLAPSE_REGION_ATTR);
+      // An interim voice transcript stays expanded so the speaker can watch it.
+      if (current === "live") continue;
+      if (current === "settling") userCollapseLive.delete(messageId);
+      const state: UserMessageCollapseState = !overflows
+        ? "fit"
+        : userCollapseToggled.get(messageId) ? "expanded" : "collapsed";
+      if (state === current) continue;
+      applyUserCollapseChange(bubble, region, messageId, {
+        state, maxHeight, ...resolveUserMessageCollapseLabels(config),
+      }, "measure");
+    }
+  };
+
+  const pruneUserMessageCollapse = (messages: AgentWidgetMessage[]) => {
+    if (userCollapseOverflow.size === 0 && userCollapseToggled.size === 0 && userCollapseLive.size === 0) return;
+    const ids = new Set(messages.map((message) => message.id));
+    for (const map of [userCollapseOverflow, userCollapseToggled, userCollapseLive]) {
+      for (const id of map.keys()) if (!ids.has(id)) map.delete(id);
+    }
+  };
+
   // Reacts to a user message the user just sent (seeded so restored history
   // never triggers it). Follow mode re-sticks to the bottom even if the user
   // had scrolled up: sending is an unambiguous "take me to the latest"
@@ -6338,8 +6484,10 @@ export const createAgentExperience = (
           ? { toolCallId: linkedTool.id, status: linkedTool.status === "running"
               ? "running" : linkedTool.success === false || linkedTool.error ? "failed" : "completed" }
           : undefined;
+      const userCollapse = resolveUserCollapse(message);
       const fingerprint =
         computeMessageFingerprint(message, configVersion) + askMeta + `:${eligibilityKey}` +
+        (userCollapse ? `:uc-${userCollapse.state}` : "") +
         (approvalWithPlugin ? `:${message.approval?.toolCallId ?? ""}:${JSON.stringify(execution)}` : "");
       const cachedWrapper = (askWithPlugin || approvalWithPlugin || hasDirectiveBubble ||
         (message.dispatchError && config.errorDisplay === "block" && !approvalUi))
@@ -6388,7 +6536,8 @@ export const createAgentExperience = (
         // Keep the detail readable even while the secondary UI chunk loads.
         const bubble = createStandardBubble(message, transform, config.layout?.messages,
           config.messageActions, messageActionCallbacks, {
-            loadingIndicatorRenderer: inlineLoadingRenderer, widgetConfig: config, actionEligibility
+            loadingIndicatorRenderer: inlineLoadingRenderer, widgetConfig: config, actionEligibility,
+            userCollapse
           });
         bubble.dataset.personaDefaultMessage = "true";
         return bubble;
@@ -7206,6 +7355,8 @@ export const createAgentExperience = (
   ) => {
     if (messages.length > 0) warmClientStream();
     renderMessagesWithPluginsImpl(container, messages, transform);
+    pruneUserMessageCollapse(messages);
+    syncUserMessageCollapse();
     refreshReadAloudButtons();
     if (revealedToolCalls.size > 0) {
       for (const [id, timer] of revealedToolCalls) {
@@ -11120,6 +11271,8 @@ export const createAgentExperience = (
   // (viewport resize) so the pin survives all of them.
   if (typeof ResizeObserver !== "undefined") {
     const contentResizeObserver = new ResizeObserver(() => {
+      // Width changes rewrap text and late images grow attachments.
+      syncUserMessageCollapse();
       handleContentResize();
       syncTranscriptEdgeFades();
       // A resize can start or stop a table overflowing without a render or a
