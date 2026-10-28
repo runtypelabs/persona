@@ -5521,9 +5521,22 @@ export const createAgentExperience = (
     .map((message) => queryMessageBubble(message.id))
     .filter((bubble): bubble is HTMLElement => Boolean(bubble?.isConnected));
   const isApprovalBelow = () => pendingApprovalBubbles().some(isBelowFold);
-  // Set by a jump taken from the "Approval needed" control: once it lands,
-  // focus moves to the approval's primary action, in view.
-  let focusApprovalAfterJump = false;
+  const isFullyInView = (element: HTMLElement) => {
+    const top = offsetTopWithinBody(element);
+    return top >= body.scrollTop && top + element.offsetHeight <= body.scrollTop + readableViewportHeight();
+  };
+  // The approvals a jump from the "Approval needed" control was taken for.
+  // Once it lands, focus moves to the first of them whose primary action is
+  // fully in view, and never to one the reader can't see.
+  let approvalJumpTargets: string[] = [];
+  const focusApprovalJumpTarget = () => {
+    const targets = approvalJumpTargets;
+    approvalJumpTargets = [];
+    for (const id of targets) {
+      const allow = queryMessageBubble(id)?.querySelector<HTMLButtonElement>('[data-action="allow"]');
+      if (allow && isFullyInView(allow)) { allow.focus({ preventScroll: true }); return; }
+    }
+  };
 
   // Whether the user is currently away from the latest content: drives both
   // the scroll-to-bottom affordance and the new-messages badge. Effective
@@ -5624,13 +5637,8 @@ export const createAgentExperience = (
 
   const latestScroll = createScrollToLatest(body, container,
     () => { lastScrollTop = body.scrollTop; },
-    () => {
-      resumeAutoScroll(); scheduleAutoScroll(true); syncScrollToBottomButton();
-      if (!focusApprovalAfterJump) return;
-      focusApprovalAfterJump = false;
-      pendingApprovalBubbles()[0]?.querySelector<HTMLButtonElement>('[data-action="allow"]')?.focus({ preventScroll: true });
-    },
-    () => { focusApprovalAfterJump = false; autoFollow.pause(); syncScrollToBottomButton(); });
+    () => { resumeAutoScroll(); scheduleAutoScroll(true); syncScrollToBottomButton(); focusApprovalJumpTarget(); },
+    () => { approvalJumpTargets = []; autoFollow.pause(); syncScrollToBottomButton(); });
 
   // Custom smooth scroll animation with easing
   const smoothScrollToBottom = (element: HTMLElement, duration = 500) => {
@@ -11211,12 +11219,13 @@ export const createAgentExperience = (
   });
   destroyCallbacks.push(() => body.removeEventListener("wheel", handleWheel));
   scrollToBottomButton.addEventListener("click", () => {
-    const approvalBelow = isApprovalBelow();
+    const targets = pendingApprovalBubbles().filter(isBelowFold)
+      .map((bubble) => bubble.getAttribute("data-message-id")!);
     // Jumping to the latest abandons the current anchor: drop the spacer
     // first so "bottom" means the real end of content, not spacer padding
     // that would keep shrinking underneath the reader.
     resetAnchorState();
-    focusApprovalAfterJump = approvalBelow;
+    approvalJumpTargets = targets;
     cancelAutoScroll();
     autoFollow.pause();
     latestScroll.start(config);

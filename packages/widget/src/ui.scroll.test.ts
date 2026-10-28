@@ -1116,7 +1116,15 @@ describe("createAgentExperience streaming scroll", () => {
   });
 
   describe("approval waiting below an anchored turn", () => {
-    const setup = (approvalTop: number) => {
+    const approvalMessage = (id: string, status: "pending" | "approved" = "pending") => ({
+      type: "message" as const, message: {
+        id, role: "assistant" as const, content: "", createdAt: STREAM_CREATED_AT,
+        variant: "approval" as const, approval: { id, agentId: "agent", executionId: "execution", status, toolName: "Search", description: "Search documentation", parameters: { query: "docs" } },
+      },
+    });
+    // `approvals` maps approval ids to card tops; each Allow button sits 40px
+    // into its card (jsdom has no layout, so the geometry is mocked).
+    const setup = (approvals: Record<string, number>, scrollHeight = 1600) => {
       const raf = installRafMock();
       const mount = createMount();
       const controller = createAgentExperience(mount, {
@@ -1125,12 +1133,13 @@ describe("createAgentExperience streaming scroll", () => {
         features: { scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 } },
       } as any);
       const body = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
-      const metrics = installScrollMetrics(body, { scrollHeight: 1600, clientHeight: 400 });
-      // A long question at 100 anchors at 84; the approval card renders at
-      // `approvalTop` (jsdom has no layout, so the geometry is mocked).
+      const metrics = installScrollMetrics(body, { scrollHeight, clientHeight: 400 });
+      const tops: Record<string, number> = { "user-approve": 100, ...approvals };
       vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
         const id = this.getAttribute("data-message-id") ?? this.getAttribute("data-wrapper-id");
-        return id === "user-approve" ? 100 : id === "approval-below" ? approvalTop : 0;
+        if (id && id in tops) return tops[id];
+        const card = this.matches('[data-action="allow"]') ? this.closest("[data-message-id]")?.getAttribute("data-message-id") : null;
+        return card && card in tops ? tops[card] + 40 : 0;
       });
       emitStreamingStatus(controller);
       emitUserMessage(controller, "user-approve", "Long question ".repeat(80));
@@ -1138,18 +1147,15 @@ describe("createAgentExperience streaming scroll", () => {
       expect(metrics.getScrollTop()).toBe(84);
       const composer = mount.querySelector<HTMLTextAreaElement>("textarea")!;
       composer.focus();
-      controller.injectTestMessage({ type: "message", message: {
-        id: "approval-below", role: "assistant", content: "", createdAt: STREAM_CREATED_AT,
-        variant: "approval", approval: { id: "approval-below", agentId: "agent", executionId: "execution", status: "pending", toolName: "Search", description: "Search documentation", parameters: { query: "docs" } },
-      } });
+      for (const id of Object.keys(approvals)) controller.injectTestMessage(approvalMessage(id));
       raf.flush();
-      const allow = () => mount.querySelector<HTMLButtonElement>('[data-message-id="approval-below"] [data-action="allow"]');
-      return { raf, mount, controller, metrics, composer, allow, jump: getScrollToBottomButton(mount)! };
+      const allow = (id: string) => mount.querySelector<HTMLButtonElement>(`[data-message-id="${id}"] [data-action="allow"]`);
+      return { raf, controller, metrics, composer, allow, jump: getScrollToBottomButton(mount)! };
     };
 
     it("names it instead of scrolling or moving focus, then focuses it after the jump", () => {
-      const { raf, controller, metrics, composer, allow, jump } = setup(1200);
-      expect(allow()).not.toBeNull();
+      const { raf, controller, metrics, composer, allow, jump } = setup({ "approval-below": 1400 });
+      expect(allow("approval-below")).not.toBeNull();
       // The anchor holds, and Enter-to-allow never lands on an unseen card.
       expect(metrics.getScrollTop()).toBe(84);
       expect(document.activeElement).toBe(composer);
@@ -1159,27 +1165,47 @@ describe("createAgentExperience streaming scroll", () => {
 
       jump.click();
       raf.flush();
+      // Bottom is 1200: the card at 1400 and its Allow button at 1440 are in view.
       expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
-      expect(document.activeElement).toBe(allow());
+      expect(document.activeElement).toBe(allow("approval-below"));
       expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+      controller.destroy();
+    });
+
+    it("after the jump, focuses only an approval whose action is in view", () => {
+      // The older card ends up above the viewport after the jump; the newer
+      // one is in view. Focus must go to the visible one, never the older.
+      const { raf, controller, composer, allow, jump } = setup({ "approval-old": 700, "approval-new": 1400 });
+      jump.click();
+      raf.flush();
+      expect(document.activeElement).not.toBe(allow("approval-old"));
+      expect(document.activeElement).toBe(allow("approval-new"));
+      expect(composer).not.toBe(document.activeElement);
+      controller.destroy();
+    });
+
+    it("focuses nothing after the jump when no target's action is in view", () => {
+      // The only card lands above the jump's viewport (bottom is 1200).
+      const { raf, controller, allow, jump } = setup({ "approval-above": 700 });
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+      jump.click();
+      raf.flush();
+      expect(document.activeElement).not.toBe(allow("approval-above"));
       controller.destroy();
     });
 
     it("leaves a visible approval to the card itself", () => {
-      const { controller, metrics, allow, jump } = setup(300);
+      const { controller, metrics, allow, jump } = setup({ "approval-below": 300 });
       expect(metrics.getScrollTop()).toBe(84);
       expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
-      expect(document.activeElement).toBe(allow());
+      expect(document.activeElement).toBe(allow("approval-below"));
       controller.destroy();
     });
 
     it("drops the label once the approval resolves", () => {
-      const { raf, controller, jump } = setup(1200);
+      const { raf, controller, jump } = setup({ "approval-below": 1400 });
       expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
-      controller.injectTestMessage({ type: "message", message: {
-        id: "approval-below", role: "assistant", content: "", createdAt: STREAM_CREATED_AT,
-        variant: "approval", approval: { id: "approval-below", agentId: "agent", executionId: "execution", status: "approved", toolName: "Search", description: "Search documentation", parameters: { query: "docs" } },
-      } });
+      controller.injectTestMessage(approvalMessage("approval-below", "approved"));
       raf.flush();
       expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
       controller.destroy();
