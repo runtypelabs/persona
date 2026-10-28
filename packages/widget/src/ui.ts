@@ -2901,24 +2901,36 @@ export const createAgentExperience = (
 
   // "Show more" / "Show less" on a long user message. Toggling is reading
   // intent like a tool disclosure: it pauses follow and never re-anchors.
-  messagesWrapper.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    const toggle = target.closest<HTMLButtonElement>(`button[${USER_COLLAPSE_TOGGLE_ATTR}]`);
-    const bubble = toggle?.closest<HTMLElement>("[data-message-id]");
-    const region = bubble?.querySelector<HTMLElement>(`[${USER_COLLAPSE_REGION_ATTR}]`);
-    const messageId = bubble?.getAttribute("data-message-id");
-    if (!toggle || !bubble || !region || !messageId) return;
-    event.preventDefault();
+  const setUserCollapseExpanded = (bubble: HTMLElement, expanded: boolean) => {
+    const region = bubble.querySelector<HTMLElement>(`[${USER_COLLAPSE_REGION_ATTR}]`);
+    const messageId = bubble.getAttribute("data-message-id");
+    if (!region || !messageId) return;
     markReaderEngaged();
     pauseAutoScroll();
-    const expanded = toggle.getAttribute("aria-expanded") !== "true";
     userCollapseToggled.set(messageId, expanded);
     applyUserCollapseChange(bubble, region, messageId, {
       state: expanded ? "expanded" : "collapsed",
       maxHeight: resolveUserMessageCollapseMaxHeight(config),
       ...resolveUserMessageCollapseLabels(config),
     }, "toggle");
+  };
+  messagesWrapper.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const toggle = target.closest<HTMLButtonElement>(`button[${USER_COLLAPSE_TOGGLE_ATTR}]`);
+    const bubble = toggle?.closest<HTMLElement>("[data-message-id]");
+    if (!toggle || !bubble) return;
+    event.preventDefault();
+    setUserCollapseExpanded(bubble, toggle.getAttribute("aria-expanded") !== "true");
+  });
+  // Keyboard focus landing on a link or control inside the clipped part
+  // expands the message, so a focused element is never hidden behind the clip.
+  messagesWrapper.addEventListener("focusin", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const region = target.closest(`[${USER_COLLAPSE_REGION_ATTR}="collapsed"]`);
+    const bubble = region?.closest<HTMLElement>("[data-message-id]");
+    if (bubble) setUserCollapseExpanded(bubble, true);
   });
 
   // Add event delegation for reasoning and tool bubble expansion
@@ -11916,6 +11928,10 @@ export const createAgentExperience = (
       const previousShowToolCalls = config.features?.showToolCalls;
       const previousToolCallDisplay = config.features?.toolCallDisplay;
       const previousReasoningDisplay = config.features?.reasoningDisplay;
+      const userCollapseConfigKey = () => JSON.stringify([
+        config.features?.userMessageCollapse, config.copy?.showMoreLabel, config.copy?.showLessLabel,
+      ]);
+      const previousUserCollapseConfig = userCollapseConfigKey();
       const previousStreamAnimationType = config.features?.streamAnimation?.type;
       // History provider identity: enablement, eligibility, and advertised
       // scopes are all resolved at construction, so a change rebuilds it.
@@ -12173,7 +12189,8 @@ export const createAgentExperience = (
       const featuresChanged = (config.features?.showReasoning ?? true) !== (previousShowReasoning ?? true)
         || (config.features?.showToolCalls ?? true) !== (previousShowToolCalls ?? true)
         || JSON.stringify(config.features?.toolCallDisplay) !== JSON.stringify(previousToolCallDisplay)
-        || JSON.stringify(config.features?.reasoningDisplay) !== JSON.stringify(previousReasoningDisplay);
+        || JSON.stringify(config.features?.reasoningDisplay) !== JSON.stringify(previousReasoningDisplay)
+        || userCollapseConfigKey() !== previousUserCollapseConfig;
       const messagesConfigChanged = (config.future?.v5Defaults === true) !== previousDefaultsVersion
         || "toolCall" in nextConfig || messageActionsChanged || layoutMessagesChanged
         || "loadingIndicator" in nextConfig || iterationDisplayChanged || featuresChanged

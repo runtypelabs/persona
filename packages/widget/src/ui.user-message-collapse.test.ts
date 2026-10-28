@@ -225,6 +225,39 @@ describe("long user message collapse", () => {
     controller.destroy();
   });
 
+  it("expands when keyboard focus lands inside the clipped content", () => {
+    installRafMock();
+    const { mount, controller } = mountWidget();
+    emitUser(controller, "focus", 900);
+    const content = region(mount, "focus")!.querySelector<HTMLElement>(".persona-message-content")!;
+    content.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(region(mount, "focus")!.getAttribute("data-persona-user-collapse")).toBe("expanded");
+    expect(toggle(mount, "focus")!.getAttribute("aria-expanded")).toBe("true");
+    // Focusing the toggle itself (outside the region) changes nothing.
+    toggle(mount, "focus")!.click();
+    toggle(mount, "focus")!.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(region(mount, "focus")!.getAttribute("data-persona-user-collapse")).toBe("collapsed");
+    controller.destroy();
+  });
+
+  it("applies maxHeight and label changes from update() to rendered bubbles", () => {
+    installRafMock();
+    const { mount, controller } = mountWidget();
+    emitUser(controller, "updated", 900);
+    emit(controller, { id: "reply", role: "assistant", content: "Reply" });
+    controller.update({
+      features: { userMessageCollapse: { enabled: true, maxHeight: 300 } },
+      copy: { showMoreLabel: "Expand", showLessLabel: "Shrink" },
+    });
+    expect(region(mount, "updated")!.style.getPropertyValue("--persona-user-collapse-max-height")).toBe("300px");
+    expect(toggle(mount, "updated")!.textContent).toBe("Expand");
+    // Raised past the content height, the bubble no longer collapses at all.
+    controller.update({ features: { userMessageCollapse: { enabled: true, maxHeight: 1000 } } });
+    expect(region(mount, "updated")!.getAttribute("data-persona-user-collapse")).toBe("fit");
+    expect(toggle(mount, "updated")).toBeNull();
+    controller.destroy();
+  });
+
   it("keeps the reader's choice across streaming re-renders and morphs", () => {
     const raf = installRafMock();
     const { mount, controller } = mountWidget();

@@ -148,3 +148,22 @@ margin):
 | --- | ---: | ---: | ---: |
 | `dist/index.global.js` (gzip) | 167.62 kB | 167.87 kB | 167.7 → 168 kB |
 | `dist/index.global.js` (Brotli) | 132.91 KiB | 133.17 KiB | 133 → 133.2 KiB |
+
+## Long user message collapse
+
+`features.userMessageCollapse` (on under `future.v5Defaults`) adds the collapse
+region and toggle to the default user bubble, the post-morph measurement and the
+viewport hold to `ui.ts`, and the clip, fade and toggle styles to `widget.css`.
+It runs on the first render so a long message never flashes at full height,
+so it stays in the core rather than a lazy chunk. Raises, each to the smallest
+budget that fits with room for the CI build's few extra bytes (gzip, decimal
+kB, and Brotli, binary KiB; Before is main 465d95ea):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` | 167.49 kB | 168.72 kB | 167.6 → 168.8 kB |
+| `dist/widget.css` | 24.32 kB | 24.53 kB | 24.5 → 24.6 kB |
+| `dist/index.global.js` (Brotli) | 132.91 KiB | 133.84 KiB | 133 → 134 KiB |
+| `dist/widget.css` (Brotli) | 20.07 KiB | 20.21 KiB | 20.1 → 20.25 KiB |
+
+`index.js` and `index.cjs` stay within their budgets (209.16 kB and 208.89 kB gzip).
