@@ -1,0 +1,69 @@
+{
+  "runId": "20261029-011724-c7047c",
+  "entries": [
+    {
+      "feature": "approval-morph",
+      "label": "V5 light: streaming dots morph into the Approval needed pill",
+      "note": null,
+      "files": [
+        "01-approval-morph-v5-light-streaming-dots-morph-into-the-approval-.gif",
+        "01-approval-morph-v5-light-streaming-dots-morph-into-the-approval-.webm",
+        "01-approval-morph-v5-light-streaming-dots-morph-into-the-approval-.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=light&delayMs=220&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%2C%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%7D",
+      "at": "2026-10-29T01:27:38.047Z",
+      "head": "e2391aafde93bf84c6040f8166ca6d1c4e3ce72b",
+      "diffHash": "3b06457b3f3a"
+    },
+    {
+      "feature": "approval-morph",
+      "label": "V4 light: streaming arrow morphs into the Approval needed pill",
+      "note": null,
+      "files": [
+        "02-approval-morph-v4-light-streaming-arrow-morphs-into-the-approva.gif",
+        "02-approval-morph-v4-light-streaming-arrow-morphs-into-the-approva.webm",
+        "02-approval-morph-v4-light-streaming-arrow-morphs-into-the-approva.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=light&delayMs=220&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%7D",
+      "at": "2026-10-29T01:28:05.635Z",
+      "head": "e2391aafde93bf84c6040f8166ca6d1c4e3ce72b",
+      "diffHash": "3b06457b3f3a"
+    },
+    {
+      "feature": "approval-morph",
+      "label": "V5 dark: streaming dots morph into the Approval needed pill",
+      "note": null,
+      "files": [
+        "03-approval-morph-v5-dark-streaming-dots-morph-into-the-approval-n.gif",
+        "03-approval-morph-v5-dark-streaming-dots-morph-into-the-approval-n.webm",
+        "03-approval-morph-v5-dark-streaming-dots-morph-into-the-approval-n.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=dark&delayMs=220&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%2C%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%7D",
+      "at": "2026-10-29T01:28:25.256Z",
+      "head": "e2391aafde93bf84c6040f8166ca6d1c4e3ce72b",
+      "diffHash": "3b06457b3f3a"
+    },
+    {
+      "feature": "approval-morph",
+      "label": "slow motion (1400ms): V5 with amber approval accent",
+      "note": null,
+      "files": [
+        "04-approval-morph-slow-motion-1400ms-v5-with-amber-approval-accent.gif",
+        "04-approval-morph-slow-motion-1400ms-v5-with-amber-approval-accent.webm",
+        "04-approval-morph-slow-motion-1400ms-v5-with-amber-approval-accent.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval&theme=light&delayMs=220&config=%7B%22launcher%22%3A%7B%22fullHeight%22%3Atrue%7D%2C%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22theme%22%3A%7B%22components%22%3A%7B%22motion%22%3A%7B%22durationBase%22%3A%221400ms%22%7D%2C%22scrollToBottom%22%3A%7B%22approval%22%3A%7B%22background%22%3A%22palette.colors.warning.50%22%2C%22foreground%22%3A%22palette.colors.warning.800%22%2C%22border%22%3A%22palette.colors.warning.300%22%7D%7D%7D%7D%7D",
+      "at": "2026-10-29T01:29:00.116Z",
+      "head": "e2391aafde93bf84c6040f8166ca6d1c4e3ce72b",
+      "diffHash": "3b06457b3f3a"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "approval-morph",
+      "pass": false,
+      "skipped": true,
+      "note": "pill->arrow and reduced motion verified by unit tests, not recorded"
+    }
+  ]
+}
