@@ -45,8 +45,11 @@ export function createScrollToBottomControl(
   };
   const morph = (from: Keyframe) => {
     const style = getComputedStyle(element);
-    const duration = style.getPropertyValue("--persona-motion-duration-base");
-    const timing = { duration: parseFloat(duration) * (duration.includes("ms") ? 1 : 1000) || 200, easing: style.getPropertyValue("--persona-motion-easing").trim() || "ease-out" };
+    const value = style.getPropertyValue("--persona-motion-duration-base");
+    const ms = parseFloat(value) * (value.includes("ms") ? 1 : 1000);
+    // "0ms" turns motion off; only a missing or invalid value falls back.
+    if (ms === 0) return;
+    const timing = { duration: ms > 0 ? ms : 200, easing: style.getPropertyValue("--persona-motion-easing").trim() || "ease-out" };
     // Clip only while widening into the pill: the arrow's count badge hangs
     // outside the button.
     const clip = label.style.display === "none" ? null : { overflow: "hidden" };

@@ -215,6 +215,26 @@ describe("scroll-to-bottom chrome", () => {
       } finally { restore(); }
     });
 
+    it("swaps instantly when the theme turns motion off, and falls back when the duration is missing", () => {
+      const { calls, restore } = stubAnimate();
+      try {
+        const config: AgentWidgetConfig = { future: { v5Defaults: true } };
+        const off = createScrollToBottomControl(icon, "transcript");
+        off.element.style.setProperty("--persona-motion-duration-base", "0ms");
+        off.update(config, true);
+        off.update(config, true, false, 0, true);
+        expect(calls).toHaveLength(0);
+        expect(off.element.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+        off.destroy();
+
+        const unset = createScrollToBottomControl(icon, "transcript");
+        unset.update(config, true);
+        unset.update(config, true, false, 0, true);
+        expect(calls[0].options.duration).toBe(200);
+        unset.destroy();
+      } finally { restore(); }
+    });
+
     it("does not morph a control that appears, hides, or prefers reduced motion", () => {
       const { calls, restore } = stubAnimate();
       try {
