@@ -3,9 +3,9 @@ import { brotliCompressSync, constants } from "node:zlib";
 
 // Regression ceilings, in binary KiB at Brotli quality 11.
 const budgets = [
-  { file: "index.global.js", bytes: 134 * 1024, exclusive: false },
+  { file: "index.global.js", bytes: 134.2 * 1024, exclusive: false },
   { file: "launcher.global.js", bytes: 20 * 1024, exclusive: true },
-  { file: "widget.css", bytes: 20.25 * 1024, exclusive: false },
+  { file: "widget.css", bytes: 20.3 * 1024, exclusive: false },
 ];
 
 for (const { file, bytes, exclusive } of budgets) {

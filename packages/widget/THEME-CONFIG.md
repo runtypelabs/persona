@@ -901,6 +901,17 @@ Labels are localized with `copy.showMoreLabel` and `copy.showLessLabel`. The
 clip region carries `data-persona-user-collapse="fit" | "live" | "collapsed" |
 "expanded"` and the button `data-persona-user-collapse-toggle`, for host CSS.
 
+The toggle sits at the start of the bubble's text, under the last visible line.
+To move it, override its alignment in your stylesheet; the button keeps its own
+width, so an auto margin pushes it across:
+
+```css
+/* Align to the bubble's end edge */
+.persona-user-collapse-toggle { display: flex; margin-inline-start: auto; }
+/* Or center it */
+.persona-user-collapse-toggle { display: flex; margin-inline: auto; }
+```
+
 ```typescript
 features: { userMessageCollapse: { enabled: true, maxHeight: 200 } },
 copy: { showMoreLabel: 'Mehr anzeigen', showLessLabel: 'Weniger anzeigen' },

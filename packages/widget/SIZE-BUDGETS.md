@@ -157,13 +157,13 @@ viewport hold to `ui.ts`, and the clip, fade and toggle styles to `widget.css`.
 It runs on the first render so a long message never flashes at full height,
 so it stays in the core rather than a lazy chunk. Raises, each to the smallest
 budget that fits with room for the CI build's few extra bytes (gzip, decimal
-kB, and Brotli, binary KiB; Before is main 465d95ea):
+kB, and Brotli, binary KiB; Before is main 3120c86, local build):
 
 | Output | Before | After | Budget |
 | --- | ---: | ---: | ---: |
-| `dist/index.global.js` | 167.49 kB | 168.72 kB | 167.6 → 168.8 kB |
-| `dist/widget.css` | 24.32 kB | 24.53 kB | 24.5 → 24.6 kB |
-| `dist/index.global.js` (Brotli) | 132.91 KiB | 133.84 KiB | 133 → 134 KiB |
-| `dist/widget.css` (Brotli) | 20.07 KiB | 20.21 KiB | 20.1 → 20.25 KiB |
+| `dist/index.global.js` | 167.88 kB | 169.11 kB | 168 → 169.2 kB |
+| `dist/widget.css` | 24.37 kB | 24.58 kB | 24.5 → 24.6 kB |
+| `dist/index.global.js` (Brotli) | 133.15 KiB | 134.12 KiB | 133.2 → 134.2 KiB |
+| `dist/widget.css` (Brotli) | 20.10 KiB | 20.25 KiB | 20.1 → 20.3 KiB |
 
-`index.js` and `index.cjs` stay within their budgets (209.16 kB and 208.89 kB gzip).
+`index.js` and `index.cjs` stay within their budgets (209.59 kB and 209.31 kB gzip).
