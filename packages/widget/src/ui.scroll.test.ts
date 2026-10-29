@@ -1115,6 +1115,103 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
+  describe("approval waiting below an anchored turn", () => {
+    const approvalMessage = (id: string, status: "pending" | "approved" = "pending") => ({
+      type: "message" as const, message: {
+        id, role: "assistant" as const, content: "", createdAt: STREAM_CREATED_AT,
+        variant: "approval" as const, approval: { id, agentId: "agent", executionId: "execution", status, toolName: "Search", description: "Search documentation", parameters: { query: "docs" } },
+      },
+    });
+    // `approvals` maps approval ids to card tops; each Allow button sits 40px
+    // into its card (jsdom has no layout, so the geometry is mocked).
+    const setup = (approvals: Record<string, number>, scrollHeight = 1600) => {
+      const raf = installRafMock();
+      const mount = createMount();
+      const controller = createAgentExperience(mount, {
+        apiUrl: "/test", future: { v5Defaults: true }, launcher: { enabled: false },
+        approval: { keyboardShortcuts: "focused" },
+        features: { scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 } },
+      } as any);
+      const body = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+      const metrics = installScrollMetrics(body, { scrollHeight, clientHeight: 400 });
+      const tops: Record<string, number> = { "user-approve": 100, ...approvals };
+      vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
+        const id = this.getAttribute("data-message-id") ?? this.getAttribute("data-wrapper-id");
+        if (id && id in tops) return tops[id];
+        const card = this.matches('[data-action="allow"]') ? this.closest("[data-message-id]")?.getAttribute("data-message-id") : null;
+        return card && card in tops ? tops[card] + 40 : 0;
+      });
+      emitStreamingStatus(controller);
+      emitUserMessage(controller, "user-approve", "Long question ".repeat(80));
+      raf.flush();
+      expect(metrics.getScrollTop()).toBe(84);
+      const composer = mount.querySelector<HTMLTextAreaElement>("textarea")!;
+      composer.focus();
+      for (const id of Object.keys(approvals)) controller.injectTestMessage(approvalMessage(id));
+      raf.flush();
+      const allow = (id: string) => mount.querySelector<HTMLButtonElement>(`[data-message-id="${id}"] [data-action="allow"]`);
+      return { raf, controller, metrics, composer, allow, jump: getScrollToBottomButton(mount)! };
+    };
+
+    it("names it instead of scrolling or moving focus, then focuses it after the jump", () => {
+      const { raf, controller, metrics, composer, allow, jump } = setup({ "approval-below": 1400 });
+      expect(allow("approval-below")).not.toBeNull();
+      // The anchor holds, and Enter-to-allow never lands on an unseen card.
+      expect(metrics.getScrollTop()).toBe(84);
+      expect(document.activeElement).toBe(composer);
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+      expect(jump.textContent).toBe("Approval needed");
+      expect(jump.getAttribute("aria-label")).toBe("Approval needed below. Jump to latest");
+
+      jump.click();
+      raf.flush();
+      // Bottom is 1200: the card at 1400 and its Allow button at 1440 are in view.
+      expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+      expect(document.activeElement).toBe(allow("approval-below"));
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+      controller.destroy();
+    });
+
+    it("after the jump, focuses only an approval whose action is in view", () => {
+      // The older card ends up above the viewport after the jump; the newer
+      // one is in view. Focus must go to the visible one, never the older.
+      const { raf, controller, composer, allow, jump } = setup({ "approval-old": 700, "approval-new": 1400 });
+      jump.click();
+      raf.flush();
+      expect(document.activeElement).not.toBe(allow("approval-old"));
+      expect(document.activeElement).toBe(allow("approval-new"));
+      expect(composer).not.toBe(document.activeElement);
+      controller.destroy();
+    });
+
+    it("focuses nothing after the jump when no target's action is in view", () => {
+      // The only card lands above the jump's viewport (bottom is 1200).
+      const { raf, controller, allow, jump } = setup({ "approval-above": 700 });
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+      jump.click();
+      raf.flush();
+      expect(document.activeElement).not.toBe(allow("approval-above"));
+      controller.destroy();
+    });
+
+    it("leaves a visible approval to the card itself", () => {
+      const { controller, metrics, allow, jump } = setup({ "approval-below": 300 });
+      expect(metrics.getScrollTop()).toBe(84);
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+      expect(document.activeElement).toBe(allow("approval-below"));
+      controller.destroy();
+    });
+
+    it("drops the label once the approval resolves", () => {
+      const { raf, controller, jump } = setup({ "approval-below": 1400 });
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+      controller.injectTestMessage(approvalMessage("approval-below", "approved"));
+      raf.flush();
+      expect(jump.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+      controller.destroy();
+    });
+  });
+
   it("does not yank a paused reader when content grows without a render event", () => {
     const raf = installRafMock();
     const resize = installResizeObserverMock();
@@ -1366,6 +1463,19 @@ describe("createAgentExperience streaming scroll", () => {
     expect(spacer?.style.height).toBe("0px");
     expect(spacer?.style.display).toBe("none");
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+    const releasedAt = metrics.getScrollTop();
+
+    // Later streaming, resizes, and stream end must not reinstate the anchor
+    // or its spacer.
+    metrics.setScrollHeight(1500);
+    emitStreamingMessage(controller, "Streaming response, now longer still");
+    raf.flush();
+    resize.trigger();
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    raf.flush();
+    expect(spacer?.style.height).toBe("0px");
+    expect(spacer?.style.display).toBe("none");
+    expect(metrics.getScrollTop()).toBe(releasedAt);
 
     controller.destroy();
   });
@@ -1504,9 +1614,9 @@ describe("createAgentExperience streaming scroll", () => {
     }
   });
 
-  it("anchor-top hands off to the first unread block only when it starts below the fold", () => {
+  it("anchor-top keeps a user message taller than the viewport anchored as the reply arrives", () => {
     const raf = installRafMock();
-    installResizeObserverMock();
+    const resize = installResizeObserverMock();
     const mount = createMount();
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",
@@ -1517,34 +1627,87 @@ describe("createAgentExperience streaming scroll", () => {
     } as any);
 
     const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    // Earlier history fills 0..100; the new question spans 100..1082, more
+    // than twice the 400px viewport.
     const metrics = installScrollMetrics(scrollContainer!, {
-      scrollHeight: 1600,
+      scrollHeight: 1100,
       clientHeight: 400
     });
 
     emitStreamingStatus(controller);
-    emitUserMessage(controller, "user-strand", "Very long question");
+    emitUserMessage(controller, "user-tall", "Very long question ".repeat(200));
     const bubble = scrollContainer!.querySelector<HTMLElement>(
-      '[data-message-id="user-strand"]'
+      '[data-message-id="user-tall"]'
     );
     Object.defineProperty(bubble!, "offsetTop", { value: 100 });
+    Object.defineProperty(bubble!, "offsetHeight", { value: 982 });
     raf.flush();
     expect(metrics.getScrollTop()).toBe(84);
 
-    // The reply's first block starts 500px below the user message: with the
-    // user message pinned it would sit past the fold (16 + 500 > 400 - 96),
-    // so the anchor hands off to the block: target = 600 - 16 = 584. This is
-    // the stranded case the handoff exists for (tall send / tool prelude).
+    // The reply's first block starts 1000px below the question's top, entirely
+    // below the fold. The question keeps the anchor: the reader can finish
+    // reading it, and the jump control says there is output below.
     emitStreamingMessage(controller, "Streaming response");
-    // Streaming updates render on the next animation frame.
     raf.step(1);
     const streamBubble = scrollContainer!.querySelector<HTMLElement>(
       `[data-message-id="${STREAM_MESSAGE_ID}"]`
     );
-    Object.defineProperty(streamBubble!, "offsetTop", { value: 600 });
-    emitStreamingMessage(controller, "Streaming response, longer");
+    Object.defineProperty(streamBubble!, "offsetTop", { value: 1100 });
+    for (const [height, text] of [
+      [1300, "Streaming response, longer"],
+      [1600, "Streaming response, longer still"],
+      [2000, "Streaming response, longer still, with more detail"]
+    ] as const) {
+      metrics.setScrollHeight(height);
+      emitStreamingMessage(controller, text);
+      raf.flush();
+      resize.trigger();
+      expect(metrics.getScrollTop()).toBe(84);
+    }
+
+    const jump = getScrollToBottomButton(mount)!;
+    expect(jump.style.display).toBe("");
+    expect(jump.getAttribute("data-persona-scroll-to-bottom-visible")).toBe("true");
+
+    // Completion does not hand off either.
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: STREAM_MESSAGE_ID,
+        role: "assistant",
+        content: "Streaming response, complete",
+        createdAt: STREAM_CREATED_AT,
+        streaming: false
+      }
+    });
+    controller.injectTestMessage({ type: "status", status: "idle" });
     raf.flush();
-    expect(metrics.getScrollTop()).toBe(584);
+    expect(metrics.getScrollTop()).toBe(84);
+
+    // The jump control reveals the answer and releases the anchor.
+    jump.click();
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+    const releasedAt = metrics.getScrollTop();
+
+    // Later renders and resizes never pull the reader back to the question.
+    emitStreamingStatus(controller);
+    controller.injectTestMessage({
+      type: "message",
+      message: {
+        id: "ast-follow-up",
+        role: "assistant",
+        content: "A follow-up block",
+        createdAt: STREAM_CREATED_AT,
+        streaming: true
+      }
+    });
+    metrics.setScrollHeight(2300);
+    raf.flush();
+    resize.trigger();
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(releasedAt);
 
     controller.destroy();
   });

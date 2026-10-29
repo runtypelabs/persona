@@ -1837,6 +1837,40 @@ or resuming reconnects use the idle `iconName`. Historical event records and
 message `streaming` flags do not imply live activity. `showActivityWhilePinned:
 false` keeps activity silent in anchor-top mode.
 
+While a pending approval sits below the fold, the control widens to a labelled
+pill: the approval card's shield glyph and `features.scrollToBottom.approvalLabel`
+(default `"Approval needed"`; `""` keeps the regular control). The unread count
+is hidden in this state, and a custom `renderIcon` sees `state.activity ===
+"approval-below"`. When the control is already showing, it morphs between the
+two shapes: width and colors ease over `components.motion.durationBase` with
+`components.motion.easing`, and the new glyph and label fade in. Appearing or
+hiding keeps the regular `transition`, and reduced motion swaps instantly. Activating it jumps to the latest content and focuses the
+approval's primary action. Persona never moves focus to a pending approval
+the reader can't see, so it stays in the composer until the reader jumps.
+Its colors default to the control's own, so it matches the theme; give it an
+accent with `components.scrollToBottom.approval`:
+
+| Token | Default |
+|-------|---------|
+| `background` | the control's `background` |
+| `foreground` | the control's `foreground` |
+| `border` | the control's `border` |
+| `fontWeight` | `500` |
+
+```ts
+theme: {
+  components: {
+    scrollToBottom: {
+      approval: {
+        background: "palette.colors.warning.50",
+        foreground: "palette.colors.warning.800",
+        border: "palette.colors.warning.300",
+      },
+    },
+  },
+},
+```
+
 `features.scrollToBottom.transition` selects `"fade"` or `"none"`. V4 defaults to
 `"arrow"` / `"none"`; `future.v5Defaults: true` defaults to `"dots"` / `"fade"`.
 Either can be explicitly configured in both versions. Fades reuse

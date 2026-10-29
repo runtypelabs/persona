@@ -121,3 +121,30 @@ validation, and keeping operator replies through retry and edit.
 
 `widget.css` stays within its 24.5 kB gzip budget (24.23 → 24.32 kB), and
 `index.global.js` stays within its 133 KiB Brotli budget (132.91 KiB).
+
+## Approval needed jump control
+
+Naming a pending approval below the fold in the jump-to-latest control (the
+approval state, its below-the-fold check, and focusing the approval's primary
+action after the jump) adds to the core bundle, net of the anchor-top handoff
+code this change removes. Raises the one budget it exceeds, to the smallest
+that fits (gzip, decimal kB; Before is main 465d95e, local build):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` | 167.49 kB | 167.62 kB | 167.6 → 167.7 kB |
+
+`widget.css` stays within its budgets (24.37 kB gzip of 24.5 kB; 20.10 KiB
+Brotli of 20.1 KiB), and `index.global.js` stays within its 133 KiB Brotli
+budget (132.91 KiB).
+
+The arrow-to-pill morph that followed (a Web Animations width/color morph on
+the motion tokens, kept in script so the stylesheet budgets are untouched)
+raises both `index.global.js` budgets, again to the smallest that fits (CI
+measures gzip slightly above a local build, so the gzip limit leaves that
+margin):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` (gzip) | 167.62 kB | 167.87 kB | 167.7 → 168 kB |
+| `dist/index.global.js` (Brotli) | 132.91 KiB | 133.17 KiB | 133 → 133.2 KiB |

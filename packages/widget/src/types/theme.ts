@@ -1307,6 +1307,17 @@ export interface ScrollToBottomTokens extends ComponentTokenSet {
     fontSize?: string;
     fontWeight?: string;
   };
+  /**
+   * The labelled "Approval needed" state shown while a pending approval is
+   * below the fold. Omitted values follow the control's own colors, so it
+   * matches the theme until you give it an accent.
+   */
+  approval?: {
+    background?: TokenReference<'color'>;
+    foreground?: TokenReference<'color'>;
+    border?: TokenReference<'color'>;
+    fontWeight?: string;
+  };
 }
 
 /** Visual tokens shared by one suggestion presentation variant. */

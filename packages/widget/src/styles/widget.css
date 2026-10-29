@@ -4869,6 +4869,16 @@
   text-align: center;
 }
 
+/* A pending approval below the fold: the control widens to a labelled pill.
+   Unset approval tokens keep the pill's own colors. */
+[data-persona-root] .persona-scroll-to-bottom-indicator[data-persona-scroll-to-bottom-approval] {
+  border-color: var(--persona-scroll-to-bottom-approval-border, var(--persona-scroll-to-bottom-border, var(--persona-primary, #111827)));
+  background: var(--persona-scroll-to-bottom-approval-bg, var(--persona-scroll-to-bottom-bg, var(--persona-button-primary-bg, var(--persona-accent, #0f0f0f))));
+  color: var(--persona-scroll-to-bottom-approval-fg, var(--persona-scroll-to-bottom-fg, var(--persona-button-primary-fg, var(--persona-text-inverse, #ffffff))));
+  font-weight: var(--persona-scroll-to-bottom-approval-font-weight, 500);
+  white-space: nowrap;
+}
+
 [data-persona-root] .persona-scroll-to-bottom-indicator:hover {
   opacity: 0.92;
 }

@@ -1218,6 +1218,29 @@ describe('theme utils', () => {
     expect(cssVars['--persona-scroll-to-bottom-count-font-weight']).toBe('700');
   });
 
+  it('maps approval-state overrides and otherwise leaves them to the pill colors', () => {
+    const cssVars = themeToCssVariables(createTheme({
+      components: {
+        scrollToBottom: {
+          approval: {
+            background: 'palette.colors.warning.50',
+            foreground: '#713f12',
+            border: 'palette.colors.warning.300',
+            fontWeight: '600',
+          },
+        },
+      },
+    }));
+    expect(cssVars['--persona-scroll-to-bottom-approval-bg']).toMatch(/^#/);
+    expect(cssVars['--persona-scroll-to-bottom-approval-fg']).toBe('#713f12');
+    expect(cssVars['--persona-scroll-to-bottom-approval-border']).toMatch(/^#/);
+    expect(cssVars['--persona-scroll-to-bottom-approval-font-weight']).toBe('600');
+    for (const v5Defaults of [false, true]) {
+      const defaults = themeToCssVariables(getActiveTheme({ apiUrl: '/api', future: { v5Defaults } }));
+      expect(Object.keys(defaults).filter(key => key.startsWith('--persona-scroll-to-bottom-approval-'))).toEqual([]);
+    }
+  });
+
   it.each([false, true])('preserves CSS count badge fallbacks with V5=%s', (v5Defaults) => {
     for (const colorScheme of ['light', 'dark'] as const) {
       const cssVars = themeToCssVariables(getActiveTheme({

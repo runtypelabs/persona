@@ -1341,6 +1341,13 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['fontSize', 'font-size'],
     ['fontWeight', 'font-weight'],
   ], '--persona-components-scrollToBottom-countBadge-');
+  // The approval state falls back to the pill's own colors in CSS.
+  emitTruthy(cssVars, 'scroll-to-bottom-approval-', [
+    ['background', 'bg'],
+    ['foreground', 'fg'],
+    ['border', 'border'],
+    ['fontWeight', 'font-weight'],
+  ], '--persona-components-scrollToBottom-approval-');
 
   // V5 materializes message-action defaults in the theme; V4 retains the CSS
   // fallbacks. References follow ghost/semantic overrides in either scheme.

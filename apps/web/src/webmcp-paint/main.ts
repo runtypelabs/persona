@@ -124,6 +124,9 @@ function mountWidget(): void {
         // ask_user_question tool (answer-pill sheet): "Done: check my work" /
         // "Show me again" / "Skip ahead".
         askUserQuestion: { expose: true },
+        // Page tools run in long sequences: fold each run into one collapsible
+        // activity group (the V5 default) so the answer isn't buried under cards.
+        toolCallDisplay: { grouped: true, groupedMode: "collapsible" },
       },
       // Fresh canvas state rides along with every message so "make it bigger"
       // or "what color is selected" need no tool round-trip. The flow prompt

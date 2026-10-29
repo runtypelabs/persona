@@ -36,6 +36,26 @@ export function createScrollToBottomControl(
   let abort: AbortController | undefined;
   let builtin = "";
   const media = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : undefined;
+  // Arrow <-> "Approval needed" pill: one button changing shape, so morph its
+  // width and colors on the theme's motion tokens while the new label fades in.
+  let morphs: Animation[] = [];
+  const paint = () => {
+    const style = getComputedStyle(element);
+    return { width: `${element.offsetWidth}px`, backgroundColor: style.backgroundColor, borderColor: style.borderColor, color: style.color };
+  };
+  const morph = (from: Keyframe) => {
+    const style = getComputedStyle(element);
+    const value = style.getPropertyValue("--persona-motion-duration-base");
+    const ms = parseFloat(value) * (value.includes("ms") ? 1 : 1000);
+    // "0ms" turns motion off; only a missing or invalid value falls back.
+    if (ms === 0) return;
+    const timing = { duration: ms > 0 ? ms : 200, easing: style.getPropertyValue("--persona-motion-easing").trim() || "ease-out" };
+    // Clip only while widening into the pill: the arrow's count badge hangs
+    // outside the button.
+    const clip = label.style.display === "none" ? null : { overflow: "hidden" };
+    morphs = [element.animate([{ ...from, ...clip }, { ...paint(), ...clip }], timing)];
+    if (clip) morphs.push(label.animate([{ opacity: 0 }, { opacity: 1 }], timing));
+  };
   state.reducedMotion = media?.matches ?? false;
   const warn = (error: unknown) => console.warn("Persona scroll icon failed", error);
   const context = (): AgentWidgetScrollToBottomIconContext => ({ config, state: { ...state }, view, signal: abort!.signal });
@@ -51,7 +71,9 @@ export function createScrollToBottomControl(
     if (handle?.element) return;
     const feature = config.features?.scrollToBottom;
     const dots = state.activity === "generating-below" && (feature?.streamingIndicator ?? (config.future?.v5Defaults ? "dots" : "arrow")) === "dots";
-    const key = dots ? "dots" : `arrow:${feature?.iconName ?? "arrow-down"}`;
+    // Same glyph as the approval card it points at, so the two read as one thing.
+    const iconName = state.activity === "approval-below" ? "shield-check" : feature?.iconName ?? "arrow-down";
+    const key = dots ? "dots" : `arrow:${iconName}`;
     if (builtin === key) return;
     builtin = key;
     glyph.innerHTML = "";
@@ -64,7 +86,7 @@ export function createScrollToBottomControl(
       }
       glyph.appendChild(dotGroup);
     } else {
-      const icon = renderIcon(feature?.iconName ?? "arrow-down", "14px", "currentColor", 2);
+      const icon = renderIcon(iconName, "14px", "currentColor", 2);
       if (icon) glyph.appendChild(icon);
     }
   };
@@ -106,11 +128,12 @@ export function createScrollToBottomControl(
 
   return {
     element,
-    update(nextConfig: AgentWidgetConfig, visible: boolean, active = false, count = 0) {
+    /** `approval` marks a pending approval below the fold: the control names it. */
+    update(nextConfig: AgentWidgetConfig, visible: boolean, active = false, count = 0, approval = false) {
       const previous = config.features?.scrollToBottom;
       const next = nextConfig.features?.scrollToBottom;
       const configChanged = config.future?.v5Defaults !== nextConfig.future?.v5Defaults ||
-        (["enabled", "iconName", "label", "streamingIndicator", "transition", "scrollBehavior", "scrollDurationMs"] as (keyof AgentWidgetScrollToBottomFeature)[])
+        (["enabled", "iconName", "label", "approvalLabel", "streamingIndicator", "transition", "scrollBehavior", "scrollDurationMs"] as (keyof AgentWidgetScrollToBottomFeature)[])
           .some((key) => previous?.[key] !== next?.[key]);
       config = nextConfig;
       const feature = config.features?.scrollToBottom;
@@ -132,21 +155,37 @@ export function createScrollToBottomControl(
           focusTarget.focus({ preventScroll: true });
         }
       }
-      const text = feature?.label ?? "";
-      const base = text || "Jump to latest";
-      element.setAttribute("aria-label", `${base}${count > 0 ? ` (${count} new)` : ""}${active && visible ? " (response streaming below)" : ""}`);
+      // A waiting approval outranks streaming and the unread count: the turn is
+      // blocked on the reader, so the control says so in words.
+      const waiting = approval && visible;
+      // Morph only a visible control changing shape, never its fade in or out.
+      const reshape = state.visible && visible && (state.activity === "approval-below") !== waiting;
+      if (reshape || !visible) morphs.forEach((animation) => animation.cancel());
+      const from = reshape && !state.reducedMotion && typeof element.animate === "function" ? paint() : null;
+      const approvalText = feature?.approvalLabel ?? "Approval needed";
+      const text = waiting && approvalText ? approvalText : feature?.label ?? "";
+      const base = feature?.label || "Jump to latest";
+      element.setAttribute("aria-label", waiting
+        ? `${approvalText || "Approval needed"} below. ${base}`
+        : `${base}${count > 0 ? ` (${count} new)` : ""}${active && visible ? " (response streaming below)" : ""}`);
       element.title = text;
       element.setAttribute("data-persona-scroll-to-bottom-has-label", String(Boolean(text)));
+      if (waiting) element.setAttribute("data-persona-scroll-to-bottom-approval", "");
+      else element.removeAttribute("data-persona-scroll-to-bottom-approval");
       label.textContent = text;
       label.style.display = text ? "" : "none";
-      badge.textContent = count > 0 ? String(count) : "";
-      badge.style.display = count > 0 ? "" : "none";
-      const nextState = { ...state, visible, hovered: visible && state.hovered, focused: visible && state.focused, activity: active && visible ? "generating-below" as const : "idle" as const };
+      const shownCount = waiting ? 0 : count;
+      badge.textContent = shownCount > 0 ? String(shownCount) : "";
+      badge.style.display = shownCount > 0 ? "" : "none";
+      const activity = waiting ? "approval-below" as const : active && visible ? "generating-below" as const : "idle" as const;
+      const nextState = { ...state, visible, hovered: visible && state.hovered, focused: visible && state.focused, activity };
       const changed = configChanged || stateChanged(nextState);
       state = nextState;
       updateRenderer(changed);
+      if (from) morph(from);
     },
     destroy() {
+      morphs.forEach((animation) => animation.cancel());
       dispose();
       lifetime.abort();
       media?.removeEventListener?.("change", motion);

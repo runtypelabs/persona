@@ -2228,10 +2228,13 @@ export type AgentWidgetArtifactsFeature = {
  *
  * - `"anchor-top"` (default): on send, scroll the user's message near the top
  *   of the viewport and hold it there while the response streams in beneath it
- *   (ChatGPT-style). When a turn has no user send to anchor to (a proactive
- *   greeting, an injected assistant message, a resubmit, or first-load
- *   streaming), it falls back to `"follow"` for that turn so content never
- *   streams in off-screen.
+ *   (ChatGPT-style). The anchor holds for the whole reply, even when the
+ *   message is taller than the viewport or tool calls push the answer below
+ *   the fold, until the reader scrolls away, jumps to the latest content with
+ *   the scroll-to-bottom control, or sends again. When a turn has no user send
+ *   to anchor to (a proactive greeting, an injected assistant message, a
+ *   resubmit, or first-load streaming), it falls back to `"follow"` for that
+ *   turn so content never streams in off-screen.
  * - `"follow"`: keep the newest content pinned to the bottom of the viewport,
  *   pausing when the user scrolls up and resuming when they return to the
  *   bottom. This was the default before 4.x.
@@ -2320,7 +2323,8 @@ export type AgentWidgetScrollBehaviorFeature = {
 
 /** Decorative glyph state. Hidden glyphs should pause host-owned animation. */
 export type AgentWidgetScrollToBottomIconState = {
-  activity: "idle" | "generating-below";
+  /** `"approval-below"`: a pending approval is below the fold and the turn waits on it. */
+  activity: "idle" | "generating-below" | "approval-below";
   visible: boolean;
   hovered: boolean;
   focused: boolean;
@@ -2360,6 +2364,15 @@ export type AgentWidgetScrollToBottomFeature = {
    * @default ""
    */
   label?: string;
+  /**
+   * Label shown while a pending approval sits below the fold. The control
+   * widens to a labelled pill with the approval's shield glyph, and the turn
+   * stays put until the reader jumps (anchor-top never scrolls them to it).
+   * Styled by `theme.components.scrollToBottom.approval`. Set to an empty
+   * string to keep the regular control.
+   * @default "Approval needed"
+   */
+  approvalLabel?: string;
   /** Glyph while a live response is arriving below. V4 defaults to arrow; V5 to dots. */
   streamingIndicator?: "dots" | "arrow";
   /** Visibility transition. V4 defaults to none; V5 to fade. Honors reduced motion. */

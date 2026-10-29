@@ -983,6 +983,9 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     features: {
       ...DEFAULT_WIDGET_CONFIG.features,
       showEventStreamToggle: true,
+      // Page tools run in long sequences: fold each run into one collapsible
+      // activity group (the V5 default) so the answer isn't buried under cards.
+      toolCallDisplay: { grouped: true, groupedMode: "collapsible" },
     },
     storageAdapter: createLocalStorageAdapter(`persona-state-webmcp-${mode}`),
     postprocessMessage: ({ text }) => markdownPostprocessor(text),

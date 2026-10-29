@@ -39,16 +39,22 @@ const installRafMock = () => {
   vi.stubGlobal("cancelAnimationFrame", (id: number) => {
     callbacks.delete(id);
   });
+  const run = (maxFrames: number) => {
+    let frames = 0;
+    while (callbacks.size > 0 && frames < maxFrames) {
+      const pending = [...callbacks.values()];
+      callbacks.clear();
+      frames += 1;
+      now += 16;
+      pending.forEach((cb) => cb(now));
+    }
+  };
   return {
+    step(frameCount = 1) {
+      run(frameCount);
+    },
     flush(maxFrames = 80) {
-      let frames = 0;
-      while (callbacks.size > 0 && frames < maxFrames) {
-        const pending = [...callbacks.values()];
-        callbacks.clear();
-        frames += 1;
-        now += 16;
-        pending.forEach((cb) => cb(now));
-      }
+      run(maxFrames);
     },
   };
 };
@@ -498,12 +504,11 @@ describe("scrollBehavior.announce (Principle 15)", () => {
 });
 
 
-// Anchor-top pins the sent user message (market pattern) and hands off to
-// the turn's first UNREAD attention-worthy block only when that block starts
-// below the fold: tool calls and reasoning are chrome and never targeted, so
-// a response that opens with them scrolls them past rather than stranding
-// the answer. A block starting within view keeps the user message anchored.
-describe("anchor-top first-unread positioning", () => {
+// Anchor-top pins the sent user message for the whole reply. It never hands
+// off to the reply because the reply starts below the fold: tool runs,
+// artifacts, multi-block answers, and tall questions all stream in beneath
+// the anchor, and the jump-to-latest control is how the reader gets there.
+describe("anchor-top holds the sent message for the whole reply", () => {
   beforeEach(() => {
     installRafMock();
   });
@@ -515,7 +520,8 @@ describe("anchor-top first-unread positioning", () => {
 
   const emitToolMessage = (
     controller: ReturnType<typeof createAgentExperience>,
-    id: string
+    id: string,
+    status: "running" | "complete" = "complete"
   ) => {
     controller.injectTestMessage({
       type: "message",
@@ -525,13 +531,14 @@ describe("anchor-top first-unread positioning", () => {
         content: "",
         createdAt: CREATED_AT,
         variant: "tool",
-        toolCall: { id, name: "search", status: "complete" },
+        streaming: status === "running",
+        toolCall: { id, name: "search", status },
       },
     });
   };
 
   // An artifact / component block: substance lives in rawContent, `content`
-  // is empty. Testing text alone would silently skip these.
+  // is empty.
   const emitArtifactMessage = (
     controller: ReturnType<typeof createAgentExperience>,
     id: string
@@ -560,6 +567,9 @@ describe("anchor-top first-unread positioning", () => {
     Object.defineProperty(bubble!, "offsetTop", { configurable: true, value });
   };
 
+  const getSpacer = (mount: HTMLElement) =>
+    getScrollContainer(mount).querySelector<HTMLElement>("[data-persona-anchor-spacer]")!;
+
   const startTurn = (
     controller: ReturnType<typeof createAgentExperience>,
     mount: HTMLElement,
@@ -571,7 +581,7 @@ describe("anchor-top first-unread positioning", () => {
     raf.flush();
   };
 
-  it("skips a run of tool calls and anchors the answer", () => {
+  it("keeps the sent message anchored through a tool run and an answer below the fold", () => {
     const raf = installRafMock();
     const mount = createMount();
     const controller = createAgentExperience(mount, anchorTopConfig());
@@ -583,26 +593,31 @@ describe("anchor-top first-unread positioning", () => {
     startTurn(controller, mount, raf);
     expect(metrics.getScrollTop()).toBe(284); // parked on the sent message
 
-    for (let i = 0; i < 6; i += 1) emitToolMessage(controller, `t${i}`);
+    for (let i = 0; i < 6; i += 1) {
+      emitToolMessage(controller, `t${i}`, "running");
+      setBubbleOffsetTop(mount, `t${i}`, 360 + i * 60);
+      emitToolMessage(controller, `t${i}`);
+    }
     metrics.setScrollHeight(1500);
     raf.flush();
-    // Tool calls are chrome: they never move the anchor.
     expect(metrics.getScrollTop()).toBe(284);
 
-    // The answer starts 400px below the pinned question — past the fold at a
-    // 400px viewport — so the anchor hands off to it. (The strandedness probe
-    // reads layout at render time, so the mocked offset needs one more
-    // render to be seen.)
+    // The answer starts 400px below the pinned question, past the fold at a
+    // 400px viewport. A second render lets any render-time probe see the
+    // mocked offset; the anchor still stays on the question.
     emitStreamingAssistant(controller, "a1", "Good news — your order is on track.");
     setBubbleOffsetTop(mount, "a1", 700);
+    metrics.setScrollHeight(1700);
     emitStreamingAssistant(controller, "a1", "Good news — your order is on track!");
     raf.flush();
-    expect(metrics.getScrollTop()).toBe(684);
+    expect(metrics.getScrollTop()).toBe(284);
 
+    // The jump control advertises the offscreen answer.
+    expect(getScrollToBottomButton(mount).style.display).toBe("");
     controller.destroy();
   });
 
-  it("anchors an artifact block, whose content lives in rawContent", () => {
+  it("keeps the anchor when an artifact block lands below the fold", () => {
     const raf = installRafMock();
     const mount = createMount();
     const controller = createAgentExperience(mount, anchorTopConfig());
@@ -617,18 +632,15 @@ describe("anchor-top first-unread positioning", () => {
     raf.flush();
 
     emitArtifactMessage(controller, "art-msg");
-    // 320px below the question: stranded past the 400 - 96 visibility floor,
-    // so the anchor hands off. The trailing tool render lets the probe see
-    // the mocked offset.
     setBubbleOffsetTop(mount, "art-msg", 620);
     emitToolMessage(controller, "t-after");
     raf.flush();
 
-    expect(metrics.getScrollTop()).toBe(604);
+    expect(metrics.getScrollTop()).toBe(284);
     controller.destroy();
   });
 
-  it("holds the FIRST unread block when more text streams in after it", () => {
+  it("holds the anchor across multiple assistant blocks, streaming updates, and completion", () => {
     const raf = installRafMock();
     const mount = createMount();
     const controller = createAgentExperience(mount, anchorTopConfig());
@@ -638,24 +650,26 @@ describe("anchor-top first-unread positioning", () => {
     });
 
     startTurn(controller, mount, raf);
-    // First segment starts past the fold (delta 400 at a 400px viewport):
-    // the anchor hands off to it.
     emitStreamingAssistant(controller, "a1", "First segment.");
     setBubbleOffsetTop(mount, "a1", 700);
     metrics.setScrollHeight(1400);
-    emitStreamingAssistant(controller, "a1", "First segment!");
+    emitStreamingAssistant(controller, "a1", "First segment, still streaming.");
     raf.flush();
-    expect(metrics.getScrollTop()).toBe(684);
+    expect(metrics.getScrollTop()).toBe(284);
 
-    // Interleaved: tool, then a second text segment. The anchor stays on the
-    // first unread block — later blocks stream in below it.
+    // Interleaved: tool, then a second text segment.
     emitToolMessage(controller, "t0");
     emitStreamingAssistant(controller, "a2", "Second segment.");
     setBubbleOffsetTop(mount, "a2", 1100);
     metrics.setScrollHeight(1800);
+    emitStreamingAssistant(controller, "a2", "Second segment, longer.");
     raf.flush();
+    expect(metrics.getScrollTop()).toBe(284);
 
-    expect(metrics.getScrollTop()).toBe(684);
+    emitAssistantMessage(controller, "a2", "Second segment, complete.");
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(284);
     controller.destroy();
   });
 
@@ -671,9 +685,9 @@ describe("anchor-top first-unread positioning", () => {
     metrics.setScrollHeight(1500);
     raf.flush();
 
-    // The reader takes over: wheels down to watch the tools run. Engagement
-    // is keyed on real input, NOT on the scroll event (streaming content
-    // clamps and restores scrollTop on its own — see the regression test
+    // The reader takes over: wheels to watch the tools run. Engagement is
+    // keyed on real input, NOT on the scroll event (streaming content
+    // clamps and restores scrollTop on its own; see the regression test
     // below), so the wheel is what must register here.
     metrics.setScrollTop(520);
     sc.dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }));
@@ -681,10 +695,46 @@ describe("anchor-top first-unread positioning", () => {
 
     emitStreamingAssistant(controller, "a1", "Good news — your order is on track.");
     setBubbleOffsetTop(mount, "a1", 700);
+    emitStreamingAssistant(controller, "a1", "Good news — your order is on track!");
+    metrics.setScrollHeight(1700);
     raf.flush();
 
     // Their position wins: no re-anchor under them.
     expect(metrics.getScrollTop()).toBe(520);
+    controller.destroy();
+  });
+
+  it("does not move a reader who is selecting transcript text", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, anchorTopConfig());
+    const sc = getScrollContainer(mount);
+    const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
+
+    startTurn(controller, mount, raf);
+    emitStreamingAssistant(controller, "a1", "Tracking shows the parcel left the depot.");
+    setBubbleOffsetTop(mount, "a1", 420);
+    raf.flush();
+
+    // Press and drag-select the answer, scrolling a little in the process.
+    const answer = sc.querySelector<HTMLElement>('[data-message-id="a1"]')!;
+    answer.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    const range = document.createRange();
+    range.selectNodeContents(answer);
+    document.getSelection()!.removeAllRanges();
+    document.getSelection()!.addRange(range);
+    metrics.setScrollTop(360);
+    sc.dispatchEvent(new Event("scroll"));
+
+    for (let i = 0; i < 3; i += 1) emitToolMessage(controller, `t${i}`);
+    emitStreamingAssistant(controller, "a2", "It arrives tomorrow.");
+    setBubbleOffsetTop(mount, "a2", 900);
+    metrics.setScrollHeight(1600);
+    emitStreamingAssistant(controller, "a2", "It arrives tomorrow morning.");
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(360);
+    expect(document.getSelection()!.toString()).toContain("parcel left the depot");
     controller.destroy();
   });
 
@@ -701,15 +751,16 @@ describe("anchor-top first-unread positioning", () => {
     sc.dispatchEvent(new Event("scroll"));
 
     // A new send is an explicit "take me along": the new user message
-    // anchors (600 - 16 = 584) and, with the reply starting only 200px below
-    // it — within view — stays anchored while the reply streams beneath.
+    // anchors (600 - 16 = 584) and holds while the reply streams beneath,
+    // including once the reply grows past the fold.
     emitUserMessage(controller, "u2", "And the second order?");
     setBubbleOffsetTop(mount, "u2", 600);
     metrics.setScrollHeight(1400);
     raf.flush();
+    expect(metrics.getScrollTop()).toBe(584);
 
     emitStreamingAssistant(controller, "a2", "That one shipped Tuesday.");
-    setBubbleOffsetTop(mount, "a2", 800);
+    setBubbleOffsetTop(mount, "a2", 1100);
     metrics.setScrollHeight(1600);
     emitStreamingAssistant(controller, "a2", "That one shipped Tuesday!");
     raf.flush();
@@ -717,33 +768,78 @@ describe("anchor-top first-unread positioning", () => {
     expect(metrics.getScrollTop()).toBe(584);
     controller.destroy();
   });
+
+  it("releases the anchor for good when the reader jumps to the latest", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, anchorTopConfig());
+    const sc = getScrollContainer(mount);
+    const metrics = installScrollMetrics(sc, { scrollHeight: 500, clientHeight: 400 });
+
+    // Short history: the anchor needs a spacer to rest the question at the
+    // top (284 + 400 - 500 + 24 slack = 208).
+    emitAssistantMessage(controller, "seed", "Earlier reply");
+    emitUserMessage(controller, "u1", "Where is my order?");
+    setBubbleOffsetTop(mount, "u1", 300);
+    raf.step(1);
+    expect(getSpacer(mount).style.height).toBe("208px");
+    // The mocked metrics don't see the spacer: apply it as a browser would.
+    metrics.setScrollHeight(708);
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(284);
+
+    for (let i = 0; i < 4; i += 1) emitToolMessage(controller, `t${i}`);
+    emitStreamingAssistant(controller, "a1", "Answer below the tools.");
+    setBubbleOffsetTop(mount, "a1", 760);
+    metrics.setScrollHeight(1400);
+    emitStreamingAssistant(controller, "a1", "Answer below the tools, longer.");
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(284);
+
+    const jump = getScrollToBottomButton(mount);
+    expect(jump.style.display).toBe("");
+    jump.click();
+    raf.flush();
+    expect(getSpacer(mount).style.display).toBe("none");
+    expect(metrics.getScrollTop()).toBe(metrics.getBottom());
+    const releasedAt = metrics.getScrollTop();
+
+    // More blocks, tool updates, and completion never reinstate the anchor.
+    emitToolMessage(controller, "t-late");
+    emitStreamingAssistant(controller, "a2", "One more thing.");
+    setBubbleOffsetTop(mount, "a2", 1300);
+    metrics.setScrollHeight(1600);
+    emitAssistantMessage(controller, "a2", "One more thing, done.");
+    raf.flush();
+    expect(getSpacer(mount).style.display).toBe("none");
+    expect(metrics.getScrollTop()).toBe(releasedAt);
+    controller.destroy();
+  });
 });
 
-// Two shapes the browser testbed covers but that are worth pinning down here,
-// since they are where the policy's judgement calls actually bite.
-describe("anchor-top first-unread — edge shapes", () => {
+// Voice: the recognized user transcript grows in place under one message id
+// (interim → final). It is one send: it anchors once and its updates never
+// re-anchor or chase the reply.
+describe("anchor-top voice transcript updates", () => {
   beforeEach(() => {
     installRafMock();
   });
 
-  const anchorTopConfig = () =>
-    baseConfig({
-      features: { scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 } },
-    });
-
-  const emitTool = (
+  const emitVoiceUser = (
     controller: ReturnType<typeof createAgentExperience>,
-    id: string
+    content: string,
+    isFinal: boolean
   ) => {
     controller.injectTestMessage({
       type: "message",
       message: {
-        id,
-        role: "assistant",
-        content: "",
+        id: "voice-u1",
+        role: "user",
+        content,
         createdAt: CREATED_AT,
-        variant: "tool",
-        toolCall: { id, name: "search", status: "complete" },
+        streaming: false,
+        viaVoice: true,
+        voiceProcessing: !isFinal,
       },
     });
   };
@@ -751,86 +847,91 @@ describe("anchor-top first-unread — edge shapes", () => {
   const setTop = (mount: HTMLElement, id: string, value: number) => {
     const bubble = getScrollContainer(mount).querySelector<HTMLElement>(
       `[data-message-id="${id}"]`
-    );
-    expect(bubble).not.toBeNull();
-    Object.defineProperty(bubble!, "offsetTop", { configurable: true, value });
+    )!;
+    Object.defineProperty(bubble, "offsetTop", { configurable: true, value });
   };
 
-  // KNOWN TRADEOFF: a chatty preamble ("Let me look that up…") is itself the
-  // first unread block, so when a long question strands it the anchor lands
-  // there — and the tool run still pushes the real answer toward the fold.
-  // That is the policy behaving as specified — chronological, honest about
-  // what arrived first — but it is the case most likely to want revisiting.
-  // (A preamble starting within view never moves the anchor at all: the user
-  // message keeps it.)
-  it("anchors a stranded preamble, not the answer that follows the tool run", () => {
+  const start = (mount: HTMLElement) => {
+    const controller = createAgentExperience(
+      mount,
+      baseConfig({ features: { scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 } } })
+    );
+    emitAssistantMessage(controller, "seed", "Earlier reply");
+    return controller;
+  };
+
+  it("keeps a growing transcript anchored from interim through final and the reply", () => {
     const raf = installRafMock();
     const mount = createMount();
-    const controller = createAgentExperience(mount, anchorTopConfig());
-    const metrics = installScrollMetrics(getScrollContainer(mount), {
-      scrollHeight: 1200,
-      clientHeight: 400,
-    });
+    const controller = start(mount);
+    const sc = getScrollContainer(mount);
+    const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
 
-    emitAssistantMessage(controller, "seed", "Earlier reply");
-    emitUserMessage(controller, "u1", "Look into my order");
-    setTop(mount, "u1", 300);
+    emitVoiceUser(controller, "Book a", false);
+    setTop(mount, "voice-u1", 300);
     raf.flush();
+    expect(metrics.getScrollTop()).toBe(284);
 
-    // A tall question strands the preamble (delta 400 > 400 - 96): handoff.
-    emitStreamingAssistant(controller, "pre", "Sure — let me pull that up.");
-    setTop(mount, "pre", 700);
-    emitStreamingAssistant(controller, "pre", "Sure — let me pull that up!");
+    // Interim text grows the same bubble past the viewport.
+    const words = "table for four near the station on Friday evening ".repeat(20);
+    emitVoiceUser(controller, `Book a ${words}`, false);
+    metrics.setScrollHeight(1600);
     raf.flush();
-    expect(metrics.getScrollTop()).toBe(684);
-
-    for (let i = 0; i < 6; i += 1) emitTool(controller, `t${i}`);
-    emitStreamingAssistant(controller, "answer", "Good news — it is on track.");
-    setTop(mount, "answer", 1300);
-    metrics.setScrollHeight(1800);
+    emitVoiceUser(controller, `Book a ${words}please.`, true);
     raf.flush();
+    expect(metrics.getScrollTop()).toBe(284);
 
-    // Still parked on the preamble: the answer is NOT re-targeted.
-    expect(metrics.getScrollTop()).toBe(684);
+    // The reply lands entirely below the long transcript.
+    emitStreamingAssistant(controller, "voice-a1", "");
+    emitStreamingAssistant(controller, "voice-a1", "Done — four seats at 7pm.");
+    setTop(mount, "voice-a1", 1500);
+    metrics.setScrollHeight(1900);
+    emitAssistantMessage(controller, "voice-a1", "Done — four seats at 7pm on Friday.");
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(284);
     controller.destroy();
   });
 
-  it("holds the sent message when a turn produces only tool calls", () => {
+  it("does not pull a reader back when the transcript updates after they scroll", () => {
     const raf = installRafMock();
     const mount = createMount();
-    const controller = createAgentExperience(mount, anchorTopConfig());
-    const metrics = installScrollMetrics(getScrollContainer(mount), {
-      scrollHeight: 1000,
-      clientHeight: 400,
-    });
+    const controller = start(mount);
+    const sc = getScrollContainer(mount);
+    const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
 
-    emitAssistantMessage(controller, "seed", "Earlier reply");
-    emitUserMessage(controller, "u1", "Just refresh the tracking data");
-    setTop(mount, "u1", 300);
+    emitVoiceUser(controller, "What's the", false);
+    setTop(mount, "voice-u1", 300);
     raf.flush();
     expect(metrics.getScrollTop()).toBe(284);
 
-    for (let i = 0; i < 6; i += 1) emitTool(controller, `t${i}`);
-    metrics.setScrollHeight(1600);
+    // The reader scrolls up to re-read the earlier reply mid-utterance.
+    metrics.setScrollTop(40);
+    sc.dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }));
+    sc.dispatchEvent(new Event("scroll"));
+
+    emitVoiceUser(controller, "What's the weather", false);
+    raf.flush();
+    emitVoiceUser(controller, "What's the weather tomorrow?", true);
+    emitStreamingAssistant(controller, "voice-a1", "Sunny, 21°C.");
+    metrics.setScrollHeight(1200);
     raf.flush();
 
-    // Nothing attention-worthy ever arrived: never chase the tool bubbles.
-    expect(metrics.getScrollTop()).toBe(284);
+    expect(metrics.getScrollTop()).toBe(40);
     controller.destroy();
   });
 });
 
 // Regression: streaming content under a pinned anchor makes the browser clamp
-// scrollTop and then restore it — a matched pair of real scroll events with no
-// user involved (observed live as -12 then +12 during a tool run). Treating
-// those as reader intent silently disabled every later re-anchor, so a
-// response that opened with tool calls stayed stuck on the sent message.
-describe("anchor-top first-unread — layout scroll is not reader intent", () => {
+// scrollTop and then restore it: a matched pair of real scroll events with no
+// user involved (observed live as -12 then +12 during a tool run). Those must
+// not read as the reader taking over, or a later layout re-pin (host move)
+// would stand down.
+describe("anchor-top — layout scroll is not reader intent", () => {
   beforeEach(() => {
     installRafMock();
   });
 
-  it("still anchors the answer after a clamp/restore scroll pair", () => {
+  it("keeps the anchor and its spacer through a clamp/restore scroll pair", () => {
     const raf = installRafMock();
     const mount = createMount();
     const controller = createAgentExperience(
@@ -840,17 +941,22 @@ describe("anchor-top first-unread — layout scroll is not reader intent", () =>
       })
     );
     const sc = getScrollContainer(mount);
-    const metrics = installScrollMetrics(sc, { scrollHeight: 1000, clientHeight: 400 });
+    const metrics = installScrollMetrics(sc, { scrollHeight: 600, clientHeight: 400 });
 
     emitAssistantMessage(controller, "seed", "Earlier reply");
     emitUserMessage(controller, "u1", "Where is my order?");
     const userBubble = sc.querySelector<HTMLElement>('[data-message-id="u1"]');
     Object.defineProperty(userBubble!, "offsetTop", { configurable: true, value: 300 });
+    raf.step(1);
+    const spacer = sc.querySelector<HTMLElement>("[data-persona-anchor-spacer]")!;
+    // 284 + 400 - 600 + 24 slack.
+    expect(spacer.style.height).toBe("108px");
+    metrics.setScrollHeight(708);
     raf.flush();
     expect(metrics.getScrollTop()).toBe(284);
 
-    // Tool run: the spacer shrinks, scrollTop is clamped down, then the
-    // growing transcript restores it. Both are layout, not the reader.
+    // Tool run: scrollTop is clamped down, then the growing transcript
+    // restores it. Both are layout, not the reader.
     for (let i = 0; i < 6; i += 1) {
       controller.injectTestMessage({
         type: "message",
@@ -866,21 +972,17 @@ describe("anchor-top first-unread — layout scroll is not reader intent", () =>
     }
     metrics.setScrollTop(272);
     sc.dispatchEvent(new Event("scroll"));
-    metrics.setScrollHeight(1500);
     metrics.setScrollTop(284);
     sc.dispatchEvent(new Event("scroll"));
-    raf.flush();
 
-    // Stranded answer (delta 400): the clamp/restore pair must not have been
-    // read as reader intent, so the handoff still fires. One more render so
-    // the strandedness probe sees the mocked offset.
     emitStreamingAssistant(controller, "a1", "Good news — your order is on track.");
     const answer = sc.querySelector<HTMLElement>('[data-message-id="a1"]');
     Object.defineProperty(answer!, "offsetTop", { configurable: true, value: 700 });
     emitStreamingAssistant(controller, "a1", "Good news — your order is on track!");
     raf.flush();
 
-    expect(metrics.getScrollTop()).toBe(684);
+    expect(metrics.getScrollTop()).toBe(284);
+    expect(spacer.style.display).toBe("");
     controller.destroy();
   });
 });

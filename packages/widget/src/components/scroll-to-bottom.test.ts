@@ -40,6 +40,49 @@ describe("scroll-to-bottom chrome", () => {
     control.destroy();
   });
 
+  it("names a pending approval below with a labelled shield pill, then reverts", () => {
+    const control = createScrollToBottomControl(icon, "transcript");
+    const config: AgentWidgetConfig = { future: { v5Defaults: true } };
+    control.update(config, true, false, 2, true);
+    const el = control.element;
+    expect(el.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+    expect(el.getAttribute("data-persona-scroll-to-bottom-has-label")).toBe("true");
+    expect(el.textContent).toBe("Approval needed");
+    expect(el.querySelector("svg")?.getAttribute("data-icon")).toBe("shield-check");
+    // The label replaces the unread count; assistive tech hears where it leads.
+    expect(el.querySelector<HTMLElement>("[data-persona-scroll-to-bottom-count]")?.style.display).toBe("none");
+    expect(el.getAttribute("aria-label")).toBe("Approval needed below. Jump to latest");
+
+    // Hidden, the approval state never shows.
+    control.update(config, false, false, 0, true);
+    expect(el.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+
+    control.update(config, true, false, 2, false);
+    expect(el.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(false);
+    expect(el.getAttribute("data-persona-scroll-to-bottom-has-label")).toBe("false");
+    expect(el.querySelector("svg")?.getAttribute("data-icon")).toBe("arrow-down");
+    expect(el.getAttribute("aria-label")).toBe("Jump to latest (2 new)");
+    control.destroy();
+  });
+
+  it("uses a custom approval label, opts out with an empty one, and tells custom glyphs", () => {
+    const states: string[] = [];
+    const renderIcon = vi.fn((_context: AgentWidgetScrollToBottomIconContext) => ({
+      element: document.createElement("span"),
+      update: (next: AgentWidgetScrollToBottomIconContext) => { states.push(next.state.activity); },
+    }));
+    const control = createScrollToBottomControl(icon, "transcript");
+    control.update({ features: { scrollToBottom: { approvalLabel: "Review request", renderIcon } } }, true, false, 0, true);
+    expect(control.element.textContent).toBe("Review request");
+    expect(renderIcon.mock.calls[0][0].state.activity).toBe("approval-below");
+    control.update({ features: { scrollToBottom: { approvalLabel: "", renderIcon } } }, true, false, 1, true);
+    expect(control.element.getAttribute("data-persona-scroll-to-bottom-has-label")).toBe("false");
+    expect(control.element.getAttribute("aria-label")).toBe("Approval needed below. Jump to latest");
+    control.update({ features: { scrollToBottom: { renderIcon } } }, true, false, 0, false);
+    expect(states.at(-1)).toBe("idle");
+    control.destroy();
+  });
+
   it("makes fading controls inert immediately and returns focus only when owned, including Shadow DOM", () => {
     const host = document.createElement("div"); document.body.appendChild(host);
     const root = host.attachShadow({ mode: "open" });
@@ -120,6 +163,98 @@ describe("scroll-to-bottom chrome", () => {
     expect(control.element.querySelector("svg")).not.toBeNull();
     expect(destroy).toHaveBeenCalledTimes(1);
     control.destroy(); warning.mockRestore();
+  });
+
+  describe("approval morph", () => {
+    const stubAnimate = () => {
+      const calls: { target: Element; keyframes: Keyframe[]; options: KeyframeAnimationOptions; animation: { cancel: ReturnType<typeof vi.fn> } }[] = [];
+      const original = (HTMLElement.prototype as { animate?: unknown }).animate;
+      (HTMLElement.prototype as { animate?: unknown }).animate = function (this: Element, keyframes: Keyframe[], options: KeyframeAnimationOptions) {
+        const animation = { cancel: vi.fn(), finished: new Promise<void>(() => {}) };
+        calls.push({ target: this, keyframes, options, animation });
+        return animation;
+      };
+      return { calls, restore: () => { (HTMLElement.prototype as { animate?: unknown }).animate = original; } };
+    };
+
+    it("morphs a visible arrow into the pill on the theme's motion tokens, and back", () => {
+      const { calls, restore } = stubAnimate();
+      try {
+        const control = createScrollToBottomControl(icon, "transcript");
+        document.body.appendChild(control.element);
+        control.element.style.setProperty("--persona-motion-duration-base", "0.3s");
+        control.element.style.setProperty("--persona-motion-easing", "cubic-bezier(0.2, 0, 0, 1)");
+        const config: AgentWidgetConfig = { future: { v5Defaults: true } };
+        control.update(config, true);
+        expect(calls).toHaveLength(0);
+
+        control.update(config, true, false, 0, true);
+        const [own, labelFade] = calls;
+        expect(own.target).toBe(control.element);
+        expect(own.keyframes).toHaveLength(2);
+        expect(own.keyframes[0]).toMatchObject({ overflow: "hidden" });
+        expect(own.keyframes[0]).toHaveProperty("width");
+        expect(own.keyframes[1]).toHaveProperty("backgroundColor");
+        expect(own.options).toEqual({ duration: 300, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+        // The label fades in as the clipped pill widens.
+        expect(labelFade.target.textContent).toBe("Approval needed");
+        expect(calls).toHaveLength(2);
+
+        // Ordinary syncs in the same state leave a running morph alone.
+        control.update(config, true, false, 0, true);
+        expect(calls).toHaveLength(2);
+        expect(calls.every((call) => call.animation.cancel.mock.calls.length === 0)).toBe(true);
+
+        // Back to the arrow: the running morph is replaced, unclipped (the
+        // count badge hangs outside the button).
+        control.update(config, true, false, 2, false);
+        expect(calls.slice(0, 2).every((call) => call.animation.cancel.mock.calls.length === 1)).toBe(true);
+        expect(calls).toHaveLength(3);
+        expect(calls[2].keyframes[0]).not.toHaveProperty("overflow");
+        control.destroy();
+      } finally { restore(); }
+    });
+
+    it("swaps instantly when the theme turns motion off, and falls back when the duration is missing", () => {
+      const { calls, restore } = stubAnimate();
+      try {
+        const config: AgentWidgetConfig = { future: { v5Defaults: true } };
+        const off = createScrollToBottomControl(icon, "transcript");
+        off.element.style.setProperty("--persona-motion-duration-base", "0ms");
+        off.update(config, true);
+        off.update(config, true, false, 0, true);
+        expect(calls).toHaveLength(0);
+        expect(off.element.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+        off.destroy();
+
+        const unset = createScrollToBottomControl(icon, "transcript");
+        unset.update(config, true);
+        unset.update(config, true, false, 0, true);
+        expect(calls[0].options.duration).toBe(200);
+        unset.destroy();
+      } finally { restore(); }
+    });
+
+    it("does not morph a control that appears, hides, or prefers reduced motion", () => {
+      const { calls, restore } = stubAnimate();
+      try {
+        const config: AgentWidgetConfig = { future: { v5Defaults: true } };
+        const control = createScrollToBottomControl(icon, "transcript");
+        control.update(config, false);
+        control.update(config, true, false, 0, true); // appears already as the pill
+        control.update(config, false, false, 0, true); // hides
+        expect(calls).toHaveLength(0);
+        control.destroy();
+
+        vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+        const reduced = createScrollToBottomControl(icon, "transcript");
+        reduced.update(config, true);
+        reduced.update(config, true, false, 0, true);
+        expect(calls).toHaveLength(0);
+        expect(reduced.element.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+        reduced.destroy();
+      } finally { restore(); }
+    });
   });
 
   it("provides live reduced-motion changes and releases its media listener", () => {
