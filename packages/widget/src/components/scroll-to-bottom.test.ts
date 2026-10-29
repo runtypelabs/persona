@@ -165,6 +165,78 @@ describe("scroll-to-bottom chrome", () => {
     control.destroy(); warning.mockRestore();
   });
 
+  describe("approval morph", () => {
+    const stubAnimate = () => {
+      const calls: { target: Element; keyframes: Keyframe[]; options: KeyframeAnimationOptions; animation: { cancel: ReturnType<typeof vi.fn> } }[] = [];
+      const original = (HTMLElement.prototype as { animate?: unknown }).animate;
+      (HTMLElement.prototype as { animate?: unknown }).animate = function (this: Element, keyframes: Keyframe[], options: KeyframeAnimationOptions) {
+        const animation = { cancel: vi.fn(), finished: new Promise<void>(() => {}) };
+        calls.push({ target: this, keyframes, options, animation });
+        return animation;
+      };
+      return { calls, restore: () => { (HTMLElement.prototype as { animate?: unknown }).animate = original; } };
+    };
+
+    it("morphs a visible arrow into the pill on the theme's motion tokens, and back", () => {
+      const { calls, restore } = stubAnimate();
+      try {
+        const control = createScrollToBottomControl(icon, "transcript");
+        document.body.appendChild(control.element);
+        control.element.style.setProperty("--persona-motion-duration-base", "0.3s");
+        control.element.style.setProperty("--persona-motion-easing", "cubic-bezier(0.2, 0, 0, 1)");
+        const config: AgentWidgetConfig = { future: { v5Defaults: true } };
+        control.update(config, true);
+        expect(calls).toHaveLength(0);
+
+        control.update(config, true, false, 0, true);
+        const [own, labelFade] = calls;
+        expect(own.target).toBe(control.element);
+        expect(own.keyframes).toHaveLength(2);
+        expect(own.keyframes[0]).toMatchObject({ overflow: "hidden" });
+        expect(own.keyframes[0]).toHaveProperty("width");
+        expect(own.keyframes[1]).toHaveProperty("backgroundColor");
+        expect(own.options).toEqual({ duration: 300, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+        // The label fades in as the clipped pill widens.
+        expect(labelFade.target.textContent).toBe("Approval needed");
+        expect(calls).toHaveLength(2);
+
+        // Ordinary syncs in the same state leave a running morph alone.
+        control.update(config, true, false, 0, true);
+        expect(calls).toHaveLength(2);
+        expect(calls.every((call) => call.animation.cancel.mock.calls.length === 0)).toBe(true);
+
+        // Back to the arrow: the running morph is replaced, unclipped (the
+        // count badge hangs outside the button).
+        control.update(config, true, false, 2, false);
+        expect(calls.slice(0, 2).every((call) => call.animation.cancel.mock.calls.length === 1)).toBe(true);
+        expect(calls).toHaveLength(3);
+        expect(calls[2].keyframes[0]).not.toHaveProperty("overflow");
+        control.destroy();
+      } finally { restore(); }
+    });
+
+    it("does not morph a control that appears, hides, or prefers reduced motion", () => {
+      const { calls, restore } = stubAnimate();
+      try {
+        const config: AgentWidgetConfig = { future: { v5Defaults: true } };
+        const control = createScrollToBottomControl(icon, "transcript");
+        control.update(config, false);
+        control.update(config, true, false, 0, true); // appears already as the pill
+        control.update(config, false, false, 0, true); // hides
+        expect(calls).toHaveLength(0);
+        control.destroy();
+
+        vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+        const reduced = createScrollToBottomControl(icon, "transcript");
+        reduced.update(config, true);
+        reduced.update(config, true, false, 0, true);
+        expect(calls).toHaveLength(0);
+        expect(reduced.element.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
+        reduced.destroy();
+      } finally { restore(); }
+    });
+  });
+
   it("provides live reduced-motion changes and releases its media listener", () => {
     let change: (() => void) | undefined;
     const media = { matches: true, addEventListener: vi.fn((_event, callback) => { change = callback; }), removeEventListener: vi.fn() };

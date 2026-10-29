@@ -36,6 +36,23 @@ export function createScrollToBottomControl(
   let abort: AbortController | undefined;
   let builtin = "";
   const media = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : undefined;
+  // Arrow <-> "Approval needed" pill: one button changing shape, so morph its
+  // width and colors on the theme's motion tokens while the new label fades in.
+  let morphs: Animation[] = [];
+  const paint = () => {
+    const style = getComputedStyle(element);
+    return { width: `${element.offsetWidth}px`, backgroundColor: style.backgroundColor, borderColor: style.borderColor, color: style.color };
+  };
+  const morph = (from: Keyframe) => {
+    const style = getComputedStyle(element);
+    const duration = style.getPropertyValue("--persona-motion-duration-base");
+    const timing = { duration: parseFloat(duration) * (duration.includes("ms") ? 1 : 1000) || 200, easing: style.getPropertyValue("--persona-motion-easing").trim() || "ease-out" };
+    // Clip only while widening into the pill: the arrow's count badge hangs
+    // outside the button.
+    const clip = label.style.display === "none" ? null : { overflow: "hidden" };
+    morphs = [element.animate([{ ...from, ...clip }, { ...paint(), ...clip }], timing)];
+    if (clip) morphs.push(label.animate([{ opacity: 0 }, { opacity: 1 }], timing));
+  };
   state.reducedMotion = media?.matches ?? false;
   const warn = (error: unknown) => console.warn("Persona scroll icon failed", error);
   const context = (): AgentWidgetScrollToBottomIconContext => ({ config, state: { ...state }, view, signal: abort!.signal });
@@ -138,6 +155,10 @@ export function createScrollToBottomControl(
       // A waiting approval outranks streaming and the unread count: the turn is
       // blocked on the reader, so the control says so in words.
       const waiting = approval && visible;
+      // Morph only a visible control changing shape, never its fade in or out.
+      const reshape = state.visible && visible && (state.activity === "approval-below") !== waiting;
+      if (reshape || !visible) morphs.forEach((animation) => animation.cancel());
+      const from = reshape && !state.reducedMotion && typeof element.animate === "function" ? paint() : null;
       const approvalText = feature?.approvalLabel ?? "Approval needed";
       const text = waiting && approvalText ? approvalText : feature?.label ?? "";
       const base = feature?.label || "Jump to latest";
@@ -158,8 +179,10 @@ export function createScrollToBottomControl(
       const changed = configChanged || stateChanged(nextState);
       state = nextState;
       updateRenderer(changed);
+      if (from) morph(from);
     },
     destroy() {
+      morphs.forEach((animation) => animation.cancel());
       dispose();
       lifetime.abort();
       media?.removeEventListener?.("change", motion);

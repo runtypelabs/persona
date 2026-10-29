@@ -1841,7 +1841,10 @@ While a pending approval sits below the fold, the control widens to a labelled
 pill: the approval card's shield glyph and `features.scrollToBottom.approvalLabel`
 (default `"Approval needed"`; `""` keeps the regular control). The unread count
 is hidden in this state, and a custom `renderIcon` sees `state.activity ===
-"approval-below"`. Activating it jumps to the latest content and focuses the
+"approval-below"`. When the control is already showing, it morphs between the
+two shapes: width and colors ease over `components.motion.durationBase` with
+`components.motion.easing`, and the new glyph and label fade in. Appearing or
+hiding keeps the regular `transition`, and reduced motion swaps instantly. Activating it jumps to the latest content and focuses the
 approval's primary action. Persona never moves focus to a pending approval
 the reader can't see, so it stays in the composer until the reader jumps.
 Its colors default to the control's own, so it matches the theme; give it an

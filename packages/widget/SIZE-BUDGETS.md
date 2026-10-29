@@ -137,3 +137,14 @@ that fits (gzip, decimal kB; Before is main 465d95e, local build):
 `widget.css` stays within its budgets (24.37 kB gzip of 24.5 kB; 20.10 KiB
 Brotli of 20.1 KiB), and `index.global.js` stays within its 133 KiB Brotli
 budget (132.91 KiB).
+
+The arrow-to-pill morph that followed (a Web Animations width/color morph on
+the motion tokens, kept in script so the stylesheet budgets are untouched)
+raises both `index.global.js` budgets, again to the smallest that fits (CI
+measures gzip slightly above a local build, so the gzip limit leaves that
+margin):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` (gzip) | 167.62 kB | 167.87 kB | 167.7 → 168 kB |
+| `dist/index.global.js` (Brotli) | 132.91 KiB | 133.17 KiB | 133 → 133.2 KiB |
