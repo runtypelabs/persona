@@ -84,6 +84,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline"],
   },
   {
+    slug: "user-message-collapse-demo",
+    href: "/user-message-collapse-demo.html",
+    title: "Long Message Collapse",
+    blurb: "Long pasted user messages clip behind a Show more toggle: height, labels, fade, color, and placement, live. Runs locally.",
+    tier: "patterns",
+    tags: ["interaction", "theming", "a11y"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "custom-loading-indicator",
     href: "/custom-loading-indicator.html",
     title: "Replace the Loader",

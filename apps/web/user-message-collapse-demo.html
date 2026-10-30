@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Long Message Collapse: Persona</title>
+  <style>
+    .collapse-control {
+      display: grid;
+      gap: 0.45rem;
+      margin-top: 1rem;
+    }
+    .collapse-control:first-of-type { margin-top: 0.75rem; }
+    .collapse-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .collapse-samples {
+      display: grid;
+      gap: 0.45rem;
+      margin-top: 0.75rem;
+    }
+    .collapse-samples .btn { text-align: left; }
+  </style>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <div class="info-section">
+          <h3>Send a long message</h3>
+          <p>Each sample goes through <code>controller.submitMessage()</code>, the same path as the composer. Paste your own text into the composer too: replies are scripted locally, no API key needed.</p>
+          <div class="collapse-samples">
+            <button class="btn" type="button" data-sample="stack-trace">Paste a stack trace</button>
+            <button class="btn" type="button" data-sample="transcript">Dictate a long voice note</button>
+            <button class="btn" type="button" data-sample="spec">Paste a spec with code</button>
+            <button class="btn" type="button" data-sample="short">Send a short message</button>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>Collapse</h3>
+          <p>Every change applies live with <code>controller.update()</code>; the transcript stays put.</p>
+
+          <div class="collapse-control">
+            <div class="checkbox-row">
+              <input type="checkbox" id="collapse-enabled" checked />
+              <label for="collapse-enabled"><code>features.userMessageCollapse.enabled</code></label>
+            </div>
+          </div>
+
+          <div class="collapse-control">
+            <span class="mount-toggle-label">Max height</span>
+            <div class="collapse-buttons mount-toggle-group" role="group" aria-label="Max height">
+              <button class="collapse-height-button mount-toggle-button" type="button" data-height="120" aria-pressed="false" title="About five lines.">120px</button>
+              <button class="collapse-height-button mount-toggle-button" type="button" data-height="240" aria-pressed="true" title="The default: about ten lines.">240px</button>
+              <button class="collapse-height-button mount-toggle-button" type="button" data-height="400" aria-pressed="false" title="About sixteen lines.">400px</button>
+            </div>
+          </div>
+
+          <div class="collapse-control">
+            <span class="mount-toggle-label">Toggle placement (CSS only)</span>
+            <div class="collapse-buttons mount-toggle-group" role="group" aria-label="Toggle placement">
+              <button class="collapse-placement-button mount-toggle-button" type="button" data-placement="start" aria-pressed="true" title="The default: under the last visible line, at the start edge.">Start</button>
+              <button class="collapse-placement-button mount-toggle-button" type="button" data-placement="end" aria-pressed="false" title="margin-inline-start: auto">End</button>
+              <button class="collapse-placement-button mount-toggle-button" type="button" data-placement="center" aria-pressed="false" title="margin-inline: auto">Center</button>
+            </div>
+          </div>
+
+          <div class="collapse-control">
+            <span class="mount-toggle-label">Fade height</span>
+            <div class="collapse-buttons mount-toggle-group" role="group" aria-label="Fade height">
+              <button class="collapse-fade-button mount-toggle-button" type="button" data-fade="16px" aria-pressed="false">16px</button>
+              <button class="collapse-fade-button mount-toggle-button" type="button" data-fade="" aria-pressed="true" title="The default: 48px.">48px</button>
+              <button class="collapse-fade-button mount-toggle-button" type="button" data-fade="96px" aria-pressed="false">96px</button>
+            </div>
+          </div>
+
+          <div class="collapse-control">
+            <span class="mount-toggle-label">Toggle color</span>
+            <div class="collapse-buttons mount-toggle-group" role="group" aria-label="Toggle color">
+              <button class="collapse-color-button mount-toggle-button" type="button" data-color="" aria-pressed="true" title="The default: inherits the user bubble text color.">Bubble text</button>
+              <button class="collapse-color-button mount-toggle-button" type="button" data-color="#2563eb" aria-pressed="false">Blue</button>
+              <button class="collapse-color-button mount-toggle-button" type="button" data-color="#7c3aed" aria-pressed="false">Violet</button>
+            </div>
+          </div>
+
+          <div class="collapse-control field-grid">
+            <div class="field">
+              <label for="collapse-more-label"><code>showMoreLabel</code></label>
+              <input type="text" id="collapse-more-label" placeholder="Show more" />
+            </div>
+            <div class="field">
+              <label for="collapse-less-label"><code>showLessLabel</code></label>
+              <input type="text" id="collapse-less-label" placeholder="Show less" />
+            </div>
+          </div>
+          <div class="btn-row collapse-control">
+            <button class="btn" type="button" id="collapse-labels-de">Mehr / Weniger anzeigen</button>
+            <button class="btn" type="button" id="collapse-labels-reset">Default labels</button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Long user messages</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">What collapses</h3>
+        <p>A built-in user bubble whose rendered content (text, markdown, code, attachments) is taller than <code>maxHeight</code> is clipped with a bottom fade and a real <code>&lt;button&gt;</code>. Content within about two lines (48px) of the limit stays expanded, so the toggle never hides just a line or two. The full message stays in the DOM, so find-in-page, copy, selection, and screen readers still reach it. It is off by default in V4 and on under <code>future.v5Defaults</code>.</p>
+        <div class="code-block">
+<span class="prop">features</span>: {
+  <span class="prop">userMessageCollapse</span>: { <span class="prop">enabled</span>: <span class="keyword">true</span>, <span class="prop">maxHeight</span>: <span class="keyword">240</span> },
+},
+<span class="prop">copy</span>: { <span class="prop">showMoreLabel</span>: <span class="string">"Show more"</span>, <span class="prop">showLessLabel</span>: <span class="string">"Show less"</span> },
+<span class="prop">theme</span>: {
+  <span class="prop">components</span>: {
+    <span class="prop">userMessageCollapse</span>: {
+      <span class="prop">fadeHeight</span>: <span class="string">"48px"</span>,
+      <span class="prop">toggleForeground</span>: <span class="string">"#2563eb"</span>,
+      <span class="prop">toggleFontSize</span>: <span class="string">"0.8125rem"</span>,
+      <span class="prop">toggleFontWeight</span>: <span class="string">"600"</span>,
+    },
+  },
+},
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Moving the toggle</h3>
+        <p>The toggle sits at the start of the bubble's text, under the last visible line. It keeps its own width, so an auto margin in your stylesheet pushes it across. The placement control above swaps exactly these rules in a page stylesheet.</p>
+        <div class="code-block">
+<span class="comment">/* Align to the bubble's end edge */</span>
+.persona-user-collapse-toggle { <span class="prop">display</span>: flex; <span class="prop">margin-inline-start</span>: auto; }
+<span class="comment">/* Or center it */</span>
+.persona-user-collapse-toggle { <span class="prop">display</span>: flex; <span class="prop">margin-inline</span>: auto; }
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Accessible by default</h3>
+        <p>The button carries <code>aria-expanded</code> and <code>aria-controls</code> pointing at the clip region, and focusing into a collapsed message expands it. A reader's choice is remembered per message for the life of the widget, and interim voice transcripts stay expanded until they are final.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Hooks for host CSS</h3>
+        <p>The clip region carries <code>data-persona-user-collapse="fit" | "live" | "collapsed" | "expanded"</code> and the button <code>data-persona-user-collapse-toggle</code> with the <code>.persona-user-collapse-toggle</code> class. See "Long user messages" in <code>THEME-CONFIG.md</code> for the token table.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/user-message-collapse-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("user-message-collapse-demo");
+  </script>
+</body>
+</html>
