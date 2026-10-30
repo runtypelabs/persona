@@ -2801,6 +2801,31 @@ export type AgentWidgetStreamAnimationFeature = {
   plugins?: Record<string, StreamAnimationPlugin>;
 };
 
+/**
+ * Collapse long user messages behind a "Show more" / "Show less" toggle.
+ * Only the built-in user bubble collapses; `layout.messages.renderUserMessage`
+ * and plugin `renderMessage` output is left untouched.
+ */
+export type AgentWidgetUserMessageCollapseFeature = {
+  /**
+   * Clip a user bubble whose rendered content (text, markdown, code,
+   * attachments) is taller than `maxHeight`, with a bottom fade and a real
+   * toggle button. The full message stays in the DOM, so find-in-page, copy,
+   * selection and screen readers still reach it. Interim voice transcripts
+   * stay expanded and collapse once final. A reader's toggle is remembered
+   * per message for the life of the widget.
+   * @default false (`true` under `future.v5Defaults`)
+   */
+  enabled?: boolean;
+  /**
+   * Collapsed height in px. Content within about two lines (48px) of the
+   * limit is left expanded, so the toggle never hides just a line or two.
+   * The default shows about ten lines of bubble text.
+   * @default 240
+   */
+  maxHeight?: number;
+};
+
 export type AgentWidgetFeatureFlags = {
   showReasoning?: boolean;
   showToolCalls?: boolean;
@@ -2817,6 +2842,8 @@ export type AgentWidgetFeatureFlags = {
   scrollToBottom?: AgentWidgetScrollToBottomFeature;
   /** Transcript scroll behavior during streamed responses. */
   scrollBehavior?: AgentWidgetScrollBehaviorFeature;
+  /** "Show more" collapse for long user messages. Off by default; on under `future.v5Defaults`. */
+  userMessageCollapse?: AgentWidgetUserMessageCollapseFeature;
   /** Collapsed transcript behavior for tool call rows. */
   toolCallDisplay?: AgentWidgetToolCallDisplayFeature;
   /** Collapsed transcript behavior for reasoning rows. */
@@ -8446,6 +8473,10 @@ export type AgentWidgetConfig = {
     sendButtonLabel?: string;
     /** Button label shown in text mode while a response is streaming. Default: "Stop". */
     stopButtonLabel?: string;
+    /** Toggle label on a collapsed long user message (`features.userMessageCollapse`). @default "Show more" */
+    showMoreLabel?: string;
+    /** Toggle label on an expanded long user message (`features.userMessageCollapse`). @default "Show less" */
+    showLessLabel?: string;
     /**
      * When false, the welcome / intro card is not shown above the message list.
      * @deprecated Use `welcome.variant: "none"`.

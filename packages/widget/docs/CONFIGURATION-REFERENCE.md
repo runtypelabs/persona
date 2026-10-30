@@ -257,7 +257,7 @@ config: {
 | `darkTheme` | `DeepPartial<PersonaTheme>` | Dark-mode token overrides, merged over `theme` when the active scheme is dark. |
 | `colorScheme` | `'light' \| 'dark' \| 'auto'` | Color scheme mode. `'auto'` detects from `<html class="dark">` or `prefers-color-scheme`. Default: `'light'`. |
 | `welcome` | `{ title?, subtitle?, icon?, variant?, dismiss?, message? }` | First-open welcome surface. See [Welcome](#welcome) below. |
-| `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel?, stopButtonLabel?, showWelcomeCard?, stopReasonNotice? }` | Customize user-facing text strings, hide the welcome card, or override per-stop-reason notices. `welcomeTitle`, `welcomeSubtitle`, and `showWelcomeCard` are deprecated aliases of `welcome.title`, `welcome.subtitle`, and `welcome.variant: 'none'`. |
+| `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel?, stopButtonLabel?, showMoreLabel?, showLessLabel?, showWelcomeCard?, stopReasonNotice? }` | Customize user-facing text strings, hide the welcome card, or override per-stop-reason notices. `showMoreLabel` / `showLessLabel` label the long user message toggle (default `"Show more"` / `"Show less"`). `welcomeTitle`, `welcomeSubtitle`, and `showWelcomeCard` are deprecated aliases of `welcome.title`, `welcome.subtitle`, and `welcome.variant: 'none'`. |
 | `autoFocusInput` | `boolean` | Focus the chat input after the panel opens. Skips when voice is active. Default: `false`. |
 | `launcherWidth` | `string` | CSS width for the floating launcher panel (e.g. `'320px'`). Default: `'min(440px, calc(100vw - 24px))'`. |
 
@@ -861,6 +861,7 @@ See [Menu behavior and positioning](./CONTEXT-MENTIONS.md#menu-behavior-and-posi
 | `composerHistory` | `boolean?` | `Up`/`Down` arrows in the composer navigate previously sent user messages for re-entry/editing (shell / Slack style). Entered only when the caret is at the start of the input, so multi-line cursor movement is preserved. Default: `true`. |
 | `scrollToBottom` | `AgentWidgetScrollToBottomFeature?` | Shared transcript/event-stream scroll-to-bottom affordance. Defaults: `enabled: true`, `iconName: "arrow-down"`, icon-only label. Shows a new-message count while scrolled away. |
 | `scrollBehavior` | `AgentWidgetScrollBehaviorFeature?` | Streaming transcript scroll mode. Defaults: `{ mode: "anchor-top", anchorTopOffset: 16, showActivityWhilePinned: true }`. |
+| `userMessageCollapse` | `AgentWidgetUserMessageCollapseFeature?` | "Show more" / "Show less" collapse for long user messages. Default: off; on under `future.v5Defaults`. |
 | `toolCallDisplay` | `AgentWidgetToolCallDisplayFeature?` | Collapsed tool-call row behavior: summary mode, active preview, grouping, expandability, and loading animation. |
 | `reasoningDisplay` | `AgentWidgetReasoningDisplayFeature?` | Collapsed reasoning row behavior: active preview, expandability, and loading animation. |
 | `streamAnimation` | `AgentWidgetStreamAnimationFeature?` | Assistant text reveal animation while streaming (`none`, `typewriter`, `letter-rise`, `word-fade`, `wipe`, `glyph-cycle`, `pop-bubble`, or custom plugin). |
@@ -876,6 +877,16 @@ See [Menu behavior and positioning](./CONTEXT-MENTIONS.md#menu-behavior-and-posi
 | `mode` | `'follow' \| 'anchor-top' \| 'none'?` | `anchor-top` (default) pins the sent user message near the top while the response streams (ChatGPT-style), falling back to `follow` for a turn with no user send to anchor to; `follow` keeps the latest content in view; `none` disables streaming auto-scroll. Default: `'anchor-top'`. |
 | `anchorTopOffset` | `number?` | Top gap in pixels for `anchor-top`. Default: `16`. |
 | `showActivityWhilePinned` | `boolean?` | In `anchor-top`, surface the new-message count + "streaming below" hint while the reader is pinned away from the latest content. Default: `true`. |
+
+**`features.userMessageCollapse`**: `AgentWidgetUserMessageCollapseFeature`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | Clip a built-in user bubble whose rendered content (text, markdown, code, attachments) is taller than `maxHeight`, with a bottom fade and a `Show more` / `Show less` button (`aria-expanded`, `aria-controls`). The full text stays in the DOM. Interim voice transcripts stay expanded until final. Toggling counts as reader input: it pauses follow and holds the bubble's top in place. Custom `layout.messages.renderUserMessage` and plugin `renderMessage` output is untouched. Default: `false` (`true` under `future.v5Defaults`). |
+| `maxHeight` | `number?` | Collapsed height in px. Content within 48px (about two lines) of it stays expanded. Default: `240` (about ten lines). |
+
+Labels come from `copy.showMoreLabel` / `copy.showLessLabel`; the fade and toggle are themed with
+[`components.userMessageCollapse.*`](../THEME-CONFIG.md#long-user-messages-componentsusermessagecollapse).
 
 **`features.scrollToBottom`**: `AgentWidgetScrollToBottomFeature`
 
