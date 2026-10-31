@@ -1,0 +1,52 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e1]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e2]
+    - paragraph
+      - StaticText "Scenario: approval. Replies are scripted in-page; no backend."
+    - generic
+      - paragraph
+        - StaticText "Line 1: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 2: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 3: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 4: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 5: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 6: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 7: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 8: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 9: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 10: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 11: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 12: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 13: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 14: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 15: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 16: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 17: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 18: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 19: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 20: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 21: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 22: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 23: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 24: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 25: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 26: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 27: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 28: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 29: Please review this part of the documentation and find approval guidance."
+        - StaticText "Line 30: Please review this part of the documentation and find approval guidance."
+      - generic
+        - button "Copy message" [ref=e10]
+      - generic
+        - button "Show details" [expanded=false, ref=e7]
+        - button "Allow" [ref=e8]
+        - button "Deny" [ref=e9]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e3]
+      - button "Start voice recognition" [ref=e4]
+      - button "Send message" [ref=e5]
+  - button "Approval needed below. Jump to latest" [ref=e6]

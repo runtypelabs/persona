@@ -1,0 +1,82 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 304,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Line 1: Please summarize this long note.\nLine 2: Please summarize this long note.\nLine 3: Please summarize this long note.\nLine 4: Please summarize this long note.\nLine 5: Please summarize this long note.\nLine 6: Please summarize this long note.\nLine 7: Please summarize this long note.\nLine 8: Please summarize this long note.\nLine 9: Please summarize this long note.\nLine 10: Please summarize this long note.\nLine 11: Please summarize this long note.\nLine 12: Please summarize this long note.\nLine 13: Please summarize this long note.\nLine 14: Please summarize this long note.\nLine 15: Please summarize this long note.\nLine 16: Please summarize this long note.\nLine 17: Please summarize this long note.\nLine 18: Please summarize this long note.\nLine 19: Please summarize this long note.\nLine 20: Please summarize this long note.\nLine 21: Please summarize this long note.\nLine 22: Please summarize this long note.\nLine 23: Please summarize this long note.\nLine 24: Please summarize this long note.\nLine 25: Please summarize this long note.\nLine 26: Please summarize this long note.\nLine 27: Please summarize this long note.\nLine 28: Please summarize this long note.\nLine 29: Please summarize this long note.\nLine 30: Please summarize this long note.",
+            "createdAt": "2026-10-31T06:50:55.015Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 287,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793429455015
+      }
+    },
+    {
+      "at": 287,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvw1lbxj_f4bu1dqq",
+        "timestamp": 1793429455015
+      }
+    },
+    {
+      "at": 296,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvw1lbxj_1p1terx8",
+        "role": "user",
+        "content": "Line 1: Please summarize this long note.\nLine 2: Please summarize this long note.\nLine 3: Please summarize this long note.\nLine 4: Please summarize this long note.\nLine 5: Please summarize this long note.\nLine 6: Please summarize this long note.\nLine 7: Please summarize this long note.\nLine 8: Please summarize this long note.\nLine 9: Please summarize this long note.\nLine 10: Please summarize this long note.\nLine 11: Please summarize this long note.\nLine 12: Please summarize this long note.\nLine 13: Please summarize this long note.\nLine 14: Please summarize this long note.\nLine 15: Please summarize this long note.\nLine 16: Please summarize this long note.\nLine 17: Please summarize this long note.\nLine 18: Please summarize this long note.\nLine 19: Please summarize this long note.\nLine 20: Please summarize this long note.\nLine 21: Please summarize this long note.\nLine 22: Please summarize this long note.\nLine 23: Please summarize this long note.\nLine 24: Please summarize this long note.\nLine 25: Please summarize this long note.\nLine 26: Please summarize this long note.\nLine 27: Please summarize this long note.\nLine 28: Please summarize this long note.\nLine 29: Please summarize this long note.\nLine 30: Please summarize this long note.",
+        "createdAt": "2026-10-31T06:50:55.015Z",
+        "sequence": 1793429454750,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 1386,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1793429455052-2994f004249c3",
+        "role": "assistant",
+        "content": "You said: **Line 1: Please summarize this long note.\nLine 2: Please summarize this long note.\nLine 3: Please summarize this long note.\nLine 4: Please summarize this long note.\nLine 5: Please summarize this long note.\nLine 6: Please summarize this long note.\nLine 7: Please summarize this long note.\nLine 8: Please summarize this long note.\nLine 9: Please summarize this long note.\nLine 10: Please summarize this long note.\nLine 11: Please summarize this long note.\nLine 12: Please summarize this long note.\nLine 13: Please summarize this long note.\nLine 14: Please summarize this long note.\nLine 15: Please summarize this long note.\nLine 16: Please summarize this long note.\nLine 17: Please summarize this long note.\nLine 18: Please summarize this long note.\nLine 19: Please summarize this long note.\nLine 20: Please summarize this long note.\nLine 21: Please summarize this long note.\nLine 22: Please summarize this long note.\nLine 23: Please summarize this long note.\nLine 24: Please summarize this long note.\nLine 25: Please summarize this long note.\nLine 26: Please summarize this long note.\nLine 27: Please summarize this long note.\nLine 28: Please summarize this long note.\nLine 29: Please summarize this long note.\nLine 30: Please summarize this long note.**. This reply is scripted by the verify fixture.",
+        "createdAt": "2026-10-31T06:50:55.052Z",
+        "streaming": false,
+        "sequence": 1793429455034,
+        "agentMetadata": {
+          "textBlockId": "turn-1-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 1393,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvw1lbxj_f4bu1dqq",
+        "timestamp": 1793429456122,
+        "outcome": "success"
+      }
+    }
+  ]
+}

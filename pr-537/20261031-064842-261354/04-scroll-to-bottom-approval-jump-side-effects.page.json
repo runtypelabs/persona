@@ -1,0 +1,290 @@
+{
+  "scenario": "approval",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 18952,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Line 1: Please review this part of the documentation and find approval guidance.\nLine 2: Please review this part of the documentation and find approval guidance.\nLine 3: Please review this part of the documentation and find approval guidance.\nLine 4: Please review this part of the documentation and find approval guidance.\nLine 5: Please review this part of the documentation and find approval guidance.\nLine 6: Please review this part of the documentation and find approval guidance.\nLine 7: Please review this part of the documentation and find approval guidance.\nLine 8: Please review this part of the documentation and find approval guidance.\nLine 9: Please review this part of the documentation and find approval guidance.\nLine 10: Please review this part of the documentation and find approval guidance.\nLine 11: Please review this part of the documentation and find approval guidance.\nLine 12: Please review this part of the documentation and find approval guidance.\nLine 13: Please review this part of the documentation and find approval guidance.\nLine 14: Please review this part of the documentation and find approval guidance.\nLine 15: Please review this part of the documentation and find approval guidance.\nLine 16: Please review this part of the documentation and find approval guidance.\nLine 17: Please review this part of the documentation and find approval guidance.\nLine 18: Please review this part of the documentation and find approval guidance.\nLine 19: Please review this part of the documentation and find approval guidance.\nLine 20: Please review this part of the documentation and find approval guidance.\nLine 21: Please review this part of the documentation and find approval guidance.\nLine 22: Please review this part of the documentation and find approval guidance.\nLine 23: Please review this part of the documentation and find approval guidance.\nLine 24: Please review this part of the documentation and find approval guidance.\nLine 25: Please review this part of the documentation and find approval guidance.\nLine 26: Please review this part of the documentation and find approval guidance.\nLine 27: Please review this part of the documentation and find approval guidance.\nLine 28: Please review this part of the documentation and find approval guidance.\nLine 29: Please review this part of the documentation and find approval guidance.\nLine 30: Please review this part of the documentation and find approval guidance.",
+            "createdAt": "2026-10-31T06:49:12.039Z"
+          }
+        ]
+      }
+    },
+    {
+      "at": 31447,
+      "url": "approval:onDecision",
+      "body": {
+        "approvalId": "approval-exec_verify_1",
+        "decision": "approved"
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 18926,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793429352038
+      }
+    },
+    {
+      "at": 18927,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mvw1j4h2_t709w5nr",
+        "timestamp": 1793429352038
+      }
+    },
+    {
+      "at": 18939,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mvw1j4h3_33ze4aeg",
+        "role": "user",
+        "content": "Line 1: Please review this part of the documentation and find approval guidance.\nLine 2: Please review this part of the documentation and find approval guidance.\nLine 3: Please review this part of the documentation and find approval guidance.\nLine 4: Please review this part of the documentation and find approval guidance.\nLine 5: Please review this part of the documentation and find approval guidance.\nLine 6: Please review this part of the documentation and find approval guidance.\nLine 7: Please review this part of the documentation and find approval guidance.\nLine 8: Please review this part of the documentation and find approval guidance.\nLine 9: Please review this part of the documentation and find approval guidance.\nLine 10: Please review this part of the documentation and find approval guidance.\nLine 11: Please review this part of the documentation and find approval guidance.\nLine 12: Please review this part of the documentation and find approval guidance.\nLine 13: Please review this part of the documentation and find approval guidance.\nLine 14: Please review this part of the documentation and find approval guidance.\nLine 15: Please review this part of the documentation and find approval guidance.\nLine 16: Please review this part of the documentation and find approval guidance.\nLine 17: Please review this part of the documentation and find approval guidance.\nLine 18: Please review this part of the documentation and find approval guidance.\nLine 19: Please review this part of the documentation and find approval guidance.\nLine 20: Please review this part of the documentation and find approval guidance.\nLine 21: Please review this part of the documentation and find approval guidance.\nLine 22: Please review this part of the documentation and find approval guidance.\nLine 23: Please review this part of the documentation and find approval guidance.\nLine 24: Please review this part of the documentation and find approval guidance.\nLine 25: Please review this part of the documentation and find approval guidance.\nLine 26: Please review this part of the documentation and find approval guidance.\nLine 27: Please review this part of the documentation and find approval guidance.\nLine 28: Please review this part of the documentation and find approval guidance.\nLine 29: Please review this part of the documentation and find approval guidance.\nLine 30: Please review this part of the documentation and find approval guidance.",
+        "createdAt": "2026-10-31T06:49:12.039Z",
+        "sequence": 1793429333148,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 19016,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1793429352084-418ab0dcc1efb",
+        "role": "assistant",
+        "content": "Let me search the documentation for that.",
+        "createdAt": "2026-10-31T06:49:12.084Z",
+        "streaming": false,
+        "sequence": 1793429352066,
+        "agentMetadata": {
+          "textBlockId": "turn-1-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 19020,
+      "type": "approval:requested",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "pending",
+          "agentId": "agent_verify",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "Line 1: Please review this part of the documentation and find approval guidance.\nLine 2: Please review this part of the documentation and find approval guidance.\nLine 3: Please review this part of the documentation and find approval guidance.\nLine 4: Please review this part of the documentation and find approval guidance.\nLine 5: Please review this part of the documentation and find approval guidance.\nLine 6: Please review this part of the documentation and find approval guidance.\nLine 7: Please review this part of the documentation and find approval guidance.\nLine 8: Please review this part of the documentation and find approval guidance.\nLine 9: Please review this part of the documentation and find approval guidance.\nLine 10: Please review this part of the documentation and find approval guidance.\nLine 11: Please review this part of the documentation and find approval guidance.\nLine 12: Please review this part of the documentation and find approval guidance.\nLine 13: Please review this part of the documentation and find approval guidance.\nLine 14: Please review this part of the documentation and find approval guidance.\nLine 15: Please review this part of the documentation and find approval guidance.\nLine 16: Please review this part of the documentation and find approval guidance.\nLine 17: Please review this part of the documentation and find approval guidance.\nLine 18: Please review this part of the documentation and find approval guidance.\nLine 19: Please review this part of the documentation and find approval guidance.\nLine 20: Please review this part of the documentation and find approval guidance.\nLine 21: Please review this part of the documentation and find approval guidance.\nLine 22: Please review this part of the documentation and find approval guidance.\nLine 23: Please review this part of the documentation and find approval guidance.\nLine 24: Please review this part of the documentation and find approval guidance.\nLine 25: Please review this part of the documentation and find approval guidance.\nLine 26: Please review this part of the documentation and find approval guidance.\nLine 27: Please review this part of the documentation and find approval guidance.\nLine 28: Please review this part of the documentation and find approval guidance.\nLine 29: Please review this part of the documentation and find approval guidance.\nLine 30: Please review this part of the documentation and find approval guidance.",
+            "numResults": 5
+          }
+        },
+        "message": {
+          "id": "approval-approval-exec_verify_1",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-31T06:49:12.129Z",
+          "streaming": false,
+          "variant": "approval",
+          "sequence": 1793429352067,
+          "approval": {
+            "id": "approval-exec_verify_1",
+            "status": "pending",
+            "agentId": "agent_verify",
+            "executionId": "exec_verify_1",
+            "toolName": "search_docs",
+            "toolType": "Runtype",
+            "description": "Search the Runtype documentation for relevant pages",
+            "parameters": {
+              "query": "Line 1: Please review this part of the documentation and find approval guidance.\nLine 2: Please review this part of the documentation and find approval guidance.\nLine 3: Please review this part of the documentation and find approval guidance.\nLine 4: Please review this part of the documentation and find approval guidance.\nLine 5: Please review this part of the documentation and find approval guidance.\nLine 6: Please review this part of the documentation and find approval guidance.\nLine 7: Please review this part of the documentation and find approval guidance.\nLine 8: Please review this part of the documentation and find approval guidance.\nLine 9: Please review this part of the documentation and find approval guidance.\nLine 10: Please review this part of the documentation and find approval guidance.\nLine 11: Please review this part of the documentation and find approval guidance.\nLine 12: Please review this part of the documentation and find approval guidance.\nLine 13: Please review this part of the documentation and find approval guidance.\nLine 14: Please review this part of the documentation and find approval guidance.\nLine 15: Please review this part of the documentation and find approval guidance.\nLine 16: Please review this part of the documentation and find approval guidance.\nLine 17: Please review this part of the documentation and find approval guidance.\nLine 18: Please review this part of the documentation and find approval guidance.\nLine 19: Please review this part of the documentation and find approval guidance.\nLine 20: Please review this part of the documentation and find approval guidance.\nLine 21: Please review this part of the documentation and find approval guidance.\nLine 22: Please review this part of the documentation and find approval guidance.\nLine 23: Please review this part of the documentation and find approval guidance.\nLine 24: Please review this part of the documentation and find approval guidance.\nLine 25: Please review this part of the documentation and find approval guidance.\nLine 26: Please review this part of the documentation and find approval guidance.\nLine 27: Please review this part of the documentation and find approval guidance.\nLine 28: Please review this part of the documentation and find approval guidance.\nLine 29: Please review this part of the documentation and find approval guidance.\nLine 30: Please review this part of the documentation and find approval guidance.",
+              "numResults": 5
+            }
+          }
+        }
+      }
+    },
+    {
+      "at": 31446,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "agent_verify",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "Line 1: Please review this part of the documentation and find approval guidance.\nLine 2: Please review this part of the documentation and find approval guidance.\nLine 3: Please review this part of the documentation and find approval guidance.\nLine 4: Please review this part of the documentation and find approval guidance.\nLine 5: Please review this part of the documentation and find approval guidance.\nLine 6: Please review this part of the documentation and find approval guidance.\nLine 7: Please review this part of the documentation and find approval guidance.\nLine 8: Please review this part of the documentation and find approval guidance.\nLine 9: Please review this part of the documentation and find approval guidance.\nLine 10: Please review this part of the documentation and find approval guidance.\nLine 11: Please review this part of the documentation and find approval guidance.\nLine 12: Please review this part of the documentation and find approval guidance.\nLine 13: Please review this part of the documentation and find approval guidance.\nLine 14: Please review this part of the documentation and find approval guidance.\nLine 15: Please review this part of the documentation and find approval guidance.\nLine 16: Please review this part of the documentation and find approval guidance.\nLine 17: Please review this part of the documentation and find approval guidance.\nLine 18: Please review this part of the documentation and find approval guidance.\nLine 19: Please review this part of the documentation and find approval guidance.\nLine 20: Please review this part of the documentation and find approval guidance.\nLine 21: Please review this part of the documentation and find approval guidance.\nLine 22: Please review this part of the documentation and find approval guidance.\nLine 23: Please review this part of the documentation and find approval guidance.\nLine 24: Please review this part of the documentation and find approval guidance.\nLine 25: Please review this part of the documentation and find approval guidance.\nLine 26: Please review this part of the documentation and find approval guidance.\nLine 27: Please review this part of the documentation and find approval guidance.\nLine 28: Please review this part of the documentation and find approval guidance.\nLine 29: Please review this part of the documentation and find approval guidance.\nLine 30: Please review this part of the documentation and find approval guidance.",
+            "numResults": 5
+          },
+          "resolvedAt": 1793429364556
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 31453,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "Line 1: Please review this part of the documentation and find approval guidance.\nLine 2: Please review this part of the documentation and find approval guidance.\nLine 3: Please review this part of the documentation and find approval guidance.\nLine 4: Please review this part of the documentation and find approval guidance.\nLine 5: Please review this part of the documentation and find approval guidance.\nLine 6: Please review this part of the documentation and find approval guidance.\nLine 7: Please review this part of the documentation and find approval guidance.\nLine 8: Please review this part of the documentation and find approval guidance.\nLine 9: Please review this part of the documentation and find approval guidance.\nLine 10: Please review this part of the documentation and find approval guidance.\nLine 11: Please review this part of the documentation and find approval guidance.\nLine 12: Please review this part of the documentation and find approval guidance.\nLine 13: Please review this part of the documentation and find approval guidance.\nLine 14: Please review this part of the documentation and find approval guidance.\nLine 15: Please review this part of the documentation and find approval guidance.\nLine 16: Please review this part of the documentation and find approval guidance.\nLine 17: Please review this part of the documentation and find approval guidance.\nLine 18: Please review this part of the documentation and find approval guidance.\nLine 19: Please review this part of the documentation and find approval guidance.\nLine 20: Please review this part of the documentation and find approval guidance.\nLine 21: Please review this part of the documentation and find approval guidance.\nLine 22: Please review this part of the documentation and find approval guidance.\nLine 23: Please review this part of the documentation and find approval guidance.\nLine 24: Please review this part of the documentation and find approval guidance.\nLine 25: Please review this part of the documentation and find approval guidance.\nLine 26: Please review this part of the documentation and find approval guidance.\nLine 27: Please review this part of the documentation and find approval guidance.\nLine 28: Please review this part of the documentation and find approval guidance.\nLine 29: Please review this part of the documentation and find approval guidance.\nLine 30: Please review this part of the documentation and find approval guidance.",
+            "numResults": 5
+          },
+          "resolvedAt": 1793429364564
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 31467,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "Line 1: Please review this part of the documentation and find approval guidance.\nLine 2: Please review this part of the documentation and find approval guidance.\nLine 3: Please review this part of the documentation and find approval guidance.\nLine 4: Please review this part of the documentation and find approval guidance.\nLine 5: Please review this part of the documentation and find approval guidance.\nLine 6: Please review this part of the documentation and find approval guidance.\nLine 7: Please review this part of the documentation and find approval guidance.\nLine 8: Please review this part of the documentation and find approval guidance.\nLine 9: Please review this part of the documentation and find approval guidance.\nLine 10: Please review this part of the documentation and find approval guidance.\nLine 11: Please review this part of the documentation and find approval guidance.\nLine 12: Please review this part of the documentation and find approval guidance.\nLine 13: Please review this part of the documentation and find approval guidance.\nLine 14: Please review this part of the documentation and find approval guidance.\nLine 15: Please review this part of the documentation and find approval guidance.\nLine 16: Please review this part of the documentation and find approval guidance.\nLine 17: Please review this part of the documentation and find approval guidance.\nLine 18: Please review this part of the documentation and find approval guidance.\nLine 19: Please review this part of the documentation and find approval guidance.\nLine 20: Please review this part of the documentation and find approval guidance.\nLine 21: Please review this part of the documentation and find approval guidance.\nLine 22: Please review this part of the documentation and find approval guidance.\nLine 23: Please review this part of the documentation and find approval guidance.\nLine 24: Please review this part of the documentation and find approval guidance.\nLine 25: Please review this part of the documentation and find approval guidance.\nLine 26: Please review this part of the documentation and find approval guidance.\nLine 27: Please review this part of the documentation and find approval guidance.\nLine 28: Please review this part of the documentation and find approval guidance.\nLine 29: Please review this part of the documentation and find approval guidance.\nLine 30: Please review this part of the documentation and find approval guidance.",
+            "numResults": 5
+          },
+          "resolvedAt": 1793429364564
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 31468,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "tool-call_search",
+        "role": "assistant",
+        "content": "",
+        "createdAt": "2026-10-31T06:49:24.569Z",
+        "streaming": false,
+        "variant": "tool",
+        "agentMetadata": {
+          "executionId": "exec_verify_1"
+        },
+        "sequence": 1793429364561,
+        "toolCall": {
+          "id": "call_search",
+          "status": "complete",
+          "name": "search_docs",
+          "success": true,
+          "duration": 620,
+          "args": {
+            "query": "approval theming",
+            "numResults": 5
+          },
+          "startedAt": 1793429364570,
+          "completedAt": 1793429364574,
+          "durationMs": 620,
+          "result": {
+            "results": [
+              "Theming approvals",
+              "Approval events"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "at": 31484,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "Line 1: Please review this part of the documentation and find approval guidance.\nLine 2: Please review this part of the documentation and find approval guidance.\nLine 3: Please review this part of the documentation and find approval guidance.\nLine 4: Please review this part of the documentation and find approval guidance.\nLine 5: Please review this part of the documentation and find approval guidance.\nLine 6: Please review this part of the documentation and find approval guidance.\nLine 7: Please review this part of the documentation and find approval guidance.\nLine 8: Please review this part of the documentation and find approval guidance.\nLine 9: Please review this part of the documentation and find approval guidance.\nLine 10: Please review this part of the documentation and find approval guidance.\nLine 11: Please review this part of the documentation and find approval guidance.\nLine 12: Please review this part of the documentation and find approval guidance.\nLine 13: Please review this part of the documentation and find approval guidance.\nLine 14: Please review this part of the documentation and find approval guidance.\nLine 15: Please review this part of the documentation and find approval guidance.\nLine 16: Please review this part of the documentation and find approval guidance.\nLine 17: Please review this part of the documentation and find approval guidance.\nLine 18: Please review this part of the documentation and find approval guidance.\nLine 19: Please review this part of the documentation and find approval guidance.\nLine 20: Please review this part of the documentation and find approval guidance.\nLine 21: Please review this part of the documentation and find approval guidance.\nLine 22: Please review this part of the documentation and find approval guidance.\nLine 23: Please review this part of the documentation and find approval guidance.\nLine 24: Please review this part of the documentation and find approval guidance.\nLine 25: Please review this part of the documentation and find approval guidance.\nLine 26: Please review this part of the documentation and find approval guidance.\nLine 27: Please review this part of the documentation and find approval guidance.\nLine 28: Please review this part of the documentation and find approval guidance.\nLine 29: Please review this part of the documentation and find approval guidance.\nLine 30: Please review this part of the documentation and find approval guidance.",
+            "numResults": 5
+          },
+          "resolvedAt": 1793429364564
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 31501,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "Line 1: Please review this part of the documentation and find approval guidance.\nLine 2: Please review this part of the documentation and find approval guidance.\nLine 3: Please review this part of the documentation and find approval guidance.\nLine 4: Please review this part of the documentation and find approval guidance.\nLine 5: Please review this part of the documentation and find approval guidance.\nLine 6: Please review this part of the documentation and find approval guidance.\nLine 7: Please review this part of the documentation and find approval guidance.\nLine 8: Please review this part of the documentation and find approval guidance.\nLine 9: Please review this part of the documentation and find approval guidance.\nLine 10: Please review this part of the documentation and find approval guidance.\nLine 11: Please review this part of the documentation and find approval guidance.\nLine 12: Please review this part of the documentation and find approval guidance.\nLine 13: Please review this part of the documentation and find approval guidance.\nLine 14: Please review this part of the documentation and find approval guidance.\nLine 15: Please review this part of the documentation and find approval guidance.\nLine 16: Please review this part of the documentation and find approval guidance.\nLine 17: Please review this part of the documentation and find approval guidance.\nLine 18: Please review this part of the documentation and find approval guidance.\nLine 19: Please review this part of the documentation and find approval guidance.\nLine 20: Please review this part of the documentation and find approval guidance.\nLine 21: Please review this part of the documentation and find approval guidance.\nLine 22: Please review this part of the documentation and find approval guidance.\nLine 23: Please review this part of the documentation and find approval guidance.\nLine 24: Please review this part of the documentation and find approval guidance.\nLine 25: Please review this part of the documentation and find approval guidance.\nLine 26: Please review this part of the documentation and find approval guidance.\nLine 27: Please review this part of the documentation and find approval guidance.\nLine 28: Please review this part of the documentation and find approval guidance.\nLine 29: Please review this part of the documentation and find approval guidance.\nLine 30: Please review this part of the documentation and find approval guidance.",
+            "numResults": 5
+          },
+          "resolvedAt": 1793429364564
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 31501,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "ast_mvw1je4s_gap0lm27",
+        "role": "assistant",
+        "content": "Found **2** pages: *Theming approvals* and *Approval events*.",
+        "createdAt": "2026-10-31T06:49:24.590Z",
+        "streaming": false,
+        "sequence": 1793429364562,
+        "agentMetadata": {
+          "textBlockId": "turn-approved-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-approved"
+        }
+      }
+    },
+    {
+      "at": 31508,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mvw1j4h2_t709w5nr",
+        "timestamp": 1793429364620,
+        "outcome": "success"
+      }
+    }
+  ]
+}
