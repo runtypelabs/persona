@@ -36,6 +36,11 @@ function createMockElement(tag = "div"): any {
     clientHeight: 300,
     // For <select>
     options: [] as any[],
+    append(...nodes: (Node | string)[]) {
+      for (const node of nodes) {
+        el.appendChild(typeof node === "string" ? { nodeType: 3, textContent: node } : node);
+      }
+    },
     appendChild(child: any) {
       // Handle DocumentFragment: move its children into this element
       if (child.tagName === "FRAGMENT") {

@@ -25,9 +25,7 @@ export function createScrollToBottomControl(
   const label = createElement("span", "");
   const badge = createElement("span", "");
   badge.setAttribute("data-persona-scroll-to-bottom-count", "");
-  element.appendChild(glyph);
-  element.appendChild(label);
-  element.appendChild(badge);
+  element.append(glyph, label, badge);
   let config: AgentWidgetConfig = {};
   let state: AgentWidgetScrollToBottomIconState = { activity: "idle", visible: false, hovered: false, focused: false, reducedMotion: false };
   // Keep renderer identity separate from its handle, including null fallbacks.
