@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.34.0
+
+### Patch Changes
+
+- 3b7abdd: Refresh build tooling and isolate the native declaration emitter.
+
 ## 4.29.2
 
 ### Patch Changes

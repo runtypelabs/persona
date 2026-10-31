@@ -1,5 +1,18 @@
 # @runtypelabs/persona
 
+## 4.34.0
+
+### Minor Changes
+
+- 080a216: Add `features.userMessageCollapse`: long user messages (pasted text, voice transcripts) collapse to `maxHeight` (default 240px, about ten lines) behind a "Show more" / "Show less" button, so a long sent message no longer fills the viewport above the reply in `anchor-top` mode. The height is measured from the rendered content, the full text stays in the DOM, interim voice transcripts stay expanded until final, and toggling counts as reader input that holds the bubble in place. Labels come from `copy.showMoreLabel` / `copy.showLessLabel`, and the fade and toggle take optional `theme.components.userMessageCollapse` tokens. Off by default; on under `future.v5Defaults`. Custom `renderUserMessage` and plugin `renderMessage` bubbles are unchanged.
+- 28bcb1c: The jump-to-latest control now says "Approval needed" when a pending approval is below the fold. It widens to a labelled pill with the approval's shield glyph instead of scrolling the reader there. When the control is already showing, the arrow morphs into the pill (and back) on the theme's `motion.durationBase` and `motion.easing`, and reduced motion swaps instantly. Activating it jumps to the latest content and focuses the approval's primary action. Persona also no longer moves focus to an approval the reader can't see. Configure the text with `features.scrollToBottom.approvalLabel` (empty string keeps the regular control). Style it with `theme.components.scrollToBottom.approval` (`background`, `foreground`, `border`, `fontWeight`), which defaults to the control's own colors. Custom `renderIcon` glyphs see `state.activity === "approval-below"`.
+
+### Patch Changes
+
+- cfbc7d1: `anchor-top` now keeps the submitted user message anchored for the whole reply. It no longer hands the anchor off to the assistant's first block when that block starts below the fold (a long message, a tool-heavy prelude), so readers keep their place and use the jump-to-latest control to reach the answer. Jumping to the latest releases the anchor and spacer for the rest of the turn.
+- 3b7abdd: Refresh build tooling and isolate the native declaration emitter.
+- d10440e: Reduce widget bundle size by simplifying scroll-to-bottom control construction.
+
 ## 4.33.0
 
 ### Minor Changes
