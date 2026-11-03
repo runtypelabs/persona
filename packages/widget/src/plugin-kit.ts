@@ -156,7 +156,9 @@ export interface PopoverOptions {
   /**
    * Where to mount `content`. Defaults to the anchor's shadow root (when
    * shadowed), its open dialog, or `document.body`: keeping it inside the same style + stacking
-   * scope as the anchor while escaping the transcript's scroll clipping.
+   * scope as the anchor while escaping the transcript's scroll clipping. Mounted
+   * outside the anchor's `[data-persona-root]`, `content` carries a copy of the
+   * root's theme variables and color scheme, kept current while open.
    */
   container?: HTMLElement | ShadowRoot;
   onOpen?: () => void;
@@ -216,6 +218,24 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
   const currentContainer = () => options.container ?? defaultContainer(anchor);
   let open = false;
   let detach: (() => void) | null = null;
+  let carried: string[] = [];
+
+  // The theme lives on the widget root as inline custom properties plus scheme
+  // attributes. Content mounted outside that root (body, dialog, shadow root)
+  // would paint the stylesheet's light fallbacks, so it carries a copy.
+  const carryTheme = (): void => {
+    const root = anchor.closest<HTMLElement>("[data-persona-root]");
+    if (!root || root.contains(content)) return;
+    const { style } = root;
+    for (const name of carried) if (!style.getPropertyValue(name)) content.style.removeProperty(name);
+    carried = Array.from(style).filter((name) => name.startsWith("--"));
+    for (const name of carried) content.style.setProperty(name, style.getPropertyValue(name));
+    for (const attr of ["data-persona-color-scheme", "data-persona-defaults"]) {
+      const value = root.getAttribute(attr);
+      if (value) content.setAttribute(attr, value);
+      else content.removeAttribute(attr);
+    }
+  };
 
   const reposition = (): void => {
     if (!open) return;
@@ -224,6 +244,7 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
       const focused = content.contains(content.ownerDocument.activeElement)
         ? content.ownerDocument.activeElement as HTMLElement : null;
       container.appendChild(content);
+      carryTheme();
       focused?.focus({ preventScroll: true });
     }
     const rect = options.getAnchorRect?.() ?? anchor.getBoundingClientRect();
@@ -321,9 +342,16 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     ownerWindow.addEventListener("resize", onReposition);
     const moveRoot = anchor.closest("[data-persona-root]");
     moveRoot?.addEventListener("persona:internal:host-moved", onReposition);
+    // A live theme or color-scheme change rewrites the root while open.
+    let themeObserver: MutationObserver | undefined;
+    if (moveRoot && ownerWindow.MutationObserver) {
+      themeObserver = new ownerWindow.MutationObserver(carryTheme);
+      themeObserver.observe(moveRoot, { attributeFilter: ["style", "data-persona-color-scheme"] });
+    }
 
     detach = () => {
       observer?.disconnect();
+      themeObserver?.disconnect();
       ownerWindow.clearTimeout(armId);
       ownerDocument.removeEventListener("pointerdown", onOutside, true);
       ownerWindow.removeEventListener("scroll", onReposition, true);

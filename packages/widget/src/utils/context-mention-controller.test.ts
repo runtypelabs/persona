@@ -5,6 +5,7 @@ import { ContextMentionController } from "./context-mention-controller";
 import { createTextareaComposerInput } from "./composer-input";
 import { createContentEditableComposerInput } from "./composer-contenteditable";
 import { createSlashCommandsSource } from "./mention-matcher";
+import { applyThemeVariables } from "./theme";
 import type {
   AgentWidgetConfig,
   AgentWidgetContextMentionConfig,
@@ -430,6 +431,61 @@ describe("ContextMentionController", () => {
       [false, "@"],
       [true, "/"],
     ]);
+  });
+});
+
+describe("ContextMentionController — theme", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  // The menu portals to document.body, outside the themed widget root. Without
+  // the root's variables it painted the light fallbacks in a dark widget.
+  it("paints the body-portaled menu with the widget's dark theme and follows a scheme change", async () => {
+    const root = document.createElement("div");
+    root.setAttribute("data-persona-root", "true");
+    const dark: AgentWidgetConfig = {
+      colorScheme: "dark",
+      future: { v5Defaults: true },
+      theme: { semantic: { colors: { surface: "#17181c", border: "#2e3038" } } },
+    } as AgentWidgetConfig;
+    applyThemeVariables(root, dark);
+    const form = document.createElement("form");
+    const textarea = document.createElement("textarea");
+    form.appendChild(textarea);
+    root.appendChild(form);
+    document.body.appendChild(root);
+
+    const controller = new ContextMentionController({
+      mentionConfig: { enabled: true, sources: [syncSource("files", [item("App.tsx")])] },
+      composerInput: createTextareaComposerInput(textarea),
+      anchor: form,
+      getMessages: () => [],
+      getConfig: () => ({}) as AgentWidgetConfig,
+      onSelect: vi.fn(() => true),
+      announce: vi.fn(),
+    });
+    textarea.value = "@";
+    textarea.setSelectionRange(1, 1);
+    controller.onInput();
+
+    const menu = document.querySelector<HTMLElement>("[data-persona-mention-menu]")!;
+    expect(menu.parentElement).toBe(document.body);
+    expect(menu.getAttribute("data-persona-color-scheme")).toBe("dark");
+    expect(menu.style.getPropertyValue("--persona-surface")).toBe("#17181c");
+    expect(menu.style.getPropertyValue("--persona-border")).toBe("#2e3038");
+    const darkText = root.style.getPropertyValue("--persona-text");
+    expect(darkText).not.toBe("");
+    expect(menu.style.getPropertyValue("--persona-text")).toBe(darkText);
+
+    // controller.update({ colorScheme }) re-applies the theme onto the root.
+    applyThemeVariables(root, { ...dark, colorScheme: "light" } as AgentWidgetConfig);
+    await tick();
+    expect(menu.getAttribute("data-persona-color-scheme")).toBe("light");
+    expect(menu.style.getPropertyValue("--persona-text")).toBe(root.style.getPropertyValue("--persona-text"));
+    expect(menu.style.getPropertyValue("--persona-text")).not.toBe(darkText);
+
+    controller.destroy();
   });
 });
 

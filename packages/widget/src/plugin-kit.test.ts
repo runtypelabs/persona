@@ -262,6 +262,107 @@ describe("createPopover", () => {
   });
 });
 
+describe("createPopover theme carry-over", () => {
+  const setupRoot = () => {
+    const root = document.createElement("div");
+    root.setAttribute("data-persona-root", "true");
+    root.setAttribute("data-persona-color-scheme", "dark");
+    root.setAttribute("data-persona-defaults", "v5");
+    root.style.setProperty("--persona-surface", "#17181c");
+    root.style.setProperty("--persona-border", "#2e3038");
+    root.style.setProperty("--persona-text", "#f4f4f5");
+    root.style.height = "100%";
+    const anchor = document.createElement("button");
+    root.appendChild(anchor);
+    document.body.appendChild(root);
+    const content = document.createElement("div");
+    return { root, anchor, content };
+  };
+
+  it("copies the root's theme variables and scheme onto body-mounted content", () => {
+    const { anchor, content } = setupRoot();
+    createPopover({ anchor, content }).open();
+
+    expect(content.parentElement).toBe(document.body);
+    expect(content.style.getPropertyValue("--persona-surface")).toBe("#17181c");
+    expect(content.style.getPropertyValue("--persona-border")).toBe("#2e3038");
+    expect(content.style.getPropertyValue("--persona-text")).toBe("#f4f4f5");
+    expect(content.getAttribute("data-persona-color-scheme")).toBe("dark");
+    expect(content.getAttribute("data-persona-defaults")).toBe("v5");
+    // Only custom properties travel, never the root's own layout.
+    expect(content.style.height).toBe("");
+    // Not a second widget root: root-scoped rules and lookups stay unambiguous.
+    expect(content.hasAttribute("data-persona-root")).toBe(false);
+  });
+
+  it("follows a live scheme change while open and clears removed variables", async () => {
+    const { root, anchor, content } = setupRoot();
+    createPopover({ anchor, content }).open();
+
+    root.style.setProperty("--persona-surface", "#ffffff");
+    root.style.removeProperty("--persona-border");
+    root.setAttribute("data-persona-color-scheme", "light");
+    await flushMicrotasks();
+
+    expect(content.style.getPropertyValue("--persona-surface")).toBe("#ffffff");
+    expect(content.style.getPropertyValue("--persona-border")).toBe("");
+    expect(content.getAttribute("data-persona-color-scheme")).toBe("light");
+  });
+
+  it("stops following the root once closed and refreshes on the next open", async () => {
+    const { root, anchor, content } = setupRoot();
+    const popover = createPopover({ anchor, content });
+    popover.open();
+    popover.close();
+
+    root.style.setProperty("--persona-surface", "#ffffff");
+    await flushMicrotasks();
+    expect(content.style.getPropertyValue("--persona-surface")).toBe("#17181c");
+
+    popover.open();
+    expect(content.style.getPropertyValue("--persona-surface")).toBe("#ffffff");
+  });
+
+  it("leaves content mounted inside the root to plain inheritance", () => {
+    const { root, anchor, content } = setupRoot();
+    createPopover({ anchor, content, container: root }).open();
+
+    expect(content.parentElement).toBe(root);
+    expect(content.style.getPropertyValue("--persona-surface")).toBe("");
+    expect(content.hasAttribute("data-persona-color-scheme")).toBe(false);
+  });
+
+  it("carries the theme into a shadow root, where content sits beside the root", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const root = document.createElement("div");
+    root.setAttribute("data-persona-root", "true");
+    root.setAttribute("data-persona-color-scheme", "dark");
+    root.style.setProperty("--persona-surface", "#17181c");
+    const anchor = document.createElement("button");
+    root.appendChild(anchor);
+    shadow.appendChild(root);
+    const content = document.createElement("div");
+
+    createPopover({ anchor, content }).open();
+
+    expect(content.parentNode).toBe(shadow);
+    expect(content.style.getPropertyValue("--persona-surface")).toBe("#17181c");
+    expect(content.getAttribute("data-persona-color-scheme")).toBe("dark");
+  });
+
+  it("does nothing for an anchor outside any widget root", () => {
+    const anchor = document.createElement("button");
+    document.body.appendChild(anchor);
+    const content = document.createElement("div");
+    createPopover({ anchor, content }).open();
+
+    expect(content.style.cssText).not.toContain("--persona");
+    expect(content.hasAttribute("data-persona-color-scheme")).toBe(false);
+  });
+});
+
 describe("viewport-constrained popovers", () => {
   const rect = (left: number, top: number, width: number, height: number): DOMRect =>
     ({ left, top, right: left + width, bottom: top + height, width, height }) as DOMRect;
