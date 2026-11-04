@@ -22,7 +22,6 @@ import {
   COMPOSER_CONTROL_CLASS,
   COMPOSER_CONTROL_GLYPH_CLASS,
   COMPOSER_CONTROL_ICON_FALLBACK_PX,
-  forwardMenuTokens,
 } from "./composer-tokens";
 
 export interface ComposerOverflowMenuOptions {
@@ -65,19 +64,6 @@ export interface ComposerOverflowMenu {
 
 const focusableSelector =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
-/**
- * Panel surface tokens, forwarded onto the portaled panel on every open; unset
- * ones clear so the stylesheet's fallbacks stand.
- */
-const MENU_TOKEN_VARS = [
-  "--persona-components-composer-overflowMenu-background",
-  "--persona-components-composer-overflowMenu-borderColor",
-  "--persona-components-composer-overflowMenu-borderRadius",
-  "--persona-components-composer-overflowMenu-foreground",
-  "--persona-components-composer-overflowMenu-shadow",
-  ...["padding", "rowGap", "rowPadding", "rowBorderRadius", "fontSize", "lineHeight", "iconSize", "iconGap", "hoverBackground", "focusBackground", "descriptionColor", "descriptionFontSize", "dividerColor", "dividerSpacing", "minWidth", "maxHeight"].map((name) => `--persona-components-composer-overflowMenu-${name}`),
-] as const;
 
 /**
  * Set on the menu row that holds keyboard focus. Rows that shade on
@@ -296,7 +282,6 @@ export function createComposerOverflowMenu(
   };
 
   const refresh = (): void => {
-    forwardMenuTokens(triggerButton, panel, MENU_TOKEN_VARS);
     panel.setAttribute("data-persona-menu-description-layout", options.getConfig?.()?.descriptionLayout ?? "stacked");
     const width = options.getConfig?.()?.width;
     panel.style.width = width === "composer"
