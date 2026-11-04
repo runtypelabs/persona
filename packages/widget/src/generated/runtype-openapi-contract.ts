@@ -36,6 +36,12 @@ export type RuntypeExecutionStreamEvent = ({
   iterations?: number;
   kind: "agent" | "flow";
   outcome?: "completed" | "error" | "aborted";
+  output?: {
+  validation?: {
+  errored?: Array<string>;
+  failed?: Array<string>;
+};
+};
   seq: number;
   stepErrorCount?: number;
   stopReason?: string;
@@ -48,7 +54,12 @@ export type RuntypeExecutionStreamEvent = ({
   output: number;
 };
   totalTokensUsed?: number;
+  truncatedStepCount?: number;
   type: "execution_complete";
+  warnings?: Array<{
+  code: string;
+  message: string;
+}>;
 }) | ({
   blockReason?: string;
   code?: string;
@@ -216,6 +227,7 @@ export type RuntypeExecutionStreamEvent = ({
 };
   success?: boolean;
   tokensUsed?: number;
+  truncated?: boolean;
   type: "step_complete";
   unresolvedVariables?: Array<string>;
 }) | {
@@ -439,6 +451,7 @@ export type RuntypeExecutionStreamEvent = ({
   toolCallId: string;
   type: "tool_output_delta";
 } | {
+  completedAt?: string;
   error?: string;
   executionId: string;
   executionTime?: number;
