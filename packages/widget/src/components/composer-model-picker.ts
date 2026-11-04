@@ -18,24 +18,11 @@ import { createPopover, type PopoverHandle } from "../plugin-kit";
 import type { ComposerCustomAction, ComposerModel } from "../types";
 import { createElement, createNode } from "../utils/dom";
 import type { renderLucideIcon } from "../utils/icons";
-import { forwardMenuTokens } from "./composer-tokens";
 
 export const COMPOSER_MODEL_PICKER_ACTION_ID = "core:model";
 export const COMPOSER_MODEL_PICKER_ORDER = 700;
 
 const ROW_ICON_SIZE = 16;
-
-/**
- * Tokens the popover panel reads, forwarded onto the portaled panel on every
- * open; unset ones clear so the stylesheet's fallbacks stand.
- */
-const MENU_TOKEN_VARS = [
-  "--persona-components-composer-modelPicker-menuBackground",
-  "--persona-components-composer-modelPicker-menuBorderRadius",
-  "--persona-components-composer-modelPicker-rowHoverBackground",
-  "--persona-components-composer-modelPicker-labelColor",
-  "--persona-components-composer-modelPicker-descriptionColor",
-] as const;
 
 export interface ComposerModelPickerOptions {
   renderIcon: typeof renderLucideIcon;
@@ -212,7 +199,6 @@ export function createComposerModelPickerAction(
           onDismiss: () => trigger.setAttribute("aria-expanded", "false"),
         });
       }
-      forwardMenuTokens(trigger, menu, MENU_TOKEN_VARS);
       popover.open();
       trigger.setAttribute("aria-expanded", "true");
       const ids = [...rows.keys()];
