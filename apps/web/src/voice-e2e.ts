@@ -4,6 +4,7 @@ import {
   initAgentWidget,
   type AgentWidgetConfig,
   type AgentWidgetController,
+  type VoicePlaybackMetrics,
 } from "@runtypelabs/persona";
 import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 
@@ -147,6 +148,7 @@ if (slidesDemo) {
 
 const host = document.getElementById("e2e-host") as HTMLElement;
 const status = document.getElementById("e2e-status") as HTMLElement;
+const playbackMetrics: VoicePlaybackMetrics[] = [];
 
 const config: AgentWidgetConfig = {
   ...DEFAULT_WIDGET_CONFIG,
@@ -162,6 +164,7 @@ const config: AgentWidgetConfig = {
   ...(webmcpDemo || slidesDemo ? { webmcp: { enabled: true } } : {}),
   voiceRecognition: {
     enabled: true,
+    onPlaybackMetrics: (metrics) => playbackMetrics.push(metrics),
     provider: {
       type: "runtype",
       runtype: {
@@ -185,5 +188,5 @@ const controller: AgentWidgetController = initAgentWidget({
 status.textContent = `ready voiceHost=${voiceHost}`;
 
 Object.assign(window as unknown as Record<string, unknown>, {
-  __personaE2E: { controller },
+  __personaE2E: { controller, playbackMetrics },
 });

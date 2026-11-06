@@ -3,6 +3,7 @@ import { installFakeHistoryApi } from "../fixtures/fake-history-api";
 import { startFakeVoiceServer, type FakeVoiceCall, type FakeVoiceServer } from "../fixtures/fake-voice-server";
 import { clickLiveMic, openVoicePage, voiceSel } from "../fixtures/voice-page";
 import { deliverPcm, finishPlayback, installPlaybackProbe } from "../fixtures/voice-playback-probe";
+import type { VoicePlaybackMetrics } from "../../packages/widget/src/types";
 
 test.use({
   permissions: ["microphone"],
@@ -32,6 +33,12 @@ async function advance(page: Page): Promise<void> {
   await page.clock.runFor(elapsed);
 }
 
+async function metrics(page: Page): Promise<VoicePlaybackMetrics[]> {
+  return page.evaluate(() => (window as unknown as {
+    __personaE2E: { playbackMetrics: VoicePlaybackMetrics[] };
+  }).__personaE2E.playbackMetrics);
+}
+
 test("the default voice player renders late 100 ms chunks without holes or lost samples", async ({ page }, info) => {
   const call = await start(page, [0, 0.08, 0.22, 0.31, 0.46, 0.51]);
   for (let i = 0; i < 6; i++) {
@@ -40,6 +47,7 @@ test("the default voice player renders late 100 ms chunks without holes or lost 
     if (i < 5) await advance(page);
   }
   const runs = await finishPlayback(page, info);
+  expect((await metrics(page)).at(-1)).toMatchObject({ underrunCount: 0, refillCount: 0, queuedAudioMs: 0 });
   expect(runs).toHaveLength(1);
   expect(runs[0].samples).toBe(14_400);
   expect(runs[0].amplitude).toBe(0.25);
@@ -56,6 +64,15 @@ test("an underrun re-buffers the first late chunk and resumes in order", async (
   await deliverPcm(page, call, 100, 0.5);
   await advance(page);
   await deliverPcm(page, call, 100, 0.5);
+  const snapshots = await metrics(page);
+  expect(snapshots.find((snapshot) => snapshot.reason === "underrun")).toMatchObject({
+    queuedAudioMs: 100, underrunCount: 1, refillCount: 0, continuous: true,
+  });
+  const refill = snapshots.find((snapshot) => snapshot.reason === "refill");
+  expect(refill).toMatchObject({ underrunCount: 1, refillCount: 1 });
+  expect(refill?.queuedAudioMs).toBeCloseTo(200);
+  expect(refill?.lastRefillMs).toBeGreaterThanOrEqual(70);
+  expect(refill?.lastRefillMs).toBeLessThanOrEqual(90);
   const runs = await finishPlayback(page, info);
   expect(runs).toHaveLength(2);
   expect(runs[0]).toEqual({ amplitude: 0.25, startSample: 0, samples: 4_800 });
@@ -73,6 +90,7 @@ test("audio_clear discards a short reply held in the jitter buffer", async ({ pa
   await expect.poll(() => page.evaluate(() => window.__voicePlaybackProbe.clears)).toBe(1);
   await page.clock.runFor(200);
   expect(await finishPlayback(page, info)).toEqual([]);
+  expect((await metrics(page)).at(-1)).toMatchObject({ reason: "flushed", queuedAudioMs: 0, underrunCount: 0, refillCount: 0 });
 });
 
 test("audio_clear stops playing audio and a subsequent short reply drains without audio_end", async ({ page }, info) => {
@@ -86,6 +104,7 @@ test("audio_clear stops playing audio and a subsequent short reply drains withou
   await advance(page);
   await expect.poll(() => page.evaluate(() => window.__voicePlaybackProbe.sources)).toBe(2);
   const runs = await finishPlayback(page, info);
+  expect((await metrics(page)).at(-1)).toMatchObject({ reason: "drained", queuedAudioMs: 0, underrunCount: 0, refillCount: 0 });
   expect(runs).toHaveLength(2);
   expect(runs[0]).toEqual({ amplitude: 0.25, startSample: 0, samples: 2_304 });
   expect(runs[1].amplitude).toBe(-0.25);

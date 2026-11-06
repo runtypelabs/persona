@@ -248,6 +248,13 @@ export const wireSessionVoice = (
       });
     }
 
+    if (provider.onPlaybackMetrics && s.config.voiceRecognition?.onPlaybackMetrics) {
+      provider.onPlaybackMetrics((metrics) => {
+        if (!isCurrent()) return;
+        s.config.voiceRecognition?.onPlaybackMetrics?.(metrics);
+      });
+    }
+
     provider.onError((error) => {
       if (!isCurrent()) return;
       console.error('Voice error:', error);

@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import type { FakeVoiceCall } from "./fake-voice-server";
+import type { VoicePlaybackMetrics } from "../../packages/widget/src/types";
 
 interface PlaybackProbe {
   received: number;
@@ -95,6 +96,9 @@ export interface AudioRun {
 /** Measure the rendered waveform, not the player's scheduling calls. */
 export async function finishPlayback(page: Page, testInfo: TestInfo): Promise<AudioRun[]> {
   const samples = await page.evaluate(() => window.__voicePlaybackProbe.finish());
+  const playbackMetrics = await page.evaluate(() => (window as unknown as {
+    __personaE2E: { playbackMetrics: VoicePlaybackMetrics[] };
+  }).__personaE2E.playbackMetrics);
   const runs: AudioRun[] = [];
   for (let i = 0; i < samples.length; i++) {
     const amplitude = samples[i];
@@ -120,7 +124,7 @@ export async function finishPlayback(page: Page, testInfo: TestInfo): Promise<Au
   const audioPath = testInfo.outputPath("rendered-playback.wav");
   const reportPath = testInfo.outputPath("rendered-playback.json");
   await writeFile(audioPath, wav);
-  await writeFile(reportPath, JSON.stringify({ sampleRate: 24_000, runs }, null, 2));
+  await writeFile(reportPath, JSON.stringify({ sampleRate: 24_000, runs, playbackMetrics }, null, 2));
   await testInfo.attach("rendered-playback.wav", { path: audioPath, contentType: "audio/wav" });
   await testInfo.attach("rendered-playback.json", { path: reportPath, contentType: "application/json" });
   return runs;
