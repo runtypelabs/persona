@@ -1,4 +1,4 @@
-import type { PcmStreamPlayer } from "../types";
+import type { PcmStreamPlayer, VoicePlaybackMetrics } from "../types";
 
 /**
  * AudioPlaybackManager
@@ -48,6 +48,14 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
   // prebuffer's worth of quiet instead.
   #continuous = false;
   #tailTimer: ReturnType<typeof setTimeout> | undefined;
+  #metricsCallbacks: ((metrics: VoicePlaybackMetrics) => void)[] = [];
+  #lastMetricsAt = -Infinity;
+  #awaitingAudio = false;
+  #underrunCount = 0;
+  #refillStartedAt: number | null = null;
+  #refillCount = 0;
+  #lastRefillMs: number | null = null;
+  #totalRefillMs = 0;
 
   // PCM format constants
   readonly #sampleRate: number;
@@ -113,6 +121,15 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     const float32 = this.#pcmToFloat32(data);
     if (float32.length === 0) return;
 
+    const underrun =
+      !this.#buffering && this.#awaitingAudio &&
+      !this.#userPaused && this.#ctx !== null && this.#nextStartTime < this.#ctx.currentTime;
+    if (underrun) {
+      this.#underrunCount++;
+      if (this.#waterlineSamples > 0) this.#refillStartedAt = performance.now();
+    }
+    this.#awaitingAudio = true;
+
     if (
       this.#waterlineSamples > 0 &&
       this.#ctx &&
@@ -126,6 +143,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
       this.#pendingBuffers.push(float32);
       this.#pendingSamples += float32.length;
       clearTimeout(this.#tailTimer);
+      if (underrun) this.#emitPlaybackMetrics("underrun");
       if (this.#pendingSamples >= this.#waterlineSamples) this.#releaseBuffer();
       else if (this.#continuous) {
         this.#tailTimer = setTimeout(
@@ -135,7 +153,9 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
       }
     } else {
       this.#scheduleSamples(float32);
+      if (underrun) this.#emitPlaybackMetrics("underrun");
     }
+    this.#emitPlaybackMetrics("queue");
   }
 
   /**
@@ -143,6 +163,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    * The onFinished callback fires after all queued audio has played.
    */
   markStreamEnd(): void {
+    this.#awaitingAudio = false;
     // A reply shorter than the prebuffer never reaches the waterline; release
     // whatever we held so it still plays.
     if (this.#pendingBuffers.length > 0) this.#releaseBuffer();
@@ -178,7 +199,10 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     this.#pendingSamples = 0;
     this.#buffering = this.#waterlineSamples > 0;
     this.#started = false;
+    this.#awaitingAudio = false;
+    this.#refillStartedAt = null;
     clearTimeout(this.#tailTimer);
+    this.#emitPlaybackMetrics("flushed");
   }
 
   /** See {@link VoicePlaybackEngine.setContinuousMode}. */
@@ -209,6 +233,11 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     this.#startedCallbacks.push(callback);
   }
 
+  /** Subscribe without starting a polling timer or retaining audio in the measurements. */
+  onPlaybackMetrics(callback: (metrics: VoicePlaybackMetrics) => void): void {
+    this.#metricsCallbacks.push(callback);
+  }
+
   /**
    * Pause playback. Suspends the AudioContext clock; queued/scheduled audio
    * freezes in place and {@link resume} continues exactly where it left off.
@@ -229,6 +258,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    */
   async destroy(): Promise<void> {
     this.flush();
+    this.#metricsCallbacks = [];
     if (this.#ctx) {
       await this.#ctx.close();
       this.#ctx = null;
@@ -245,6 +275,13 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     this.#pendingBuffers = [];
     this.#pendingSamples = 0;
     for (const samples of held) this.#scheduleSamples(samples);
+    if (this.#refillStartedAt !== null) {
+      this.#lastRefillMs = Math.max(0, performance.now() - this.#refillStartedAt);
+      this.#refillStartedAt = null;
+      this.#refillCount++;
+      this.#totalRefillMs += this.#lastRefillMs;
+      this.#emitPlaybackMetrics("refill");
+    }
   }
 
   /** Schedule one Float32 sample block for gap-free playback. */
@@ -282,7 +319,33 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
       this.#activeSources.splice(idx, 1);
       this.#pendingCount--;
       this.#checkFinished();
+      this.#emitPlaybackMetrics(this.#pendingCount === 0 && this.#pendingSamples === 0 ? "drained" : "queue");
     };
+  }
+
+  #emitPlaybackMetrics(reason: VoicePlaybackMetrics["reason"]): void {
+    if (this.#metricsCallbacks.length === 0) return;
+    const now = performance.now();
+    if (reason === "queue" && now - this.#lastMetricsAt < 250) return;
+    this.#lastMetricsAt = now;
+    const scheduledMs = this.#ctx ? Math.max(0, this.#nextStartTime - this.#ctx.currentTime) * 1000 : 0;
+    const metrics: VoicePlaybackMetrics = {
+      reason,
+      queuedAudioMs: scheduledMs + this.#pendingSamples / this.#sampleRate * 1000,
+      buffering: this.#buffering,
+      continuous: this.#continuous,
+      underrunCount: this.#underrunCount,
+      refillCount: this.#refillCount,
+      lastRefillMs: this.#lastRefillMs,
+      totalRefillMs: this.#totalRefillMs,
+    };
+    for (const callback of this.#metricsCallbacks) {
+      try {
+        callback(metrics);
+      } catch {
+        // SAFETY: optional diagnostics must not interrupt audio playback.
+      }
+    }
   }
 
   #checkFinished(): void {

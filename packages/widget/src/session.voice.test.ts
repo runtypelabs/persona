@@ -8,6 +8,7 @@ import type {
   AgentWidgetEvent,
   AgentWidgetMessage,
   VoiceMetrics,
+  VoicePlaybackMetrics,
   VoiceDelegationRequest,
   VoiceSessionBridge,
   VoiceTranscriptMetadata,
@@ -32,6 +33,7 @@ const h = vi.hoisted(() => {
         ) => void)
       | null;
     metricsCb: ((m: VoiceMetrics) => void) | null;
+    playbackMetricsCb: ((m: VoicePlaybackMetrics) => void) | null;
     statusCb: ((s: string) => void) | null;
     errorCb: ((e: Error) => void) | null;
     bridge: VoiceSessionBridge | null;
@@ -40,6 +42,7 @@ const h = vi.hoisted(() => {
   } = {
     transcriptCb: null,
     metricsCb: null,
+    playbackMetricsCb: null,
     statusCb: null,
     errorCb: null,
     bridge: null,
@@ -66,6 +69,9 @@ const h = vi.hoisted(() => {
     },
     onMetrics: (cb: typeof state.metricsCb) => {
       state.metricsCb = cb;
+    },
+    onPlaybackMetrics: (cb: typeof state.playbackMetricsCb) => {
+      state.playbackMetricsCb = cb;
     },
     prewarm: () => {
       state.prewarms += 1;
@@ -111,6 +117,7 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
   let messages: AgentWidgetMessage[] = [];
   let streaming = false;
   let metricsSeen: VoiceMetrics[] = [];
+  let playbackMetricsSeen: VoicePlaybackMetrics[] = [];
 
   const drive = (
     role: 'user' | 'assistant',
@@ -121,9 +128,11 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
   beforeEach(async () => {
     h.state.transcriptCb = null;
     h.state.metricsCb = null;
+    h.state.playbackMetricsCb = null;
     messages = [];
     streaming = false;
     metricsSeen = [];
+    playbackMetricsSeen = [];
 
     session = new AgentWidgetSession(
       {
@@ -134,6 +143,7 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
           onMetrics: (m) => {
             metricsSeen.push(m);
           },
+          onPlaybackMetrics: (m) => playbackMetricsSeen.push(m),
         },
       },
       {
@@ -202,6 +212,56 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
   it('forwards metrics to the config hook', () => {
     h.state.metricsCb!({ llmMs: 100, totalMs: 250 });
     expect(metricsSeen).toEqual([{ llmMs: 100, totalMs: 250 }]);
+  });
+
+  it('forwards local playback measurements until voice cleanup without mixing server metrics', () => {
+    const metrics: VoicePlaybackMetrics = {
+      reason: 'queue', queuedAudioMs: 100, buffering: true, continuous: true,
+      underrunCount: 0, refillCount: 0, lastRefillMs: null, totalRefillMs: 0,
+    };
+    h.state.playbackMetricsCb!(metrics);
+    expect(playbackMetricsSeen).toEqual([metrics]);
+    expect(metricsSeen).toEqual([]);
+    const staleCallback = h.state.playbackMetricsCb!;
+    session.cleanupVoice();
+    staleCallback(metrics);
+    expect(playbackMetricsSeen).toHaveLength(1);
+  });
+
+  it('allows adding the playback hook through updateConfig without replacing the voice connection', async () => {
+    session.cleanupVoice();
+    const config = {
+      apiUrl: 'http://localhost:8000',
+      voiceRecognition: { enabled: true, provider: { type: 'runtype' as const, runtype: { agentId: 'a1' } } },
+    };
+    session.updateConfig(config);
+    h.state.playbackMetricsCb = null;
+    session.setupVoice();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const callback = h.state.playbackMetricsCb as ((m: VoicePlaybackMetrics) => void) | null;
+    session.updateConfig({ ...config, voiceRecognition: {
+      ...config.voiceRecognition, onPlaybackMetrics: (metrics) => playbackMetricsSeen.push(metrics),
+    } });
+    const metrics: VoicePlaybackMetrics = {
+      reason: 'queue', queuedAudioMs: 100, buffering: true, continuous: true,
+      underrunCount: 0, refillCount: 0, lastRefillMs: null, totalRefillMs: 0,
+    };
+    callback!(metrics);
+    expect(h.state.playbackMetricsCb).toBe(callback);
+    expect(playbackMetricsSeen).toEqual([metrics]);
+  });
+
+  it('does not let a throwing host metrics hook escape into a provider audio loop', () => {
+    session.updateConfig({
+      voiceRecognition: { enabled: true, provider: { type: 'runtype', runtype: { agentId: 'a1' } },
+        onPlaybackMetrics: () => { throw new Error('broken telemetry'); },
+      },
+    });
+    const metrics: VoicePlaybackMetrics = {
+      reason: 'queue', queuedAudioMs: 100, buffering: true, continuous: true,
+      underrunCount: 0, refillCount: 0, lastRefillMs: null, totalRefillMs: 0,
+    };
+    expect(() => h.state.playbackMetricsCb!(metrics)).not.toThrow();
   });
 });
 

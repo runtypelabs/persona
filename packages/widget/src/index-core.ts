@@ -702,6 +702,7 @@ export type {
   VoiceStatus,
   VoiceConfig,
   VoiceMetrics,
+  VoicePlaybackMetrics,
   VoicePlaybackEngine,
   VoiceTranscriptMetadata,
   VoiceDelegationRequest,

@@ -48,3 +48,47 @@ receive/playback timing measurements still matter before a broad rollout.
 The unit suite covers the 150 ms threshold, tail timers, and playback lifecycle
 edges with a controlled clock. The existing voice suites cover delegation and
 call state separately.
+
+## Playback measurements
+
+The browser suite also checks the public `voiceRecognition.onPlaybackMetrics`
+callback against the rendered audio. Late frames absorbed by the reserve report
+zero underruns. A forced depletion reports one underrun and the measured refill
+wait. Interruptions empty the queue without recording a completed refill.
+
+```ts
+voiceRecognition: {
+  enabled: true,
+  provider: { type: "runtype", runtype: { agentId: "your-agent-id" } },
+  onPlaybackMetrics(metrics) {
+    // Forward numeric metadata to your own diagnostics if needed.
+    console.debug("Voice playback", metrics);
+  },
+}
+```
+
+The built-in player emits local snapshots, separate from server `onMetrics`:
+
+- `queuedAudioMs`: held samples plus scheduled audio not yet played, excluding
+  sound-device/output latency.
+- `underrunCount`: a chunk arrived after scheduled audio ran out, before an
+  explicit stream end or interruption. One count per depletion, not per late chunk.
+- `refillCount`, `lastRefillMs`, `totalRefillMs`: completed refill waits, measured
+  from the first late chunk until the player schedules the held batch. Startup
+  buffering and cancelled waits are excluded. Time waiting for that first late
+  chunk is not refill time.
+- `buffering`, `continuous`, `reason`: context for each snapshot. Queue snapshots
+  are limited to one per 250 ms during activity. Underrun, refill, flush, and drain
+  snapshots bypass that limit. There is no periodic timer while idle.
+
+Counters last for one player instance, normally one call, and survive interruptions.
+A new call starts fresh. The callback is optional, contains no audio or transcript,
+and sends nothing to a server. A custom playback engine can implement the optional
+`onPlaybackMetrics` method or leave it unsupported. Slow callbacks still run on the
+main thread, so avoid synchronous storage or expensive processing inside them.
+
+For GPT Live, `continuous` is true. The stream has no end-of-reply markers, so
+`underrunCount` also includes natural pauses between utterances or around delegation.
+It is a scheduler-depletion measure, not proof of an audible glitch or a network
+fault. Correlate it with received audio and call activity before drawing conclusions.
+No adaptive buffer tuning is enabled; the default remains 150 ms.
