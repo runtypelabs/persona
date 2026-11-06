@@ -1,0 +1,63 @@
+{
+  "scenario": "execution-error",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 36958,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Please check this request.",
+            "createdAt": "2026-11-06T05:40:33.674Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 36931,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793943633673
+      }
+    },
+    {
+      "at": 36932,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mw4jpyq2_039hjktg",
+        "timestamp": 1793943633674
+      }
+    },
+    {
+      "at": 36945,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mw4jpyq2_hei4osly",
+        "role": "user",
+        "content": "Please check this request.",
+        "createdAt": "2026-11-06T05:40:33.674Z",
+        "sequence": 1793943596772,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 37095,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mw4jpyq2_039hjktg",
+        "timestamp": 1793943633837,
+        "outcome": "error"
+      }
+    }
+  ]
+}

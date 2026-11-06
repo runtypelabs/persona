@@ -1,0 +1,52 @@
+{
+  "runId": "20261106-053409-dfb8be",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "Native embedded run failure at committed candidate",
+      "note": null,
+      "files": [
+        "05-streaming-native-embedded-run-failure-at-committed-candida.gif",
+        "05-streaming-native-embedded-run-failure-at-committed-candida.webm",
+        "05-streaming-native-embedded-run-failure-at-committed-candida.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4417/verify.html?scenario=execution-error&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22layout%22%3A%7B%22embedded%22%3Atrue%7D%7D",
+      "at": "2026-11-06T05:40:53.830Z",
+      "head": "7b47ee525f6b4c6bd3f1cfb67cd5c9f2d543f080",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Native inline failure and ready composer",
+      "note": "Clean Persona candidate 7b47ee52. Embedded V5; native SSE execution_error. One inline failure, server detail and Retry; no Offline status; composer ready.",
+      "files": [
+        "06-streaming-native-inline-failure-and-ready-composer.png",
+        "06-streaming-native-inline-failure-and-ready-composer.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4417/verify.html?scenario=execution-error&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22layout%22%3A%7B%22embedded%22%3Atrue%7D%7D",
+      "at": "2026-11-06T05:40:58.079Z",
+      "head": "7b47ee525f6b4c6bd3f1cfb67cd5c9f2d543f080",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Committed native terminal failure side effects",
+      "note": "1 request(s) crossed the network boundary, 4 controller event(s)",
+      "files": [
+        "07-streaming-committed-native-terminal-failure-side-effects.page.json"
+      ],
+      "url": "http://127.0.0.1:4417/verify.html?scenario=execution-error&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22layout%22%3A%7B%22embedded%22%3Atrue%7D%7D",
+      "at": "2026-11-06T05:41:01.564Z",
+      "head": "7b47ee525f6b4c6bd3f1cfb67cd5c9f2d543f080",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Native execution_error: one inline failure card with remote detail and Retry; composer enabled; Online status hidden; one failed run outcome. Session tests cover custom parser, failed completion, host rendering, real stream read failure and durable reconnect."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+- generic
+  - generic
+    - paragraph
+      - StaticText "Please check this request."
+    - alert
+      - strong
+        - StaticText "Something went wrong"
+      - group
+        - DisclosureTriangle "This run failed. Please try again. Details: The remote run could not finish. Show more" [expanded=false]
+          - generic
+            - paragraph
+              - StaticText "This run failed. Please try again."
+            - paragraph
+              - emphasis
+                - StaticText "Details: The remote run could not finish."
+      - button "Retry response" [ref=e4]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e1]
+      - button "Start voice recognition" [ref=e2]
+      - button "Send message" [ref=e3]
