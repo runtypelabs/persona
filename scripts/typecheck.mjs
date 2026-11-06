@@ -1,24 +1,7 @@
 // Typechecks with tsrs, falling back to tsgo if no matching platform binary
 // is installed. Arguments are passed through.
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-const tsrsManifest = require.resolve("tsrs/package.json");
-const requireFromTsrs = createRequire(tsrsManifest);
-const { optionalDependencies = {} } = require(tsrsManifest);
-
-// pnpm installs only the @tsrs/* binary package matching this host.
-const platformPrefix = `@tsrs/${process.platform}-${process.arch}`;
-const hasTsrsBinary = Object.keys(optionalDependencies).some((name) => {
-  if (!name.startsWith(platformPrefix)) return false;
-  try {
-    requireFromTsrs.resolve(`${name}/package.json`);
-    return true;
-  } catch {
-    return false;
-  }
-});
+import { hasTsrsBinary } from "./tsrs.mjs";
 
 const bin = hasTsrsBinary ? "tsrs" : "tsgo";
 if (!hasTsrsBinary) {

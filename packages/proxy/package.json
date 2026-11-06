@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "lint": "oxlint",
+    "lint": "node ../../scripts/lint.mjs",
     "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
     "test:run": "vitest run"
   },
