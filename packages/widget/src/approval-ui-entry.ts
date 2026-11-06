@@ -1,3 +1,4 @@
+export { createPauseBubble } from "./components/pause-bubble";
 /**
  * Runtime entry for the lazy approval-ui chunk: the built-in approval bubble,
  * its details-toggle state/updater, and the built-in approval plugin.

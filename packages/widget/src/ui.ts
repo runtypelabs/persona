@@ -7000,6 +7000,13 @@ export const createAgentExperience = (
           const approvalMod = ensureApprovalUi();
           if (!approvalMod) return;
           bubble = approvalMod.createApprovalBubble(message, config, approvalDetailsExpansionState);
+        } else if (message.variant === "pause") {
+          // Passive auto-resuming durable pause (server resumes the stream
+          // itself): a non-interactive "working in the background" indicator
+          // that self-hides once `durablePause.resolved` flips true.
+          const pauseUi = ensureApprovalUi();
+          if (!pauseUi) return;
+          bubble = pauseUi.createPauseBubble(message, config);
         } else {
           // Check for custom message renderers in layout config
           const messageLayoutConfig = config.layout?.messages;
