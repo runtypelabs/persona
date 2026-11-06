@@ -692,8 +692,11 @@ WebMCP lets the page register browser-local tools on `document.modelContext`. Wi
 | --- | --- | --- |
 | `enabled` | `boolean?` | Install/use the WebMCP polyfill and include page-registered tools in dispatch payloads. Default: `false`. |
 | `allowlist` | `string[]?` | Glob-ish bare tool-name patterns to include client-side; `*` matches any chars except `:`. If omitted, all registered tools are included (subject to server-side policy). |
-| `autoApprove` | `(info: WebMcpConfirmInfo) => boolean` | Return `true` to skip the native approval bubble for safe tools (for example read-only searches). |
-| `onConfirm` | `(info: WebMcpConfirmInfo) => Promise<boolean>` | Override the native in-panel approval bubble with a custom confirmer. Receives bare `toolName`, `args`, optional `title`, annotations, and `reason: 'gate'`. |
+| `autoApprove` | `(info: WebMcpConfirmInfo) => boolean` | Return `true` to skip the native approval bubble for safe tools (for example read-only searches). Never consulted for a tool that matches `requireConfirmFor`. |
+| `onConfirm` | `(info: WebMcpConfirmInfo) => Promise<boolean>` | Override the native in-panel approval bubble with a custom confirmer. Receives bare `toolName`, `args`, optional `title`, annotations, `reason: 'gate'`, and `confirmRequired: true` when the tool matches `requireConfirmFor`. |
+| `requireConfirmFor` | `string[]?` | Bare tool-name patterns (`*` matches any run of characters) that always need confirmation, even when `autoApprove` would approve them or the tool is a read-only voice call. Merged with the bound surface's patterns (below). |
+
+**Always-confirm tools (`requireConfirmFor`).** A tool that matches a pattern always asks for confirmation: Persona skips `autoApprove` and shows the approval bubble, or calls your `onConfirm` with `info.confirmRequired === true` (a custom handler should not auto-approve it). Unmatched tools behave as before. Patterns come from `webmcp.requireConfirmFor` and, in client-token mode, from the bound chat surface's `behavior.webmcp.requireConfirmFor`, which Runtype returns as `config.webmcp.requireConfirmFor` from `/v1/client/init`. Proxy and direct-dispatch setups get only the widget-side list. This is client-side UX, not a security boundary: the server enforces only the surface's `webmcp.enabled` and its `allowlist`.
 
 ```ts
 initAgentWidget({

@@ -41,8 +41,11 @@ instructions that can authorize another tool call.
 
 Keep Persona's confirmation defaults. If you configure `webmcp.autoApprove`,
 use a host-owned, explicitly reviewed safe-read policy, not arbitrary
-page-authored hints. Keep the voice lane's existing policy separate. Neither
-browser confirmation nor `requireConfirmFor` replaces server authorization.
+page-authored hints. Keep the voice lane's existing policy separate. A tool
+matching `webmcp.requireConfirmFor`, or the bound Runtype surface's
+`behavior.webmcp.requireConfirmFor`, always asks for confirmation, even when
+`autoApprove` would approve it. Neither browser confirmation nor
+`requireConfirmFor` replaces server authorization.
 On the Runtype client-token path, the server enforces surface enablement and
 origin-scoped tool allowlists; token origin restrictions still apply.
 

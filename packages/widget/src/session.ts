@@ -3305,9 +3305,13 @@ export class AgentWidgetSession {
   public requestWebMcpApproval(info: WebMcpConfirmInfo): Promise<boolean> {
     // Per-tool policy hook: auto-allow opted-out tools without any UI. A
     // throwing predicate must not block the call, so fall through to an
-    // explicit gate on error.
+    // explicit gate on error. A `requireConfirmFor` match (flagged by the
+    // bridge) never consults it: the surface owner said it must be confirmed.
     try {
-      if (this.config.webmcp?.autoApprove?.(info) === true) {
+      if (
+        info.confirmRequired !== true &&
+        this.config.webmcp?.autoApprove?.(info) === true
+      ) {
         return Promise.resolve(true);
       }
     } catch {

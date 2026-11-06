@@ -212,7 +212,7 @@
   {
     "name": "Lazy · request construction and session initialization (client-dispatch.js)",
     "path": "dist/client-dispatch.js",
-    "limit": "5.65 kB",
+    "limit": "5.7 kB",
     "gzip": true
   },
   {

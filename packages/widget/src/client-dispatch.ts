@@ -394,6 +394,8 @@ export class ClientDispatch {
         welcomeMessage: data.config.welcomeMessage,
         placeholder: data.config.placeholder,
         theme: data.config.theme as ClientSession["config"]["theme"],
+        // Kept only as a non-empty array; the bridge ignores non-string entries.
+        ...readWebMcpInitConfig(data.config),
       },
     };
   }
@@ -1087,3 +1089,14 @@ export class ClientDispatch {
   }
 
 }
+
+/** `config.webmcp` from `/v1/client/init`, kept only with a non-empty pattern array. */
+const readWebMcpInitConfig = (
+  config: unknown
+): Pick<ClientSession["config"], "webmcp"> => {
+  const list = (config as { webmcp?: { requireConfirmFor?: unknown } }).webmcp
+    ?.requireConfirmFor;
+  return Array.isArray(list) && list.length
+    ? { webmcp: { requireConfirmFor: list as string[] } }
+    : {};
+};

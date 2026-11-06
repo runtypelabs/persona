@@ -275,6 +275,8 @@ export class AgentWidgetClient {
           recordToolDisplayTitles: recordWebMcpToolDisplayTitles,
           getToolDisplayTitle: getWebMcpToolDisplayTitle,
           loadPolyfill: loadWebMcpPolyfillModule,
+          getRequireConfirmFor: () =>
+            this.clientSession?.config.webmcp?.requireConfirmFor,
         });
         if (this.#pendingWebMcpConfirmHandler !== undefined) {
           bridge.setConfirmHandler(this.#pendingWebMcpConfirmHandler);
@@ -408,10 +410,28 @@ export class AgentWidgetClient {
         if (!b) {
           return { status: "failed", error: { message: "WebMCP runtime failed to load." } };
         }
-        return b.executeVoiceToolCall(name, args, options);
+        return b.executeVoiceToolCall(name, args, await this.#voiceToolOptions(options));
       },
     };
     return surface;
+  }
+
+  /**
+   * The bound surface's `requireConfirmFor` arrives with client-token init, and
+   * a voice call can start before any typed turn has run it. Load the policy
+   * before the read-only fast tier may skip a confirm gate; if init fails,
+   * keep every voice call gated rather than act without the policy.
+   */
+  async #voiceToolOptions<T extends { autoConfirmReadOnly: boolean }>(options: T): Promise<T> {
+    if (!options.autoConfirmReadOnly || !this.isClientTokenMode() || this.clientSession) {
+      return options;
+    }
+    try {
+      await this.initSession();
+      return options;
+    } catch {
+      return { ...options, autoConfirmReadOnly: false };
+    }
   }
 
   public executeWebMcpToolCall(

@@ -1230,3 +1230,35 @@ describe("AgentWidgetSession: WebMCP parallel batched resume (core#3878)", () =>
     expect(s.webMcpApprovalResolvers.size).toBe(0);
   });
 });
+
+describe("WebMCP requireConfirmFor on the default approval UI", () => {
+  const pendingBubbles = (session: AgentWidgetSession) =>
+    (session as unknown as { messages: AgentWidgetMessage[] }).messages.filter(
+      (m) => m.variant === "approval" && m.approval?.status === "pending",
+    );
+
+  it("prompts for a matched tool even when autoApprove returns true", async () => {
+    const autoApprove = vi.fn(() => true);
+    const { session } = makeSession({ webmcp: { autoApprove } });
+    const pending = session.requestWebMcpApproval({
+      toolName: "checkout_submit",
+      args: {},
+      reason: "gate",
+      confirmRequired: true,
+    });
+    expect(autoApprove).not.toHaveBeenCalled();
+    expect(pendingBubbles(session)).toHaveLength(1);
+    session.cancel();
+    await expect(pending).resolves.toBe(false);
+  });
+
+  it("still auto-approves an unmatched tool", async () => {
+    const autoApprove = vi.fn(() => true);
+    const { session } = makeSession({ webmcp: { autoApprove } });
+    await expect(
+      session.requestWebMcpApproval({ toolName: "search", args: {}, reason: "gate" }),
+    ).resolves.toBe(true);
+    expect(autoApprove).toHaveBeenCalledTimes(1);
+    expect(pendingBubbles(session)).toHaveLength(0);
+  });
+});
