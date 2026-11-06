@@ -18,13 +18,9 @@ import type { PcmStreamPlayer } from "../types";
  * alternative — inject it via `voiceRecognition.provider.runtype.createPlaybackEngine`
  * or `textToSpeech.createPlaybackEngine` and it lands in the consumer's bundle.
  *
- * With the default `prebufferMs: 0` this behaves exactly like a bare scheduler
- * (the realtime path), so that path is unchanged. A non-zero `prebufferMs`
- * (the read-aloud path passes ~200) holds incoming audio until a waterline of
- * samples is buffered before starting, and re-enters buffering on underrun —
- * softening the schedule-clock snap that a hand-scheduled BufferSource otherwise
- * turns into a click on bursty HTTP-streamed audio. This is a pragmatic
- * approximation of the worklet's audio-thread silence, not parity.
+ * The default 150 ms prebuffer holds incoming samples before starting and
+ * refills after an underrun, absorbing short delivery gaps. Read-aloud uses
+ * its own prebuffer. An explicit `prebufferMs: 0` opts into immediate playback.
  */
 export class AudioPlaybackManager implements PcmStreamPlayer {
   #ctx: AudioContext | null = null;
@@ -44,7 +40,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
   // Prebuffer gate: while `buffering`, incoming samples accumulate in
   // `pendingBuffers` until they reach `waterlineSamples`, then release into the
-  // scheduler. With `waterlineSamples === 0` the gate is off (realtime default).
+  // scheduler. With `waterlineSamples === 0` the gate is off.
   #buffering: boolean;
   #pendingBuffers: Float32Array[] = [];
   #pendingSamples = 0;
@@ -64,7 +60,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
   constructor(sampleRate = 24000, options: { prebufferMs?: number } = {}) {
     this.#sampleRate = sampleRate;
-    const prebufferMs = Math.max(0, options.prebufferMs ?? 0);
+    const prebufferMs = Math.max(0, options.prebufferMs ?? 150);
     this.#waterlineSamples = Math.round((sampleRate * prebufferMs) / 1000);
     this.#buffering = this.#waterlineSamples > 0;
   }
@@ -116,6 +112,14 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
     const float32 = this.#pcmToFloat32(data);
     if (float32.length === 0) return;
+
+    if (
+      this.#waterlineSamples > 0 &&
+      this.#ctx &&
+      this.#nextStartTime < this.#ctx.currentTime
+    ) {
+      this.#buffering = true;
+    }
 
     if (this.#buffering) {
       // Hold until the prebuffer waterline fills, then release as a batch.
@@ -233,6 +237,9 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
   /** Release held prebuffer samples into the scheduler in arrival order. */
   #releaseBuffer(): void {
+    clearTimeout(this.#tailTimer);
+    this.#tailTimer = undefined;
+    if (this.#pendingBuffers.length === 0) return;
     this.#buffering = false;
     const held = this.#pendingBuffers;
     this.#pendingBuffers = [];
@@ -253,17 +260,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     source.connect(ctx.destination);
 
     const now = ctx.currentTime;
-    if (this.#nextStartTime === 0) {
-      // Fresh start (first audio of this session, or after flush).
-      this.#nextStartTime = now;
-    } else if (this.#nextStartTime < now) {
-      // Underrun: the playhead caught up to the queue. Snap to now (a small,
-      // unavoidable gap) and, when a prebuffer is configured, re-enter buffering
-      // so subsequent chunks re-accumulate before scheduling — collapsing a
-      // train of clicks into a single rebuffer.
-      this.#nextStartTime = now;
-      if (this.#waterlineSamples > 0) this.#buffering = true;
-    }
+    this.#nextStartTime = Math.max(this.#nextStartTime, now);
     source.start(this.#nextStartTime);
     this.#nextStartTime += buffer.duration;
 

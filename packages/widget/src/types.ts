@@ -5254,8 +5254,9 @@ export type AgentWidgetVoiceRecognitionConfig = {
       voiceId?: string;
       /**
        * Optional custom streaming playback engine. Defaults to the built-in
-       * `AudioPlaybackManager`. Import `createWorkletPlaybackEngine` from
-       * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
+       * `AudioPlaybackManager` with a 150 ms prebuffer. Import
+       * `createWorkletPlaybackEngine` from `@runtypelabs/persona/voice-worklet-player`
+       * for audio-thread playback.
        */
       createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
       /**
@@ -5564,7 +5565,7 @@ export type VoiceMetrics = {
  * The provider feeds raw PCM16 LE mono @ 24kHz (WAV header already stripped)
  * via `enqueue`, signals end-of-reply with `markStreamEnd`, and learns when
  * playback has fully drained via `onFinished`. The default implementation is
- * `AudioPlaybackManager`; an optional jitter-buffered AudioWorklet engine ships
+ * `AudioPlaybackManager` with a 150 ms prebuffer; an optional AudioWorklet engine ships
  * from `@runtypelabs/persona/voice-worklet-player` and can be injected via the
  * `runtype.createPlaybackEngine` config hook.
  */
@@ -5631,8 +5632,9 @@ export type VoiceConfig = {
     voiceId?: string;
     /**
      * Optional custom streaming playback engine. Defaults to the built-in
-     * `AudioPlaybackManager`. Import `createWorkletPlaybackEngine` from
-     * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
+     * `AudioPlaybackManager` with a 150 ms prebuffer. Import
+     * `createWorkletPlaybackEngine` from `@runtypelabs/persona/voice-worklet-player`
+     * for audio-thread playback.
      */
     createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
     /** See `voiceRecognition.provider.runtype.prewarmMode`. @default 'request' */
