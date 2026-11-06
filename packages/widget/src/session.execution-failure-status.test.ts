@@ -100,6 +100,17 @@ describe("execution failure connection status", () => {
     session.destroy();
   });
 
+  it("shows a meaningful fallback when completion failure detail is empty", async () => {
+    const session = new AgentWidgetSession({ apiUrl: "https://example.test/chat" }, {
+      onMessagesChanged: () => {}, onStatusChanged: () => {}, onStreamingChanged: () => {},
+    });
+    await session.connectStream(response([
+      { type: "execution_complete", kind: "agent", success: false, error: "" },
+    ]).body!);
+    expect(session.getMessages().at(-1)?.content).toContain("Execution error");
+    session.destroy();
+  });
+
   it("resets failure deduplication for the next run and excludes error rows from model input", async () => {
     const payloads: unknown[] = [];
     const outcomes: AgentWidgetRunFinishedEvent[] = [];

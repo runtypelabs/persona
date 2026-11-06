@@ -61,11 +61,9 @@ function filenameFromMediaType(mediaType: string): string {
   return "attachment";
 }
 
-function executionErrorMessage(error: unknown, fallback = "Execution error"): string {
-  if (typeof error === "string" && error.trim()) return error;
-  if (error && typeof error === "object" && "message" in error &&
-      typeof error.message === "string" && error.message.trim()) return error.message;
-  return fallback;
+function executionErrorMessage(error: unknown): string {
+  const message = typeof error === "string" ? error : (error as { message?: unknown } | null)?.message;
+  return String(message ?? "") || "Execution error";
 }
 
 const looksStructured = (value: string) => /^[{[<]/.test(value);
@@ -192,11 +190,7 @@ async function handleCustomSSEEvent(
 
     if (result.error) {
       partIdState.current = null;
-      onEvent({
-        type: "error",
-        error: new Error(result.error),
-        source: "execution"
-      });
+      onEvent({ type: "error", error: new Error(result.error), source: "execution" });
     }
 
     return true; // Event was handled
@@ -229,6 +223,9 @@ export async function streamResponse(
   const cancelOnAbort = !!ctx.config().backgroundConversations;
   const abortReader = () => { if (cancelOnAbort) void reader.cancel().catch(() => {}); };
   signal?.addEventListener("abort", abortReader, { once: true });
+  const reportExecutionError = (error: unknown) => {
+    onEvent({ type: "error", error: new Error(executionErrorMessage(error)), source: "execution" });
+  };
   const decoder = new TextDecoder();
   let buffer = "";
 
@@ -1211,7 +1208,7 @@ export async function streamResponse(
         // — surfaces as a terminal error and finalizes the stream.
         if (payload.success === false) {
           const message = payload.error || "Step failed";
-          onEvent({ type: "error", error: new Error(message), source: "execution" });
+          reportExecutionError(message);
           const finalMsg = assistantMessage as AgentWidgetMessage | null;
           if (finalMsg && finalMsg.streaming) {
             finalMsg.streaming = false;
@@ -1539,24 +1536,13 @@ export async function streamResponse(
         // connection drops mid-stream (durable-reconnect drop detection).
         onEvent({
           type: "status", status: payload.success === false ? "error" : "idle", terminal: true,
-          ...(payload.success === false ? {
-            error: new Error(executionErrorMessage(
-              "error" in payload ? payload.error : undefined,
-              "The run stopped before it could finish."
-            ))
-          } : {})
+          ...(payload.success === false && "error" in payload
+            ? { error: executionErrorMessage(payload.error) } : {})
         });
       } else if (payload.type === "execution_error") {
         // Terminal failure. The non-terminal `error` is handled
         // separately (recoverable → warn).
-        const errorMessage = typeof payload.error === 'string'
-          ? payload.error
-          : payload.error?.message ?? 'Execution error';
-        onEvent({
-          type: "error",
-          error: new Error(errorMessage),
-          source: "execution"
-        });
+        reportExecutionError(payload.error);
       } else if (payload.type === "ping") {
         // Keep-alive heartbeat - no action needed
       // ================================================================
@@ -1769,13 +1755,7 @@ export async function streamResponse(
           payload.error != null &&
           payload.error !== ""
         ) {
-          const errorMessage =
-            typeof payload.error === "string"
-              ? payload.error
-              : (payload.error as { message?: unknown })?.message != null
-                ? String((payload.error as { message?: unknown }).message)
-                : "Execution error";
-          onEvent({ type: "error", error: new Error(errorMessage), source: "execution" });
+          reportExecutionError(payload.error);
           const finalMsg = assistantMessage as AgentWidgetMessage | null;
           if (finalMsg && finalMsg.streaming) {
             finalMsg.streaming = false;

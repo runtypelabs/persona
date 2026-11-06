@@ -4090,7 +4090,7 @@ export class AgentWidgetSession {
         return;
       }
       if (event.status === "error" && event.terminal) {
-        this.#appendExecutionError(event.error ?? new Error("The run stopped before it could finish."));
+        this.#appendExecutionError(new Error(event.error ?? "The run stopped before it could finish."));
       }
       if (event.status === "error") this.#emitConversationExecutionState("failed");
       else if (event.terminal && event.status === "idle") this.#emitConversationExecutionState("completed");
@@ -4733,7 +4733,7 @@ export class AgentWidgetSession {
 
   #appendExecutionError(error: Error): void {
     if (this.#runFailed || this.config.executionErrorDisplay === "host") return;
-    const fallback = `This run failed. Please try again.\n\n_Details: ${error.message}_`;
+    const fallback = `This run failed.\n\n${error.message}`;
     this.#appendErrorMessage(buildDispatchErrorContent(error, this.config.errorMessage ?? fallback));
   }
 

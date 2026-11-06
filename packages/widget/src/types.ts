@@ -9779,7 +9779,7 @@ export type AgentWidgetEvent =
        */
       terminal?: boolean;
       /** Failure detail from a terminal execution completion. */
-      error?: Error;
+      error?: string;
       /** @internal Execution identity for background status before text appears. */
       executionId?: string;
     }
