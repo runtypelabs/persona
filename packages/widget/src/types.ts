@@ -887,6 +887,14 @@ export type WebMcpConfirmInfo = {
    */
   reason: 'gate';
   /**
+   * `true` when the tool matches a `requireConfirmFor` pattern (the widget's
+   * `webmcp.requireConfirmFor`, or the bound Runtype surface's
+   * `behavior.webmcp.requireConfirmFor` from client-token init). The call
+   * must be confirmed by the user: Persona never runs `autoApprove` for it,
+   * and a custom `onConfirm` should not auto-approve it either.
+   */
+  confirmRequired?: true;
+  /**
    * Aborts when the call no longer needs an answer (its deadline passed, or it
    * was cancelled). A confirm UI should close and resolve `false`; the tool
    * never runs after it aborts either way.
@@ -936,8 +944,23 @@ export type AgentWidgetWebMcpConfig = {
    * confirmation UI entirely. Use this to auto-allow read-only tools (e.g.
    * a catalog search) while still gating mutating ones. Only consulted on
    * the default-UI path: a custom `onConfirm` takes full control instead.
+   * Never consulted for a tool matching `requireConfirmFor`.
    */
   autoApprove?: (info: WebMcpConfirmInfo) => boolean;
+  /**
+   * Tool-name patterns that must always be confirmed, even when `autoApprove`
+   * would approve them (and even on the voice path's read-only fast tier).
+   * Matched against the bare tool name (no `webmcp:` prefix); `*` matches any
+   * run of characters, e.g. `["checkout_*", "delete_account"]`. A matched
+   * call shows the default approval bubble, or reaches your `onConfirm` with
+   * `info.confirmRequired === true`.
+   *
+   * Merged with the bound surface's `behavior.webmcp.requireConfirmFor`,
+   * which Runtype returns from `/v1/client/init` in client-token mode. This
+   * is client-side UX, not a security boundary: the server enforces only
+   * `webmcp.enabled` and its `allowlist`.
+   */
+  requireConfirmFor?: string[];
   /**
    * Confirm gate handler. When omitted, Persona renders its native in-panel
    * approval bubble (the same chrome used for server-driven tool approvals)
@@ -6822,6 +6845,11 @@ export type ClientSession = {
     welcomeMessage: string | null;
     placeholder: string;
     theme: Record<string, unknown> | null;
+    /**
+     * The bound chat surface's WebMCP confirm policy. Present only when the
+     * surface enables WebMCP and lists `requireConfirmFor` patterns.
+     */
+    webmcp?: { requireConfirmFor: string[] };
   };
 };
 
@@ -6862,6 +6890,11 @@ export type ClientInitResponse = {
     welcomeMessage: string | null;
     placeholder: string;
     theme: Record<string, unknown> | null;
+    /**
+     * The bound chat surface's WebMCP confirm policy. Present only when the
+     * surface enables WebMCP and lists `requireConfirmFor` patterns.
+     */
+    webmcp?: { requireConfirmFor: string[] };
   };
 };
 

@@ -394,6 +394,7 @@ export class ClientDispatch {
         welcomeMessage: data.config.welcomeMessage,
         placeholder: data.config.placeholder,
         theme: data.config.theme as ClientSession["config"]["theme"],
+        ...readWebMcpInitConfig(data.config),
       },
     };
   }
@@ -1086,4 +1087,22 @@ export class ClientDispatch {
     return payload;
   }
 
+}
+
+/**
+ * `config.webmcp.requireConfirmFor` from `/v1/client/init` (core#10933),
+ * kept only when it is a non-empty list of strings. Read defensively: older
+ * servers omit it, and the generated contract may predate the field.
+ */
+function readWebMcpInitConfig(
+  config: unknown
+): Pick<ClientSession["config"], "webmcp"> {
+  const webmcp = (config as { webmcp?: { requireConfirmFor?: unknown } } | null)
+    ?.webmcp;
+  const raw = webmcp?.requireConfirmFor;
+  if (!Array.isArray(raw)) return {};
+  const requireConfirmFor = raw.filter(
+    (pattern): pattern is string => typeof pattern === "string" && pattern.length > 0
+  );
+  return requireConfirmFor.length > 0 ? { webmcp: { requireConfirmFor } } : {};
 }

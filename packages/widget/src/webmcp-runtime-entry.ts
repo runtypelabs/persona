@@ -35,6 +35,12 @@ export interface WebMcpBridgeDeps {
   getToolDisplayTitle: (toolName: string) => string | undefined;
   /** Core's `loadWebMcpPolyfillModule` (slot-aware polyfill resolution). */
   loadPolyfill: () => Promise<WebMcpPolyfillModule>;
+  /**
+   * Server-supplied `requireConfirmFor` patterns (the bound surface's policy
+   * from client-token init), read at call time because init can land after
+   * the bridge is built. Merged with `config.requireConfirmFor`.
+   */
+  getRequireConfirmFor?: () => readonly string[] | undefined;
 }
 
 const DEFAULT_TOOL_TIMEOUT_MS = 30_000;
@@ -339,7 +345,13 @@ export class WebMcpBridge {
       ...(signal ? { signal } : {}),
       reason: "gate",
     };
-    const skipGate = autoConfirmReadOnly && annotations?.readOnlyHint === true;
+    // A `requireConfirmFor` match always reaches the confirm handler: it skips
+    // `autoApprove` on the default UI (session.ts) and the voice read-only
+    // fast tier here.
+    const confirmRequired = this.#requiresConfirmation(bareName);
+    if (confirmRequired) gateInfo.confirmRequired = true;
+    const skipGate =
+      !confirmRequired && autoConfirmReadOnly && annotations?.readOnlyHint === true;
     if (!skipGate && !(await this.#requestConfirm(gateInfo))) {
       return runFailure("denied", "User declined the tool call.");
     }
@@ -485,6 +497,19 @@ export class WebMcpBridge {
       );
       return false;
     }
+  }
+
+  #requiresConfirmation(toolName: string): boolean {
+    let serverPatterns: readonly string[] | undefined;
+    try {
+      serverPatterns = this.#deps.getRequireConfirmFor?.();
+    } catch {
+      serverPatterns = undefined;
+    }
+    const matches = (list: readonly string[] | undefined): boolean =>
+      Array.isArray(list) &&
+      list.some((pattern) => typeof pattern === "string" && matchesGlob(toolName, pattern));
+    return matches(this.config.requireConfirmFor) || matches(serverPatterns);
   }
 
   #passesClientAllowlist(toolName: string): boolean {

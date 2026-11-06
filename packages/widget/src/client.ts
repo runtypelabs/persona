@@ -275,6 +275,8 @@ export class AgentWidgetClient {
           recordToolDisplayTitles: recordWebMcpToolDisplayTitles,
           getToolDisplayTitle: getWebMcpToolDisplayTitle,
           loadPolyfill: loadWebMcpPolyfillModule,
+          getRequireConfirmFor: () =>
+            this.clientSession?.config.webmcp?.requireConfirmFor,
         });
         if (this.#pendingWebMcpConfirmHandler !== undefined) {
           bridge.setConfirmHandler(this.#pendingWebMcpConfirmHandler);

@@ -30,6 +30,7 @@ vi.mock("@mcp-b/webmcp-polyfill", () => ({
 // one-argument constructor, wired to the real core deps — so these tests also
 // exercise the deps-injection seam the lazy CDN path uses.
 import { WebMcpBridge } from "./webmcp-bridge-public";
+import { WebMcpBridge as WebMcpBridgeRuntime } from "./webmcp-runtime-entry";
 import {
   getWebMcpToolDisplayTitle,
   isWebMcpToolName,
@@ -960,5 +961,89 @@ describe("WebMcpBridge.watchToolChanges", () => {
     const stop = bridge.watchToolChanges(vi.fn());
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(() => stop()).not.toThrow();
+  });
+});
+
+describe("WebMcpBridge requireConfirmFor", () => {
+  const runtimeBridge = (
+    config: AgentWidgetWebMcpConfig,
+    getRequireConfirmFor: () => readonly string[] | undefined,
+  ) =>
+    new WebMcpBridgeRuntime(config, {
+      recordToolDisplayTitles: () => {},
+      getToolDisplayTitle: () => undefined,
+      loadPolyfill: async () => ({ initializeWebMCPPolyfill: () => {} }),
+      getRequireConfirmFor,
+    });
+
+  it("flags a widget-config match with confirmRequired on the confirm info", async () => {
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => true);
+    registry.tools = [fakeTool({ name: "checkout_submit" }), fakeTool({ name: "search" })];
+    const bridge = new WebMcpBridge({
+      enabled: true,
+      onConfirm,
+      requireConfirmFor: ["checkout_*"],
+    });
+    await bridge.executeToolCall("webmcp:checkout_submit", {});
+    await bridge.executeToolCall("webmcp:search", {});
+    expect(onConfirm).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ toolName: "checkout_submit", confirmRequired: true }),
+    );
+    expect(onConfirm.mock.calls[1]?.[0]).not.toHaveProperty("confirmRequired");
+  });
+
+  it("reads server patterns at call time and matches the bare tool name", async () => {
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => true);
+    registry.tools = [fakeTool({ name: "delete_account" }), fakeTool({ name: "deleted_items" })];
+    let server: string[] | undefined;
+    const bridge = runtimeBridge({ enabled: true, onConfirm }, () => server);
+    await bridge.executeToolCall("webmcp:delete_account", {});
+    expect(onConfirm.mock.calls[0]?.[0]).not.toHaveProperty("confirmRequired");
+
+    // Init lands after the bridge was built.
+    server = ["delete_account", "*_admin"];
+    await bridge.executeToolCall("webmcp:delete_account", {});
+    await bridge.executeToolCall("webmcp:deleted_items", {});
+    expect(onConfirm.mock.calls[1]?.[0]).toMatchObject({ confirmRequired: true });
+    expect(onConfirm.mock.calls[2]?.[0]).not.toHaveProperty("confirmRequired");
+  });
+
+  it("merges widget and server patterns", async () => {
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => true);
+    registry.tools = [fakeTool({ name: "pay_now" }), fakeTool({ name: "wipe_cart" })];
+    const bridge = runtimeBridge(
+      { enabled: true, onConfirm, requireConfirmFor: ["pay_*"] },
+      () => ["wipe_*"],
+    );
+    await bridge.executeToolCall("webmcp:pay_now", {});
+    await bridge.executeToolCall("webmcp:wipe_cart", {});
+    expect(onConfirm.mock.calls.map((c) => c[0]?.confirmRequired)).toEqual([true, true]);
+  });
+
+  it.each([[undefined], [[] as string[]]])(
+    "an absent or empty list leaves the gate unflagged (%s)",
+    async (list) => {
+      const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => true);
+      registry.tools = [fakeTool({ name: "checkout_submit" })];
+      const bridge = runtimeBridge({ enabled: true, onConfirm, requireConfirmFor: list }, () => list);
+      await bridge.executeToolCall("webmcp:checkout_submit", {});
+      expect(onConfirm.mock.calls[0]?.[0]).not.toHaveProperty("confirmRequired");
+    },
+  );
+
+  it("does not let the voice read-only fast tier skip a matched tool", async () => {
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => false);
+    const execute = vi.fn(() => "ran");
+    registry.tools = [
+      fakeTool({ name: "checkout_preview", annotations: { readOnlyHint: true }, execute }),
+    ];
+    const bridge = runtimeBridge({ enabled: true, onConfirm }, () => ["checkout_*"]);
+    const r = await bridge.executeVoiceToolCall("webmcp:checkout_preview", {}, {
+      autoConfirmReadOnly: true,
+    });
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ confirmRequired: true }));
+    expect(execute).not.toHaveBeenCalled();
+    expect(r.status).toBe("denied");
   });
 });
