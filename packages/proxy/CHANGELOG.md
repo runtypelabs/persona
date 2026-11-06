@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.36.1
+
+### Patch Changes
+
+- 3e7338e: Update the build and test toolchain for Node.js 26 and the latest Rolldown, and speed up release publication with verified package artifact reuse and parallel CDN checks.
+
 ## 4.34.0
 
 ### Patch Changes
