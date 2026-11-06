@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 4.36.0
+
+### Minor Changes
+
+- 0a75187: Add opt-in local playback measurements for queued audio, scheduler underruns, and refill duration through voiceRecognition.onPlaybackMetrics. Keep the default jitter buffer fixed at 150 ms.
+
 ## 4.35.2
 
 ### Patch Changes
