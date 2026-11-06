@@ -1,6 +1,9 @@
 {
   "name": "persona",
   "private": true,
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
     "build": "pnpm --filter @runtypelabs/persona build && pnpm --filter @runtypelabs/persona-proxy build",
     "build:widget": "pnpm --filter @runtypelabs/persona build",
@@ -8,7 +11,7 @@
     "lint": "pnpm --filter @runtypelabs/persona lint && pnpm --filter @runtypelabs/persona-proxy lint",
     "typecheck": "pnpm --filter @runtypelabs/persona typecheck && pnpm --filter @runtypelabs/persona-proxy typecheck && pnpm --filter web typecheck",
     "test": "pnpm test:run",
-    "test:run": "node --test scripts/cdn/publish.test.mjs && pnpm check:persona-wire && pnpm --filter @runtypelabs/persona test:run && pnpm --filter @runtypelabs/persona-proxy test:run && pnpm --filter web test:run && pnpm --filter echo-express --filter echo-hono --filter echo-script-tag --filter echo-sveltekit --filter ai-sdk-next --filter eve-next --filter flue-next --filter cloudflare-agents --filter langgraph-next --filter openai-agents-next --filter runtype-hono-proxy --filter bento-slides --filter webmcp-typed-tools test",
+    "test:run": "node --test scripts/cdn/*.test.mjs && pnpm check:persona-wire && pnpm --filter @runtypelabs/persona test:run && pnpm --filter @runtypelabs/persona-proxy test:run && pnpm --filter web test:run && pnpm --filter echo-express --filter echo-hono --filter echo-script-tag --filter echo-sveltekit --filter ai-sdk-next --filter eve-next --filter flue-next --filter cloudflare-agents --filter langgraph-next --filter openai-agents-next --filter runtype-hono-proxy --filter bento-slides --filter webmcp-typed-tools test",
     "verify": "pnpm build && pnpm lint && pnpm typecheck && pnpm test:run",
     "sync:persona-wire": "node scripts/sync-persona-wire.mjs",
     "check:persona-wire": "node scripts/sync-persona-wire.mjs --check",
@@ -22,6 +25,7 @@
     "dev": "pnpm --filter @runtypelabs/persona build:styles && NODE_ENV=development concurrently \"pnpm dev:runtype-hono-proxy\" \"pnpm dev:widget\"",
     "changeset": "changeset",
     "release": "changeset publish",
+    "release:build": "pnpm build && pnpm exec changeset pack --out-dir .release-packages && pnpm exec changeset publish --from-pack-dir .release-packages",
     "fetch:runtype-openapi": "pnpm --filter @runtypelabs/persona fetch:runtype-openapi",
     "generate:runtype-types": "pnpm --filter @runtypelabs/persona generate:runtype-types",
     "check:runtype-types": "pnpm --filter @runtypelabs/persona check:runtype-types",
@@ -29,16 +33,16 @@
     "format:oxfmt:check": "oxfmt --check"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
-    "@playwright/test": "^1.62.1",
+    "@changesets/cli": "^3.0.3",
+    "@playwright/test": "^1.65.0",
     "@types/ws": "^8.18.2",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
-    "concurrently": "^8.2.2",
-    "oxlint": "^1.89.0",
+    "concurrently": "^10.0.6",
+    "oxfmt": "0.76.0",
+    "oxlint": "^1.91.0",
     "tsrs": "0.22.0-ts7.1.0-beta",
-    "ws": "^8.22.0",
     "typescript-next": "npm:typescript@7.1.0-beta",
-    "oxfmt": "0.74.0"
+    "ws": "^8.22.1"
   },
   "packageManager": "pnpm@12.15.0"
 }

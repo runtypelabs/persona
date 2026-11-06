@@ -25,7 +25,7 @@ guide ([PLUGINS.md](./packages/widget/docs/PLUGINS.md)).
 
 ## Setup
 
-**Requirements:** Node.js 24, pnpm
+**Requirements:** Node.js 26, pnpm
 
 ```bash
 pnpm install

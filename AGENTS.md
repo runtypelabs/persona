@@ -24,8 +24,8 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat UI l
 
 ## Requirements
 
-- **Node.js** 24 (see `.nvmrc`)
-- **pnpm**: managed via corepack (`corepack enable` then `corepack install`)
+- **Node.js** 26 (see `.nvmrc`)
+- **pnpm**: managed via corepack (install Corepack separately on Node 26 if needed, then `corepack enable` and `corepack install`)
 
 ## Common Commands
 

@@ -72,7 +72,7 @@ Prefer not to run a backend at all? [`examples/runtype-script-tag`](./examples/r
 
 Backend adapters in this repo, each emitting Persona's SSE wire from a different SDK:
 
-- [**Vercel Eve**](./examples/eve-next): A document workspace with a Persona V5 copilot. Preview without credentials or connect a live Eve agent (Node 24).
+- [**Vercel Eve**](./examples/eve-next): A document workspace with a Persona V5 copilot. Preview without credentials or connect a live Eve agent (Node 26).
 - [**Flue**](./examples/flue-next): A product workspace with a floating Persona V5 assistant. Preview without credentials or connect a live Flue agent.
 - [**Cloudflare Agents**](./examples/cloudflare-agents): A support inbox with a docked Persona V5 copilot, running inside a Durable Object. Preview locally without credentials or connect a live model.
 - [**OpenAI Agents**](./examples/openai-agents-next): Official OpenAI Agents SDK integration.
@@ -107,7 +107,7 @@ pnpm dev
 
 This starts the proxy on `http://localhost:43111` and the demo app at `http://localhost:5173`. Both depend on the local widget package via workspace linking, so changes hot-reload without publishing.
 
-> **Note:** Requires Node.js 24 (`nvm use` reads `.nvmrc`). Corepack manages pnpm for you.
+> **Note:** Requires Node.js 26 (`nvm use` reads `.nvmrc`). Install Corepack separately if needed, then run `corepack enable` and `corepack install` to select the pinned pnpm version.
 
 ### Install from npm
 
