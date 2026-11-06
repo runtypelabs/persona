@@ -1,5 +1,16 @@
 # @runtypelabs/persona
 
+## 4.35.0
+
+### Minor Changes
+
+- 3b863bb: Add `webmcp.requireConfirmFor` and honor a Runtype surface's WebMCP confirm policy. A page tool whose bare name matches a pattern always asks for confirmation: `autoApprove` is skipped, the voice read-only fast tier no longer bypasses it, and a custom `onConfirm` receives `info.confirmRequired: true`. In client-token mode the patterns from `/v1/client/init` (`config.webmcp.requireConfirmFor`, the surface's `behavior.webmcp.requireConfirmFor`) are merged with the widget's own list and exposed on `ClientSession.config.webmcp`. This is client-side UX, not a security boundary.
+
+### Patch Changes
+
+- d5e2b79: Remove the model picker's and overflow menu's own theme-token forwarding. Both menus are popovers, and popovers mounted outside the widget root now carry the root's theme variables and color scheme themselves, so the per-menu copy of their tokens on every open was redundant.
+- b92abd6: Fix composer popovers painting the light fallbacks in a dark widget. The `@` mention menu, the popover model picker, the overflow `+` menu and the approval "Allow once" menu mount on `document.body` (or the shadow root), outside `[data-persona-root]`, so they missed the theme variables and color scheme set on the widget root and rendered white with dark text. `createPopover` now copies the root's theme variables and `data-persona-color-scheme` / `data-persona-defaults` onto content it mounts outside the root, and keeps them current while the popover is open, so a live `controller.update()` of the theme or color scheme reaches an open menu too.
+
 ## 4.34.0
 
 ### Minor Changes
