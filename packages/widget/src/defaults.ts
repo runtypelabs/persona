@@ -125,7 +125,6 @@ export const DEFAULTS_BASE: Partial<AgentWidgetConfig> = {
     idleText: "Online",
     connectingText: "Connecting…",
     connectedText: "Streaming…",
-    errorText: "Offline",
   },
   voiceRecognition: {
     enabled: true,

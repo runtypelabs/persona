@@ -78,7 +78,7 @@ export const buildPillPeekBanner = (): PillPeekBanner => {
  * Suggestions row + status text are built so plugin code that mutates them
  * keeps working and `bindComposerRefsFromFooter` finds them. CSS hides the
  * suggestions while collapsed and reveals them above the pill when expanded;
- * status text stays hidden because the pill UX has no room for it.
+ * connection notices use a compact row above the pill.
  *
  * Attachment previews float ABOVE the pill in their own row when
  * AttachmentManager toggles the previews container's `display` property
@@ -93,8 +93,9 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
   });
 
   const suggestions = createSuggestionsRow();
-  const statusText = createStatusText(config);
-  statusText.style.display = "none";
+  const statusConfig = { ...config?.statusIndicator, mode: config?.statusIndicator?.mode ?? "transient" as const };
+  const statusText = createStatusText({ ...config, statusIndicator: statusConfig });
+  statusText.classList.add("persona-pill-composer__status");
 
   // Pill textarea: starts single-line, grows to `composer.maxLines` (5 by
   // default) so expanded mode still supports multi-line composition.
@@ -148,7 +149,7 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
   //   [header region: previews row, hidden until attachments exist]
   //   [suggestions, visible only while expanded]
   //   [pill form]
-  //   [hidden status]
+  //   [status notices]
   //
   // The header floats above the pill. It is `display: contents` so an empty
   // header adds no row to the footer's flex column (the previews row keeps its
@@ -162,6 +163,7 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
   footer.append(header);
   if (attachment) header.append(attachment.previewsContainer);
   footer.append(suggestions, composerForm, statusText);
+  if (statusConfig.mode === "transient") composerForm.before(statusText);
 
   // The pill flattens left/right into the form's grid; there's no separate
   // wrapper. Surface the form itself as `actionsRow` to satisfy the

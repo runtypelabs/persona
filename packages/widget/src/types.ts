@@ -5035,9 +5035,10 @@ export type AgentWidgetStatusIndicatorConfig = {
   /** Show the indicator. Explicit false also hides transient connection states. */
   visible?: boolean;
   /**
-   * "always" shows status beneath the composer; "transient" shows connecting,
-   * reconnecting, and error status above it, hiding normal idle/streaming status.
-   * Available in both defaults states. Default: "always" in v4, "transient" in v5.
+   * "always" shows status beneath the composer; "transient" shows connection
+   * interruptions and recovery above it, hiding normal request activity.
+   * Default: "always" in v4 and "transient" in v5. Composer-bar layouts default
+   * to "transient" in both versions; an explicit mode overrides that default.
    */
   mode?: "always" | "transient";
   /** Text alignment. Defaults to left in transient mode and right in always mode. */
@@ -5047,6 +5048,7 @@ export type AgentWidgetStatusIndicatorConfig = {
   idleLink?: string;
   connectingText?: string;
   connectedText?: string;
+  /** Override both generic connection errors and the notice after automatic reconnect attempts stop. */
   errorText?: string;
   /** Status text while a dropped durable stream is awaiting reconnect. */
   pausedText?: string;
@@ -8933,10 +8935,10 @@ export type AgentWidgetConfig = {
    * ```
    *
    * Resolve with a `text/event-stream` `Response`. Throw or resolve non-ok to
-   * signal "this attempt failed" (the widget backs off and retries, then gives
-   * up after the bounded attempts). Reconnect only ever arms on the durable
-   * lane (streams carrying SSE `id:` lines); without this hook a drop finalizes
-   * exactly as before.
+   * signal "this attempt failed". The widget backs off and retries, then
+   * retains its checkpoint for manual Reconnect after the bounded attempts.
+   * Reconnect only arms on streams carrying SSE `id:` lines; without this hook
+   * a drop finalizes exactly as before.
    */
   reconnectStream?: (ctx: {
     executionId: string;
@@ -8948,7 +8950,7 @@ export type AgentWidgetConfig = {
    * (`backoffMs: [1000, 2000, 4000, 8000, 8000]`).
    */
   reconnect?: {
-    /** Max reconnect attempts before giving up and finalizing. @default backoffMs.length */
+    /** Automatic attempts before pausing for manual Reconnect. @default backoffMs.length */
     maxAttempts?: number;
     /** Per-attempt delay (ms) before each retry. @default [1000, 2000, 4000, 8000, 8000] */
     backoffMs?: number[];
@@ -8956,7 +8958,8 @@ export type AgentWidgetConfig = {
   /**
    * Called whenever the durable resume handle changes: created when a durable
    * turn starts streaming, updated as the cursor advances (throttled), and
-   * `null` when the turn finishes, errors, or is torn down. Persist
+   * `null` when the turn finishes, reports an execution error, or is torn down.
+   * Automatic reconnect exhaustion retains the handle for manual recovery. Persist
    * `{ executionId, lastEventId }` next to your `conversationId` and pass it
    * back via {@link resume} on the next mount to survive a tab reload.
    */

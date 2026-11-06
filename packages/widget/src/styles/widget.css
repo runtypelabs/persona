@@ -7158,3 +7158,42 @@
   mask-image: linear-gradient(to bottom, transparent, #000 var(--persona-activity-fade-top), #000 calc(100% - var(--persona-activity-fade-bottom)), transparent);
 }
 :has(> .persona-activity-scroll:focus-visible) { outline: 2px solid var(--persona-primary); outline-offset: 2px; }
+
+.persona-mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.persona-connection-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.625rem;
+  background: var(--persona-container, rgba(11, 11, 11, 0.04));
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.persona-connection-notice.persona-text-center { justify-content: center; }
+.persona-connection-notice.persona-text-right { justify-content: flex-end; }
+.persona-connection-notice > svg { flex: 0 0 auto; }
+.persona-connection-notice__label { min-width: 0; overflow-wrap: anywhere; }
+.persona-connection-notice__action {
+  appearance: none;
+  display: inline-block;
+  margin-inline-start: 0.25rem;
+  padding: 0.1875rem 0.375rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.125rem;
+  cursor: pointer;
+}
+.persona-connection-notice__action:disabled { opacity: 0.6; cursor: default; }
+.persona-connection-notice__action:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.persona-widget-footer--pill .persona-pill-composer__status { margin: 0 0.5rem; }

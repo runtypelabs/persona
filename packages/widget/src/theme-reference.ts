@@ -330,15 +330,18 @@ export const THEME_TOKEN_DOCS = {
         '"bubble" | "flat" | "minimal". Options: groupConsecutive, avatar (show, position, userAvatar, assistantAvatar, operatorAvatar), timestamp (show, position, format).',
     },
     statusIndicator: {
-      description: 'Status text shown below the composer.',
+      description: 'Connection notices above the composer in transient mode, or persistent status below it in always mode.',
       properties: {
         visible: 'Show/hide the status indicator.',
-        align: '"left" | "center" | "right": text alignment (default: "right").',
+        mode: '"always" | "transient". Default: always in v4, transient with v5 defaults. Composer-bar layouts default to transient in both versions.',
+        align: '"left" | "center" | "right": defaults to left in transient mode and right in always mode.',
         idleText: 'Text shown when idle (default: "Online").',
         idleLink: 'URL to open when idle text is clicked (wraps text in a link).',
         connectingText: 'Text shown while connecting (default: "Connecting…").',
         connectedText: 'Text shown while streaming (default: "Streaming…").',
-        errorText: 'Text shown on error (default: "Offline").',
+        errorText: 'Override the connection error and exhausted reconnect notice. Defaults to Connection interrupted or Couldn’t reconnect.',
+        pausedText: 'Text shown while waiting for the next reconnect attempt.',
+        resumingText: 'Text shown during a reconnect request (default: "Reconnecting…").',
       },
     },
     features: {

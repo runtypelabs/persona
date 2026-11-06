@@ -182,6 +182,13 @@ describe("4.22.0 defaults parity (flag off)", () => {
       ...resolvedActual.mergedDefaultConfig.tooltip,
       delayMs: baseline.mergedDefaultConfig.tooltip.delayMs,
     };
+    // Connection copy now describes an interrupted transport; explicit overrides remain optional.
+    expect(baseline.mergedDefaultConfig.statusIndicator.errorText).toBe("Offline");
+    expect(actual.mergedDefaultConfig.statusIndicator).not.toHaveProperty("errorText");
+    resolvedActual.mergedDefaultConfig.statusIndicator = {
+      ...resolvedActual.mergedDefaultConfig.statusIndicator,
+      errorText: baseline.mergedDefaultConfig.statusIndicator.errorText,
+    };
     // Additive controls preserve V4 appearance; keep the historical fixture intact.
     const tools = resolvedActual.mergedDefaultConfig.features!.toolCallDisplay!;
     expect(baseline.mergedDefaultConfig.features.toolCallDisplay).not.toHaveProperty("groupBoundary");
