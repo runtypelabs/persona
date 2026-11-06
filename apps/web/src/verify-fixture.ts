@@ -28,8 +28,8 @@ import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-hi
  * effects alongside screenshots. Not registered in examples-nav.
  */
 
-type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "internal-error" | "browser-history" | "turn-activity" | "operator";
-const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "internal-error", "browser-history", "turn-activity", "operator"];
+type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "internal-error" | "execution-error" | "browser-history" | "turn-activity" | "operator";
+const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "internal-error", "execution-error", "browser-history", "turn-activity", "operator"];
 
 const params = new URLSearchParams(window.location.search);
 const scenarioParam = params.get("scenario") ?? "echo";
@@ -194,6 +194,11 @@ function scenarioFrames(kind: Scenario, userText: string, executionId: string): 
         { type: "tool_complete", executionId, toolCallId: `${executionId}-check`, success: true, result: "All checks passed", executionTime: 620 },
         ...buildAssistantTurnFrames({ executionId, turnId: `${executionId}-final`, text: "The example works. The final answer stays outside the activity disclosure.", chunkSize: 20 }),
         complete(executionId),
+      ];
+    case "execution-error":
+      return [
+        start(executionId),
+        { type: "execution_error", executionId, kind: "agent", error: "The remote run could not finish." },
       ];
     case "reasoning":
       return [

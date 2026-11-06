@@ -12924,13 +12924,6 @@ export const createAgentExperience = (
         applyStatusToElement(statusText, getCurrentStatusText(currentStatus), statusIndicatorConfig, currentStatus);
       }
 
-      // Update status text alignment
-      statusText.classList.remove("persona-text-left", "persona-text-center", "persona-text-right");
-      const alignClass = statusIndicatorConfig.align === "left" ? "persona-text-left"
-        : statusIndicatorConfig.align === "center" ? "persona-text-center"
-        : "persona-text-right";
-      statusText.classList.add(alignClass);
-
       // Composer baseline config is read at build time, so it re-syncs here.
       // After the control updates above, so controls this update created (mic,
       // attachment button) are already mounted when the locks sweep them.

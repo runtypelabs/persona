@@ -16,6 +16,10 @@ export const applyStatusIndicatorState = (
   status: string,
 ): void => {
   const transient = config.mode === "transient";
+  const align = config.align ?? (transient ? "left" : "right");
+  for (const side of ["left", "center", "right"]) {
+    element.classList.toggle(`persona-text-${side}`, side === align);
+  }
   const hasNotice = element.hasAttribute("data-persona-composer-reason") ||
     element.hasAttribute("data-persona-composer-notice");
   element.style.display = isStatusIndicatorVisible(config, status) ||

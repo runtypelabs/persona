@@ -5040,7 +5040,7 @@ export type AgentWidgetStatusIndicatorConfig = {
    * Available in both defaults states. Default: "always" in v4, "transient" in v5.
    */
   mode?: "always" | "transient";
-  /** Text alignment. Default: 'right'. */
+  /** Text alignment. Defaults to left in transient mode and right in always mode. */
   align?: 'left' | 'center' | 'right';
   idleText?: string;
   /** URL to open in a new tab when the idle text is clicked. */
@@ -8267,8 +8267,8 @@ export type AgentWidgetConfig = {
    */
   targetProviders?: Record<string, TargetResolver>;
   /**
-   * Override the detail shown when a dispatch fails, in either error display
-   * mode (connection refused, CORS, 4xx/5xx, malformed stream). Provide a static string, or a function of the error so you can
+   * Override the detail shown for dispatch and terminal run failures in either
+   * error display mode. Provide a static string, or a function of the error so you can
    * tailor the message per failure and decide whether to surface the raw
    * reason. When omitted, a default message is shown that includes the
    * underlying error detail.
@@ -8290,6 +8290,12 @@ export type AgentWidgetConfig = {
    * ```
    */
   errorMessage?: string | ((error: Error) => string);
+  /**
+   * Terminal run failure presentation. Defaults to "inline".
+   * Use "host" when the embedding application renders its own failure notice.
+   * Failure callbacks and run outcomes remain unchanged.
+   */
+  executionErrorDisplay?: "inline" | "host";
   /** Dispatch failure presentation. Defaults to "bubble" in V4, "block" in V5. */
   errorDisplay?: "bubble" | "block";
   /**
@@ -9772,10 +9778,17 @@ export type AgentWidgetEvent =
        * connection. The durable-reconnect drop detection keys off this.
        */
       terminal?: boolean;
+      /** Failure detail from a terminal execution completion. */
+      error?: Error;
       /** @internal Execution identity for background status before text appears. */
       executionId?: string;
     }
-  | { type: "error"; error: Error }
+  | {
+      type: "error";
+      error: Error;
+      /** A failed run received over a working stream, independent of connectivity. */
+      source?: "execution";
+    }
   /**
    * Durable-session reconnect cursor. Carries the SSE `id:` line (the durable
    * row seq) of a fully-parsed frame so the session can track `lastEventId`

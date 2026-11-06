@@ -169,7 +169,9 @@ See the live [launcher](https://persona-chat.dev/launcher-demo.html), [docked pa
 Everything below is opt-in and configurable via the widget config, feature flags, or the plugin system.
 
 ### Streaming Chat
-SSE-based message streaming with pluggable parsers (plain text, JSON, XML, regex). Bring your own stream parser or use the built-ins. Supports partial JSON parsing for incomplete chunks, configurable dispatch-failure copy via `errorMessage`, and optional stream reveal animations (`typewriter`, `letter-rise`, `word-fade`, `wipe`, `glyph-cycle`, `pop-bubble`, or custom plugins).
+SSE-based message streaming with pluggable parsers (plain text, JSON, XML, regex). Bring your own stream parser or use the built-ins. Supports partial JSON parsing for incomplete chunks, configurable failure copy via `errorMessage`, and optional stream reveal animations (`typewriter`, `letter-rise`, `word-fade`, `wipe`, `glyph-cycle`, `pop-bubble`, or custom plugins).
+
+Terminal run failures appear in the transcript and leave the connection indicator online. If your application renders its own failure notice, set `executionErrorDisplay: "host"` to suppress Persona's duplicate notice. The `errorMessage` option also overrides or suppresses the default inline run failure message.
 
 ### Multi-Modal Content
 Text, images (PNG, JPEG, GIF, WebP, SVG), and documents (PDF, DOCX, TXT, CSV, JSON, Excel). Configure allowed file types, size limits, and previews through the attachments config.

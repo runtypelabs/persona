@@ -8,6 +8,7 @@ Assistant replies stream into a bubble delta by delta and render as sanitized Ma
 - `markdown`: heading, ordered list, inline code, a link, a table, a fenced code block, a block quote.
 - `reasoning`: the `Thought for … seconds` disclosure (collapsed by default) and the answer below it.
 - `error`: a 500 from the backend becomes the "Sorry: the chat service couldn't complete the request…" bubble.
+- `execution-error`: a terminal SSE run failure renders one inline failure message and leaves the composer ready without an Offline warning.
 - `internal-error`: a scripted TypeError becomes the "Sorry: the chat encountered an unexpected error…" bubble without backend troubleshooting advice.
 - `stop`: during a stream the send button becomes `Stop generating`.
 
@@ -18,7 +19,7 @@ Assistant replies stream into a bubble delta by delta and render as sanitized Ma
 
 ## Driving it with control-persona + agent-browser
 
-Preconditions: `ctl open verify --scenario <echo|markdown|reasoning|error|internal-error>` (add `--delay-ms 150` to slow the stream for video).
+Preconditions: `ctl open verify --scenario <echo|markdown|reasoning|error|internal-error|execution-error>` (add `--delay-ms 150` to slow the stream for video).
 
 - **Send:** `ctl ab find placeholder "Send a message…" fill "hello"`, then `ctl ab press Enter`.
 - **Mid-stream:** `ctl ab snapshot -i`. Observe: `Stop generating` replaces `Send message`, and `Start voice recognition` is disabled.

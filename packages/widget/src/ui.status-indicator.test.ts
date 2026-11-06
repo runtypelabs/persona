@@ -29,6 +29,7 @@ describe.each([false, true])("status indicator (v5=%s)", (v5Defaults) => {
   it("selects the default mode and placement", () => {
     const { status, form } = mountWidget({ future: { v5Defaults } });
     expect(status.style.display).toBe(v5Defaults ? "none" : "");
+    expect(status.classList.contains(v5Defaults ? "persona-text-left" : "persona-text-right")).toBe(true);
     expect(v5Defaults ? status.nextElementSibling : form.nextElementSibling)
       .toBe(v5Defaults ? form : status);
   });
@@ -43,6 +44,20 @@ describe.each([false, true])("status indicator (v5=%s)", (v5Defaults) => {
       expect(status.style.display, state).toBe(state === "connecting" || state === "error" ? "" : "none");
       if (state === "error") expect(status.textContent).toBe("Try again");
     }
+  });
+
+  it.each([false, true])("hides a terminal run failure in transient mode (custom parser=%s)", async (customParser) => {
+    const { controller, status } = mountWidget({
+      future: { v5Defaults }, statusIndicator: { mode: "transient" },
+      parseSSEEvent: customParser ? () => ({ error: "Model unavailable" }) : undefined,
+    });
+    await controller.connectStream(new Response(
+      'event: execution_error\ndata: {"type":"execution_error","kind":"agent","error":"Model unavailable"}\n\n',
+    ).body!);
+    expect(status.style.display).toBe("none");
+    expect(status.textContent).not.toBe("Offline");
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Model unavailable"));
+    expect(document.body.textContent).toContain("This run failed");
   });
 
   it("honors explicit visibility and permits live mode changes", () => {
@@ -60,6 +75,27 @@ describe.each([false, true])("status indicator (v5=%s)", (v5Defaults) => {
     controller.update({ statusIndicator: { mode: "always", visible: true } });
     expect(form.nextElementSibling).toBe(status);
     expect(status.style.display).toBe("");
+  });
+
+  it.each(["left", "center", "right"] as const)("preserves explicit %s alignment and updates it live", (align) => {
+    const { controller, status } = mountWidget({
+      future: { v5Defaults }, statusIndicator: { mode: "transient", align },
+    });
+    expect(status.classList.contains(`persona-text-${align}`)).toBe(true);
+    controller.update({ statusIndicator: { mode: "always", align: "center" } });
+    expect(status.classList.contains("persona-text-center")).toBe(true);
+    expect(status.classList.contains("persona-text-right")).toBe(false);
+  });
+
+  it("keeps default transient alignment after an update without align", () => {
+    const { controller, status } = mountWidget({
+      future: { v5Defaults }, statusIndicator: { mode: "transient" },
+    });
+    controller.update({ statusIndicator: { mode: "transient" } });
+    expect(status.classList.contains("persona-text-left")).toBe(true);
+    expect(status.classList.contains("persona-text-right")).toBe(false);
+    controller.update({ statusIndicator: { mode: "always" } });
+    expect(status.classList.contains("persona-text-right")).toBe(true);
   });
 
   it("keeps a composer lock reason readable in transient mode", () => {

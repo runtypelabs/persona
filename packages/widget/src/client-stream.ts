@@ -61,6 +61,13 @@ function filenameFromMediaType(mediaType: string): string {
   return "attachment";
 }
 
+function executionErrorMessage(error: unknown, fallback = "Execution error"): string {
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object" && "message" in error &&
+      typeof error.message === "string" && error.message.trim()) return error.message;
+  return fallback;
+}
+
 const looksStructured = (value: string) => /^[{[<]/.test(value);
 
 /**
@@ -187,7 +194,8 @@ async function handleCustomSSEEvent(
       partIdState.current = null;
       onEvent({
         type: "error",
-        error: new Error(result.error)
+        error: new Error(result.error),
+        source: "execution"
       });
     }
 
@@ -1203,7 +1211,7 @@ export async function streamResponse(
         // — surfaces as a terminal error and finalizes the stream.
         if (payload.success === false) {
           const message = payload.error || "Step failed";
-          onEvent({ type: "error", error: new Error(message) });
+          onEvent({ type: "error", error: new Error(message), source: "execution" });
           const finalMsg = assistantMessage as AgentWidgetMessage | null;
           if (finalMsg && finalMsg.streaming) {
             finalMsg.streaming = false;
@@ -1529,7 +1537,15 @@ export async function streamResponse(
         // session uses it to distinguish the real end-of-turn from the plain
         // `idle` the dispatch wrappers emit in their `finally` when a durable
         // connection drops mid-stream (durable-reconnect drop detection).
-        onEvent({ type: "status", status: payload.success === false ? "error" : "idle", terminal: true });
+        onEvent({
+          type: "status", status: payload.success === false ? "error" : "idle", terminal: true,
+          ...(payload.success === false ? {
+            error: new Error(executionErrorMessage(
+              "error" in payload ? payload.error : undefined,
+              "The run stopped before it could finish."
+            ))
+          } : {})
+        });
       } else if (payload.type === "execution_error") {
         // Terminal failure. The non-terminal `error` is handled
         // separately (recoverable → warn).
@@ -1538,7 +1554,8 @@ export async function streamResponse(
           : payload.error?.message ?? 'Execution error';
         onEvent({
           type: "error",
-          error: new Error(errorMessage)
+          error: new Error(errorMessage),
+          source: "execution"
         });
       } else if (payload.type === "ping") {
         // Keep-alive heartbeat - no action needed
@@ -1758,7 +1775,7 @@ export async function streamResponse(
               : (payload.error as { message?: unknown })?.message != null
                 ? String((payload.error as { message?: unknown }).message)
                 : "Execution error";
-          onEvent({ type: "error", error: new Error(errorMessage) });
+          onEvent({ type: "error", error: new Error(errorMessage), source: "execution" });
           const finalMsg = assistantMessage as AgentWidgetMessage | null;
           if (finalMsg && finalMsg.streaming) {
             finalMsg.streaming = false;

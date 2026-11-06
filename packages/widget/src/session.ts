@@ -4089,9 +4089,15 @@ export class AgentWidgetSession {
         this.#beginReconnect();
         return;
       }
+      if (event.status === "error" && event.terminal) {
+        this.#appendExecutionError(event.error ?? new Error("The run stopped before it could finish."));
+      }
       if (event.status === "error") this.#emitConversationExecutionState("failed");
       else if (event.terminal && event.status === "idle") this.#emitConversationExecutionState("completed");
-      this.#setStatus(event.status);
+      this.#setStatus(
+        event.status === "error" && event.terminal ? "idle" : event.status,
+        event.status === "error"
+      );
       if (event.status === "connecting") {
         this.#setStreaming(true);
       } else if (event.status === "idle" || event.status === "error") {
@@ -4137,8 +4143,9 @@ export class AgentWidgetSession {
         this.#scheduleWebMcpBatchFlush();
       }
     } else if (event.type === "error") {
+      if (event.source === "execution") this.#appendExecutionError(event.error);
       this.#emitConversationExecutionState("failed");
-      this.#setStatus("error");
+      this.#setStatus(event.source === "execution" ? "idle" : "error", true);
       // Terminal error: drop the resume handle so no reconnect arms.
       this.#clearResumable();
       // Mirror the idle/status handler: don't tear down streaming while a
@@ -4599,8 +4606,8 @@ export class AgentWidgetSession {
     return this.#resumable;
   }
 
-  #setStatus(status: AgentWidgetSessionStatus) {
-    if (status === "error") {
+  #setStatus(status: AgentWidgetSessionStatus, runFailed = status === "error") {
+    if (runFailed) {
       this.#runFailed = true;
       this.#scheduleRunFinish();
     }
@@ -4721,7 +4728,16 @@ export class AgentWidgetSession {
   /** Preserve streamed output and give its failure a distinct transcript row. */
   #appendDispatchError(error: unknown): void {
     for (const message of this.messages) message.streaming = false;
-    const content = buildDispatchErrorContent(error, this.config.errorMessage);
+    this.#appendErrorMessage(buildDispatchErrorContent(error, this.config.errorMessage));
+  }
+
+  #appendExecutionError(error: Error): void {
+    if (this.#runFailed || this.config.executionErrorDisplay === "host") return;
+    const fallback = `This run failed. Please try again.\n\n_Details: ${error.message}_`;
+    this.#appendErrorMessage(buildDispatchErrorContent(error, this.config.errorMessage ?? fallback));
+  }
+
+  #appendErrorMessage(content: string): void {
     if (content) {
       this.#appendMessage({
         id: generateAssistantMessageId(),
