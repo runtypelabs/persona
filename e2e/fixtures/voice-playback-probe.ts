@@ -1,3 +1,4 @@
+import { writeFile } from "node:fs/promises";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import type { FakeVoiceCall } from "./fake-voice-server";
 
@@ -113,7 +114,11 @@ export async function finishPlayback(page: Page, testInfo: TestInfo): Promise<Au
   wav.write("data", 36);
   wav.writeUInt32LE(samples.length * 2, 40);
   samples.forEach((sample, i) => wav.writeInt16LE(Math.round(sample * 32767), 44 + i * 2));
-  await testInfo.attach("rendered-playback.wav", { body: wav, contentType: "audio/wav" });
-  await testInfo.attach("rendered-playback.json", { body: JSON.stringify(runs), contentType: "application/json" });
+  const audioPath = testInfo.outputPath("rendered-playback.wav");
+  const reportPath = testInfo.outputPath("rendered-playback.json");
+  await writeFile(audioPath, wav);
+  await writeFile(reportPath, JSON.stringify({ sampleRate: 24_000, runs }, null, 2));
+  await testInfo.attach("rendered-playback.wav", { path: audioPath, contentType: "audio/wav" });
+  await testInfo.attach("rendered-playback.json", { path: reportPath, contentType: "application/json" });
   return runs;
 }

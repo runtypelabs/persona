@@ -31,7 +31,9 @@ Assertions inspect the rendered sample array:
 - An interruption stops already-playing audio, and a later short reply still drains
   without an `audio_end` frame.
 
-Each test attaches a WAV and JSON waveform summary to its Playwright result.
+Each test saves a WAV and JSON waveform summary under `test-results/` and
+attaches both to its Playwright result. CI keeps the `voice-playback-waveforms`
+artifact for seven days, including passing runs.
 The samples have constant, distinguishable amplitudes so omissions, duplicates,
 reordering, and unintended gaps cannot hide in natural speech silence.
 
