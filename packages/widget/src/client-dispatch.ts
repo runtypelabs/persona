@@ -1090,7 +1090,7 @@ export class ClientDispatch {
 }
 
 /**
- * `config.webmcp.requireConfirmFor` from `/v1/client/init` (core#10933),
+ * `config.webmcp.requireConfirmFor` from `/v1/client/init`,
  * kept only when it is a non-empty list of strings. Read defensively: older
  * servers omit it, and the generated contract may predate the field.
  */
