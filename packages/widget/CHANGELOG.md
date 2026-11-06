@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 4.36.1
+
+### Patch Changes
+
+- 3e7338e: Update the build and test toolchain for Node.js 26 and the latest Rolldown, and speed up release publication with verified package artifact reuse and parallel CDN checks.
+
 ## 4.36.0
 
 ### Minor Changes
@@ -1897,7 +1903,6 @@
   - Remove `launcher.dock.collapsedWidth`. Docked mode always uses a 0px dock column when the panel is closed; the built-in launcher stays hidden while closed. Open with `controller.open()` or your own UI. Legacy `collapsedWidth` in stored config is ignored by `resolveDockConfig`.
 
   ### Features
-
   - Add `launcher.dock.reveal`: `"overlay"` overlays the panel with `transform` while the workspace stays full width underneath; `"push"` uses a sliding track so the panel and workspace move together without animating the main column width (Shopify admin-style). Default `"resize"` keeps the flex column behavior.
   - Add `launcher.dock.reveal: "emerge"`: animate the dock column like `resize` so wrapped content reflows, while the chat panel keeps a fixed `dock.width` inside the slot (clipped until open) for a full-width floating-style entrance.
   - Add `launcher.dock.animate`. Set to `false` to disable the dock column width transition so the panel opens and closes instantly without animating main content reflow.
@@ -1908,7 +1913,6 @@
   - Default artifact pane fill and document toolbar background use `components.artifact.pane` tokens resolving from `semantic.colors.container` (aligned with assistant message surfaces). Pane CSS now falls back through `--persona-components-artifact-pane-background` before raw surface/container. Override order: `features.artifacts.layout.paneBackground` (layout) → `theme.components.artifact.pane.background` / `toolbarBackground` → semantic fallbacks. `toolbarBackground` token references are resolved like other theme paths.
 
   ### Fixes
-
   - Added `theme.components.header.iconBackground` and `iconForeground` with CSS variables `--persona-header-icon-bg` and `--persona-header-icon-fg` for the avatar tile (defaults: primary / text-inverse). Added `titleForeground`, `subtitleForeground`, and `actionIconForeground` with `--persona-header-title-fg`, `--persona-header-subtitle-fg`, and `--persona-header-action-icon-fg` for header copy and default clear/close icon color (defaults: semantic primary, textMuted, textMuted). Removed default `launcher.closeButtonColor` and `launcher.clearChat.iconColor` so those header icons follow `actionIconForeground` until integrators set explicit launcher colors.
   - Docked mode: remove default panel drop shadow, use a single inner-edge border (left when docked right, right when docked left) instead of a full frame. Welcome intro card no longer uses a drop shadow when docked. Theme `components.panel.border` still overrides when set.
   - Fix docked launcher panels incorrectly becoming visible at mobile widths when closed: `recalcPanelHeight` now re-applies open/closed visibility after `applyFullHeightStyles`. The mobile fullscreen shell uses `display: flex !important` on the panel wrapper, so closed docked state now sets `display: none !important` (and clears it when opening) so the collapsed dock actually hides under the cascade.
