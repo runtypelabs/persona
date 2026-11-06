@@ -1,0 +1,252 @@
+{
+  "marks": {
+    "micOn": 55039,
+    "socketOpen": 55040,
+    "firstMicFrameSent": 55298,
+    "firstTranscript": 58665,
+    "firstAudioReceived": 58789
+  },
+  "latenciesMs": {
+    "micOnToSocketOpen": 1,
+    "socketOpenToFirstMicFrame": 258,
+    "micOnToFirstAudioReceived": 3750
+  },
+  "utterances": [],
+  "sockets": [
+    {
+      "url": "ws://127.0.0.1:56443/ws/agents/agent_e2e_voice/voice?voiceProtocol=runtype-browser-v1&clientVersion=persona%2F4.35.1&voiceCapabilities=full-duplex-v1&clientCapabilities=partial_transcript%2Ccontext",
+      "openedAt": 55040,
+      "closedAt": 101207,
+      "sent": {
+        "binary": 180,
+        "bytes": 1474560,
+        "json": {
+          "cancel": 1
+        }
+      },
+      "received": {
+        "binary": 134,
+        "bytes": 127718,
+        "json": {
+          "session_config": 1,
+          "transcript_update": 8
+        }
+      },
+      "firstBinarySentAt": 55298,
+      "firstBinaryReceivedAt": 58789
+    }
+  ],
+  "outputTracks": [
+    {
+      "context": 1,
+      "sampleRate": 16000,
+      "durationMs": 46140,
+      "meanDb": -91,
+      "maxDb": -91
+    },
+    {
+      "context": 2,
+      "sampleRate": 24000,
+      "durationMs": 2640,
+      "meanDb": -15.7,
+      "maxDb": -2.6
+    }
+  ],
+  "output": {
+    "context": 2,
+    "sampleRate": 24000,
+    "durationMs": 2640,
+    "meanDb": -15.7,
+    "maxDb": -2.6
+  },
+  "stt": {
+    "skipped": "whisper-cli or PERSONA_VERIFY_WHISPER_MODEL not available"
+  },
+  "server": {
+    "script": {
+      "userText": "What are your opening hours?",
+      "replyText": "We're open Monday to Friday from eight to six.",
+      "replyAudio": "speech",
+      "replyAudioMs": 2661
+    },
+    "micReceived": {
+      "frames": 180,
+      "ms": 46080
+    },
+    "timingsMs": {
+      "sessionConfigSent": 57204,
+      "micAudioReceived": 60570,
+      "userTranscriptFinal": 60694,
+      "replyAudioStart": 60694,
+      "replyAudioEnd": 63498
+    },
+    "clientFrames": [
+      "cancel"
+    ],
+    "closeCode": 1000
+  },
+  "timeline": [
+    {
+      "at": 141,
+      "type": "mic",
+      "detail": {
+        "state": "idle | Start voice recognition"
+      }
+    },
+    {
+      "at": 54945,
+      "type": "tts:cancel"
+    },
+    {
+      "at": 55011,
+      "type": "mic:clip-start",
+      "detail": {
+        "durationMs": 11081,
+        "contextState": "running"
+      }
+    },
+    {
+      "at": 55037,
+      "type": "audio-tap:start",
+      "detail": {
+        "context": 1,
+        "sampleRate": 16000
+      }
+    },
+    {
+      "at": 55037,
+      "type": "ws:connect",
+      "detail": {
+        "url": "ws://127.0.0.1:56443/ws/agents/agent_e2e_voice/voice?voiceProtocol=runtype-browser-v1&clientVersion=persona%2F4.35.1&voiceCapabilities=full-duplex-v1&clientCapabilities=partial_transcript%2Ccontext"
+      }
+    },
+    {
+      "at": 55039,
+      "type": "mic",
+      "detail": {
+        "state": "recording | Stop voice recognition"
+      }
+    },
+    {
+      "at": 55040,
+      "type": "ws:open",
+      "detail": {
+        "url": "ws://127.0.0.1:56443/ws/agents/agent_e2e_voice/voice?voiceProtocol=runtype-browser-v1&clientVersion=persona%2F4.35.1&voiceCapabilities=full-duplex-v1&clientCapabilities=partial_transcript%2Ccontext"
+      }
+    },
+    {
+      "at": 55298,
+      "type": "ws:first-mic-frame-sent"
+    },
+    {
+      "at": 55299,
+      "type": "ws:recv",
+      "detail": {
+        "type": "session_config"
+      }
+    },
+    {
+      "at": 58665,
+      "type": "ws:recv",
+      "detail": {
+        "type": "transcript_update"
+      }
+    },
+    {
+      "at": 58707,
+      "type": "ws:recv",
+      "detail": {
+        "type": "transcript_update"
+      }
+    },
+    {
+      "at": 58748,
+      "type": "ws:recv",
+      "detail": {
+        "type": "transcript_update"
+      }
+    },
+    {
+      "at": 58789,
+      "type": "ws:first-audio-received"
+    },
+    {
+      "at": 58790,
+      "type": "mic",
+      "detail": {
+        "state": "recording | Speak to interrupt"
+      }
+    },
+    {
+      "at": 58790,
+      "type": "ws:recv",
+      "detail": {
+        "type": "transcript_update"
+      }
+    },
+    {
+      "at": 58911,
+      "type": "ws:recv",
+      "detail": {
+        "type": "transcript_update"
+      }
+    },
+    {
+      "at": 58937,
+      "type": "audio-tap:start",
+      "detail": {
+        "context": 2,
+        "sampleRate": 24000
+      }
+    },
+    {
+      "at": 59032,
+      "type": "ws:recv",
+      "detail": {
+        "type": "transcript_update"
+      }
+    },
+    {
+      "at": 59153,
+      "type": "ws:recv",
+      "detail": {
+        "type": "transcript_update"
+      }
+    },
+    {
+      "at": 59273,
+      "type": "ws:recv",
+      "detail": {
+        "type": "transcript_update"
+      }
+    },
+    {
+      "at": 61874,
+      "type": "mic",
+      "detail": {
+        "state": "recording | Stop voice recognition"
+      }
+    },
+    {
+      "at": 101191,
+      "type": "ws:send",
+      "detail": {
+        "type": "cancel"
+      }
+    },
+    {
+      "at": 101192,
+      "type": "mic",
+      "detail": {
+        "state": "idle | Start voice recognition"
+      }
+    },
+    {
+      "at": 101207,
+      "type": "ws:close",
+      "detail": {
+        "code": 1000
+      }
+    }
+  ]
+}

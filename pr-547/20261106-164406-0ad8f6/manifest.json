@@ -1,0 +1,56 @@
+{
+  "runId": "20261106-164406-0ad8f6",
+  "entries": [
+    {
+      "feature": "voice-runtype",
+      "label": "after buffered call",
+      "note": null,
+      "files": [
+        "02-voice-runtype-after-buffered-call.png",
+        "02-voice-runtype-after-buffered-call.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/voice-e2e.html?voiceHost=ws%3A%2F%2F127.0.0.1%3A56443&clientDelegation=0",
+      "at": "2026-11-06T16:46:32.510Z",
+      "head": "44ca181cd9815078342a473e564b349495367a84",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "buffered-call",
+      "note": null,
+      "files": [
+        "01-voice-runtype-buffered-call.gif",
+        "01-voice-runtype-buffered-call.webm",
+        "01-voice-runtype-buffered-call.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/voice-e2e.html?voiceHost=ws%3A%2F%2F127.0.0.1%3A56443&clientDelegation=0",
+      "at": "2026-11-06T16:46:33.440Z",
+      "head": "44ca181cd9815078342a473e564b349495367a84",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "150ms buffer audio round trip",
+      "note": "`output.png` is the audio the widget played, tapped in-page (waveform over spectrogram): 2640 ms (mean -15.7 dB, peak -2.6 dB); `server-heard.png` is the mic PCM the voice socket received: 46080 ms in 180 frames; micOnToSocketOpen 1 ms, socketOpenToFirstMicFrame 258 ms, micOnToFirstAudioReceived 3750 ms",
+      "files": [
+        "03-voice-runtype-150ms-buffer-audio-round-trip.output.png",
+        "03-voice-runtype-150ms-buffer-audio-round-trip.output.wav",
+        "03-voice-runtype-150ms-buffer-audio-round-trip.server-heard.png",
+        "03-voice-runtype-150ms-buffer-audio-round-trip.server-heard.wav",
+        "03-voice-runtype-150ms-buffer-audio-round-trip.voice.json"
+      ],
+      "url": "http://127.0.0.1:4390/voice-e2e.html?voiceHost=ws%3A%2F%2F127.0.0.1%3A56443&clientDelegation=0",
+      "at": "2026-11-06T16:46:33.752Z",
+      "head": "44ca181cd9815078342a473e564b349495367a84",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "voice-runtype",
+      "pass": true,
+      "skipped": false,
+      "note": "Synthetic mic-to-socket-to-speaker call: 2640 ms audible output for a 2661 ms reply, peak -2.6 dB, 180 mic frames, clean hang-up. Four deterministic waveform regressions also passed, including late frames, refill, interruption and a short tail; live GPT-Live not contacted."
+    }
+  ]
+}
