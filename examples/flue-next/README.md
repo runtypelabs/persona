@@ -6,7 +6,7 @@ The assistant connects to [Flue](https://flueframework.com/), the agent framewor
 
 ## Run the keyless preview
 
-From the repository root, with Node.js 24 and pnpm installed:
+From the repository root, with Node.js 26 and pnpm installed:
 
 ```sh
 pnpm install

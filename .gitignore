@@ -48,3 +48,4 @@ packages/widget/openapi/runtype-public-openapi.local.json
 .verify/
 
 .vercel
+.release-packages/

@@ -11,6 +11,36 @@ export const LATEST_CACHE = 'public, max-age=3600, s-maxage=86400, must-revalida
 const CDN = 'https://cdn.runtype.com';
 const exec = promisify(execFile);
 
+async function mapConcurrent(items, operation) {
+  const values = [...items];
+  const results = new Array(values.length);
+  let cursor = 0;
+  let failure;
+  let failed = false;
+  await Promise.all(Array.from({ length: Math.min(12, values.length) }, async () => {
+    while (!failed && cursor < values.length) {
+      const index = cursor++;
+      try {
+        results[index] = await operation(values[index]);
+      } catch (error) {
+        failed = true;
+        failure ??= error;
+      }
+    }
+  }));
+  if (failed) throw failure;
+  return results;
+}
+
+async function timed(label, operation) {
+  const start = performance.now();
+  try {
+    return await operation();
+  } finally {
+    console.log(`${label}: ${((performance.now() - start) / 1000).toFixed(1)}s`);
+  }
+}
+
 export function validateVersion(version) {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version ?? '')) {
     throw new Error('Expected an exact Persona release version');
@@ -21,13 +51,11 @@ export function validateVersion(version) {
 export async function fileHashes(dir) {
   const files = (await readdir(dir, { recursive: true, withFileTypes: true }))
     .filter(entry => entry.isFile());
-  const result = new Map();
-  for (const file of files) {
+  return new Map(await mapConcurrent(files, async file => {
     const path = join(file.parentPath, file.name);
     const name = path.slice(resolve(dir).length + 1).replaceAll('\\', '/');
-    result.set(name, createHash('sha256').update(await readFile(path)).digest('hex'));
-  }
-  return result;
+    return [name, createHash('sha256').update(await readFile(path)).digest('hex')];
+  }));
 }
 
 export function assertSameRelease(expected, existing) {
@@ -65,8 +93,8 @@ function safeLatestCache(cache) {
 }
 
 export async function verifyLatest(hashes, fetchImpl = fetch) {
-  for (const name of ['install.global.js', 'index.global.js', 'launcher.global.js', 'client-stream.js', 'widget.css']) {
-    const response = await fetchImpl(`${CDN}/persona/latest/${name}`);
+  await mapConcurrent(['install.global.js', 'index.global.js', 'launcher.global.js', 'client-stream.js', 'widget.css'], async name => {
+    const response = await fetchImpl(`${CDN}/persona/latest/${name}`, { signal: AbortSignal.timeout(30_000) });
     const cache = response.headers.get('cache-control') ?? '';
     if (!response.ok || !safeLatestCache(cache)) {
       throw new Error(`Unsafe CDN response for ${name}: HTTP ${response.status}, Cache-Control: ${cache}. Check Cloudflare cache rules and Browser Cache TTL overrides.`);
@@ -76,15 +104,15 @@ export async function verifyLatest(hashes, fetchImpl = fetch) {
     if (/(?:no-cache|no-store)/i.test(cache)) {
       console.warn(`CDN ${name} is verified but still uses emergency revalidation; restore the bounded cache policy after rollout.`);
     }
-  }
+  });
 }
 
 export async function verifyVersioned(hashes, version, fetchImpl = fetch) {
   // Check the URLs browsers actually load, including every lazy chunk. R2
   // equality alone cannot detect cached CDN errors or response transformations.
-  for (const [name, expected] of hashes) {
+  await mapConcurrent(hashes, async ([name, expected]) => {
     const url = `${CDN}/persona/${version}/${name}`;
-    const response = await fetchImpl(url);
+    const response = await fetchImpl(url, { signal: AbortSignal.timeout(30_000) });
     if (!response.ok) throw new Error(`Versioned CDN response failed for ${url}: HTTP ${response.status}`);
     const hash = createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
     if (hash !== expected) throw new Error(`Versioned CDN serves different bytes for ${url}`);
@@ -93,7 +121,7 @@ export async function verifyVersioned(hashes, version, fetchImpl = fetch) {
     if (/\.m?js$/.test(name) && response.headers.get('access-control-allow-origin') !== '*') {
       throw new Error(`Versioned CDN lacks public CORS for ${url}. Set Access-Control-Allow-Origin: * on public Persona assets, including responses without an Origin request header.`);
     }
-  }
+  });
 }
 
 export async function publish({ dist, version, latest, env = process.env, run = exec, fetchImpl = fetch }) {
@@ -115,25 +143,26 @@ export async function publish({ dist, version, latest, env = process.env, run = 
   const existing = await mkdtemp(join(tmpdir(), 'persona-cdn-'));
   try {
     // Never replace immutable release bytes, including on a manual rerun.
-    await aws(['s3', 'sync', prefix, existing, '--no-progress', '--only-show-errors']);
+    await timed('Read existing version', () => aws(['s3', 'sync', prefix, existing, '--no-progress', '--only-show-errors']));
     const previous = await fileHashes(existing);
     if (previous.size) {
       assertSameRelease(hashes, previous);
       console.log(`Version ${version} already exists with identical files`);
     } else {
-      await aws(['s3', 'cp', dist, prefix, '--recursive', '--cache-control', IMMUTABLE_CACHE, '--no-progress', '--only-show-errors']);
+      await timed('Upload versioned assets', () => aws(['s3', 'cp', dist, prefix, '--recursive', '--cache-control', IMMUTABLE_CACHE, '--no-progress', '--only-show-errors']));
+      await timed('Verify R2 bytes', async () => {
+        await aws(['s3', 'sync', prefix, existing, '--no-progress', '--only-show-errors']);
+        assertSameRelease(hashes, await fileHashes(existing));
+      });
     }
-    // Verify the complete immutable release before making any mutable entry live.
-    await aws(['s3', 'sync', prefix, existing, '--no-progress', '--only-show-errors']);
-    assertSameRelease(hashes, await fileHashes(existing));
   } finally {
     await rm(existing, { recursive: true, force: true });
   }
-  await verifyVersioned(hashes, version, fetchImpl);
+  await timed('Verify versioned CDN assets', () => verifyVersioned(hashes, version, fetchImpl));
   if (latest) {
-    await aws(['s3', 'cp', dist, `s3://${env.R2_BUCKET}/persona/latest/`, '--recursive', '--cache-control', LATEST_CACHE, '--no-progress', '--only-show-errors']);
-    await purgeLatest(hashes.keys(), { zoneId: env.CLOUDFLARE_ZONE_ID, token: env.CLOUDFLARE_API_TOKEN, fetchImpl });
-    await verifyLatest(hashes, fetchImpl);
+    await timed('Upload latest assets', () => aws(['s3', 'cp', dist, `s3://${env.R2_BUCKET}/persona/latest/`, '--recursive', '--cache-control', LATEST_CACHE, '--no-progress', '--only-show-errors']));
+    await timed('Purge latest cache', () => purgeLatest(hashes.keys(), { zoneId: env.CLOUDFLARE_ZONE_ID, token: env.CLOUDFLARE_API_TOKEN, fetchImpl }));
+    await timed('Verify latest CDN assets', () => verifyLatest(hashes, fetchImpl));
   }
   console.log(`Published Persona ${version}${latest ? ' and verified latest' : ''}`);
 }

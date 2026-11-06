@@ -27,12 +27,12 @@
     "hono": "^4.12.25"
   },
   "devDependencies": {
-    "@types/node": "^20.12.7",
+    "@types/node": "^26.6.6",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
-    "rimraf": "^5.0.5",
-    "tsdown": "^0.23.2",
+    "rimraf": "^6.1.4",
+    "tsdown": "^0.23.7",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "engines": {
     "node": ">=20.0.0"

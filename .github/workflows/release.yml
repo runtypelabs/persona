@@ -5,19 +5,19 @@ on:
     branches:
       - main
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
-
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    # WHY: npm propagation must not hold the lock for the next version-PR update.
+    concurrency: ${{ github.workflow }}-${{ github.ref }}
     permissions:
       contents: write
       pull-requests: write
       id-token: write
     outputs:
       published: ${{ steps.changesets.outputs.published }}
-      publishedPackages: ${{ steps.changesets.outputs.publishedPackages }}
+      publishedPackages: ${{ steps.changesets.outputs.published-packages }}
       widgetVersion: ${{ steps.widget-version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,31 +30,26 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.1
         with:
-          node-version: "24"
+          node-version: "26"
           cache: "pnpm"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build packages
-        run: pnpm build
-
       - name: Create Release Pull Request or Publish
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          publish: pnpm release
-          version: pnpm changeset version
-          title: "chore: version packages"
-          commit: "chore: version packages"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          publish-script: pnpm release:build
+          version-script: pnpm changeset version
+          pr-title: "chore: version packages"
+          commit-message: "chore: version packages"
 
       - name: Read published widget version
         id: widget-version
         env:
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
         run: |
           node --input-type=module <<'JS'
           import { appendFileSync } from 'node:fs';
@@ -62,6 +57,17 @@ jobs:
           const widget = packages.find(pkg => pkg.name === '@runtypelabs/persona');
           if (widget) appendFileSync(process.env.GITHUB_OUTPUT, `version=${widget.version}\n`);
           JS
+
+      - name: Save the exact published tarballs
+        if: steps.changesets.outputs.published == 'true' && steps.widget-version.outputs.version != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: published-packages
+          path: .release-packages/
+          include-hidden-files: true
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30
 
   publish-to-r2:
     name: Publish to R2 CDN
@@ -72,4 +78,30 @@ jobs:
     uses: ./.github/workflows/r2-release.yml
     with:
       tag: '@runtypelabs/persona@${{ needs.release.outputs.widgetVersion }}'
+      artifact: published-packages
     secrets: inherit
+
+  npm-availability:
+    name: Verify npm availability
+    needs: release
+    if: needs.release.outputs.published == 'true' && needs.release.outputs.widgetVersion != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.1
+        with:
+          node-version: "26"
+      - name: Wait for npm independently of CDN publication
+        env:
+          RELEASE_VERSION: ${{ needs.release.outputs.widgetVersion }}
+        run: |
+          for attempt in {1..31}; do
+            if npm pack "@runtypelabs/persona@$RELEASE_VERSION" --ignore-scripts --prefer-online --registry=https://registry.npmjs.org; then
+              exit 0
+            fi
+            if [ "$attempt" = 31 ]; then
+              echo "npm still does not serve the published package; CDN publication uses the original tarball independently."
+              exit 1
+            fi
+            sleep 20
+          done

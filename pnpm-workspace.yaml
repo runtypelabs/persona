@@ -2,6 +2,7 @@ packages:
   - packages/*
   - apps/*
   - examples/*
+verifyDepsBeforeRun: false
 allowBuilds:
   "@google/genai": false
   core-js-pure: false
@@ -29,5 +30,8 @@ minimumReleaseAgeExclude:
   - "@tsrs/linux-x64-musl@0.22.0-ts7.1.0-beta"
   - "@tsrs/win32-x64@0.22.0-ts7.1.0-beta"
   - tsrs@0.22.0-ts7.1.0-beta
+  - playwright-core@1.65.0
+  - rolldown-plugin-dts@0.30.0
+  - tsdown@0.23.7
 overrides:
   "alasql>react-native-fs": "-"

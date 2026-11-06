@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.1
         with:
-          node-version: "24"
+          node-version: "26"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -31,11 +31,5 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Run linting
-        run: pnpm lint
-
-      - name: Run type checking
-        run: pnpm typecheck
-
-      - name: Run tests
-        run: pnpm test:run
+      - name: Run lint, type checking, and tests in parallel
+        run: pnpm exec concurrently --kill-others-on-fail --names lint,types,tests "pnpm lint" "pnpm typecheck" "pnpm test:run"
