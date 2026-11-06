@@ -38,9 +38,11 @@ export interface WebMcpBridgeDeps {
   /**
    * Server-supplied `requireConfirmFor` patterns (the bound surface's policy
    * from client-token init), read at call time because init can land after
-   * the bridge is built. Merged with `config.requireConfirmFor`.
+   * the bridge is built. Merged with `config.requireConfirmFor`. `null` means
+   * a policy is expected but not loaded yet: every call then needs
+   * confirmation (fail closed).
    */
-  getRequireConfirmFor?: () => readonly string[] | undefined;
+  getRequireConfirmFor?: () => readonly string[] | null | undefined;
 }
 
 const DEFAULT_TOOL_TIMEOUT_MS = 30_000;
@@ -500,12 +502,13 @@ export class WebMcpBridge {
   }
 
   #requiresConfirmation(toolName: string): boolean {
-    let serverPatterns: readonly string[] | undefined;
+    let serverPatterns: readonly string[] | null | undefined;
     try {
       serverPatterns = this.#deps.getRequireConfirmFor?.();
     } catch {
-      serverPatterns = undefined;
+      serverPatterns = null;
     }
+    if (serverPatterns === null) return true;
     const matches = (list: readonly string[] | undefined): boolean =>
       Array.isArray(list) &&
       list.some((pattern) => typeof pattern === "string" && matchesGlob(toolName, pattern));

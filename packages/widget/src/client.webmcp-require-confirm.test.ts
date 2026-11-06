@@ -134,3 +134,59 @@ describe("voice before any client-token init", () => {
     expect(result.status).toBe("denied");
   });
 });
+
+describe("surface policy lifetime", () => {
+  const installTools = () => {
+    (document as Document & { modelContext?: unknown }).modelContext = {
+      getTools: async () =>
+        ["checkout_submit", "search"].map((name) => ({
+          name,
+          description: name,
+          title: "",
+          window,
+          origin: location.origin,
+        })),
+      executeTool: vi.fn(async () => JSON.stringify("ran")),
+    };
+  };
+
+  it("keeps the last loaded policy after clearClientSession()", async () => {
+    installTools();
+    installInit(initBody({ webmcp: { requireConfirmFor: ["checkout_*"] } }));
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => true);
+    const client = makeClient({ enabled: true, onConfirm });
+    await client.initSession();
+    // Read the policy once while the session is live, then drop the session.
+    await client.executeWebMcpToolCall("webmcp:search", {});
+    client.clearClientSession();
+
+    await client.executeWebMcpToolCall("webmcp:checkout_submit", {});
+    await client.executeWebMcpToolCall("webmcp:search", {});
+
+    expect(onConfirm.mock.calls.map((c) => c[0]?.confirmRequired)).toEqual([
+      undefined,
+      true,
+      undefined,
+    ]);
+  });
+
+  it("flags every call while no client-token policy has loaded", async () => {
+    installTools();
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => true);
+    const client = makeClient({ enabled: true, onConfirm });
+
+    await client.executeWebMcpToolCall("webmcp:search", {});
+
+    expect(onConfirm.mock.calls[0]?.[0]).toMatchObject({ toolName: "search", confirmRequired: true });
+  });
+
+  it("leaves proxy mode (no client token) unflagged", async () => {
+    installTools();
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => true);
+    const client = new AgentWidgetClient({ apiUrl: API_URL, webmcp: { enabled: true, onConfirm } });
+
+    await client.executeWebMcpToolCall("webmcp:checkout_submit", {});
+
+    expect(onConfirm.mock.calls[0]?.[0]).not.toHaveProperty("confirmRequired");
+  });
+});

@@ -183,6 +183,8 @@ export class AgentWidgetClient {
   #currentClientTurnId: string | null = null;
   private clientSession: ClientSession | null = null;
   #sessionInitPromise: Promise<ClientSession> | null = null;
+  /** Last surface `requireConfirmFor` seen on a session; `null` until one loads. */
+  #knownRequireConfirmFor: readonly string[] | null = null;
   /**
    * Early-init latch for `warmSession()`. `false` = armed. Otherwise it holds
    * the session value (`null` or an expired session) the one early attempt was
@@ -275,8 +277,7 @@ export class AgentWidgetClient {
           recordToolDisplayTitles: recordWebMcpToolDisplayTitles,
           getToolDisplayTitle: getWebMcpToolDisplayTitle,
           loadPolyfill: loadWebMcpPolyfillModule,
-          getRequireConfirmFor: () =>
-            this.clientSession?.config.webmcp?.requireConfirmFor,
+          getRequireConfirmFor: () => this.#surfaceRequireConfirmFor(),
         });
         if (this.#pendingWebMcpConfirmHandler !== undefined) {
           bridge.setConfirmHandler(this.#pendingWebMcpConfirmHandler);
@@ -417,21 +418,29 @@ export class AgentWidgetClient {
   }
 
   /**
-   * The bound surface's `requireConfirmFor` arrives with client-token init, and
-   * a voice call can start before any typed turn has run it. Load the policy
-   * before the read-only fast tier may skip a confirm gate; if init fails,
-   * keep every voice call gated rather than act without the policy.
+   * The bound surface's `requireConfirmFor` for the WebMCP bridge. Sticky: the
+   * last policy any session carried survives `clearClientSession()` (same
+   * token, same surface), so a session cleared mid-call cannot drop it. `null`
+   * means client-token mode with no policy loaded yet; the bridge then
+   * confirms every call. `undefined` outside client-token mode.
+   */
+  #surfaceRequireConfirmFor(): readonly string[] | null | undefined {
+    if (!this.isClientTokenMode()) return undefined;
+    const session = this.clientSession;
+    if (session) this.#knownRequireConfirmFor = session.config.webmcp?.requireConfirmFor ?? [];
+    return this.#knownRequireConfirmFor;
+  }
+
+  /**
+   * A voice call can start before any typed turn has run client-token init.
+   * Try to load the surface policy first so read-only tools keep their fast
+   * tier; on failure the policy stays unknown and the bridge gates the call.
    */
   async #voiceToolOptions<T extends { autoConfirmReadOnly: boolean }>(options: T): Promise<T> {
-    if (!options.autoConfirmReadOnly || !this.isClientTokenMode() || this.clientSession) {
-      return options;
+    if (options.autoConfirmReadOnly && this.isClientTokenMode() && !this.clientSession) {
+      await this.initSession().catch(() => undefined);
     }
-    try {
-      await this.initSession();
-      return options;
-    } catch {
-      return { ...options, autoConfirmReadOnly: false };
-    }
+    return options;
   }
 
   public executeWebMcpToolCall(

@@ -891,7 +891,9 @@ export type WebMcpConfirmInfo = {
    * `webmcp.requireConfirmFor`, or the bound Runtype surface's
    * `behavior.webmcp.requireConfirmFor` from client-token init). The call
    * must be confirmed by the user: Persona never runs `autoApprove` for it,
-   * and a custom `onConfirm` should not auto-approve it either.
+   * and a custom `onConfirm` should not auto-approve it either. In
+   * client-token mode it is also set on every call until the surface policy
+   * has loaded (fail closed).
    */
   confirmRequired?: true;
   /**

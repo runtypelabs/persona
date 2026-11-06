@@ -967,7 +967,7 @@ describe("WebMcpBridge.watchToolChanges", () => {
 describe("WebMcpBridge requireConfirmFor", () => {
   const runtimeBridge = (
     config: AgentWidgetWebMcpConfig,
-    getRequireConfirmFor: () => readonly string[] | undefined,
+    getRequireConfirmFor: () => readonly string[] | null | undefined,
   ) =>
     new WebMcpBridgeRuntime(config, {
       recordToolDisplayTitles: () => {},
@@ -1031,6 +1031,23 @@ describe("WebMcpBridge requireConfirmFor", () => {
       expect(onConfirm.mock.calls[0]?.[0]).not.toHaveProperty("confirmRequired");
     },
   );
+
+  it("fails closed while the server policy is not loaded (null) or its read throws", async () => {
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => false);
+    const execute = vi.fn(() => "ran");
+    registry.tools = [fakeTool({ name: "next_slide", annotations: { readOnlyHint: true }, execute })];
+    const unloaded = runtimeBridge({ enabled: true, onConfirm }, () => null);
+    const throwing = runtimeBridge({ enabled: true, onConfirm }, () => {
+      throw new Error("boom");
+    });
+    for (const bridge of [unloaded, throwing]) {
+      const r = await bridge.executeVoiceToolCall("webmcp:next_slide", {}, { autoConfirmReadOnly: true });
+      expect(r.status).toBe("denied");
+    }
+    expect(onConfirm).toHaveBeenCalledTimes(2);
+    expect(onConfirm.mock.calls.map((c) => c[0]?.confirmRequired)).toEqual([true, true]);
+    expect(execute).not.toHaveBeenCalled();
+  });
 
   it("does not let the voice read-only fast tier skip a matched tool", async () => {
     const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => false);
