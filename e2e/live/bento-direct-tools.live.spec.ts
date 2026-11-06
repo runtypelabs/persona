@@ -160,6 +160,10 @@ test("live Bento presenter: spoken commands answered on the direct route", async
     expect(delegations.some((d) => d.route === "direct"), "no utterance was answered on the direct route").toBe(true);
     if (EXPECT_DIRECT) {
       expect(delegations.filter((d) => d.route !== "direct").map((d) => d.tool)).toEqual([]);
+      expect(
+        delegations.filter((d) => d.route === "direct").length,
+        `fewer direct answers than heard commands: ${heardTexts.join(" | ")}`,
+      ).toBeGreaterThanOrEqual(heardTexts.length);
     }
     await page.evaluate(() => (window as unknown as { bento: { ai: { hangUp(): boolean } } }).bento.ai.hangUp());
     expect(json("in", "error").map((f) => f.json)).toEqual([]);

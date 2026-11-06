@@ -64,6 +64,12 @@ it('reads the slide on screen, or a named one, as spoken text', async () => {
   expect(await tools.get('get_slide')!.execute({ slide: 'Slide 1: Welcome' })).toMatchObject({ text: 'Slide 1: Welcome. It has no text.' })
 })
 
+it('reads speaker notes through their own tool', async () => {
+  const { tools } = presenting()
+  expect(await tools.get('get_speaker_notes')!.execute({ slide: 'Slide 3: Pricing' })).toMatchObject({ text: 'Notes for Slide 3: Pricing: mention the bundle' })
+  expect(await tools.get('get_speaker_notes')!.execute({})).toMatchObject({ text: 'Slide 1: Welcome has no speaker notes.' })
+})
+
 it('summarizes the deck outline for the overview', async () => {
   const { tools } = presenting()
   expect(await tools.get('get_deck_overview')!.execute({})).toMatchObject({
