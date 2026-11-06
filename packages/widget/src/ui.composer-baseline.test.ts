@@ -802,11 +802,11 @@ describe("composer baseline configuration", () => {
 
       controller.update({ composer: { sendDisabled: false } } as never);
       expect(status.hasAttribute("data-persona-composer-reason")).toBe(false);
-      expect(status.hasAttribute("aria-live")).toBe(false);
+      expect(status.getAttribute("aria-live")).toBe("polite");
       expect(status.textContent).toBe("Online");
     });
 
-    it("uses a composer tooltip in composer-bar mode, where status is hidden", () => {
+    it("shows composer-bar lock reasons in the status row", () => {
       const { mount, controller } = makeController({
         launcher: { enabled: true, mountMode: "composer-bar" },
         composer: { inputDisabled: { reason: "Read only" } },
@@ -814,11 +814,12 @@ describe("composer baseline configuration", () => {
       const form = mount.querySelector<HTMLElement>(
         "[data-persona-composer-form]"
       )!;
-      expect(form.getAttribute("title")).toBe("Read only");
-      expect(statusOf(mount).textContent).not.toBe("Read only");
+      expect(statusOf(mount).textContent).toBe("Read only");
+      expect(statusOf(mount).style.display).toBe("");
 
       controller.update({ composer: { inputDisabled: false } } as never);
       expect(form.hasAttribute("title")).toBe(false);
+      expect(statusOf(mount).textContent).not.toBe("Read only");
     });
   });
 });

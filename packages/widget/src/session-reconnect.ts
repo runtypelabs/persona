@@ -20,7 +20,6 @@ import type {
   ResumableHandle,
 } from "./types";
 import type { AgentWidgetSessionStatus } from "./session";
-import { RECONNECT_FAILED_ID_PREFIX } from "./utils/local-only-message";
 
 /**
  * The narrow surface the reconnect loop needs from the owning session. The
@@ -31,36 +30,30 @@ import { RECONNECT_FAILED_ID_PREFIX } from "./utils/local-only-message";
 export interface ReconnectHost {
   readonly config: AgentWidgetConfig;
   getResumable(): ResumableHandle | null;
-  clearResumable(): void;
+  markInterrupted(): void;
   getStatus(): AgentWidgetSessionStatus;
   setStatus(status: AgentWidgetSessionStatus): void;
-  setStreaming(streaming: boolean): void;
   setReconnecting(value: boolean): void;
   setAbortController(controller: AbortController | null): void;
   getMessages(): AgentWidgetMessage[];
   isAwaitPending?(): boolean;
-  notifyMessagesChanged(): void;
   /** Pipe a resumed SSE body through the session, filling the same bubble. */
   resumeConnect(
     body: ReadableStream<Uint8Array>,
     assistantMessageId: string,
     seedContent: string
   ): Promise<void>;
-  appendMessage(message: AgentWidgetMessage): void;
   /**
    * After an attempt that did not finish the run: if the run is parked on an
    * await (or a reload-interrupted page tool), settle the session quietly and
    * return true so the loop stops; return false for an ordinary drop.
    */
   settleParked(executionId: string): boolean;
-  nextSequence(): number;
   emitReconnect(event: {
     phase: "paused" | "resuming" | "resumed";
     handle: ResumableHandle;
     attempt?: number;
   }): void;
-  /** Build the give-up bubble content (honors `config.errorMessage`). */
-  buildErrorContent(message: string): string;
   onError(error: Error): void;
 }
 
@@ -81,6 +74,7 @@ export function createReconnectController(
 ): ReconnectController {
   // 1-based attempt counter for the active run (0 = not running).
   let attempt = 0;
+  let generation = 0;
   let waitResolve: (() => void) | null = null;
   let waitTimer: ReturnType<typeof setTimeout> | null = null;
   let listenersAttached = false;
@@ -156,47 +150,15 @@ export function createReconnectController(
       }, ms);
     });
 
-  /** Give up after exhausting attempts: finalize the bubble and surface error. */
+  /** Keep the checkpoint available after the automatic retry budget ends. */
   const finalizeFailure = (): void => {
-    const handle = host.getResumable();
-    host.clearResumable();
-    host.setReconnecting(false);
     attempt = 0;
     detachListeners();
-    host.setAbortController(null);
-
-    let changed = false;
-    for (const msg of host.getMessages()) {
-      if (msg.streaming) {
-        msg.streaming = false;
-        changed = true;
-      }
-    }
-
-    const content = host.buildErrorContent(
-      "Connection lost and the response could not be resumed."
-    );
-    if (content) {
-      host.appendMessage({
-        dispatchError: true,
-        id: `${RECONNECT_FAILED_ID_PREFIX}${handle?.executionId ?? host.nextSequence()}`,
-        role: "assistant",
-        content,
-        localOnly: true,
-        createdAt: new Date().toISOString(),
-        streaming: false,
-        sequence: host.nextSequence(),
-      });
-    } else if (changed) {
-      host.notifyMessagesChanged();
-    }
-
-    host.setStreaming(false);
-    host.setStatus("idle");
+    host.markInterrupted();
     host.onError(new Error("Durable session reconnect failed."));
   };
 
-  const runLoop = async (): Promise<void> => {
+  const runLoop = async (currentGeneration: number): Promise<void> => {
     const backoff = host.config.reconnect?.backoffMs ?? DEFAULT_BACKOFF_MS;
     const maxAttempts = host.config.reconnect?.maxAttempts ?? backoff.length;
     const reconnectStream = host.config.reconnectStream;
@@ -228,7 +190,7 @@ export function createReconnectController(
       } catch {
         body = null;
       }
-      if (controller.signal.aborted) return; // torn down (cancel/new turn)
+      if (controller.signal.aborted || currentGeneration !== generation) return; // torn down (cancel/new turn)
 
       if (body) {
         // Seed the resume with the text already shown so post-cursor deltas
@@ -243,7 +205,7 @@ export function createReconnectController(
           // resumeConnect swallows resume-stream errors while `resuming`;
           // anything escaping here just falls through to backoff/retry.
         }
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || currentGeneration !== generation) return;
         // Reconnect reached a terminal: the idle(terminal)/error handler cleared
         // the handle. We're done.
         if (!host.getResumable()) {
@@ -281,9 +243,9 @@ export function createReconnectController(
         // `statusIndicator.pausedText` renders during the backoff sleep.
         host.setStatus("paused");
         await waitBackoff(
-          backoff[Math.min(attempt - 1, backoff.length - 1)] ?? 1000
+          backoff[Math.max(0, Math.min(attempt - 1, backoff.length - 1))] ?? 1000
         );
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || currentGeneration !== generation) return;
       }
     }
 
@@ -292,16 +254,14 @@ export function createReconnectController(
 
   return {
     begin(): void {
+      const currentGeneration = ++generation;
       attempt = 0;
       attachListeners();
-      void runLoop();
+      void runLoop(currentGeneration);
     },
     teardown(): void {
-      if (waitTimer) {
-        clearTimeout(waitTimer);
-        waitTimer = null;
-      }
-      waitResolve = null;
+      generation += 1;
+      wake();
       attempt = 0;
       detachListeners();
     },

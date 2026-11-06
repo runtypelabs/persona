@@ -28,14 +28,19 @@ describe("buildPillComposer (single-row pill composer)", () => {
     expect(elements.sendButton.getAttribute("data-persona-composer-submit")).toBe("");
   });
 
-  it("keeps suggestions available above the pill and hides status text", () => {
+  it("keeps suggestions and a configurable status region available above the pill", () => {
     const elements = buildPillComposer({ config: { apiUrl: "/api" } });
     const footerChildren = Array.from(elements.footer.children);
     expect(elements.suggestions.style.display).toBe("");
     expect(footerChildren.indexOf(elements.suggestions)).toBeLessThan(
       footerChildren.indexOf(elements.composerForm)
     );
+    expect(elements.statusText.classList.contains("persona-pill-composer__status")).toBe(true);
     expect(elements.statusText.style.display).toBe("none");
+    const always = buildPillComposer({ config: { apiUrl: "/api", statusIndicator: { mode: "always" } } });
+    expect(always.statusText.style.display).toBe("");
+    const transient = buildPillComposer({ config: { apiUrl: "/api", statusIndicator: { mode: "transient" } } });
+    expect(transient.statusText.style.display).toBe("none");
   });
 
   it("renders the paperclip in the leftActions cell when attachments are enabled", () => {

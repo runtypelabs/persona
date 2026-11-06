@@ -1015,7 +1015,7 @@ const statusIndicatorSectionDef: SectionDef = {
     simpleField('text', 'status-idle-text', 'Idle Text', 'statusIndicator.idleText', 'Online'),
     simpleField('text', 'status-connecting-text', 'Connecting Text', 'statusIndicator.connectingText', 'Connecting…'),
     simpleField('text', 'status-connected-text', 'Connected Text', 'statusIndicator.connectedText', 'Streaming…'),
-    simpleField('text', 'status-error-text', 'Error Text', 'statusIndicator.errorText', 'Offline'),
+    simpleField('text', 'status-error-text', 'Error Text', 'statusIndicator.errorText', 'Connection interrupted'),
   ],
 };
 
