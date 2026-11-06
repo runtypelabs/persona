@@ -230,13 +230,17 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
 
   it('allows adding the playback hook through updateConfig without replacing the voice connection', async () => {
     session.cleanupVoice();
-    session.updateConfig({ ...session.config, voiceRecognition: { ...session.config.voiceRecognition, onPlaybackMetrics: undefined } });
+    const config = {
+      apiUrl: 'http://localhost:8000',
+      voiceRecognition: { enabled: true, provider: { type: 'runtype' as const, runtype: { agentId: 'a1' } } },
+    };
+    session.updateConfig(config);
     h.state.playbackMetricsCb = null;
     session.setupVoice();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const callback = h.state.playbackMetricsCb;
-    session.updateConfig({ ...session.config, voiceRecognition: {
-      ...session.config.voiceRecognition, onPlaybackMetrics: (metrics) => playbackMetricsSeen.push(metrics),
+    const callback = h.state.playbackMetricsCb as ((m: VoicePlaybackMetrics) => void) | null;
+    session.updateConfig({ ...config, voiceRecognition: {
+      ...config.voiceRecognition, onPlaybackMetrics: (metrics) => playbackMetricsSeen.push(metrics),
     } });
     const metrics: VoicePlaybackMetrics = {
       reason: 'queue', queuedAudioMs: 100, buffering: true, continuous: true,
