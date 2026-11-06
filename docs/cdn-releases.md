@@ -12,14 +12,27 @@ New first-party `/persona/latest/` installer, launcher, and global bundles embed
 
 ## Publishing
 
-The automatic release and manual **Publish to R2 CDN** workflow share one publisher. The manual workflow accepts an exact npm release tag such as `@runtypelabs/persona@4.32.1`; it runs the publisher from the selected workflow branch and downloads that version's npm tarball. It does not rebuild the historical tag.
+The automatic release and manual **Publish to R2 CDN** workflow share one publisher, but obtain the release artifact differently.
+
+### Automatic releases
+
+Creating or updating the version PR does not build packages. When that PR merges, the release job builds and packs the packages once, then publishes those exact tarballs to npm. It saves the packed output as the `published-packages` workflow artifact for 30 days. The CDN job downloads that artifact, checks the widget version and SHA-256 integrity against the Changesets pack manifest, and extracts its `dist` files without rebuilding or waiting for npm downloads.
+
+**Verify npm availability** runs independently, in parallel with CDN publication. npm's publish-time scanning can delay downloads after it accepts a publish. The CDN can already be live when the npm check fails; an npm-only failure does not mean that the CDN remained unchanged. Inspect **Publish to R2 CDN** separately. The npm wait also does not hold the release job's concurrency lock or block the next version-PR update.
+
+For a failed automatic CDN job, choose **Re-run failed jobs** while the artifact is retained. This reuses the original tarball. After the 30-day artifact window, use the manual workflow once npm serves the release. Do not rerun all jobs in **Release**: npm publication would find nothing new to publish, so its outputs can skip the CDN job. For an npm-only failure, retry the availability job; do not republish or rerun a successful CDN deployment.
+
+### Manual recovery
+
+The manual workflow accepts an exact npm release tag such as `@runtypelabs/persona@4.32.1`. It runs the publisher from the selected workflow branch and downloads that version's npm tarball; it does not rebuild the historical tag. It retries the npm download for up to ten minutes. If the package remains unavailable, this manual path stops before changing the CDN. Once npm serves the release, choose **Re-run failed jobs** or dispatch **Publish to R2 CDN** again with the same exact release tag.
+
+### Shared publication checks
 
 The publisher:
 
-1. Downloads the exact published npm artifact, avoiding a second build from a different revision. It retries for up to ten minutes because npm's publish-time scanning can delay availability after a successful publish. If the package is still unavailable, the workflow stops before changing the CDN. Once npm serves the release, choose **Re-run failed jobs** or manually dispatch **Publish to R2 CDN** with the same exact release tag. Do not rerun all jobs in **Release**: npm publication would find nothing new to publish, so its outputs can skip the CDN job.
-2. Uploads and verifies `/persona/<version>/` in R2 and checks every file through its public CDN URL before updating `/latest/`. Existing versioned files must match byte-for-byte; otherwise publishing fails without replacing them. Cached CDN errors, different public bytes, or missing public CORS headers on JavaScript files also block promotion.
-3. Uses `public, max-age=31536000, immutable` for new versioned objects, and `public, max-age=3600, s-maxage=86400, must-revalidate` for `/latest/` objects. Moving URLs can be reused for one hour in browsers and one day at the edge; each release purges the edge copy. The small installer resolves its larger dependencies to its own immutable release, so a cached installer remains compatible. Browser caches may delay an update for up to an hour; CDN purges cannot evict them.
-4. Purges only the uploaded `/persona/latest/` URLs, then checks the entry, installer, launcher, stream chunk, and stylesheet for matching bytes and cache headers bounded by those TTLs. Failure is reported as a failed deployment. Temporary `no-cache`/`no-store` responses are also accepted with a warning, allowing a fixed release to be deployed while the emergency bypass remains active; they do not confirm that the permanent performance policy is restored.
+1. Uploads and verifies `/persona/<version>/` in R2 and checks every file through its public CDN URL before updating `/latest/`. Existing versioned files must match byte-for-byte; otherwise publishing fails without replacing them. Cached CDN errors, different public bytes, or missing public CORS headers on JavaScript files also block promotion. Public verification uses at most 12 concurrent requests with 30-second deadlines; transfers use up to 16 concurrent requests. Stage timings identify remaining delays.
+2. Uses `public, max-age=31536000, immutable` for new versioned objects, and `public, max-age=3600, s-maxage=86400, must-revalidate` for `/latest/` objects. Moving URLs can be reused for one hour in browsers and one day at the edge; each release purges the edge copy. The small installer resolves its larger dependencies to its own immutable release, so a cached installer remains compatible. Browser caches may delay an update for up to an hour; CDN purges cannot evict them.
+3. Purges only the uploaded `/persona/latest/` URLs, then checks the entry, installer, launcher, stream chunk, and stylesheet for matching bytes and cache headers bounded by those TTLs. Failure is reported as a failed deployment. Temporary `no-cache`/`no-store` responses are also accepted with a warning, allowing a fixed release to be deployed while the emergency bypass remains active; they do not confirm that the permanent performance policy is restored.
 
 Both automatic and manual publishers use the same concurrency group. Prereleases and versions older than the highest stable release tag cannot replace `/latest/`.
 
