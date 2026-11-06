@@ -181,10 +181,19 @@ export class AgentWidgetClient {
    * matches is superseded, and every SSE frame it still receives is dropped
    */
   #currentClientTurnId: string | null = null;
-  private clientSession: ClientSession | null = null;
-  #sessionInitPromise: Promise<ClientSession> | null = null;
-  /** Last surface `requireConfirmFor` seen on a session; `null` until one loads. */
+  #clientSession: ClientSession | null = null;
+  /** Last surface `requireConfirmFor` installed with a session; `null` until one loads. */
   #knownRequireConfirmFor: readonly string[] | null = null;
+  // Every install path assigns here, so the surface policy is recorded the
+  // moment a session lands, not when a tool call next reads it.
+  private get clientSession(): ClientSession | null {
+    return this.#clientSession;
+  }
+  private set clientSession(session: ClientSession | null) {
+    this.#clientSession = session;
+    if (session) this.#knownRequireConfirmFor = session.config?.webmcp?.requireConfirmFor ?? [];
+  }
+  #sessionInitPromise: Promise<ClientSession> | null = null;
   /**
    * Early-init latch for `warmSession()`. `false` = armed. Otherwise it holds
    * the session value (`null` or an expired session) the one early attempt was
@@ -419,16 +428,13 @@ export class AgentWidgetClient {
 
   /**
    * The bound surface's `requireConfirmFor` for the WebMCP bridge. Sticky: the
-   * last policy any session carried survives `clearClientSession()` (same
+   * policy of the last installed session survives `clearClientSession()` (same
    * token, same surface), so a session cleared mid-call cannot drop it. `null`
    * means client-token mode with no policy loaded yet; the bridge then
    * confirms every call. `undefined` outside client-token mode.
    */
   #surfaceRequireConfirmFor(): readonly string[] | null | undefined {
-    if (!this.isClientTokenMode()) return undefined;
-    const session = this.clientSession;
-    if (session) this.#knownRequireConfirmFor = session.config.webmcp?.requireConfirmFor ?? [];
-    return this.#knownRequireConfirmFor;
+    return this.isClientTokenMode() ? this.#knownRequireConfirmFor : undefined;
   }
 
   /**

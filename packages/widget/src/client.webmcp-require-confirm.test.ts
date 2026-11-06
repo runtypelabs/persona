@@ -170,6 +170,26 @@ describe("surface policy lifetime", () => {
     ]);
   });
 
+  it("records a policy when a session installs, not when a call reads it", async () => {
+    installTools();
+    // First session: no policy. A tool call reads (and would have cached) [].
+    installInit(initBody());
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => true);
+    const client = makeClient({ enabled: true, onConfirm });
+    await client.initSession();
+    await client.executeWebMcpToolCall("webmcp:checkout_submit", {});
+
+    // Second session adds a policy, then is cleared before any tool call reads it.
+    client.clearClientSession();
+    installInit(initBody({ webmcp: { requireConfirmFor: ["checkout_*"] } }));
+    await client.initSession();
+    client.clearClientSession();
+
+    await client.executeWebMcpToolCall("webmcp:checkout_submit", {});
+
+    expect(onConfirm.mock.calls.map((c) => c[0]?.confirmRequired)).toEqual([undefined, true]);
+  });
+
   it("flags every call while no client-token policy has loaded", async () => {
     installTools();
     const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => true);
