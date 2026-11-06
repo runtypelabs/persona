@@ -42,7 +42,7 @@ pnpm build:widget       # Build widget only
 pnpm build:proxy        # Build proxy only
 
 # Quality
-pnpm lint               # Lint both packages
+pnpm lint               # Lint both packages (oxlint + tsrs-lint, includes type errors)
 pnpm typecheck          # Type check widget, proxy and apps/web (tsrs)
 
 # Testing (widget package only: run from repo root or packages/widget)
@@ -225,7 +225,7 @@ All five checks must pass before a PR can be merged.
 
 - **CSS classes:** `persona-` prefix on all utility classes. `widget.css` is hand-authored with Tailwind-style names (there is no Tailwind build), and the prefix prevents collisions with host page styles. Add the rule by hand when you use a new utility class.
 - **Filenames:** kebab-case (`component-name.ts`, `my-util.ts`)
-- **Linting:** oxlint (root `.oxlintrc.json`): run `pnpm lint` before committing; CI enforces this. Type checking runs on tsrs, a Rust port of the TypeScript 7.1 compiler pinned as a root devDependency, via `scripts/typecheck.mjs`, which falls back to tsgo (`@typescript/native-preview`) if no matching platform binary is installed. tsrs supports Windows x64 and both Intel and Apple Silicon macOS. The tsdown declaration build still uses tsgo.
+- **Linting:** oxlint (root `.oxlintrc.json`): run `pnpm lint` before committing; CI enforces this. Type checking runs on tsrs, a Rust port of the TypeScript 7.1 compiler pinned as a root devDependency, via `scripts/typecheck.mjs`, which falls back to tsgo (`@typescript/native-preview`) if no matching platform binary is installed. tsrs supports Linux, Windows x64 and both Intel and Apple Silicon macOS. `pnpm lint` runs `scripts/lint.mjs`, which points oxlint at tsrs's `tsrs-lint` backend (`OXLINT_TSGOLINT_PATH`, `--type-aware --type-check`, `TSRS_FAST=1`), so lint also reports compiler diagnostics; without a tsrs binary it runs plain oxlint. Bumping tsrs means updating its version in root `package.json` and every `@tsrs/*` entry in `pnpm-workspace.yaml`'s `minimumReleaseAgeExclude`. The tsdown declaration build still uses tsgo.
 - **Type safety:** Avoid `any`; prefer explicit types from `types.ts`
 - **Exports:** Named exports preferred; only use default exports where a clear single-export module pattern applies
 - **DOM construction (`widget/src/utils/dom.ts`):** `createElement(tag, className)` for class-only nodes; `createNode(tag, { className, attrs, style, text }, ...children)` when a node also needs attributes, inline styles, or children (nullish `style`/`children` values are skipped, so conditionals inline without `if`s); `cx(...)` to join conditional class fragments instead of `classList.add`. Leave heavily conditional/imperative builders on whatever reads clearest: don't force `createNode`.
