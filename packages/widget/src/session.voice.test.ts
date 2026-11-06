@@ -227,6 +227,25 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
     staleCallback(metrics);
     expect(playbackMetricsSeen).toHaveLength(1);
   });
+
+  it('allows adding the playback hook through updateConfig without replacing the voice connection', async () => {
+    session.cleanupVoice();
+    session.updateConfig({ ...session.config, voiceRecognition: { ...session.config.voiceRecognition, onPlaybackMetrics: undefined } });
+    h.state.playbackMetricsCb = null;
+    session.setupVoice();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const callback = h.state.playbackMetricsCb;
+    session.updateConfig({ ...session.config, voiceRecognition: {
+      ...session.config.voiceRecognition, onPlaybackMetrics: (metrics) => playbackMetricsSeen.push(metrics),
+    } });
+    const metrics: VoicePlaybackMetrics = {
+      reason: 'queue', queuedAudioMs: 100, buffering: true, continuous: true,
+      underrunCount: 0, refillCount: 0, lastRefillMs: null, totalRefillMs: 0,
+    };
+    callback!(metrics);
+    expect(h.state.playbackMetricsCb).toBe(callback);
+    expect(playbackMetricsSeen).toEqual([metrics]);
+  });
 });
 
 describe('AgentWidgetSession - turn-keyed (full-duplex) voice transcripts', () => {

@@ -248,7 +248,7 @@ export const wireSessionVoice = (
       });
     }
 
-    if (provider.onPlaybackMetrics && s.config.voiceRecognition?.onPlaybackMetrics) {
+    if (provider.onPlaybackMetrics) {
       provider.onPlaybackMetrics((metrics) => {
         if (!isCurrent()) return;
         s.config.voiceRecognition?.onPlaybackMetrics?.(metrics);
