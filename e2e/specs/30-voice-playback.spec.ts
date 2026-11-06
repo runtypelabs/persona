@@ -23,15 +23,20 @@ async function start(page: Page, stops: number[]): Promise<FakeVoiceCall> {
   await page.locator(voiceSel.mic).click();
   const call = await voice.nextCall();
   await call.ready;
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
   return call;
 }
 
-const advance = (page: Page) => page.evaluate(() => window.__voicePlaybackProbe.advance());
+async function advance(page: Page): Promise<void> {
+  const elapsed = await page.evaluate(() => window.__voicePlaybackProbe.advance());
+  await page.clock.runFor(elapsed);
+}
 
 test("the default voice player renders late 100 ms chunks without holes or lost samples", async ({ page }, info) => {
   const call = await start(page, [0, 0.08, 0.22, 0.31, 0.46, 0.51]);
   for (let i = 0; i < 6; i++) {
     await deliverPcm(page, call, 100);
+    if (i === 0) await new Promise((resolve) => setTimeout(resolve, 200));
     if (i < 5) await advance(page);
   }
   const runs = await finishPlayback(page, info);
@@ -66,25 +71,27 @@ test("audio_clear discards a short reply held in the jitter buffer", async ({ pa
   await advance(page);
   call.send({ type: "audio_clear" });
   await expect.poll(() => page.evaluate(() => window.__voicePlaybackProbe.clears)).toBe(1);
-  await page.waitForTimeout(200);
+  await page.clock.runFor(200);
   expect(await finishPlayback(page, info)).toEqual([]);
 });
 
 test("audio_clear stops playing audio and a subsequent short reply drains without audio_end", async ({ page }, info) => {
-  const call = await start(page, [0, 0.096, 0.16]);
+  const call = await start(page, [0, 0.096, 0.16, 0.31]);
   await deliverPcm(page, call, 400);
   await advance(page);
   call.send({ type: "audio_clear" });
   await expect.poll(() => page.evaluate(() => window.__voicePlaybackProbe.clears)).toBe(1);
   await advance(page);
   await deliverPcm(page, call, 40, -0.25);
+  await advance(page);
   await expect.poll(() => page.evaluate(() => window.__voicePlaybackProbe.sources)).toBe(2);
   const runs = await finishPlayback(page, info);
   expect(runs).toHaveLength(2);
   expect(runs[0]).toEqual({ amplitude: 0.25, startSample: 0, samples: 2_304 });
   expect(runs[1].amplitude).toBe(-0.25);
   expect(runs[1].samples).toBe(960);
-  expect(runs[1].startSample).toBeGreaterThanOrEqual(3_712);
-  expect(runs[1].startSample).toBeLessThanOrEqual(3_840);
+  expect(runs[1].startSample).toBeGreaterThanOrEqual(7_440);
+  expect(runs[1].startSample).toBeLessThanOrEqual(7_552);
+  await page.clock.runFor(500);
   await expect(page.locator(voiceSel.mic)).toHaveAttribute("aria-label", "Stop voice recognition");
 });

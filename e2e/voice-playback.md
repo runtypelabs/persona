@@ -21,6 +21,9 @@ Only the 24 kHz speaker clock is controlled. A native `OfflineAudioContext`
 renders the actual AudioBufferSourceNodes while the test pauses at specified
 audio times to deliver the next frame. This removes wall-clock scheduling noise
 without replacing the player, its queue, PCM conversion, or audio renderer.
+Playwright's clock also controls the short-tail timer and advances with each
+audio step. The late-chunk test deliberately stalls the runner longer than the
+tail timeout to verify that host scheduling cannot release audio early.
 The probe lives entirely in the test fixture, not the published package.
 
 Assertions inspect the rendered sample array:

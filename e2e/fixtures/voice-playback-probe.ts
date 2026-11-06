@@ -7,7 +7,7 @@ interface PlaybackProbe {
   clears: number;
   sources: number;
   start(): Promise<void>;
-  advance(): Promise<void>;
+  advance(): Promise<number>;
   finish(): Promise<number[]>;
 }
 
@@ -19,6 +19,7 @@ declare global {
 
 /** Keep the widget and socket real; replace only the speaker clock with native offline rendering. */
 export async function installPlaybackProbe(page: Page, stops: number[]): Promise<void> {
+  await page.clock.install();
   await page.addInitScript((times) => {
     const context = new OfflineAudioContext(1, 24_000 * 2, 24_000);
     const resume = context.resume.bind(context);
@@ -34,10 +35,12 @@ export async function installPlaybackProbe(page: Page, stops: number[]): Promise
         await pauses[0];
       },
       async advance() {
+        const before = context.currentTime;
         const paused = pauses[++index];
         if (!paused) throw new Error("No next audio-clock stop");
         await resume();
         await paused;
+        return Math.round((context.currentTime - before) * 1000);
       },
       async finish() {
         if (index !== pauses.length - 1) throw new Error("Unvisited audio-clock stop");
