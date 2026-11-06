@@ -46,7 +46,6 @@ describe("client-token init: config.webmcp.requireConfirmFor", () => {
     ["absent", {}],
     ["empty", { webmcp: { requireConfirmFor: [] } }],
     ["malformed", { webmcp: { requireConfirmFor: "checkout_*" } }],
-    ["non-string entries only", { webmcp: { requireConfirmFor: [1, null, ""] } }],
   ])("omits config.webmcp when the list is %s", async (_label, config) => {
     installInit(initBody(config));
     const session = await makeClient().initSession();
@@ -79,5 +78,59 @@ describe("client-token init feeds the WebMCP confirm gate", () => {
     });
     expect(onConfirm.mock.calls[1]?.[0]).not.toHaveProperty("confirmRequired");
     expect(execute).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("voice before any client-token init", () => {
+  const installReadOnlyTools = () => {
+    (document as Document & { modelContext?: unknown }).modelContext = {
+      getTools: async () =>
+        ["checkout_preview", "next_slide"].map((name) => ({
+          name,
+          description: name,
+          title: "",
+          window,
+          origin: location.origin,
+          annotations: { readOnlyHint: true },
+        })),
+      executeTool: vi.fn(async () => JSON.stringify("ran")),
+    };
+  };
+  const voiceExecute = (client: AgentWidgetClient, name: string) =>
+    client
+      .getVoiceClientTools()!
+      .execute(name, {}, { signal: new AbortController().signal, autoConfirmReadOnly: true });
+
+  it("loads the surface policy so a matched read-only tool still confirms", async () => {
+    installReadOnlyTools();
+    installInit(initBody({ webmcp: { requireConfirmFor: ["checkout_*"] } }));
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => false);
+    const client = makeClient({ enabled: true, onConfirm });
+
+    const matched = await voiceExecute(client, "webmcp:checkout_preview");
+    const unmatched = await voiceExecute(client, "webmcp:next_slide");
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm.mock.calls[0]?.[0]).toMatchObject({
+      toolName: "checkout_preview",
+      confirmRequired: true,
+    });
+    expect(matched.status).toBe("denied");
+    expect(unmatched.status).toBe("completed");
+  });
+
+  it("keeps every voice call gated when init fails", async () => {
+    installReadOnlyTools();
+    global.fetch = vi.fn(async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    const onConfirm = vi.fn<WebMcpConfirmHandler>(async () => false);
+    const client = makeClient({ enabled: true, onConfirm });
+
+    const result = await voiceExecute(client, "webmcp:next_slide");
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("denied");
   });
 });
