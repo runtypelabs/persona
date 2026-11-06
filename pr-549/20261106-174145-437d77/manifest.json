@@ -1,0 +1,56 @@
+{
+  "runId": "20261106-174145-437d77",
+  "entries": [
+    {
+      "feature": "voice-runtype",
+      "label": "after measured call",
+      "note": null,
+      "files": [
+        "02-voice-runtype-after-measured-call.png",
+        "02-voice-runtype-after-measured-call.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/voice-e2e.html?voiceHost=ws%3A%2F%2F127.0.0.1%3A53269&clientDelegation=0",
+      "at": "2026-11-06T17:41:57.510Z",
+      "head": "3b750253e8a4be8a74f7b481163730c337ad08de",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "playback measurements",
+      "note": null,
+      "files": [
+        "01-voice-runtype-playback-measurements.gif",
+        "01-voice-runtype-playback-measurements.webm",
+        "01-voice-runtype-playback-measurements.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/voice-e2e.html?voiceHost=ws%3A%2F%2F127.0.0.1%3A53269&clientDelegation=0",
+      "at": "2026-11-06T17:41:58.053Z",
+      "head": "3b750253e8a4be8a74f7b481163730c337ad08de",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "measured audio round trip",
+      "note": "`output.png` is the audio the widget played, tapped in-page (waveform over spectrogram): 2640 ms (mean -15.7 dB, peak -2.6 dB); `server-heard.png` is the mic PCM the voice socket received: 7680 ms in 30 frames; micOnToSocketOpen 3 ms, socketOpenToFirstMicFrame 268 ms, micOnToFirstAudioReceived 3758 ms",
+      "files": [
+        "03-voice-runtype-measured-audio-round-trip.output.png",
+        "03-voice-runtype-measured-audio-round-trip.output.wav",
+        "03-voice-runtype-measured-audio-round-trip.server-heard.png",
+        "03-voice-runtype-measured-audio-round-trip.server-heard.wav",
+        "03-voice-runtype-measured-audio-round-trip.voice.json"
+      ],
+      "url": "http://127.0.0.1:4391/voice-e2e.html?voiceHost=ws%3A%2F%2F127.0.0.1%3A53269&clientDelegation=0",
+      "at": "2026-11-06T17:41:58.590Z",
+      "head": "3b750253e8a4be8a74f7b481163730c337ad08de",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "voice-runtype",
+      "pass": true,
+      "skipped": false,
+      "note": "No intended visual change. Synthetic mic/socket/playback round trip at PR head: 2640 ms output, peak -2.6 dB; 14 snapshots, zero underruns/refills, drained queue 0 ms. Native-audio E2E covers forced gaps/refill/cancellation. Doctor's process-group warning was checked against the owned Vite child PID/cwd."
+    }
+  ]
+}

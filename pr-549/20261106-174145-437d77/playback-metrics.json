@@ -1,0 +1,142 @@
+[
+  {
+    "buffering": true,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 20,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 137.33333333333331,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 116.0000000000001,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 100.00000000000033,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 109.33333333333373,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 93.33333333333394,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 88.00000000000097,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 82.66666666666778,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 72.00000000000139,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 61.33333333333502,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 45.333333333335005,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 15.45833333333535,
+    "reason": "queue",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": false,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 0,
+    "reason": "drained",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  },
+  {
+    "buffering": true,
+    "continuous": true,
+    "lastRefillMs": null,
+    "queuedAudioMs": 0,
+    "reason": "flushed",
+    "refillCount": 0,
+    "totalRefillMs": 0,
+    "underrunCount": 0
+  }
+]
