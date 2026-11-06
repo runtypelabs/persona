@@ -1,19 +1,33 @@
 /**
- * Standalone WebMCP v5 fallback chunk (`dist/webmcp-polyfill.js`).
- * Keep this fallback on v5 so upgrades do not change existing consumers'
- * browser requirements or callback-result semantics. Host-installed v6 is
- * supported separately by the bridge's dual-contract argument adapter.
+ * Standalone WebMCP fallback chunk (`dist/webmcp-polyfill.js`): the upstream
+ * WebMCP polyfill as distributed by `@mcp-b/webmcp-polyfill` v6. Host pages
+ * that install an older runtime themselves (v3-v5, or a JSON-string facade)
+ * keep working through the bridge's dual-contract argument adapter; this file
+ * only matters when the page has no `document.modelContext` at all.
  *
  * The IIFE/CDN widget bundle marks `@mcp-b/webmcp-polyfill` external so the
  * polyfill never ships to consumers who don't enable WebMCP. When
  * `config.webmcp.enabled` is true and no `document.modelContext` exists yet,
- * the bridge dynamically
- * imports this chunk from a URL derived from the widget script's own `src`
- * (see the loader registered in `index-global.ts`).
+ * the bridge dynamically imports this chunk from a URL derived from the widget
+ * script's own `src` (see the loader registered in `index-global.ts`).
  *
  * Built self-contained (`--no-external`): it must work standalone on a CDN
  * with no module resolution. npm/bundler consumers never load this file;
  * their bundlers resolve the bare `import("@mcp-b/webmcp-polyfill")` in
  * `webmcp-bridge.ts` directly.
  */
-export { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP as installUpstreamWebMCP } from "@mcp-b/webmcp-polyfill";
+
+// Keep the chunk's declarations local: v6's declaration file re-exports a
+// namespace that webmcp-types declares globally rather than as a module export.
+// Forwarding the function directly makes declaration bundlers follow that edge.
+export function installWebMCP(): void {
+  installUpstreamWebMCP();
+}
+
+/**
+ * @deprecated v5's initializer name, kept so pages that import it from this
+ * chunk (e.g. to install before Persona's first dispatch) still link. It is
+ * an alias of `installWebMCP()`; v6 has no cleanup counterpart.
+ */
+export const initializeWebMCPPolyfill = (): void => installWebMCP();
