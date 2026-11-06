@@ -292,7 +292,7 @@ import {
 import { getActivityUiSync, type ActivityUiModule } from "./activity-ui-loader";
 import { getLoadingLabelRuntimeSync, type LoadingLabelRuntime } from "./loading-label-runtime-loader";
 import { copyToolDetail } from "./components/tool-details";
-import { createPauseBubble } from "./components/pause-bubble";
+
 import {
   ensureAskUserQuestionSheet,
   isAskUserQuestionMessage,
@@ -7004,7 +7004,9 @@ export const createAgentExperience = (
           // Passive auto-resuming durable pause (server resumes the stream
           // itself): a non-interactive "working in the background" indicator
           // that self-hides once `durablePause.resolved` flips true.
-          bubble = createPauseBubble(message, config);
+          const pauseUi = ensureApprovalUi();
+          if (!pauseUi) return;
+          bubble = pauseUi.createPauseBubble(message, config);
         } else {
           // Check for custom message renderers in layout config
           const messageLayoutConfig = config.layout?.messages;

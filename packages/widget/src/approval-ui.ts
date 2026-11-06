@@ -9,6 +9,7 @@
  */
 export {
   createApprovalBubble,
+  createPauseBubble,
   createErrorBlock,
   createBuiltInApprovalPlugin,
   humanizeToolName,
