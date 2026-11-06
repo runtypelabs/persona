@@ -251,7 +251,11 @@ export const wireSessionVoice = (
     if (provider.onPlaybackMetrics) {
       provider.onPlaybackMetrics((metrics) => {
         if (!isCurrent()) return;
-        s.config.voiceRecognition?.onPlaybackMetrics?.(metrics);
+        try {
+          s.config.voiceRecognition?.onPlaybackMetrics?.(metrics);
+        } catch {
+          // SAFETY: optional diagnostics must not interrupt a custom provider's audio loop.
+        }
       });
     }
 

@@ -208,6 +208,21 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
     expect(seen.at(-1)?.queuedAudioMs).toBeCloseTo(100);
   });
 
+  it("reports an underrun before a single late chunk immediately refills the buffer", () => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const player = new AudioPlaybackManager();
+    const seen: VoicePlaybackMetrics[] = [];
+    player.onPlaybackMetrics((metrics) => seen.push(metrics));
+    player.enqueue(pcm(4800));
+    MockAudioContext.instances[0].currentTime = 0.4;
+    now = 400;
+    player.enqueue(pcm(4800));
+    expect(seen.map((metrics) => metrics.reason)).toEqual(["queue", "underrun", "refill"]);
+    expect(seen[1]).toMatchObject({ queuedAudioMs: 200, buffering: true, underrunCount: 1, refillCount: 0 });
+    expect(seen[2]).toMatchObject({ buffering: false, underrunCount: 1, refillCount: 1, lastRefillMs: 0 });
+  });
+
   it("buffers 150 ms by default before scheduling realtime audio", () => {
     const player = new AudioPlaybackManager();
     player.enqueue(pcm(2400));

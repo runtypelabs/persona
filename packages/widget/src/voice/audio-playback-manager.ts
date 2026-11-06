@@ -143,6 +143,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
       this.#pendingBuffers.push(float32);
       this.#pendingSamples += float32.length;
       clearTimeout(this.#tailTimer);
+      if (underrun) this.#emitPlaybackMetrics("underrun");
       if (this.#pendingSamples >= this.#waterlineSamples) this.#releaseBuffer();
       else if (this.#continuous) {
         this.#tailTimer = setTimeout(
@@ -152,8 +153,9 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
       }
     } else {
       this.#scheduleSamples(float32);
+      if (underrun) this.#emitPlaybackMetrics("underrun");
     }
-    this.#emitPlaybackMetrics(underrun && (this.#refillStartedAt !== null || this.#waterlineSamples === 0) ? "underrun" : "queue");
+    this.#emitPlaybackMetrics("queue");
   }
 
   /**

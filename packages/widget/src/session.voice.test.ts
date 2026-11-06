@@ -250,6 +250,19 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
     expect(h.state.playbackMetricsCb).toBe(callback);
     expect(playbackMetricsSeen).toEqual([metrics]);
   });
+
+  it('does not let a throwing host metrics hook escape into a provider audio loop', () => {
+    session.updateConfig({
+      voiceRecognition: { enabled: true, provider: { type: 'runtype', runtype: { agentId: 'a1' } },
+        onPlaybackMetrics: () => { throw new Error('broken telemetry'); },
+      },
+    });
+    const metrics: VoicePlaybackMetrics = {
+      reason: 'queue', queuedAudioMs: 100, buffering: true, continuous: true,
+      underrunCount: 0, refillCount: 0, lastRefillMs: null, totalRefillMs: 0,
+    };
+    expect(() => h.state.playbackMetricsCb!(metrics)).not.toThrow();
+  });
 });
 
 describe('AgentWidgetSession - turn-keyed (full-duplex) voice transcripts', () => {
