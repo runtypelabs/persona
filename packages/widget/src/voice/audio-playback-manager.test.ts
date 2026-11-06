@@ -68,6 +68,88 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
     delete (global as any).window;
   });
 
+  it("buffers 150 ms by default before scheduling realtime audio", () => {
+    const player = new AudioPlaybackManager();
+    player.enqueue(pcm(2400));
+    expect(MockAudioContext.instances).toHaveLength(0);
+    player.enqueue(pcm(1200));
+    const ctx = MockAudioContext.instances[0];
+    expect(ctx.sources.map((source) => source.startTime)).toEqual([0, 0.1]);
+  });
+
+  it("re-buffers the first late chunk instead of playing it alone after an underrun", () => {
+    const player = new AudioPlaybackManager(24000, { prebufferMs: 150 });
+    player.enqueue(pcm(4800));
+    const ctx = MockAudioContext.instances[0];
+    ctx.currentTime = 0.4;
+    player.enqueue(pcm(2400));
+    expect(ctx.sources).toHaveLength(1);
+    ctx.currentTime = 0.46;
+    player.enqueue(pcm(2400));
+    expect(ctx.sources).toHaveLength(3);
+    expect(ctx.sources[1].startTime).toBeCloseTo(0.46);
+    expect(ctx.sources[2].startTime).toBeCloseTo(0.56);
+  });
+
+  it("flush discards a short buffered reply and its pending release timer", () => {
+    vi.useFakeTimers();
+    try {
+      const player = new AudioPlaybackManager(24000, { prebufferMs: 150 });
+      player.setContinuousMode(true);
+      player.enqueue(pcm(960));
+      player.flush();
+      vi.advanceTimersByTime(300);
+      expect(MockAudioContext.instances).toHaveLength(0);
+      player.enqueue(pcm(2400));
+      expect(MockAudioContext.instances).toHaveLength(0);
+      vi.advanceTimersByTime(150);
+      expect(MockAudioContext.instances[0].sources).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("releases a short continuous reply after an underrun without waiting for audio_end", () => {
+    vi.useFakeTimers();
+    try {
+      const player = new AudioPlaybackManager(24000, { prebufferMs: 150 });
+      player.setContinuousMode(true);
+      player.enqueue(pcm(4800));
+      const ctx = MockAudioContext.instances[0];
+      ctx.currentTime = 0.5;
+      player.enqueue(pcm(960));
+      expect(ctx.sources).toHaveLength(1);
+      vi.advanceTimersByTime(149);
+      expect(ctx.sources).toHaveLength(1);
+      vi.advanceTimersByTime(1);
+      expect(ctx.sources).toHaveLength(2);
+      expect(ctx.sources[1].startTime).toBe(0.5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a cleared short-tail timer cannot disable buffering for the next reply", () => {
+    vi.useFakeTimers();
+    try {
+      const player = new AudioPlaybackManager(24000, { prebufferMs: 150 });
+      player.setContinuousMode(true);
+      player.enqueue(pcm(960));
+      player.markStreamEnd();
+      const ctx = MockAudioContext.instances[0];
+      ctx.sources[0].onended?.();
+      ctx.currentTime = 0.5;
+      player.enqueue(pcm(960));
+      vi.advanceTimersByTime(150);
+      expect(ctx.sources).toHaveLength(2);
+      ctx.currentTime = 1;
+      player.enqueue(pcm(960));
+      expect(ctx.sources).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // waterline @ 24kHz / 200ms = round(24000 * 200 / 1000) = 4800 samples.
   it("holds audio until the prebuffer waterline, then releases and fires onStarted once", () => {
     const m = new AudioPlaybackManager(24000, { prebufferMs: 200 });
@@ -153,7 +235,7 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
   });
 
   it("pauses via AudioContext.suspend and does not auto-resume on further audio", () => {
-    const m = new AudioPlaybackManager(24000); // prebufferMs 0 → realtime, no gate
+    const m = new AudioPlaybackManager(24000, { prebufferMs: 0 });
     const started = vi.fn();
     m.onStarted(started);
 
@@ -177,7 +259,7 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
   });
 
   it("clears the started latch on flush so the next reply can fire onStarted again", () => {
-    const m = new AudioPlaybackManager(24000); // realtime: schedules on first chunk
+    const m = new AudioPlaybackManager(24000, { prebufferMs: 0 });
     const started = vi.fn();
     m.onStarted(started);
 
@@ -192,7 +274,7 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
   });
 
   it("ignores onended from sources a flush stopped, so the next reply drains on its own audio", () => {
-    const m = new AudioPlaybackManager(24000);
+    const m = new AudioPlaybackManager(24000, { prebufferMs: 0 });
     m.enqueue(pcm(100));
     m.enqueue(pcm(100));
     const ctx = MockAudioContext.instances[0];
