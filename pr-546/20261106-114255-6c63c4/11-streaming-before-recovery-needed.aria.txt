@@ -1,0 +1,27 @@
+- generic
+  - StaticText "Verify fixture"
+  - button "Clear chat" [ref=e1]
+  - generic
+    - paragraph
+      - StaticText "Help me finish this response."
+    - generic
+      - paragraph
+        - StaticText "Here is the beginning of your response."
+      - button "Copy message" [ref=e6]
+    - alert
+      - strong
+        - StaticText "Something went wrong"
+      - group
+        - DisclosureTriangle "Sorry: the chat encountered an unexpected error. Please reload the page and try again. Details: Connection lost and the response could not be resumed. Show more" [expanded=false]
+          - generic
+            - paragraph
+              - StaticText "Sorry: the chat encountered an unexpected error. Please reload the page and try again."
+            - paragraph
+              - emphasis
+                - StaticText "Details: Connection lost and the response could not be resumed."
+      - button "Retry response" [ref=e5]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e2]
+      - button "Start voice recognition" [ref=e3]
+      - button "Send message" [ref=e4]

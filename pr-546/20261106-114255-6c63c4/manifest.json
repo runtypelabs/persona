@@ -1,0 +1,305 @@
+{
+  "runId": "20261106-114255-6c63c4",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "after recovery needed",
+      "note": null,
+      "files": [
+        "02-streaming-after-recovery-needed.png",
+        "02-streaming-after-recovery-needed.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:43:09.592Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after recovered response",
+      "note": null,
+      "files": [
+        "03-streaming-after-recovered-response.png",
+        "03-streaming-after-recovered-response.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:43:11.657Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after exhausted recovery",
+      "note": null,
+      "files": [
+        "01-streaming-after-exhausted-recovery.gif",
+        "01-streaming-after-exhausted-recovery.webm",
+        "01-streaming-after-exhausted-recovery.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:43:11.867Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after recovery requests",
+      "note": "4 request(s) crossed the network boundary, 11 controller event(s)",
+      "files": [
+        "04-streaming-after-recovery-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:43:11.938Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after working indicator",
+      "note": null,
+      "files": [
+        "06-streaming-after-working-indicator.png",
+        "06-streaming-after-working-indicator.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:43:14.179Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after initial request",
+      "note": null,
+      "files": [
+        "05-streaming-after-initial-request.gif",
+        "05-streaming-after-initial-request.webm",
+        "05-streaming-after-initial-request.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:43:22.946Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after initial request",
+      "note": "1 request(s) crossed the network boundary, 5 controller event(s)",
+      "files": [
+        "07-streaming-after-initial-request.page.json"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:43:23.013Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after compact recovery needed",
+      "note": null,
+      "files": [
+        "09-streaming-after-compact-recovery-needed.png",
+        "09-streaming-after-compact-recovery-needed.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:43:25.650Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after compact recovery",
+      "note": null,
+      "files": [
+        "08-streaming-after-compact-recovery.gif",
+        "08-streaming-after-compact-recovery.webm",
+        "08-streaming-after-compact-recovery.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:43:27.014Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after compact recovery requests",
+      "note": "4 request(s) crossed the network boundary, 12 controller event(s)",
+      "files": [
+        "10-streaming-after-compact-recovery-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:43:27.081Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after waiting to reconnect",
+      "note": null,
+      "files": [
+        "12-streaming-after-waiting-to-reconnect.png",
+        "12-streaming-after-waiting-to-reconnect.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:43:48.620Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after reconnect request in flight",
+      "note": null,
+      "files": [
+        "13-streaming-after-reconnect-request-in-flight.png",
+        "13-streaming-after-reconnect-request-in-flight.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:43:54.660Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after automatic reconnect",
+      "note": null,
+      "files": [
+        "11-streaming-after-automatic-reconnect.gif",
+        "11-streaming-after-automatic-reconnect.webm",
+        "11-streaming-after-automatic-reconnect.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:44:07.051Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after automatic reconnect requests",
+      "note": "3 request(s) crossed the network boundary, 9 controller event(s)",
+      "files": [
+        "14-streaming-after-automatic-reconnect-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:44:07.118Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after execution failure",
+      "note": null,
+      "files": [
+        "16-streaming-after-execution-failure.png",
+        "16-streaming-after-execution-failure.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=execution-error&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:44:29.312Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after execution failure",
+      "note": null,
+      "files": [
+        "15-streaming-after-execution-failure.gif",
+        "15-streaming-after-execution-failure.webm",
+        "15-streaming-after-execution-failure.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=execution-error&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:44:29.462Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after execution failure events",
+      "note": "1 request(s) crossed the network boundary, 4 controller event(s)",
+      "files": [
+        "17-streaming-after-execution-failure-events.page.json"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=execution-error&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:44:29.530Z",
+      "head": "5a594978810343ba7f8aadd563e055c9bea1e731",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "baseline comparison",
+      "label": "before recovery needed",
+      "note": "Merge-base widget source with the same deterministic fixture overlay; light theme, matched configuration and viewport.",
+      "files": [
+        "11-streaming-before-recovery-needed.png",
+        "11-streaming-before-recovery-needed.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:25:31.870Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "baseline comparison",
+      "label": "before working indicator",
+      "note": "Merge-base widget source with the same deterministic fixture overlay; light theme, matched configuration and viewport.",
+      "files": [
+        "14-streaming-before-working-indicator.png",
+        "14-streaming-before-working-indicator.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:25:34.884Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "baseline comparison",
+      "label": "before compact recovery needed",
+      "note": "Merge-base widget source with the same deterministic fixture overlay; light theme, matched configuration and viewport.",
+      "files": [
+        "17-streaming-before-compact-recovery-needed.png",
+        "17-streaming-before-compact-recovery-needed.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:25:47.089Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "baseline comparison",
+      "label": "before waiting to reconnect",
+      "note": "Merge-base widget source with the same deterministic fixture overlay; light theme, matched configuration and viewport.",
+      "files": [
+        "20-streaming-before-waiting-to-reconnect.png",
+        "20-streaming-before-waiting-to-reconnect.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:31:06.673Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "baseline comparison",
+      "label": "before reconnect request in flight",
+      "note": "Merge-base widget source with the same deterministic fixture overlay; light theme, matched configuration and viewport.",
+      "files": [
+        "21-streaming-before-reconnect-request-in-flight.png",
+        "21-streaming-before-reconnect-request-in-flight.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:31:12.576Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Desktop v5 recovery, 390px compact recovery, delayed initial request, automatic reconnect and terminal execution failure driven through the real composer. One dispatch per journey; reconnect preserves execution/cursor; completion fires once after recovery. Matched merge-base screenshots use the same fixture overlay."
+    },
+    {
+      "feature": "other-entry-points",
+      "pass": false,
+      "skipped": true,
+      "note": "Dark theme, voice, approval/tool UI and custom host labels were not manually driven in this capture; reconnect lifecycle and configuration variants are covered by automated regression tests."
+    }
+  ]
+}

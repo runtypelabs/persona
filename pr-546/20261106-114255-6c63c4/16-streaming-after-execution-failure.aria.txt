@@ -1,0 +1,12 @@
+- generic
+  - StaticText "Verify fixture"
+  - button "Clear chat" [ref=e1]
+  - generic
+    - paragraph
+    - alert
+      - button "Retry response" [ref=e5]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e2]
+      - button "Start voice recognition" [ref=e3]
+      - button "Send message" [ref=e4]

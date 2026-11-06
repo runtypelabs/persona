@@ -1,0 +1,167 @@
+{
+  "scenario": "reconnect-exhausted",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 259,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Help me finish this response.",
+            "createdAt": "2026-11-06T11:43:24.290Z"
+          }
+        ]
+      }
+    },
+    {
+      "at": 264,
+      "url": "reconnectStream",
+      "body": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 1
+      }
+    },
+    {
+      "at": 517,
+      "url": "reconnectStream",
+      "body": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 2
+      }
+    },
+    {
+      "at": 1638,
+      "url": "reconnectStream",
+      "body": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 3
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 242,
+      "type": "widget:opened",
+      "detail": {
+        "open": true,
+        "source": "auto",
+        "timestamp": 1793965404290
+      }
+    },
+    {
+      "at": 242,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793965404290
+      }
+    },
+    {
+      "at": 243,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mw4wol1e_lg9eyvpn",
+        "timestamp": 1793965404290
+      }
+    },
+    {
+      "at": 251,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mw4wol1e_6esv2apv",
+        "role": "user",
+        "content": "Help me finish this response.",
+        "createdAt": "2026-11-06T11:43:24.290Z",
+        "sequence": 1793965404064,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 261,
+      "type": "stream:paused",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3"
+      }
+    },
+    {
+      "at": 264,
+      "type": "stream:resuming",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 1
+      }
+    },
+    {
+      "at": 517,
+      "type": "stream:resuming",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 2
+      }
+    },
+    {
+      "at": 1638,
+      "type": "stream:paused",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3"
+      }
+    },
+    {
+      "at": 1638,
+      "type": "stream:resuming",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 1
+      }
+    },
+    {
+      "at": 2644,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1793965404308-cbccbb43a83958",
+        "role": "assistant",
+        "content": "Here is the beginning of your response. The connection is restored and this same response is complete.",
+        "createdAt": "2026-11-06T11:43:24.308Z",
+        "streaming": false,
+        "sequence": 1793965404308,
+        "agentMetadata": {
+          "textBlockId": "recovery-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0
+        }
+      }
+    },
+    {
+      "at": 2646,
+      "type": "stream:resumed",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3"
+      }
+    },
+    {
+      "at": 2648,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mw4wol1e_lg9eyvpn",
+        "timestamp": 1793965406696,
+        "outcome": "success"
+      }
+    }
+  ]
+}

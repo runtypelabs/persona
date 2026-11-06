@@ -1,0 +1,33 @@
+- generic
+  - StaticText "ready scenario=reconnect-exhausted mode=inline theme=light"
+  - generic
+    - generic
+      - button "Close chat" [ref=e3]
+      - generic
+        - paragraph
+          - StaticText "Help me finish this response."
+        - generic
+          - paragraph
+            - StaticText "Here is the beginning of your response."
+          - button "Copy message" [ref=e8]
+        - alert
+          - strong
+            - StaticText "Something went wrong"
+          - group
+            - DisclosureTriangle "Sorry: the chat encountered an unexpected error. Please reload the page and try again. Details: Connection lost and the response could not be resumed. Show more" [expanded=false]
+              - generic
+                - paragraph
+                  - StaticText "Sorry: the chat encountered an unexpected error. Please reload the page and try again."
+                - paragraph
+                  - emphasis
+                    - StaticText "Details: Connection lost and the response could not be resumed."
+          - button "Retry response" [ref=e7]
+      - button "Clear chat" [ref=e4]
+      - status
+    - generic
+      - button "Show conversation" [ref=e1]
+      - generic
+        - form
+          - textbox "Send a message…" [ref=e2]
+          - button "Start voice recognition" [ref=e5]
+          - button "Send message" [ref=e6]

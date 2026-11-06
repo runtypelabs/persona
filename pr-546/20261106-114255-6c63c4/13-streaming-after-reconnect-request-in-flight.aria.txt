@@ -1,0 +1,13 @@
+- generic
+  - StaticText "Verify fixture"
+  - button "Clear chat" [ref=e1]
+  - generic
+    - paragraph
+    - paragraph
+  - generic
+    - status
+      - button "Reconnect to this response" [disabled, ref=e3]
+    - form
+      - textbox "Send a message…" [ref=e4]
+      - button "Start voice recognition" [disabled, ref=e5]
+      - button "Stop generating" [ref=e6]

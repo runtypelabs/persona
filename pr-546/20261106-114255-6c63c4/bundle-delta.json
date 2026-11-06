@@ -1,0 +1,46 @@
+[
+  {
+    "file": "index.global.js",
+    "before": {
+      "gzip": 169140,
+      "brotli": 137330
+    },
+    "after": {
+      "gzip": 169774,
+      "brotli": 137987
+    }
+  },
+  {
+    "file": "widget.css",
+    "before": {
+      "gzip": 24578,
+      "brotli": 20741
+    },
+    "after": {
+      "gzip": 24797,
+      "brotli": 20870
+    }
+  },
+  {
+    "file": "session-reconnect.js",
+    "before": {
+      "gzip": 1192,
+      "brotli": 1037
+    },
+    "after": {
+      "gzip": 985,
+      "brotli": 870
+    }
+  },
+  {
+    "file": "client-stream.js",
+    "before": {
+      "gzip": 10496,
+      "brotli": 9399
+    },
+    "after": {
+      "gzip": 10533,
+      "brotli": 9427
+    }
+  }
+]

@@ -1,0 +1,16 @@
+- generic
+  - StaticText "Verify fixture"
+  - button "Clear chat" [ref=e1]
+  - generic
+    - generic
+      - heading "Verify fixture" [level=2, ref=e2]
+      - paragraph
+        - StaticText "Scenario: reconnect. Replies are scripted in-page; no backend."
+    - generic
+  - generic
+    - status
+      - button "Reconnect now" [ref=e3]
+    - form
+      - textbox "Send a message…" [ref=e4]
+      - button "Start voice recognition" [disabled, ref=e5]
+      - button "Stop generating" [ref=e6]

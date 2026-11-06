@@ -1,0 +1,292 @@
+{
+  "runId": "20261106-111623-3b14f2",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "before recovery needed",
+      "note": null,
+      "files": [
+        "02-streaming-before-recovery-needed.png",
+        "02-streaming-before-recovery-needed.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:17:52.404Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before exhausted recovery",
+      "note": null,
+      "files": [
+        "01-streaming-before-exhausted-recovery.gif",
+        "01-streaming-before-exhausted-recovery.webm",
+        "01-streaming-before-exhausted-recovery.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:17:52.603Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before recovery requests",
+      "note": "3 request(s) crossed the network boundary, 8 controller event(s)",
+      "files": [
+        "03-streaming-before-recovery-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:17:52.687Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before working indicator",
+      "note": null,
+      "files": [
+        "05-streaming-before-working-indicator.png",
+        "05-streaming-before-working-indicator.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:17:55.025Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before initial request",
+      "note": null,
+      "files": [
+        "04-streaming-before-initial-request.gif",
+        "04-streaming-before-initial-request.webm",
+        "04-streaming-before-initial-request.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:18:02.781Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before initial request",
+      "note": "1 request(s) crossed the network boundary, 3 controller event(s)",
+      "files": [
+        "06-streaming-before-initial-request.page.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:18:02.862Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before compact recovery needed",
+      "note": null,
+      "files": [
+        "08-streaming-before-compact-recovery-needed.png",
+        "08-streaming-before-compact-recovery-needed.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:18:05.757Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before compact recovery",
+      "note": null,
+      "files": [
+        "07-streaming-before-compact-recovery.gif",
+        "07-streaming-before-compact-recovery.webm",
+        "07-streaming-before-compact-recovery.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:18:06.022Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before compact recovery requests",
+      "note": "3 request(s) crossed the network boundary, 9 controller event(s)",
+      "files": [
+        "09-streaming-before-compact-recovery-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:18:06.108Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before recovery needed",
+      "note": null,
+      "files": [
+        "11-streaming-before-recovery-needed.png",
+        "11-streaming-before-recovery-needed.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:25:31.870Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before exhausted recovery",
+      "note": null,
+      "files": [
+        "10-streaming-before-exhausted-recovery.gif",
+        "10-streaming-before-exhausted-recovery.webm",
+        "10-streaming-before-exhausted-recovery.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:25:32.132Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before recovery requests",
+      "note": "3 request(s) crossed the network boundary, 8 controller event(s)",
+      "files": [
+        "12-streaming-before-recovery-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:25:32.240Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before working indicator",
+      "note": null,
+      "files": [
+        "14-streaming-before-working-indicator.png",
+        "14-streaming-before-working-indicator.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:25:34.884Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before initial request",
+      "note": null,
+      "files": [
+        "13-streaming-before-initial-request.gif",
+        "13-streaming-before-initial-request.webm",
+        "13-streaming-before-initial-request.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:25:43.744Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before initial request",
+      "note": "1 request(s) crossed the network boundary, 5 controller event(s)",
+      "files": [
+        "15-streaming-before-initial-request.page.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=slow-start&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:25:43.860Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before compact recovery needed",
+      "note": null,
+      "files": [
+        "17-streaming-before-compact-recovery-needed.png",
+        "17-streaming-before-compact-recovery-needed.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:25:47.089Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before compact recovery",
+      "note": null,
+      "files": [
+        "16-streaming-before-compact-recovery.gif",
+        "16-streaming-before-compact-recovery.webm",
+        "16-streaming-before-compact-recovery.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:25:47.574Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before compact recovery requests",
+      "note": "3 request(s) crossed the network boundary, 9 controller event(s)",
+      "files": [
+        "18-streaming-before-compact-recovery-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect-exhausted&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-06T11:25:47.709Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before waiting to reconnect",
+      "note": null,
+      "files": [
+        "20-streaming-before-waiting-to-reconnect.png",
+        "20-streaming-before-waiting-to-reconnect.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:31:06.673Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before reconnect request in flight",
+      "note": null,
+      "files": [
+        "21-streaming-before-reconnect-request-in-flight.png",
+        "21-streaming-before-reconnect-request-in-flight.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:31:12.576Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before automatic reconnect",
+      "note": null,
+      "files": [
+        "19-streaming-before-automatic-reconnect.gif",
+        "19-streaming-before-automatic-reconnect.webm",
+        "19-streaming-before-automatic-reconnect.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:31:25.105Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    },
+    {
+      "feature": "streaming",
+      "label": "before automatic reconnect requests",
+      "note": "3 request(s) crossed the network boundary, 9 controller event(s)",
+      "files": [
+        "22-streaming-before-automatic-reconnect-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%7D",
+      "at": "2026-11-06T11:31:25.187Z",
+      "head": "4401a861e29005d3bd5272bfd2595092dec3cb98",
+      "diffHash": "00d6d9cff644"
+    }
+  ],
+  "verdicts": []
+}
