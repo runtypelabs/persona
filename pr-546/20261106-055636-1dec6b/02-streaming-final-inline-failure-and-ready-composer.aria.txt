@@ -1,0 +1,10 @@
+- generic
+  - generic
+    - paragraph
+    - alert
+      - button "Retry response" [ref=e4]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e1]
+      - button "Start voice recognition" [ref=e2]
+      - button "Send message" [ref=e3]

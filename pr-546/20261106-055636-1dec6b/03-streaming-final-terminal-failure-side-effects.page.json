@@ -1,0 +1,63 @@
+{
+  "scenario": "execution-error",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 29703,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Please check this request.",
+            "createdAt": "2026-11-06T05:57:18.961Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 29683,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1793944638960
+      }
+    },
+    {
+      "at": 29683,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mw4kbiep_em5ufruv",
+        "timestamp": 1793944638961
+      }
+    },
+    {
+      "at": 29693,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mw4kbiep_1w0fwgfz",
+        "role": "user",
+        "content": "Please check this request.",
+        "createdAt": "2026-11-06T05:57:18.961Z",
+        "sequence": 1793944609298,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 29832,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mw4kbiep_em5ufruv",
+        "timestamp": 1793944639110,
+        "outcome": "error"
+      }
+    }
+  ]
+}

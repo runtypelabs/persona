@@ -1,0 +1,52 @@
+{
+  "runId": "20261106-055636-1dec6b",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "Native terminal failure on final candidate",
+      "note": null,
+      "files": [
+        "01-streaming-native-terminal-failure-on-final-candidate.gif",
+        "01-streaming-native-terminal-failure-on-final-candidate.webm",
+        "01-streaming-native-terminal-failure-on-final-candidate.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4417/verify.html?scenario=execution-error&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22layout%22%3A%7B%22embedded%22%3Atrue%7D%7D",
+      "at": "2026-11-06T05:57:41.270Z",
+      "head": "1ef6ba950a650669bdc0fc4f95558128fb10b5fd",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Final inline failure and ready composer",
+      "note": "Clean Persona commit 1ef6ba95. Native execution_error shows one inline card, remote detail and Retry; composer enabled; no Offline warning.",
+      "files": [
+        "02-streaming-final-inline-failure-and-ready-composer.png",
+        "02-streaming-final-inline-failure-and-ready-composer.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4417/verify.html?scenario=execution-error&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22layout%22%3A%7B%22embedded%22%3Atrue%7D%7D",
+      "at": "2026-11-06T05:57:44.630Z",
+      "head": "1ef6ba950a650669bdc0fc4f95558128fb10b5fd",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Final terminal failure side effects",
+      "note": "1 request(s) crossed the network boundary, 4 controller event(s)",
+      "files": [
+        "03-streaming-final-terminal-failure-side-effects.page.json"
+      ],
+      "url": "http://127.0.0.1:4417/verify.html?scenario=execution-error&config=%7B%22future%22%3A%7B%22v5Defaults%22%3Atrue%7D%2C%22layout%22%3A%7B%22embedded%22%3Atrue%7D%7D",
+      "at": "2026-11-06T05:57:49.115Z",
+      "head": "1ef6ba950a650669bdc0fc4f95558128fb10b5fd",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Native execution_error renders one inline failure with server detail and Retry; composer enabled, Online status hidden, run finished as error. Session tests cover custom parsers, completion failures, host display, empty detail, network read errors and durable reconnect."
+    }
+  ]
+}
