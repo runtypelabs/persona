@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -170,6 +171,17 @@ describe.runIf(built)("published package install methods (dist/)", () => {
       );
     }
   }, 90_000);
+
+  // Node 26 masks this for marked: require(esm) loads it here but not on the
+  // older Node versions `engines` allows, so assert on the output.
+  it("CJS: inlines the ESM-only dependencies instead of requiring them", () => {
+    for (const file of readdirSync(dist("."))) {
+      if (!file.endsWith(".cjs")) continue;
+      const source = readFileSync(dist(file), "utf8");
+      expect(source, `${file} requires marked`).not.toMatch(/require\([`"']marked[`"']\)/);
+      expect(source, `${file} requires idiomorph`).not.toMatch(/require\([`"']idiomorph[`"']\)/);
+    }
+  });
 
   it("CJS: `require` of `.` and every subpath loads in Node with the same exports as ESM", () => {
     const cjs = runProbe("cjs-probe.cjs", cjsSpecifiers);

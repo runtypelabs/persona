@@ -38,7 +38,7 @@ Preview remains available when Live Eve is configured. Selecting a different doc
 
 ## Integration and versions
 
-Verified against the published **`eve@0.80.1`** package, **AI SDK `7.0.143`** (Eve's compatible peer), **Next.js `16.4.2`**, and **React `19.3.1`**. Eve is in beta; the SDK and event contract can change across versions.
+Verified against the published **`eve@0.83.3`** package, **AI SDK `7.0.163`** (Eve's compatible peer), **Next.js `16.4.5`**, and **React `19.3.1`**. Eve is in beta; the SDK and event contract can change across versions.
 
 The live adapter uses the current, typed API:
 

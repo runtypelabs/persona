@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { mergeWithDefaults } from "../defaults";
 import { mergeConfigUpdate } from "../utils/config-merge";
+import { applyThemeVariables } from "../utils/theme";
 import { applyHeaderControlStyle, createClearChatButton, createCloseButton, createHeaderIconButton } from "./header-parts";
 import { applyMicButtonStyle, applySendButtonStyle, createMicButton, createSendButton } from "./composer-parts";
 import type { AgentWidgetConfig } from "../types";
@@ -28,14 +29,18 @@ describe.each([false, true])("independent controls V5=%s", (v5) => {
     const input = config(v5, { sendButton: { useIcon: false } });
     const controls = [createCloseButton(input).button, createClearChatButton(input).button,
       createSendButton(input).button, createMicButton(input)!.button];
-    document.body.append(...controls);
+    const host = document.createElement("div");
+    applyThemeVariables(host, input);
+    host.append(...controls);
+    document.body.append(host);
     try {
-      for (const button of controls) {
+      // Each control resolves its own theme padding through the shared rule,
+      // which has to reach it and win over its default padding classes.
+      const themed = ["2px 3px", "4px 6px", "3px 5px", "2px 4px"];
+      controls.forEach((button, index) => {
         expect(button.classList.contains("persona-theme-padding")).toBe(true);
-        // jsdom leaves custom-property values unresolved, but this proves the
-        // rule reaches the control and wins over its default padding classes.
-        expect(getComputedStyle(button).padding).toBe("var(--persona-theme-padding)");
-      }
+        expect(getComputedStyle(button).padding).toBe(themed[index]);
+      });
       const explicit = mergeConfigUpdate(input, {
         launcher: { closeButtonPaddingX: "9px", clearChat: { paddingY: "11px" } },
         sendButton: { paddingX: "13px" }, voiceRecognition: { paddingY: "15px" },

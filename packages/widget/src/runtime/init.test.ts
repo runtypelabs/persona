@@ -393,7 +393,7 @@ describe("initAgentWidget docked mode", () => {
     expect(panelSlot.style.transform).toBe("translateX(100%)");
 
     handle.open();
-    expect(panelSlot.style.transform).toBe("translateX(0)");
+    expect(panelSlot.style.transform).toBe("translateX(0px)");
 
     handle.destroy();
   });

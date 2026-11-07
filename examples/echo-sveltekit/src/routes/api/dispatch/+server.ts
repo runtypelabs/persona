@@ -1,5 +1,5 @@
 import type { RequestHandler } from "./$types";
-import { createEchoPersonaHandler /*, openAiResponder */ } from "$lib/echo-adapter";
+import { createEchoPersonaHandler /*, openAiResponder */ } from "../../../lib/echo-adapter";
 
 // The canonical adapter: a plain Web `(Request) => Promise<Response>`. To stream
 // a real model, set OPENAI_API_KEY and swap in:

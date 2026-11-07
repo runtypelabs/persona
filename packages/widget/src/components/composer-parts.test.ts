@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createAttachmentControls,
   createComposerTextarea,
@@ -95,15 +95,29 @@ describe("createComposerTextarea", () => {
     document.body.removeChild(textarea);
   });
 
+  it("caps at the used value of a unitless line height", () => {
+    const { textarea, attachAutoResize } = createComposerTextarea(baseConfig);
+    textarea.style.lineHeight = "1.5";
+    document.body.appendChild(textarea);
+    attachAutoResize();
+    Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 10000 });
+    textarea.dispatchEvent(new Event("input"));
+    // Computed line-height is 16px * 1.5 = 24px, so 3 lines is 72px.
+    expect(textarea.style.height).toBe("72px");
+    document.body.removeChild(textarea);
+  });
+
   it("falls back to 60px for unitless line heights and detached nodes", () => {
+    // Browsers and jsdom resolve unitless values, so stub an engine that does not.
+    const computed = vi.spyOn(window, "getComputedStyle").mockReturnValue({ lineHeight: "1.5" } as CSSStyleDeclaration);
     const unitless = createComposerTextarea(baseConfig);
-    unitless.textarea.style.lineHeight = "1.5";
     document.body.appendChild(unitless.textarea);
     unitless.attachAutoResize();
     Object.defineProperty(unitless.textarea, "scrollHeight", { configurable: true, value: 10000 });
     unitless.textarea.dispatchEvent(new Event("input"));
     expect(unitless.textarea.style.height).toBe("60px");
     document.body.removeChild(unitless.textarea);
+    computed.mockRestore();
 
     // Never appended: getComputedStyle still must not throw or produce NaN.
     const detached = createComposerTextarea(baseConfig);

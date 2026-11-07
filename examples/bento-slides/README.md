@@ -114,6 +114,8 @@ scripts/  postbuild-compress.mjs (+ lib/b86.mjs) for the single-file build
   in `canvas.ts`, `PresentSession.next/prev/goToPosition/currentIndex`, and the
   `src/ai/` import in `main.ts`.
 - The Copilot's CSS is appended to the end of `slides/src/styles.css`.
+- `present.ts` targets reveal.js 6: the `reveal.js/reveal.css` export and the
+  `RevealApi` type.
 - Two kernel touches: `net.ts` gains `onOfflineEnforced()` (so offline mode
   also unmounts the Copilot and hangs up its call), and `charts.ts` guards the
   tooltip swatch colour (`safeCssColor`) against markup in chart options. The

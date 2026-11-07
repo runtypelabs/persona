@@ -209,6 +209,8 @@ describe("history rail beside a resizable artifact split", () => {
     const railHost = railHostOf(mount)!;
     setWidth(railHost, RAIL_WIDTH);
     addArtifact(controller);
+    // No stylesheet here, so pin the welded default instead of computed `normal`.
+    splitRoot(mount).style.gap = "0px";
 
     const width = dragArtifact(mount, -2000);
     const reserved = RAIL_WIDTH + ARTIFACT_RESIZE_RAILED_TRANSCRIPT_MIN_PX;

@@ -92,17 +92,30 @@ type Entries = Record<string, string>;
 const RELATIVE_JS_SPECIFIER = /((?:from|import)\s*\(?\s*")(\.{1,2}\/[^"]+)\.js"/g;
 
 /**
- * ESM + CJS library entries; deps stay external (tsup's default). Rolldown
- * refuses `codeSplitting: false` for a multi-input build, so each entry gets its
- * own single-input build. Declarations come from the one dts-only build below.
+ * ESM-only dependencies. `require("idiomorph")` does not resolve at all, and
+ * `require("marked")` needs Node's require(esm), which `engines` does not
+ * guarantee, so the CJS output inlines both.
+ */
+const CJS_INLINED_DEPS = ["idiomorph", "marked"];
+
+/**
+ * ESM + CJS library entries; deps stay external (tsup's default) apart from
+ * `CJS_INLINED_DEPS`. Rolldown refuses `codeSplitting: false` for a multi-input
+ * build, so each entry gets its own single-input build. Declarations come from
+ * the one dts-only build below.
  */
 const library = (entries: Entries, extra: UserConfig = {}): UserConfig[] =>
-  Object.entries(entries).map(([name, file]) => ({
-    ...base,
-    entry: { [name]: file },
-    format: ["esm", "cjs"],
-    ...extra,
-  }));
+  Object.entries(entries).flatMap(([name, file]): UserConfig[] => {
+    const entry = { ...base, entry: { [name]: file }, ...extra };
+    return [
+      { ...entry, format: ["esm"] },
+      {
+        ...entry,
+        format: ["cjs"],
+        deps: { ...extra.deps, alwaysBundle: [...[extra.deps?.alwaysBundle ?? []].flat(), ...CJS_INLINED_DEPS] },
+      },
+    ];
+  });
 
 /**
  * Every published `.d.ts` / `.d.cts`, from a single tsgo run. The dts plugin

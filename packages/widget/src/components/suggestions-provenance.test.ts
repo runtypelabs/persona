@@ -114,12 +114,12 @@ describe.each([false, true])("suggestion style migration (v5=%s)", (v5Defaults) 
     try {
       const config = resolved({ future: { v5Defaults }, colorScheme: "auto", darkTheme: theme });
       const { container, button } = render(config);
-      expect(getComputedStyle(button).padding).toBe("var(--persona-theme-padding)");
+      expect(getComputedStyle(button).padding).toBe("6px 12px");
       document.documentElement.classList.add("dark");
       applyThemeVariables(container, config);
       expect(container.querySelector("button")).toBe(button);
       expect(container.style.getPropertyValue("--persona-suggestion-compat-padding")).toBe("10px 20px");
-      expect(getComputedStyle(button).padding).toBe("var(--persona-theme-padding)");
+      expect(getComputedStyle(button).padding).toBe("10px 20px");
       const explicit = render(mergeConfigUpdate(config, { suggestionChipsConfig: { paddingX: "3px" } })).button;
       expect(explicit.classList.contains("persona-theme-padding")).toBe(true);
       expect(getComputedStyle(explicit).paddingLeft).toBe("3px");

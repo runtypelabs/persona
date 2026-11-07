@@ -220,18 +220,23 @@ describe("scroll-to-bottom chrome", () => {
       try {
         const config: AgentWidgetConfig = { future: { v5Defaults: true } };
         const off = createScrollToBottomControl(icon, "transcript");
+        // Computed styles are empty on a disconnected element.
+        document.body.append(off.element);
         off.element.style.setProperty("--persona-motion-duration-base", "0ms");
         off.update(config, true);
         off.update(config, true, false, 0, true);
         expect(calls).toHaveLength(0);
         expect(off.element.hasAttribute("data-persona-scroll-to-bottom-approval")).toBe(true);
         off.destroy();
+        off.element.remove();
 
         const unset = createScrollToBottomControl(icon, "transcript");
+        document.body.append(unset.element);
         unset.update(config, true);
         unset.update(config, true, false, 0, true);
         expect(calls[0].options.duration).toBe(200);
         unset.destroy();
+        unset.element.remove();
       } finally { restore(); }
     });
 
