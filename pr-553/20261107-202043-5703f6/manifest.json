@@ -1,0 +1,120 @@
+{
+  "runId": "20261107-202043-5703f6",
+  "entries": [
+    {
+      "feature": "markdown",
+      "label": "streamed markdown turn",
+      "note": null,
+      "files": [
+        "01-markdown-streamed-markdown-turn.gif",
+        "01-markdown-streamed-markdown-turn.webm",
+        "01-markdown-streamed-markdown-turn.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=markdown",
+      "at": "2026-11-07T20:20:52.254Z",
+      "head": "3e7338ec2d49597d82e7eb724919d296e0b40e3b",
+      "diffHash": "4a56c92f60f2"
+    },
+    {
+      "feature": "markdown",
+      "label": "rendered",
+      "note": null,
+      "files": [
+        "02-markdown-rendered.png",
+        "02-markdown-rendered.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=markdown",
+      "at": "2026-11-07T20:20:52.405Z",
+      "head": "3e7338ec2d49597d82e7eb724919d296e0b40e3b",
+      "diffHash": "4a56c92f60f2"
+    },
+    {
+      "feature": "markdown",
+      "label": "markdown turn",
+      "note": "1 request(s) crossed the network boundary, 5 controller event(s)",
+      "files": [
+        "03-markdown-markdown-turn.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=markdown",
+      "at": "2026-11-07T20:20:52.494Z",
+      "head": "3e7338ec2d49597d82e7eb724919d296e0b40e3b",
+      "diffHash": "4a56c92f60f2"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "details expanded",
+      "note": null,
+      "files": [
+        "04-tool-calls-details-expanded.png",
+        "04-tool-calls-details-expanded.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool",
+      "at": "2026-11-07T20:20:55.270Z",
+      "head": "3e7338ec2d49597d82e7eb724919d296e0b40e3b",
+      "diffHash": "4a56c92f60f2"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "tool flow",
+      "note": "1 request(s) crossed the network boundary, 6 controller event(s)",
+      "files": [
+        "05-tool-calls-tool-flow.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=tool",
+      "at": "2026-11-07T20:20:55.362Z",
+      "head": "3e7338ec2d49597d82e7eb724919d296e0b40e3b",
+      "diffHash": "4a56c92f60f2"
+    },
+    {
+      "feature": "approvals",
+      "label": "allowed",
+      "note": null,
+      "files": [
+        "06-approvals-allowed.png",
+        "06-approvals-allowed.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-11-07T20:20:57.986Z",
+      "head": "3e7338ec2d49597d82e7eb724919d296e0b40e3b",
+      "diffHash": "4a56c92f60f2"
+    },
+    {
+      "feature": "approvals",
+      "label": "allow flow",
+      "note": "2 request(s) crossed the network boundary, 15 controller event(s)",
+      "files": [
+        "07-approvals-allow-flow.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-11-07T20:20:58.081Z",
+      "head": "3e7338ec2d49597d82e7eb724919d296e0b40e3b",
+      "diffHash": "4a56c92f60f2"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "markdown",
+      "pass": true,
+      "skipped": false,
+      "note": "Streamed headings, ordered list, table, code block and quote render on marked 18; no idiomorph duplicate-id warnings or errors. Task lists covered by unit tests, not this fixture"
+    },
+    {
+      "feature": "tool-calls",
+      "pass": true,
+      "skipped": false,
+      "note": "Tool turn streams and expands; no console errors"
+    },
+    {
+      "feature": "approvals",
+      "pass": true,
+      "skipped": false,
+      "note": "Allow resumes the turn; no console errors"
+    },
+    {
+      "feature": "dictation-inline-swap",
+      "pass": false,
+      "skipped": true,
+      "note": "Mid-capture swap needs a host update() call; covered by ui.dictation-surface tests with jsdom 31, not driven in a browser"
+    }
+  ]
+}

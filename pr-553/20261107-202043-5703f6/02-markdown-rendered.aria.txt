@@ -1,0 +1,54 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e1]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e2]
+    - paragraph
+      - StaticText "Scenario: markdown. Replies are scripted in-page; no backend."
+    - generic
+      - paragraph
+        - StaticText "show me markdown"
+      - generic
+        - heading "Release checklist" [level=2, ref=e6]
+        - paragraph
+          - StaticText "Here is what ships in "
+          - strong
+            - StaticText "this"
+          - StaticText " build:"
+        - list
+          - listitem [level=1]
+            - ListMarker "1. "
+            - StaticText "Streaming "
+            - emphasis
+            - StaticText " with "
+            - code
+          - listitem [level=1]
+            - ListMarker "2. "
+            - StaticText "A "
+            - link "link to the docs" [ref=e8]
+          - listitem [level=1]
+            - ListMarker "3. "
+            - StaticText "A table and a code block"
+        - table
+          - rowgroup
+            - row
+              - columnheader "Package" [ref=e15]
+              - columnheader "Bump" [ref=e16]
+              - columnheader "Notes" [ref=e17]
+          - row
+            - cell "@runtypelabs/persona" [ref=e9]
+            - cell "patch" [ref=e10]
+            - cell "widget fix" [ref=e11]
+          - row
+            - cell "@runtypelabs/persona-proxy" [ref=e12]
+            - cell "none" [ref=e13]
+            - cell "unchanged" [ref=e14]
+        - code
+          - StaticText "initAgentWidget({ target: '#chat', config: { apiUrl: '/chat' } });\n"
+        - button "Copy message" [ref=e7]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e3]
+      - button "Start voice recognition" [ref=e4]
+      - button "Send message" [ref=e5]

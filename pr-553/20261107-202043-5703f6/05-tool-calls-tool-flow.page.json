@@ -1,0 +1,121 @@
+{
+  "scenario": "tool",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 146,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "weather",
+            "createdAt": "2026-11-07T20:20:53.698Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 128,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1794082853698
+      }
+    },
+    {
+      "at": 128,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mw6ulxky_0nhglq51",
+        "timestamp": 1794082853698
+      }
+    },
+    {
+      "at": 136,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mw6ulxky_bvammpf0",
+        "role": "user",
+        "content": "weather",
+        "createdAt": "2026-11-07T20:20:53.698Z",
+        "sequence": 1794082853587,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 460,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "tool-call_weather",
+        "role": "assistant",
+        "content": "",
+        "createdAt": "2026-11-07T20:20:53.900Z",
+        "streaming": false,
+        "variant": "tool",
+        "agentMetadata": {
+          "executionId": "exec_verify_1",
+          "iteration": 1
+        },
+        "sequence": 1794082853717,
+        "toolCall": {
+          "id": "call_weather",
+          "status": "complete",
+          "name": "get_weather",
+          "success": true,
+          "duration": 840,
+          "args": {
+            "city": "Lisbon",
+            "unit": "celsius"
+          },
+          "startedAt": 1794082853900,
+          "completedAt": 1794082854024,
+          "durationMs": 840,
+          "chunks": [
+            "Fetching forecast…"
+          ],
+          "result": {
+            "city": "Lisbon",
+            "tempC": 22,
+            "conditions": "sunny"
+          }
+        }
+      }
+    },
+    {
+      "at": 1078,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1794082854270-407ebe6cd9017",
+        "role": "assistant",
+        "content": "It's **22°C and sunny** in Lisbon right now.",
+        "createdAt": "2026-11-07T20:20:54.270Z",
+        "streaming": false,
+        "sequence": 1794082853718,
+        "agentMetadata": {
+          "textBlockId": "turn-2-text",
+          "executionId": "exec_verify_1",
+          "iteration": 1,
+          "turnId": "turn-2",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 1200,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mw6ulxky_0nhglq51",
+        "timestamp": 1794082854770,
+        "outcome": "success"
+      }
+    }
+  ]
+}

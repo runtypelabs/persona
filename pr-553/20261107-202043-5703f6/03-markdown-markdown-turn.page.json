@@ -1,0 +1,82 @@
+{
+  "scenario": "markdown",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 303,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "show me markdown",
+            "createdAt": "2026-11-07T20:20:48.456Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 284,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1794082848456
+      }
+    },
+    {
+      "at": 284,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mw6ultjc_7cbm1qa8",
+        "timestamp": 1794082848456
+      }
+    },
+    {
+      "at": 293,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mw6ultjc_047kp2oe",
+        "role": "user",
+        "content": "show me markdown",
+        "createdAt": "2026-11-07T20:20:48.456Z",
+        "sequence": 1794082848189,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 2826,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1794082848721-647d8823f05928",
+        "role": "assistant",
+        "content": "## Release checklist\n\nHere is what ships in **this** build:\n\n1. Streaming *Markdown* with `inline code`\n2. A [link to the docs](https://persona-chat.dev)\n3. A table and a code block\n\n| Package | Bump | Notes |\n| --- | --- | --- |\n| `@runtypelabs/persona` | patch | widget fix |\n| `@runtypelabs/persona-proxy` | none | unchanged |\n\n```ts\ninitAgentWidget({ target: '#chat', config: { apiUrl: '/chat' } });\n```\n\n> Block quotes render too.",
+        "createdAt": "2026-11-07T20:20:48.721Z",
+        "streaming": false,
+        "sequence": 1794082848476,
+        "agentMetadata": {
+          "textBlockId": "turn-1-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 2952,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mw6ultjc_7cbm1qa8",
+        "timestamp": 1794082851124,
+        "outcome": "success"
+      }
+    }
+  ]
+}
