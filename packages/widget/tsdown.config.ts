@@ -65,6 +65,10 @@ const base = {
   // Several configs write into the same dist/; the build script wipes it once
   // up front instead.
   clean: false,
+  // tsdown enables dts whenever package.json has `types`, so without this every
+  // runtime build also ran declaration emit on the default compiler, and that
+  // compiler's version reshaped the JS chunks. Only `declarations` emits types.
+  dts: false,
   target: "es2022",
   platform: "browser",
   minify: true,
