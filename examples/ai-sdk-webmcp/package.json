@@ -10,7 +10,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@mcp-b/webmcp-polyfill": "^6.0.0",
+    "@mcp-b/webmcp-polyfill": "^6.0.3",
     "@runtypelabs/persona": "workspace:^",
     "@vercel/functions": "^3.7.1",
     "ai": "^6.0.203",
@@ -20,7 +20,7 @@
     "zod": "^4.1.11"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "typescript": "^6.0.3"

@@ -3,6 +3,7 @@
 // suspension. Web Audio is faked — these assert scheduling decisions, not sound.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { AudioPlaybackManager } from "./audio-playback-manager";
+import type { VoicePlaybackMetrics } from "../types";
 
 class MockBufferSource {
   buffer: { duration: number } | null = null;
@@ -65,7 +66,243 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     delete (global as any).window;
+  });
+
+  it("samples held and scheduled audio without polling or changing the 150 ms gate", () => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const player = new AudioPlaybackManager();
+    const seen: VoicePlaybackMetrics[] = [];
+    player.onPlaybackMetrics((metrics) => seen.push(metrics));
+    player.enqueue(pcm(2400));
+    expect(seen.at(-1)).toMatchObject({ queuedAudioMs: 100, buffering: true, underrunCount: 0 });
+    now = 100;
+    player.enqueue(pcm(1200));
+    const ctx = MockAudioContext.instances[0];
+    expect(ctx.sources).toHaveLength(2);
+    expect(seen).toHaveLength(1);
+    ctx.currentTime = 0.05;
+    now = 250;
+    player.enqueue(pcm(2400));
+    expect(seen.at(-1)).toMatchObject({ queuedAudioMs: 200, buffering: false, refillCount: 0 });
+    ctx.currentTime = 1;
+    ctx.sources.forEach((source) => source.onended?.());
+    expect(seen.at(-1)).toMatchObject({ reason: "drained", queuedAudioMs: 0 });
+  });
+
+  it("counts one underrun per refill and measures from the first late chunk to release", () => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const player = new AudioPlaybackManager();
+    const seen: VoicePlaybackMetrics[] = [];
+    player.onPlaybackMetrics((metrics) => seen.push(metrics));
+    player.enqueue(pcm(4800));
+    const ctx = MockAudioContext.instances[0];
+    ctx.currentTime = 0.4;
+    now = 400;
+    player.enqueue(pcm(2400));
+    expect(seen.at(-1)).toMatchObject({ reason: "underrun", queuedAudioMs: 100, underrunCount: 1, refillCount: 0 });
+    ctx.currentTime = 0.46;
+    now = 460;
+    player.enqueue(pcm(2400));
+    expect(seen.at(-1)).toMatchObject({ reason: "refill", queuedAudioMs: 200, underrunCount: 1, refillCount: 1, lastRefillMs: 60, totalRefillMs: 60 });
+    ctx.currentTime = 0.8;
+    now = 800;
+    player.enqueue(pcm(2400));
+    ctx.currentTime = 0.83;
+    now = 830;
+    player.markStreamEnd();
+    expect(seen.at(-1)).toMatchObject({ reason: "refill", underrunCount: 2, refillCount: 2, lastRefillMs: 30, totalRefillMs: 90 });
+  });
+
+  it("does not count startup, explicit stream endings, or interrupted refills as completed refills", () => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const player = new AudioPlaybackManager();
+    const seen: VoicePlaybackMetrics[] = [];
+    player.onPlaybackMetrics((metrics) => seen.push(metrics));
+    player.enqueue(pcm(960));
+    player.markStreamEnd();
+    const ctx = MockAudioContext.instances[0];
+    ctx.currentTime = 5;
+    now = 5000;
+    player.enqueue(pcm(4800));
+    expect(seen.at(-1)).toMatchObject({ underrunCount: 0, refillCount: 0, lastRefillMs: null });
+    ctx.currentTime = 6;
+    now = 6000;
+    player.enqueue(pcm(960));
+    player.flush();
+    expect(seen.at(-1)).toMatchObject({ reason: "flushed", queuedAudioMs: 0, underrunCount: 1, refillCount: 0, totalRefillMs: 0 });
+    now = 7000;
+    player.enqueue(pcm(4800));
+    expect(seen.at(-1)).toMatchObject({ underrunCount: 1, refillCount: 0 });
+  });
+
+  it("reports continuous short-tail refill time without counting the startup tail", () => {
+    vi.useFakeTimers();
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    try {
+      const player = new AudioPlaybackManager();
+      const seen: VoicePlaybackMetrics[] = [];
+      player.onPlaybackMetrics((metrics) => seen.push(metrics));
+      player.setContinuousMode(true);
+      player.enqueue(pcm(960));
+      now = 150;
+      vi.advanceTimersByTime(150);
+      const ctx = MockAudioContext.instances[0];
+      ctx.currentTime = 1;
+      now = 1000;
+      player.enqueue(pcm(960));
+      now = 1150;
+      vi.advanceTimersByTime(150);
+      expect(seen.at(-1)).toMatchObject({ reason: "refill", continuous: true, underrunCount: 1, refillCount: 1, lastRefillMs: 150 });
+      expect(seen.at(-1)?.queuedAudioMs).toBeCloseTo(40);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("isolates a failing metrics consumer from playback and other subscribers", () => {
+    const player = new AudioPlaybackManager();
+    const seen: VoicePlaybackMetrics[] = [];
+    player.onPlaybackMetrics(() => { throw new Error("broken telemetry"); });
+    player.onPlaybackMetrics((metrics) => seen.push(metrics));
+    expect(() => player.enqueue(pcm(4800))).not.toThrow();
+    expect(MockAudioContext.instances[0].sources).toHaveLength(1);
+    expect(seen.at(-1)?.queuedAudioMs).toBe(200);
+  });
+
+  it("ignores empty input and explicit pauses and installs no measurement timer", () => {
+    vi.useFakeTimers();
+    try {
+      const player = new AudioPlaybackManager(24000, { prebufferMs: 0 });
+      const seen: VoicePlaybackMetrics[] = [];
+      player.onPlaybackMetrics((metrics) => seen.push(metrics));
+      player.enqueue(new Uint8Array());
+      player.enqueue(new Uint8Array([0]));
+      expect(seen).toEqual([]);
+      player.enqueue(new Uint8Array([0]));
+      player.pause();
+      const ctx = MockAudioContext.instances[0];
+      ctx.currentTime = 10;
+      player.enqueue(pcm(2400));
+      player.flush();
+      expect(seen.at(-1)).toMatchObject({ underrunCount: 0, refillCount: 0, queuedAudioMs: 0 });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("counts immediate-playback underruns without inventing a refill wait", () => {
+    const player = new AudioPlaybackManager(24000, { prebufferMs: 0 });
+    const seen: VoicePlaybackMetrics[] = [];
+    player.onPlaybackMetrics((metrics) => seen.push(metrics));
+    player.enqueue(pcm(2400));
+    MockAudioContext.instances[0].currentTime = 1;
+    player.enqueue(pcm(2400));
+    expect(seen.at(-1)).toMatchObject({ reason: "underrun", underrunCount: 1, refillCount: 0, lastRefillMs: null });
+    expect(seen.at(-1)?.queuedAudioMs).toBeCloseTo(100);
+  });
+
+  it("reports an underrun before a single late chunk immediately refills the buffer", () => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const player = new AudioPlaybackManager();
+    const seen: VoicePlaybackMetrics[] = [];
+    player.onPlaybackMetrics((metrics) => seen.push(metrics));
+    player.enqueue(pcm(4800));
+    MockAudioContext.instances[0].currentTime = 0.4;
+    now = 400;
+    player.enqueue(pcm(4800));
+    expect(seen.map((metrics) => metrics.reason)).toEqual(["queue", "underrun", "refill"]);
+    expect(seen[1]).toMatchObject({ queuedAudioMs: 200, buffering: true, underrunCount: 1, refillCount: 0 });
+    expect(seen[2]).toMatchObject({ buffering: false, underrunCount: 1, refillCount: 1, lastRefillMs: 0 });
+  });
+
+  it("buffers 150 ms by default before scheduling realtime audio", () => {
+    const player = new AudioPlaybackManager();
+    player.enqueue(pcm(2400));
+    expect(MockAudioContext.instances).toHaveLength(0);
+    player.enqueue(pcm(1200));
+    const ctx = MockAudioContext.instances[0];
+    expect(ctx.sources.map((source) => source.startTime)).toEqual([0, 0.1]);
+  });
+
+  it("re-buffers the first late chunk instead of playing it alone after an underrun", () => {
+    const player = new AudioPlaybackManager(24000, { prebufferMs: 150 });
+    player.enqueue(pcm(4800));
+    const ctx = MockAudioContext.instances[0];
+    ctx.currentTime = 0.4;
+    player.enqueue(pcm(2400));
+    expect(ctx.sources).toHaveLength(1);
+    ctx.currentTime = 0.46;
+    player.enqueue(pcm(2400));
+    expect(ctx.sources).toHaveLength(3);
+    expect(ctx.sources[1].startTime).toBeCloseTo(0.46);
+    expect(ctx.sources[2].startTime).toBeCloseTo(0.56);
+  });
+
+  it("flush discards a short buffered reply and its pending release timer", () => {
+    vi.useFakeTimers();
+    try {
+      const player = new AudioPlaybackManager(24000, { prebufferMs: 150 });
+      player.setContinuousMode(true);
+      player.enqueue(pcm(960));
+      player.flush();
+      vi.advanceTimersByTime(300);
+      expect(MockAudioContext.instances).toHaveLength(0);
+      player.enqueue(pcm(2400));
+      expect(MockAudioContext.instances).toHaveLength(0);
+      vi.advanceTimersByTime(150);
+      expect(MockAudioContext.instances[0].sources).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("releases a short continuous reply after an underrun without waiting for audio_end", () => {
+    vi.useFakeTimers();
+    try {
+      const player = new AudioPlaybackManager(24000, { prebufferMs: 150 });
+      player.setContinuousMode(true);
+      player.enqueue(pcm(4800));
+      const ctx = MockAudioContext.instances[0];
+      ctx.currentTime = 0.5;
+      player.enqueue(pcm(960));
+      expect(ctx.sources).toHaveLength(1);
+      vi.advanceTimersByTime(149);
+      expect(ctx.sources).toHaveLength(1);
+      vi.advanceTimersByTime(1);
+      expect(ctx.sources).toHaveLength(2);
+      expect(ctx.sources[1].startTime).toBe(0.5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a cleared short-tail timer cannot disable buffering for the next reply", () => {
+    vi.useFakeTimers();
+    try {
+      const player = new AudioPlaybackManager(24000, { prebufferMs: 150 });
+      player.setContinuousMode(true);
+      player.enqueue(pcm(960));
+      player.markStreamEnd();
+      const ctx = MockAudioContext.instances[0];
+      ctx.sources[0].onended?.();
+      ctx.currentTime = 0.5;
+      player.enqueue(pcm(960));
+      vi.advanceTimersByTime(150);
+      expect(ctx.sources).toHaveLength(2);
+      ctx.currentTime = 1;
+      player.enqueue(pcm(960));
+      expect(ctx.sources).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // waterline @ 24kHz / 200ms = round(24000 * 200 / 1000) = 4800 samples.
@@ -153,7 +390,7 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
   });
 
   it("pauses via AudioContext.suspend and does not auto-resume on further audio", () => {
-    const m = new AudioPlaybackManager(24000); // prebufferMs 0 → realtime, no gate
+    const m = new AudioPlaybackManager(24000, { prebufferMs: 0 });
     const started = vi.fn();
     m.onStarted(started);
 
@@ -177,7 +414,7 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
   });
 
   it("clears the started latch on flush so the next reply can fire onStarted again", () => {
-    const m = new AudioPlaybackManager(24000); // realtime: schedules on first chunk
+    const m = new AudioPlaybackManager(24000, { prebufferMs: 0 });
     const started = vi.fn();
     m.onStarted(started);
 
@@ -192,7 +429,7 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
   });
 
   it("ignores onended from sources a flush stopped, so the next reply drains on its own audio", () => {
-    const m = new AudioPlaybackManager(24000);
+    const m = new AudioPlaybackManager(24000, { prebufferMs: 0 });
     m.enqueue(pcm(100));
     m.enqueue(pcm(100));
     const ctx = MockAudioContext.instances[0];

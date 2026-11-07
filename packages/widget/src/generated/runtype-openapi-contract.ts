@@ -646,6 +646,9 @@ export type RuntypeClientInitResponse = {
   config: {
   placeholder: string;
   theme?: unknown;
+  webmcp?: {
+  requireConfirmFor: Array<string>;
+};
   welcomeMessage: string | null;
 };
   conversationId: string;

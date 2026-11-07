@@ -113,6 +113,7 @@ import type {
   VoiceDelegationRequest,
   VoiceDelegationResult,
   VoiceMetrics,
+  VoicePlaybackMetrics,
   VoicePlaybackEngine,
   VoiceSessionBridge,
   VoiceTranscriptMetadata,
@@ -361,6 +362,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   #statusCallbacks: ((status: VoiceStatus) => void)[] = [];
   #transcriptCallbacks: TranscriptCallback[] = [];
   #metricsCallbacks: ((metrics: VoiceMetrics) => void)[] = [];
+  #playbackMetricsCallbacks: ((metrics: VoicePlaybackMetrics) => void)[] = [];
 
   constructor(private config: VoiceConfig["runtype"]) {}
 
@@ -608,6 +610,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         return;
       }
       this.#playback = engine;
+      if (this.#playbackMetricsCallbacks.length > 0) this.#observePlaybackMetrics(engine);
       this.#armPlaybackFinished();
       // Capture from now: frames buffer until the call socket is open.
       this.#startCapture(captureContext, stream, generation);
@@ -749,6 +752,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.#statusCallbacks = [];
     this.#transcriptCallbacks = [];
     this.#metricsCallbacks = [];
+    this.#playbackMetricsCallbacks = [];
   }
 
   /**
@@ -1401,6 +1405,27 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   onMetrics(callback: (metrics: VoiceMetrics) => void): void {
     this.#metricsCallbacks.push(callback);
+  }
+
+  onPlaybackMetrics(callback: (metrics: VoicePlaybackMetrics) => void): void {
+    this.#playbackMetricsCallbacks.push(callback);
+    if (this.#playbackMetricsCallbacks.length === 1 && this.#playback) {
+      this.#observePlaybackMetrics(this.#playback);
+    }
+  }
+
+  #observePlaybackMetrics(engine: VoicePlaybackEngine): void {
+    const generation = this.#callGeneration;
+    engine.onPlaybackMetrics?.((metrics) => {
+      if (generation !== this.#callGeneration || this.#playback !== engine) return;
+      for (const callback of this.#playbackMetricsCallbacks) {
+        try {
+          callback(metrics);
+        } catch {
+          // SAFETY: diagnostics must not break playback, including with a custom engine.
+        }
+      }
+    });
   }
 
   #emitStatus(status: VoiceStatus): void {

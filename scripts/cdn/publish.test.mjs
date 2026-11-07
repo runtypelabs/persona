@@ -4,7 +4,47 @@ import { mkdtemp, mkdir, writeFile, rm, cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { setImmediate } from 'node:timers/promises';
 import { assertSameRelease, fileHashes, IMMUTABLE_CACHE, LATEST_CACHE, publish, purgeLatest, validateVersion, verifyLatest, verifyVersioned } from './publish.mjs';
+
+test('version verification overlaps requests with bounded concurrency through body consumption', async () => {
+  const hashes = new Map(Array.from({ length: 40 }, (_, index) => [`${index}.js`, createHash('sha256').update('asset').digest('hex')]));
+  let active = 0, peak = 0, completed = 0;
+  await verifyVersioned(hashes, '4.32.1', async (_url, options) => {
+    assert.ok(options.signal instanceof AbortSignal);
+    active++;
+    peak = Math.max(peak, active);
+    return {
+      ok: true,
+      headers: new Headers({ 'Access-Control-Allow-Origin': '*' }),
+      async arrayBuffer() {
+        await setImmediate();
+        active--;
+        completed++;
+        return Buffer.from('asset');
+      },
+    };
+  });
+  assert.ok(peak > 1, 'requests should overlap');
+  assert.ok(peak <= 12, 'at most twelve asset bodies should be in flight');
+  assert.equal(completed, 40);
+  assert.equal(active, 0);
+});
+
+test('verification drains in-flight requests before reporting a failure', async () => {
+  const hashes = new Map(Array.from({ length: 30 }, (_, index) => [`${index}.js`, createHash('sha256').update('asset').digest('hex')]));
+  let active = 0, peak = 0;
+  await assert.rejects(verifyVersioned(hashes, '4.32.1', async url => {
+    active++;
+    peak = Math.max(peak, active);
+    await setImmediate();
+    active--;
+    if (url.endsWith('/0.js')) throw new Error('network failure');
+    return new Response('asset', { headers: { 'Access-Control-Allow-Origin': '*' } });
+  }), /network failure/);
+  assert.ok(peak > 1);
+  assert.equal(active, 0);
+});
 
 test('requires exact safe release versions', () => {
   for (const value of ['4.32.1', '4.33.0-beta.1', '4.33.0+build.1']) assert.equal(validateVersion(value), value);
@@ -111,6 +151,7 @@ test('publishes and verifies versioned assets before latest; reruns preserve imm
     publicChecks.length = 0;
     await publish(options);
     assert.equal(calls.filter(args => args[3] === 'cp').length, 1);
+    assert.equal(calls.filter(args => args[3] === 'sync').length, 1);
     for (const name of ['launcher.global.js', 'ui-extras.js']) {
       calls.length = 0;
       const requests = [];

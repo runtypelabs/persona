@@ -11,8 +11,8 @@
     "runtype:ensure": "node runtype/ensure-docs-agent.ts"
   },
   "dependencies": {
-    "@mcp-b/global": "^6.0.0",
-    "@mcp-b/webmcp-polyfill": "^6.0.0",
+    "@mcp-b/global": "^6.0.3",
+    "@mcp-b/webmcp-polyfill": "^6.0.3",
     "@runtypelabs/persona": "workspace:^",
     "alasql": "^4.17.3",
     "echarts": "^6.1.0",
@@ -30,7 +30,7 @@
     "@runtypelabs/sdk": "^10.3.1",
     "jsdom": "^28.1.0",
     "typescript": "^6.0.3",
-    "vite": "^8.3.5",
-    "vitest": "^5.0.5"
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
   }
 }

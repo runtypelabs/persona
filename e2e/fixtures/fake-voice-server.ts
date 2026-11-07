@@ -113,6 +113,8 @@ export interface FakeVoiceCall {
   sendAudio(ms: number): Promise<void>;
   /** Stream caller-supplied PCM16 LE mono 24 kHz (e.g. synthesized speech) in real-time 20 ms frames. */
   sendPcm(pcm: Buffer): Promise<void>;
+  /** Deliver one raw PCM frame without pacing; the playback suite controls the audio clock. */
+  sendPcmFrame(pcm: Buffer): void;
   close(code?: number): void;
 }
 
@@ -418,6 +420,9 @@ function createCall(
         ws.send(pcm.subarray(at, at + frameBytes));
         await sleep(20);
       }
+    },
+    sendPcmFrame(pcm) {
+      if (ws.readyState === ws.OPEN) ws.send(pcm);
     },
     close(code = 1000) {
       ws.close(code, "Voice call ended");

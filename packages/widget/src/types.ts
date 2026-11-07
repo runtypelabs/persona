@@ -5213,6 +5213,13 @@ export type AgentWidgetVoiceRecognitionConfig = {
   onMetrics?: (metrics: VoiceMetrics) => void;
 
   /**
+   * Local playback measurements, separate from server turn latency. Queue updates
+   * are sampled at most every 250 ms during activity; lifecycle changes emit immediately.
+   * No audio, transcript, or automatic upload. Custom engines may omit support.
+   */
+  onPlaybackMetrics?: (metrics: VoicePlaybackMetrics) => void;
+
+  /**
    * Warm the voice path when the visitor shows intent to talk, before the mic
    * click, so the call starts faster.
    *
@@ -5254,8 +5261,9 @@ export type AgentWidgetVoiceRecognitionConfig = {
       voiceId?: string;
       /**
        * Optional custom streaming playback engine. Defaults to the built-in
-       * `AudioPlaybackManager`. Import `createWorkletPlaybackEngine` from
-       * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
+       * `AudioPlaybackManager` with a 150 ms prebuffer. Import
+       * `createWorkletPlaybackEngine` from `@runtypelabs/persona/voice-worklet-player`
+       * for audio-thread playback.
        */
       createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
       /**
@@ -5558,13 +5566,34 @@ export type VoiceMetrics = {
   totalMs?: number;
 };
 
+/** Local player snapshots. Counters last for the player/call lifetime, including across interruptions. */
+export type VoicePlaybackMetrics = {
+  reason: 'queue' | 'underrun' | 'refill' | 'flushed' | 'drained';
+  /** Unplayed scheduled audio plus held samples, in ms; excludes device/output latency. */
+  queuedAudioMs: number;
+  buffering: boolean;
+  /** True for unmarked speech-to-speech output such as GPT Live. */
+  continuous: boolean;
+  /**
+   * A new chunk arrived after scheduled audio ran out, before an explicit end/flush.
+   * In continuous mode this includes natural pauses: it is NOT a count of audible glitches.
+   */
+  underrunCount: number;
+  /** Completed refill waits after underruns; excludes initial buffering and cancelled waits. */
+  refillCount: number;
+  /** Most recent completed wait from first late chunk to scheduling, or null if none. */
+  lastRefillMs: number | null;
+  /** Sum of completed refill waits in ms, not the preceding no-input gap. */
+  totalRefillMs: number;
+};
+
 /**
  * Streaming PCM playback engine used by the realtime voice provider.
  *
  * The provider feeds raw PCM16 LE mono @ 24kHz (WAV header already stripped)
  * via `enqueue`, signals end-of-reply with `markStreamEnd`, and learns when
  * playback has fully drained via `onFinished`. The default implementation is
- * `AudioPlaybackManager`; an optional jitter-buffered AudioWorklet engine ships
+ * `AudioPlaybackManager` with a 150 ms prebuffer; an optional AudioWorklet engine ships
  * from `@runtypelabs/persona/voice-worklet-player` and can be injected via the
  * `runtype.createPlaybackEngine` config hook.
  */
@@ -5577,6 +5606,8 @@ export interface VoicePlaybackEngine {
   flush(): void;
   /** Register a callback fired once all queued audio has finished playing. */
   onFinished(callback: () => void): void;
+  /** Optional local measurements. Subscribers survive flush; destroy releases them. */
+  onPlaybackMetrics?(callback: (metrics: VoicePlaybackMetrics) => void): void;
   /** Release all audio resources. */
   destroy(): Promise<void> | void;
   /**
@@ -5631,8 +5662,9 @@ export type VoiceConfig = {
     voiceId?: string;
     /**
      * Optional custom streaming playback engine. Defaults to the built-in
-     * `AudioPlaybackManager`. Import `createWorkletPlaybackEngine` from
-     * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
+     * `AudioPlaybackManager` with a 150 ms prebuffer. Import
+     * `createWorkletPlaybackEngine` from `@runtypelabs/persona/voice-worklet-player`
+     * for audio-thread playback.
      */
     createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
     /** See `voiceRecognition.provider.runtype.prewarmMode`. @default 'request' */
@@ -5706,6 +5738,9 @@ export interface VoiceProvider {
 
   /** Register a callback for per-turn latency metrics (realtime path). */
   onMetrics?(callback: (metrics: VoiceMetrics) => void): void;
+
+  /** Register for optional local playback measurements, separate from server latency metrics. */
+  onPlaybackMetrics?(callback: (metrics: VoicePlaybackMetrics) => void): void;
 
   /**
    * Register a callback for live capture amplitude, normalized to 0..1.

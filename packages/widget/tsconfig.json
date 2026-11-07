@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "lib": ["ES2020", "DOM"],
+    "lib": ["ES2022", "DOM"],
     "paths": {
       "@runtypelabs/persona": ["./src"],
       "@runtypelabs/persona/context-mentions": ["./src/context-mentions.ts"],

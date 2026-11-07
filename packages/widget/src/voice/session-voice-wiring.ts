@@ -248,6 +248,17 @@ export const wireSessionVoice = (
       });
     }
 
+    if (provider.onPlaybackMetrics) {
+      provider.onPlaybackMetrics((metrics) => {
+        if (!isCurrent()) return;
+        try {
+          s.config.voiceRecognition?.onPlaybackMetrics?.(metrics);
+        } catch {
+          // SAFETY: optional diagnostics must not interrupt a custom provider's audio loop.
+        }
+      });
+    }
+
     provider.onError((error) => {
       if (!isCurrent()) return;
       console.error('Voice error:', error);

@@ -6,6 +6,7 @@ import type {
   VoiceClientTools,
   VoiceDirectTurn,
   VoiceConfig,
+  VoicePlaybackMetrics,
   VoiceDelegationFollowUp,
   VoiceDelegationRequest,
   VoiceDelegationResult,
@@ -597,6 +598,43 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
       '{"type":"metrics","llm_ms":120,"tts_ms":80,"first_audio_ms":200,"total_ms":400}',
     );
     expect(metrics).toEqual([{ llmMs: 120, ttsMs: 80, firstAudioMs: 200, totalMs: 400 }]);
+  });
+
+  it('forwards playback measurements only for the active call and isolates subscriber failures', async () => {
+    let emit: ((metrics: VoicePlaybackMetrics) => void) | undefined;
+    const engine = { ...makeFakeEngine(), onPlaybackMetrics: (cb: typeof emit) => { emit = cb; } };
+    const provider = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => engine });
+    const seen: VoicePlaybackMetrics[] = [];
+    provider.onPlaybackMetrics(() => { throw new Error('broken telemetry'); });
+    provider.onPlaybackMetrics((metrics) => seen.push(metrics));
+    await provider.startListening();
+    const metrics: VoicePlaybackMetrics = {
+      reason: 'queue', queuedAudioMs: 100, buffering: true, continuous: true,
+      underrunCount: 0, refillCount: 0, lastRefillMs: null, totalRefillMs: 0,
+    };
+    emit!(metrics);
+    expect(seen).toEqual([metrics]);
+    await provider.stopListening();
+    emit!(metrics);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('can subscribe during a call and leaves unobserved engines alone', async () => {
+    let emit: ((metrics: VoicePlaybackMetrics) => void) | undefined;
+    const subscribe = vi.fn((cb: typeof emit) => { emit = cb; });
+    const engine = { ...makeFakeEngine(), onPlaybackMetrics: subscribe };
+    const provider = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => engine });
+    await provider.startListening();
+    expect(subscribe).not.toHaveBeenCalled();
+    const seen: VoicePlaybackMetrics[] = [];
+    provider.onPlaybackMetrics((metrics) => seen.push(metrics));
+    const metrics: VoicePlaybackMetrics = {
+      reason: 'queue', queuedAudioMs: 100, buffering: true, continuous: false,
+      underrunCount: 0, refillCount: 0, lastRefillMs: null, totalRefillMs: 0,
+    };
+    emit!(metrics);
+    expect(seen).toEqual([metrics]);
+    await provider.disconnect();
   });
 
   it('reports barge-in semantics while the call is live', async () => {

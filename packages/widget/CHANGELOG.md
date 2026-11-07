@@ -1,5 +1,23 @@
 # @runtypelabs/persona
 
+## 4.36.0
+
+### Minor Changes
+
+- 0a75187: Add opt-in local playback measurements for queued audio, scheduler underruns, and refill duration through voiceRecognition.onPlaybackMetrics. Keep the default jitter buffer fixed at 150 ms.
+
+## 4.35.2
+
+### Patch Changes
+
+- a386ab3: Buffer 150 ms of realtime voice audio before playback and refill after underruns instead of playing isolated late chunks. Preserve interruption clearing and release short continuous replies without waiting for an end-of-audio signal.
+
+## 4.35.1
+
+### Patch Changes
+
+- 960e28d: Fail closed on the WebMCP `requireConfirmFor` surface policy. In client-token mode, a page tool call made before the surface policy has loaded now always asks for confirmation, and the last loaded policy survives `clearClientSession()`, so a session cleared mid-call can no longer drop it.
+
 ## 4.35.0
 
 ### Minor Changes

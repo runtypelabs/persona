@@ -6,7 +6,7 @@ This example uses the supported **`Agent.onRequest` HTTP/SSE API**. Persona cons
 
 ## Run locally, without credentials
 
-From the monorepo root, with Node.js 24 and pnpm:
+From the monorepo root, with Node.js 26 and pnpm:
 
 ```sh
 pnpm install

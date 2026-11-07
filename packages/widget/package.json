@@ -1,6 +1,6 @@
 {
   "name": "@runtypelabs/persona",
-  "version": "4.35.0",
+  "version": "4.36.0",
   "description": "Themeable, pluggable streaming agent widget for websites, in plain JS with support for voice input and reasoning / tool output.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -194,7 +194,7 @@
     "check:runtype-types": "pnpm run fetch:runtype-openapi && node scripts/generate-runtype-openapi-types.mjs --check"
   },
   "dependencies": {
-    "@mcp-b/webmcp-polyfill": "^6.0.0",
+    "@mcp-b/webmcp-polyfill": "^6.0.3",
     "dompurify": "^3.4.13",
     "idiomorph": "^0.7.4",
     "lucide": "^1.18.0",
@@ -202,21 +202,21 @@
     "partial-json": "^0.1.7"
   },
   "devDependencies": {
-    "@size-limit/file": "^12.1.0",
+    "@size-limit/file": "^14.3.0",
     "@types/jsdom": "^30.0.0",
-    "@types/node": "^20.12.7",
+    "@types/node": "^26.6.6",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
-    "@vitest/ui": "^5.0.5",
-    "acorn": "^8.15.0",
+    "@vitest/ui": "^5.1.0",
+    "acorn": "^8.19.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^28.1.0",
     "lightningcss": "^1.33.0",
-    "rimraf": "^5.0.5",
-    "size-limit": "^12.1.0",
-    "terser": "^5.49.0",
-    "tsdown": "^0.23.2",
+    "rimraf": "^6.1.4",
+    "size-limit": "^14.3.0",
+    "terser": "^5.51.2",
+    "tsdown": "^0.23.7",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.5",
+    "vitest": "^5.1.0",
     "webmcp-polyfill-v5": "npm:@mcp-b/webmcp-polyfill@5.1.0"
   },
   "engines": {

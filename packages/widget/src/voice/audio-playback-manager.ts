@@ -1,4 +1,4 @@
-import type { PcmStreamPlayer } from "../types";
+import type { PcmStreamPlayer, VoicePlaybackMetrics } from "../types";
 
 /**
  * AudioPlaybackManager
@@ -18,13 +18,9 @@ import type { PcmStreamPlayer } from "../types";
  * alternative — inject it via `voiceRecognition.provider.runtype.createPlaybackEngine`
  * or `textToSpeech.createPlaybackEngine` and it lands in the consumer's bundle.
  *
- * With the default `prebufferMs: 0` this behaves exactly like a bare scheduler
- * (the realtime path), so that path is unchanged. A non-zero `prebufferMs`
- * (the read-aloud path passes ~200) holds incoming audio until a waterline of
- * samples is buffered before starting, and re-enters buffering on underrun —
- * softening the schedule-clock snap that a hand-scheduled BufferSource otherwise
- * turns into a click on bursty HTTP-streamed audio. This is a pragmatic
- * approximation of the worklet's audio-thread silence, not parity.
+ * The default 150 ms prebuffer holds incoming samples before starting and
+ * refills after an underrun, absorbing short delivery gaps. Read-aloud uses
+ * its own prebuffer. An explicit `prebufferMs: 0` opts into immediate playback.
  */
 export class AudioPlaybackManager implements PcmStreamPlayer {
   #ctx: AudioContext | null = null;
@@ -44,7 +40,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
   // Prebuffer gate: while `buffering`, incoming samples accumulate in
   // `pendingBuffers` until they reach `waterlineSamples`, then release into the
-  // scheduler. With `waterlineSamples === 0` the gate is off (realtime default).
+  // scheduler. With `waterlineSamples === 0` the gate is off.
   #buffering: boolean;
   #pendingBuffers: Float32Array[] = [];
   #pendingSamples = 0;
@@ -52,6 +48,14 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
   // prebuffer's worth of quiet instead.
   #continuous = false;
   #tailTimer: ReturnType<typeof setTimeout> | undefined;
+  #metricsCallbacks: ((metrics: VoicePlaybackMetrics) => void)[] = [];
+  #lastMetricsAt = -Infinity;
+  #awaitingAudio = false;
+  #underrunCount = 0;
+  #refillStartedAt: number | null = null;
+  #refillCount = 0;
+  #lastRefillMs: number | null = null;
+  #totalRefillMs = 0;
 
   // PCM format constants
   readonly #sampleRate: number;
@@ -64,7 +68,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
   constructor(sampleRate = 24000, options: { prebufferMs?: number } = {}) {
     this.#sampleRate = sampleRate;
-    const prebufferMs = Math.max(0, options.prebufferMs ?? 0);
+    const prebufferMs = Math.max(0, options.prebufferMs ?? 150);
     this.#waterlineSamples = Math.round((sampleRate * prebufferMs) / 1000);
     this.#buffering = this.#waterlineSamples > 0;
   }
@@ -117,11 +121,29 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     const float32 = this.#pcmToFloat32(data);
     if (float32.length === 0) return;
 
+    const underrun =
+      !this.#buffering && this.#awaitingAudio &&
+      !this.#userPaused && this.#ctx !== null && this.#nextStartTime < this.#ctx.currentTime;
+    if (underrun) {
+      this.#underrunCount++;
+      if (this.#waterlineSamples > 0) this.#refillStartedAt = performance.now();
+    }
+    this.#awaitingAudio = true;
+
+    if (
+      this.#waterlineSamples > 0 &&
+      this.#ctx &&
+      this.#nextStartTime < this.#ctx.currentTime
+    ) {
+      this.#buffering = true;
+    }
+
     if (this.#buffering) {
       // Hold until the prebuffer waterline fills, then release as a batch.
       this.#pendingBuffers.push(float32);
       this.#pendingSamples += float32.length;
       clearTimeout(this.#tailTimer);
+      if (underrun) this.#emitPlaybackMetrics("underrun");
       if (this.#pendingSamples >= this.#waterlineSamples) this.#releaseBuffer();
       else if (this.#continuous) {
         this.#tailTimer = setTimeout(
@@ -131,7 +153,9 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
       }
     } else {
       this.#scheduleSamples(float32);
+      if (underrun) this.#emitPlaybackMetrics("underrun");
     }
+    this.#emitPlaybackMetrics("queue");
   }
 
   /**
@@ -139,6 +163,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    * The onFinished callback fires after all queued audio has played.
    */
   markStreamEnd(): void {
+    this.#awaitingAudio = false;
     // A reply shorter than the prebuffer never reaches the waterline; release
     // whatever we held so it still plays.
     if (this.#pendingBuffers.length > 0) this.#releaseBuffer();
@@ -174,7 +199,10 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     this.#pendingSamples = 0;
     this.#buffering = this.#waterlineSamples > 0;
     this.#started = false;
+    this.#awaitingAudio = false;
+    this.#refillStartedAt = null;
     clearTimeout(this.#tailTimer);
+    this.#emitPlaybackMetrics("flushed");
   }
 
   /** See {@link VoicePlaybackEngine.setContinuousMode}. */
@@ -205,6 +233,11 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     this.#startedCallbacks.push(callback);
   }
 
+  /** Subscribe without starting a polling timer or retaining audio in the measurements. */
+  onPlaybackMetrics(callback: (metrics: VoicePlaybackMetrics) => void): void {
+    this.#metricsCallbacks.push(callback);
+  }
+
   /**
    * Pause playback. Suspends the AudioContext clock; queued/scheduled audio
    * freezes in place and {@link resume} continues exactly where it left off.
@@ -225,6 +258,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    */
   async destroy(): Promise<void> {
     this.flush();
+    this.#metricsCallbacks = [];
     if (this.#ctx) {
       await this.#ctx.close();
       this.#ctx = null;
@@ -233,11 +267,21 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
   /** Release held prebuffer samples into the scheduler in arrival order. */
   #releaseBuffer(): void {
+    clearTimeout(this.#tailTimer);
+    this.#tailTimer = undefined;
+    if (this.#pendingBuffers.length === 0) return;
     this.#buffering = false;
     const held = this.#pendingBuffers;
     this.#pendingBuffers = [];
     this.#pendingSamples = 0;
     for (const samples of held) this.#scheduleSamples(samples);
+    if (this.#refillStartedAt !== null) {
+      this.#lastRefillMs = Math.max(0, performance.now() - this.#refillStartedAt);
+      this.#refillStartedAt = null;
+      this.#refillCount++;
+      this.#totalRefillMs += this.#lastRefillMs;
+      this.#emitPlaybackMetrics("refill");
+    }
   }
 
   /** Schedule one Float32 sample block for gap-free playback. */
@@ -253,17 +297,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     source.connect(ctx.destination);
 
     const now = ctx.currentTime;
-    if (this.#nextStartTime === 0) {
-      // Fresh start (first audio of this session, or after flush).
-      this.#nextStartTime = now;
-    } else if (this.#nextStartTime < now) {
-      // Underrun: the playhead caught up to the queue. Snap to now (a small,
-      // unavoidable gap) and, when a prebuffer is configured, re-enter buffering
-      // so subsequent chunks re-accumulate before scheduling — collapsing a
-      // train of clicks into a single rebuffer.
-      this.#nextStartTime = now;
-      if (this.#waterlineSamples > 0) this.#buffering = true;
-    }
+    this.#nextStartTime = Math.max(this.#nextStartTime, now);
     source.start(this.#nextStartTime);
     this.#nextStartTime += buffer.duration;
 
@@ -285,7 +319,33 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
       this.#activeSources.splice(idx, 1);
       this.#pendingCount--;
       this.#checkFinished();
+      this.#emitPlaybackMetrics(this.#pendingCount === 0 && this.#pendingSamples === 0 ? "drained" : "queue");
     };
+  }
+
+  #emitPlaybackMetrics(reason: VoicePlaybackMetrics["reason"]): void {
+    if (this.#metricsCallbacks.length === 0) return;
+    const now = performance.now();
+    if (reason === "queue" && now - this.#lastMetricsAt < 250) return;
+    this.#lastMetricsAt = now;
+    const scheduledMs = this.#ctx ? Math.max(0, this.#nextStartTime - this.#ctx.currentTime) * 1000 : 0;
+    const metrics: VoicePlaybackMetrics = {
+      reason,
+      queuedAudioMs: scheduledMs + this.#pendingSamples / this.#sampleRate * 1000,
+      buffering: this.#buffering,
+      continuous: this.#continuous,
+      underrunCount: this.#underrunCount,
+      refillCount: this.#refillCount,
+      lastRefillMs: this.#lastRefillMs,
+      totalRefillMs: this.#totalRefillMs,
+    };
+    for (const callback of this.#metricsCallbacks) {
+      try {
+        callback(metrics);
+      } catch {
+        // SAFETY: optional diagnostics must not interrupt audio playback.
+      }
+    }
   }
 
   #checkFinished(): void {

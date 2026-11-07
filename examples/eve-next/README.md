@@ -6,7 +6,7 @@ The example uses the real `@runtypelabs/persona` widget with `future: { v5Defaul
 
 ## Run Preview
 
-From the repository root, with Node 24 and pnpm:
+From the repository root, with Node 26 and pnpm:
 
 ```sh
 pnpm install
