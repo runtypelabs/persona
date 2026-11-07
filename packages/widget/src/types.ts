@@ -7550,8 +7550,8 @@ export type AgentWidgetMarkdownTableToken = {
   align: Array<"left" | "center" | "right" | null>;
   /**
    * Rendered `<tr>` HTML for the header row. The structured `header` / `rows` /
-   * `align` fields are not reconstructable from the bundled parser and arrive
-   * empty, so a table override composes from these two instead.
+   * `align` fields arrive empty, so a table override composes from these two
+   * instead.
    */
   headerHtml?: string;
   /** Rendered `<tr>` HTML for the body rows. See `headerHtml`. */
@@ -7583,8 +7583,8 @@ export type AgentWidgetMarkdownListToken = {
   loose: boolean;
   items: unknown[];
   /**
-   * Rendered `<li>` HTML for the list body. `items` is not reconstructable from
-   * the bundled parser and arrives empty, so a list override wraps this.
+   * Rendered `<li>` HTML for the list body. `items` arrives empty, so a list
+   * override wraps this.
    */
   itemsHtml?: string;
 };
@@ -7631,11 +7631,11 @@ export type AgentWidgetMarkdownEmToken = {
  * Each method receives the token and should return an HTML string.
  * Return `false` to use the default renderer.
  *
- * The bundled parser hands the widget positional arguments rather than tokens,
- * so `raw` and `tokens` are not always recoverable: they arrive as `""` and
- * `[]` on the tokens where the parser does not supply them. Every field the
- * parser does supply (`href`, `title`, `text`, `depth`, `lang`, ...) is
- * populated. `text` is already-rendered inline HTML, not raw markdown.
+ * These are the widget's tokens, not the parser's: `raw` and `tokens` arrive as
+ * `""` and `[]` (a heading's `raw` is its plain text). The other fields (`href`,
+ * `title`, `text`, `depth`, `lang`, ...) are populated. `text` is
+ * already-rendered inline HTML, not raw markdown, and `title` and image `text`
+ * are HTML-escaped, so an override can interpolate them.
  *
  * @example
  * ```typescript

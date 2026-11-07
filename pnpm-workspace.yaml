@@ -11,17 +11,6 @@ allowBuilds:
   sharp: true
   workerd: true
 minimumReleaseAgeExclude:
-  - flint-chart@0.2.1
-  - openai@7.39.0
-  - "@cloudflare/workerd-darwin-64@1.20261019.1"
-  - "@cloudflare/workerd-darwin-arm64@1.20261019.1"
-  - "@cloudflare/workerd-linux-64@1.20261019.1"
-  - "@cloudflare/workerd-linux-arm64@1.20261019.1"
-  - "@cloudflare/workerd-windows-64@1.20261019.1"
-  - "@cloudflare/workers-types@5.20261019.1"
-  - miniflare@5.20261019.0-beta
-  - workerd@1.20261019.1
-  - wrangler@4.151.2
   - "@tsrs/darwin-arm64@0.22.0-ts7.1.0-beta"
   - "@tsrs/darwin-x64@0.22.0-ts7.1.0-beta"
   - "@tsrs/linux-arm64-gnu@0.22.0-ts7.1.0-beta"

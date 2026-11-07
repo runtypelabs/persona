@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createToolBubble } from "./tool-bubble";
 import { mergeWithDefaults } from "../defaults";
 import { mergeConfigUpdate } from "../utils/config-merge";
+import { applyThemeVariables } from "../utils/theme";
 import { applyToolPadding } from "../utils/tool-styles";
 import type { AgentWidgetMessage } from "../types";
 
@@ -59,13 +60,16 @@ describe("tool padding cascade and updates", () => {
     document.head.appendChild(style);
     const config = mergeWithDefaults({ future: { v5Defaults }, theme: { components: { toolBubble: { header: { padding: "10px 16px" }, content: { padding: "12px 16px" } } } } });
     const bubble = createToolBubble(message, config, new Set([message.id]));
-    document.body.appendChild(bubble);
+    const host = document.createElement("div");
+    applyThemeVariables(host, config);
+    host.appendChild(bubble);
+    document.body.appendChild(host);
     const header = bubble.querySelector<HTMLElement>(":scope > button")!;
     const content = bubble.querySelector<HTMLElement>(":scope > .persona-border-t")!;
     expect(header.classList.contains("persona-theme-padding")).toBe(true);
-    expect(getComputedStyle(header).padding).toBe("var(--persona-theme-padding)");
-    expect(getComputedStyle(content).padding).toBe("var(--persona-theme-padding)");
-    bubble.remove(); style.remove();
+    expect(getComputedStyle(header).padding).toBe("10px 16px");
+    expect(getComputedStyle(content).padding).toBe("12px 16px");
+    host.remove(); style.remove();
   });
 
   it("clears old axes and theme hooks on reuse and restores each axis independently", () => {

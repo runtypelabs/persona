@@ -97,10 +97,12 @@ function mirrorTextareaLook(
   // evolve, without re-enumerating a fixed property list here. Skip `height`: the
   // textarea's auto-resize sets it to a fixed px on input, but the contenteditable
   // grows with its content (capped by the copied `maxHeight`/`overflowY`), so a
-  // frozen height would clip it.
+  // frozen height would clip it. Skip `display` too: dictation hides the textarea
+  // while capturing, and a swap in that window would otherwise leave the
+  // contenteditable hidden after the capture ends.
   for (let i = 0; i < textarea.style.length; i++) {
     const prop = textarea.style.item(i);
-    if (prop === "height") continue;
+    if (prop === "height" || prop === "display") continue;
     el.style.setProperty(
       prop,
       textarea.style.getPropertyValue(prop),

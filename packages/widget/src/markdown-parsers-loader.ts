@@ -1,12 +1,21 @@
 import { createChunkLoader } from "./utils/chunk-loader";
-import type { Marked } from "marked";
 import type DOMPurify from "dompurify";
+import type { AgentWidgetMarkdownRendererOverrides } from "./types";
+
+// marked is ESM-only: a plain import of its types fails in a CommonJS consumer's
+// declaration check (TS1479), so the import types state the resolution mode.
+type MarkedModule = typeof import("marked", { with: { "resolution-mode": "import" } });
+type MarkedRendererObject = import("marked", { with: { "resolution-mode": "import" } }).RendererObject;
 
 export type MarkdownParsersModule = {
-  Marked: typeof Marked;
+  Marked: MarkedModule["Marked"];
   DOMPurify: typeof DOMPurify;
   /** Optional for compatibility with custom parser loaders. Display-only repairs. */
   stabilizeStreamingMarkdown?: (source: string) => string;
+  /** Optional for compatibility with custom parser loaders. Lives here to keep it out of the core bundle. */
+  convertRendererOverrides?: (
+    overrides?: AgentWidgetMarkdownRendererOverrides
+  ) => Partial<MarkedRendererObject> | undefined;
 };
 
 // Memoization + rejection-retry semantics live in `createChunkLoader`. The

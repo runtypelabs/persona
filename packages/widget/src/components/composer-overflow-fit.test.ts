@@ -18,7 +18,7 @@ function mount(actions: ComposerAction[], options: ComposerActionOverflowConfig 
   const elements = buildComposer({ config });
   document.body.append(elements.footer);
   const bindings = bindComposerSurface(elements.footer)!;
-  let width = 420;
+  let width = 480;
   Object.defineProperty(bindings.form, "clientWidth", { get: () => width });
   bindings.form.style.cssText = "padding:8px;gap:8px;--persona-composer-control-size:40px";
   bindings.actionsStart.style.gap = "8px";
@@ -54,14 +54,17 @@ describe("measured composer action overflow", () => {
   afterEach(() => { renderers.splice(0).forEach((renderer) => renderer.destroy()); document.body.replaceChildren(); sizes.clear(); vi.restoreAllMocks(); });
 
   it("folds by measured priority, reserves input and pinned controls, and recovers without oscillation", () => {
+    // Compact budget: width - 16 padding - 120 editor - 16 gaps, less 16 hysteresis
+    // once folded. Bar cost: 296 unfolded, 256 with late folded, 168 with both.
     const harness = mount([action("early", 100), action("late", 200), action("pinned", 900, "bar")]);
-    harness.resize(380);
+    expect(folded(harness)).toEqual([]);
+    harness.resize(420);
     expect(folded(harness)).toEqual(["late"]);
     expect(harness.bindings.actionsStart.querySelector('[data-persona-composer-action="pinned"]')).toBeTruthy();
     expect(harness.elements.sendButton.isConnected).toBe(true);
-    harness.resize(300);
+    harness.resize(340);
     expect(folded(harness)).toEqual(["early", "late"]);
-    harness.resize(420);
+    harness.resize(440);
     expect(folded(harness)).toEqual(["late"]);
     harness.resize(480);
     expect(folded(harness)).toEqual([]);
@@ -98,7 +101,7 @@ describe("measured composer action overflow", () => {
     button.focus();
     harness.renderer.sync();
     expect(document.activeElement).toBe(button);
-    harness.resize(300);
+    harness.resize(340);
     const menu = harness.renderer.getOverflowMenu()!;
     expect(document.activeElement).toBe(menu.triggerButton);
     expect(menu.isOpen()).toBe(false);
@@ -114,7 +117,7 @@ describe("measured composer action overflow", () => {
     const actions = [action("early", 100), action("late", 200)];
     const harness = mount(actions);
     const sibling = mount([action("sibling", 100)]);
-    harness.resize(300);
+    harness.resize(340);
     expect(folded(harness)).toEqual(["late"]);
     sizes.set("late", 160);
     actions[1] = { ...actions[1], shortLabel: "A much longer selected mode" };

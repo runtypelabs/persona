@@ -15,20 +15,20 @@
     "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.96",
-    "@ai-sdk/provider": "^4.0.29",
+    "@ai-sdk/openai": "^4.0.109",
+    "@ai-sdk/provider": "^4.0.36",
     "@runtypelabs/persona": "workspace:^",
-    "agents": "0.28.1",
-    "ai": "^7.0.143",
+    "agents": "0.33.0",
+    "ai": "^7.0.163",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.64.0",
-    "@cloudflare/workers-types": "^5.20261019.1",
+    "@cloudflare/vite-plugin": "1.67.0",
+    "@cloudflare/workers-types": "^5.20261106.1",
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
     "vite": "^8.3.6",
     "vitest": "^5.1.0",
-    "wrangler": "4.151.2"
+    "wrangler": "4.158.0"
   }
 }

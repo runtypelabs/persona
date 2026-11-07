@@ -159,9 +159,9 @@ describe("context-mentions bundle split", () => {
     // on older Safari, breaking the whole widget even with mentions disabled.
     for (const file of ["index.js", "index.cjs", "index.global.js"]) {
       if (!existsSync(dist(file))) continue;
-      expect(readFileSync(dist(file), "utf8").includes("(?<="), `${file} has a lookbehind`).toBe(
-        false
-      );
+      // marked probes for support with a string, then falls back without it.
+      const source = readFileSync(dist(file), "utf8").replaceAll("(?<=1)(?<!1)", "");
+      expect(source.includes("(?<="), `${file} has a lookbehind`).toBe(false);
     }
   });
 });

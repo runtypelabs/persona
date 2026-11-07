@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -26,7 +27,8 @@ import { JSDOM } from "jsdom";
  *  3. CJS `require` of `.` and every subpath with a `require` condition, and
  *     its export names match the ESM build's
  *  4. TypeScript resolution of every subpath's types under
- *     `moduleResolution: bundler`, `node16` ESM and `node16` CJS consumers
+ *     `moduleResolution: bundler`, `node16` ESM and `node16` CJS consumers,
+ *     on both the native TS 7 compiler and the TS 6 JS compiler
  *  5. the script-tag IIFEs (`index.global.js` → `window.AgentWidget`,
  *     `launcher.global.js` → `window.AgentWidgetLauncher`, `install.global.js`)
  *     evaluate as classic scripts without throwing
@@ -171,6 +173,17 @@ describe.runIf(built)("published package install methods (dist/)", () => {
     }
   }, 90_000);
 
+  // Node 26 masks this for marked: require(esm) loads it here but not on the
+  // older Node versions `engines` allows, so assert on the output.
+  it("CJS: inlines the ESM-only dependencies instead of requiring them", () => {
+    for (const file of readdirSync(dist("."))) {
+      if (!file.endsWith(".cjs")) continue;
+      const source = readFileSync(dist(file), "utf8");
+      expect(source, `${file} requires marked`).not.toMatch(/require\([`"']marked[`"']\)/);
+      expect(source, `${file} requires idiomorph`).not.toMatch(/require\([`"']idiomorph[`"']\)/);
+    }
+  });
+
   it("CJS: `require` of `.` and every subpath loads in Node with the same exports as ESM", () => {
     const cjs = runProbe("cjs-probe.cjs", cjsSpecifiers);
     expect(failures(cjs), "CJS requires that failed").toEqual([]);
@@ -191,8 +204,12 @@ describe.runIf(built)("published package install methods (dist/)", () => {
     expect(drift, "ESM/CJS export-name drift").toEqual([]);
   }, 90_000);
 
-  // The JS entry, run through Node: `.bin/tsc` is a shell shim on Windows.
-  const tsc = join(PKG_DIR, "node_modules", "typescript", "bin", "tsc");
+  // Consumers are on both compilers, so the published types must hold on each.
+  // The JS entries, run through Node: `.bin/tsc` is a shell shim on Windows.
+  const compilers = [
+    ["ts7", join(PKG_DIR, "node_modules", "typescript", "bin", "tsc")],
+    ["ts6", join(PKG_DIR, "node_modules", "typescript-api", "bin", "tsc")],
+  ] as const;
   const typeImports = (ext: "ts" | "cts") =>
     typedSpecifiers
       .map((spec, i) =>
@@ -204,7 +221,7 @@ describe.runIf(built)("published package install methods (dist/)", () => {
     `\nimport type { AgentWidgetConfig } from ${JSON.stringify(pkg.name)};\n` +
     `export const cfg: AgentWidgetConfig = { apiUrl: "/x" };\n`;
 
-  const runTsc = (name: string, compilerOptions: Record<string, unknown>, file: string, source: string) => {
+  const runTsc = (tsc: string, name: string, compilerOptions: Record<string, unknown>, file: string, source: string) => {
     const dir = join(consumer, name);
     mkdirSync(dir, { recursive: true });
     // Point the project-local node_modules at the consumer's.
@@ -236,23 +253,23 @@ describe.runIf(built)("published package install methods (dist/)", () => {
     }
   };
 
-  it.runIf(existsSync(tsc))("types: every subpath resolves under moduleResolution bundler", () => {
+  it.each(compilers)("types (%s): every subpath resolves under moduleResolution bundler", (label, tsc) => {
     expect(
-      runTsc("ts-bundler", { module: "ESNext", moduleResolution: "bundler", target: "ES2022" }, "index.ts", typeImports("ts"))
+      runTsc(tsc, `${label}-bundler`, { module: "ESNext", moduleResolution: "bundler", target: "ES2022" }, "index.ts", typeImports("ts"))
     ).toBe("");
   }, 120_000);
 
-  it.runIf(existsSync(tsc))("types: every subpath resolves for a node16 ESM consumer", () => {
+  it.each(compilers)("types (%s): every subpath resolves for a node16 ESM consumer", (label, tsc) => {
     expect(
-      runTsc("ts-node16-esm", { module: "node16", moduleResolution: "node16", target: "ES2022" }, "index.ts", typeImports("ts"))
+      runTsc(tsc, `${label}-node16-esm`, { module: "node16", moduleResolution: "node16", target: "ES2022" }, "index.ts", typeImports("ts"))
     ).toBe("");
   }, 120_000);
 
-  it.runIf(existsSync(tsc))("types: every subpath resolves for a node20 CJS consumer (.cts)", () => {
+  it.each(compilers)("types (%s): every subpath resolves for a node20 CJS consumer (.cts)", (label, tsc) => {
     // node20 models Node's require(esm), so a CJS consumer reaches the ESM
     // `.d.ts` the exports map advertises.
     expect(
-      runTsc("ts-node20-cjs", { module: "node20", moduleResolution: "node16", target: "ES2022" }, "index.cts", typeImports("cts"))
+      runTsc(tsc, `${label}-node20-cjs`, { module: "node20", moduleResolution: "node16", target: "ES2022" }, "index.cts", typeImports("cts"))
     ).toBe("");
   }, 120_000);
 
@@ -263,13 +280,13 @@ describe.runIf(built)("published package install methods (dist/)", () => {
   // condition: `"import": { "types": "./dist/x.d.ts", "default": "./dist/x.js" },
   // "require": { "types": "./dist/x.d.cts", "default": "./dist/x.cjs" }`.
   // `it.fails` flips red once that lands: then turn this into a plain `it`.
-  it.runIf(existsSync(tsc)).fails("types: every subpath resolves for a node16 CJS consumer (.cts)", () => {
+  it.fails.each(compilers)("types (%s): every subpath resolves for a node16 CJS consumer (.cts)", (label, tsc) => {
     expect(
-      runTsc("ts-node16-cjs", { module: "node16", moduleResolution: "node16", target: "ES2022" }, "index.cts", typeImports("cts"))
+      runTsc(tsc, `${label}-node16-cjs`, { module: "node16", moduleResolution: "node16", target: "ES2022" }, "index.cts", typeImports("cts"))
     ).toBe("");
   }, 120_000);
 
-  it.runIf(existsSync(tsc))("types: every shipped .d.cts type-checks as a CJS declaration", () => {
+  it.each(compilers)("types (%s): every shipped .d.cts type-checks as a CJS declaration", (label, tsc) => {
     const dcts = codeEntries
       .map(([, c]) => c.types?.replace(/\.d\.ts$/, ".d.cts"))
       .filter((t): t is string => !!t && existsSync(join(PKG_DIR, t)));
@@ -277,7 +294,7 @@ describe.runIf(built)("published package install methods (dist/)", () => {
       .map((t) => `/// <reference path=${JSON.stringify(join(PKG_DIR, t))} />`)
       .join("\n") + "\nexport {};\n";
     expect(
-      runTsc("ts-dcts", { module: "node16", moduleResolution: "node16", target: "ES2022" }, "index.cts", source)
+      runTsc(tsc, `${label}-dcts`, { module: "node16", moduleResolution: "node16", target: "ES2022" }, "index.cts", source)
     ).toBe("");
   }, 120_000);
 

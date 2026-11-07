@@ -176,7 +176,7 @@ describe("createWidgetHostLayout docked", () => {
 
     layout.syncWidgetState({ open: true, launcherEnabled: true });
     expect(dockSlot?.style.width).toBe("320px");
-    expect(dockSlot?.style.transform).toBe("translateX(0)");
+    expect(dockSlot?.style.transform).toBe("translateX(0px)");
 
     layout.destroy();
   });
@@ -661,7 +661,9 @@ describe("createWidgetHostLayout docked", () => {
 
       const dockSlot = layout.shell?.querySelector<HTMLElement>('[data-persona-dock-role="panel"]');
       expect(dockSlot?.style.padding).toBe("16px");
-      expect(dockSlot?.style.background).toBe("transparent");
+      // `background: transparent` sets every longhand to its initial value, and
+      // the CSSOM serializes that shorthand as `none`.
+      expect(dockSlot?.style.background).toBe("none");
       expect(dockSlot?.style.boxSizing).toBe("border-box");
 
       layout.destroy();

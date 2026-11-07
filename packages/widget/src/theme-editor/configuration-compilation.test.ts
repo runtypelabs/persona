@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import ts from 'typescript';
+// `typescript` 7 exposes no JS compiler API; `typescript-api` is a dev-only TS 6 alias.
+import ts from 'typescript-api';
 import { generateCodeSnippet } from '../utils/code-generators';
 
 // Use a real TypeScript program against the exported public types. Transpilation

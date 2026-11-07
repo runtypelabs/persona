@@ -18,6 +18,14 @@ const createMount = () => {
  * Mount a widget with a never-resolving fetch, send a message, and return the
  * standalone typing indicator bubble rendered during the silent gap.
  */
+// Computed values resolve var(): override the token to prove the bubble reads it.
+const tokenPadding = (bubble: HTMLElement): string => {
+  bubble.style.setProperty("--persona-message-assistant-padding", "7px 9px");
+  const { padding } = getComputedStyle(bubble);
+  bubble.style.removeProperty("--persona-message-assistant-padding");
+  return padding;
+};
+
 const renderTypingBubble = async (
   config: Record<string, unknown>
 ): Promise<{ bubble: HTMLElement; mount: HTMLElement; controller: ReturnType<typeof createAgentExperience>; destroy: () => void }> => {
@@ -119,6 +127,12 @@ describe("standalone typing indicator bubble", () => {
     expect(getComputedStyle(bubble).borderWidth).toBe("0px");
     expect(getComputedStyle(bubble).boxShadow).toBe("none");
     const waiting = getComputedStyle(label);
+    expect(waiting.fontSize).toBe("13px");
+    label.style.setProperty("--persona-activity-label-size", "19px");
+    expect(waiting.fontSize).toBe("19px");
+    label.style.removeProperty("--persona-activity-label-size");
+    // Computed styles are live and the label leaves the DOM below: keep its geometry.
+    const { minHeight, padding } = waiting;
     controller.injectTestMessage({ type: "message", message: {
       id: "tool-geometry", role: "assistant", content: "", streaming: true,
       createdAt: new Date(Date.now() + 60000).toISOString(), sequence: Date.now() + 60000,
@@ -127,9 +141,8 @@ describe("standalone typing indicator bubble", () => {
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     const header = mount.querySelector<HTMLElement>(".persona-tool-bubble > .persona-activity-header")!;
     expect(header).not.toBeNull();
-    expect(getComputedStyle(header).minHeight).toBe(waiting.minHeight);
-    expect(getComputedStyle(header).padding).toBe(waiting.padding);
-    expect(waiting.fontSize).toBe("var(--persona-activity-label-size)");
+    expect(getComputedStyle(header).minHeight).toBe(minHeight);
+    expect(getComputedStyle(header).padding).toBe(padding);
     destroy();
   });
 
@@ -152,7 +165,7 @@ describe("standalone typing indicator bubble", () => {
       future: { v5Defaults: true }, loadingIndicator: { showBubble: true },
     });
     expect(bubble.querySelector(".persona-activity-row")).toBeNull();
-    expect(getComputedStyle(bubble).padding).toBe("0.75rem 1.25rem");
+    expect(getComputedStyle(bubble).padding).toBe("12px 20px");
     destroy();
   });
 
@@ -168,7 +181,7 @@ describe("standalone typing indicator bubble", () => {
     });
     expect(bubble.textContent).toBe("Custom waiting UI");
     expect(bubble.querySelector(".persona-activity-row")).toBeNull();
-    expect(getComputedStyle(bubble).padding).toBe("0.75rem 1.25rem");
+    expect(getComputedStyle(bubble).padding).toBe("12px 20px");
     destroy();
   });
 
@@ -178,7 +191,8 @@ describe("standalone typing indicator bubble", () => {
     const bubble = createStandardBubble(message, ({ text }) => text, undefined, undefined, undefined, { widgetConfig: config });
     document.body.appendChild(bubble);
     expect(Boolean(bubble.querySelector(".persona-loading-label.persona-activity-row"))).toBe(showBubble !== true);
-    expect(getComputedStyle(bubble).padding).toBe(showBubble === true ? "var(--persona-message-assistant-padding, 0.75rem 1.25rem)" : "0px");
+    expect(getComputedStyle(bubble).padding).toBe(showBubble === true ? "12px 20px" : "0px");
+    expect(tokenPadding(bubble)).toBe(showBubble === true ? "7px 9px" : "0px");
   });
 
   it("keeps inline custom renderer geometry while allowing defaultRenderer delegation", () => {
@@ -190,7 +204,8 @@ describe("standalone typing indicator bubble", () => {
         loadingIndicatorRenderer: ({ defaultRenderer }) => delegate ? defaultRenderer() : document.createElement("aside"),
       });
       document.body.appendChild(bubble);
-      expect(getComputedStyle(bubble).padding).toBe(delegate ? "0px" : "var(--persona-message-assistant-padding, 0.75rem 1.25rem)");
+      expect(getComputedStyle(bubble).padding).toBe(delegate ? "0px" : "12px 20px");
+      expect(tokenPadding(bubble)).toBe(delegate ? "0px" : "7px 9px");
     }
   });
 

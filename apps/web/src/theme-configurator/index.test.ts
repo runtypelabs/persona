@@ -403,8 +403,11 @@ describe('theme configurator shell', () => {
         ),
       ).filter((el) => {
         if (el.getAttribute('aria-hidden') === 'true') return false;
-        const style = window.getComputedStyle(el);
-        return style.visibility !== 'hidden' && style.display !== 'none';
+        if (window.getComputedStyle(el).visibility === 'hidden') return false;
+        for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+          if (window.getComputedStyle(node).display === 'none') return false;
+        }
+        return true;
       });
 
     openBtn!.click();

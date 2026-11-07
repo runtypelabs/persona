@@ -661,11 +661,12 @@ describe("createAgentExperience detached split chat surface", () => {
     expect(container?.style.borderRadius).toBe("0px");
     expect(container?.style.boxShadow).toBe("");
     // The chat paints no surface of its own; the wrapper's canvas shows through.
+    // `background: transparent` serializes as `none`: all longhands are initial.
     // Body and footer backdrops go too, so the transcript sits on the host page
     // and only element surfaces (bubbles, composer input) keep their color.
-    expect(container?.style.background).toBe("transparent");
-    expect(bodyOf(mount)?.style.background).toBe("transparent");
-    expect(footerOf(mount)?.style.background).toBe("transparent");
+    expect(container?.style.background).toBe("none");
+    expect(bodyOf(mount)?.style.background).toBe("none");
+    expect(footerOf(mount)?.style.background).toBe("none");
     expect(footerOf(mount)?.style.borderTopStyle).toBe("none");
     expect(wrapperOf(mount).style.background).toContain("--persona-panel-canvas-bg");
     // No whole-split perimeter inset: the chat is flush to the container edges.
@@ -703,9 +704,9 @@ describe("createAgentExperience detached split chat surface", () => {
     expect(mount.classList.contains("persona-artifact-chat-flush")).toBe(true);
     expect(container?.style.borderStyle).toBe("none");
     expect(container?.style.borderRadius).toBe("0px");
-    expect(container?.style.background).toBe("transparent");
-    expect(bodyOf(mount)?.style.background).toBe("transparent");
-    expect(footerOf(mount)?.style.background).toBe("transparent");
+    expect(container?.style.background).toBe("none");
+    expect(bodyOf(mount)?.style.background).toBe("none");
+    expect(footerOf(mount)?.style.background).toBe("none");
     expect(wrapperOf(mount).style.background).toContain("--persona-panel-canvas-bg");
     expect(wrapperOf(mount).style.padding).toBe("");
 
@@ -726,9 +727,9 @@ describe("createAgentExperience detached split chat surface", () => {
     // Flush is a steady state: closing the pane never flips the chat chrome.
     expect(mount.classList.contains("persona-artifact-chat-flush")).toBe(true);
     expect(container?.style.borderRadius).toBe("0px");
-    expect(container?.style.background).toBe("transparent");
-    expect(bodyOf(mount)?.style.background).toBe("transparent");
-    expect(footerOf(mount)?.style.background).toBe("transparent");
+    expect(container?.style.background).toBe("none");
+    expect(bodyOf(mount)?.style.background).toBe("none");
+    expect(footerOf(mount)?.style.background).toBe("none");
     expect(wrapperOf(mount).style.background).toContain("--persona-panel-canvas-bg");
 
     controller.destroy();

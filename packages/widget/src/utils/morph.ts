@@ -21,8 +21,8 @@ export const morphMessages = (
   Idiomorph.morph(container, newContent.innerHTML, {
     morphStyle: "innerHTML",
     callbacks: {
-      beforeNodeMorphed(oldNode: Node, newNode: Node): boolean | void {
-        if (!(oldNode instanceof HTMLElement)) return;
+      beforeNodeMorphed(oldNode: Node, newNode: Node): boolean {
+        if (!(oldNode instanceof HTMLElement)) return true;
 
         // Render passes stand in an unchanged transcript row with an empty
         // `data-persona-reuse` stub: keep the live row as is.
@@ -63,7 +63,7 @@ export const morphMessages = (
             if (sameLiveTool) {
               return false;
             }
-            return;
+            return true;
           }
           if (oldNode.hasAttribute("data-preserve-animation")) {
             // Shared labels compare their render signature because custom effects
@@ -73,10 +73,11 @@ export const morphMessages = (
               (oldNode.dataset.personaLoadingLabel
                 ? oldNode.dataset.personaLoadingAnimation !== newNode.dataset.personaLoadingAnimation
                 : oldNode.textContent !== newNode.textContent)
-            )) return;
+            )) return true;
             return false;
           }
         }
+        return true;
       },
     },
   });

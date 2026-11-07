@@ -43,7 +43,7 @@ describe("createLauncherButton", () => {
         collapsedMaxWidth: "min(380px, calc(100vw - 48px))",
       },
     });
-    expect(element.style.maxWidth).toBe("min(380px, calc(100vw - 48px))");
+    expect(element.style.maxWidth).toBe("min(380px, -48px + 100vw)");
     element.remove();
   });
 

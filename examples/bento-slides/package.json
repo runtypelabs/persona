@@ -17,15 +17,15 @@
     "@mcp-b/webmcp-polyfill": "^5.1.0",
     "@runtypelabs/persona": "workspace:^",
     "moveable": "^0.53.0",
-    "reveal.js": "^5.2.1",
+    "reveal.js": "^6.0.2",
     "selecto": "^1.26.3"
   },
   "devDependencies": {
     "@gfx/zopfli": "^1.0.15",
     "@types/node": "^26.6.6",
     "@types/reveal.js": "^5.2.1",
-    "fake-indexeddb": "^6.2.5",
-    "jsdom": "^28.1.0",
+    "fake-indexeddb": "^6.2.7",
+    "jsdom": "^31.0.0",
     "qrcode": "^1.5.4",
     "typescript": "~5.8.3",
     "vite": "^8.3.6",

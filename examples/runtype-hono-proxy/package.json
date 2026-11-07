@@ -12,18 +12,18 @@
     "test": "tsx --test src/request-guard.test.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.10",
+    "@hono/node-server": "^2.1.6",
     "@runtypelabs/persona-proxy": "workspace:^",
-    "dotenv": "^16.4.5",
+    "dotenv": "^18.0.9",
     "get-port": "^7.2.0",
-    "hono": "^4.12.25"
+    "hono": "^4.13.16"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260612.1",
+    "@cloudflare/workers-types": "^5.20261106.1",
     "@types/node": "^26.6.6",
     "tsdown": "^0.23.7",
     "tsx": "^4.23.15",
-    "typescript": "^6.0.3",
-    "wrangler": "^4.100.0"
+    "typescript": "^7.0.2",
+    "wrangler": "^4.158.0"
   }
 }
