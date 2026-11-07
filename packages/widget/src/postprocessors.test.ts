@@ -276,6 +276,30 @@ describe("markdown renderer overrides receive the documented token", () => {
     expect(raw).toBe("Some emphasis and code");
   });
 
+  describe.each([
+    ["tight", "- one\n- two"],
+    ["loose", "- one\n\n- two"],
+    ["task", "- [x] one\n- [ ] two"],
+    ["loose task", "- [x] one\n\n- [ ] two"],
+  ])("listitem override on a %s list", (kind, source) => {
+    it("matches the default output when it falls through", () => {
+      const md = createMarkdownProcessor({ renderer: { listitem: () => false } });
+
+      expect(md(source)).toBe(createMarkdownProcessor()(source));
+    });
+
+    it("receives the item's rendered content", () => {
+      const md = createMarkdownProcessor({
+        renderer: { listitem: (token) => `<li class="custom">${token.text}</li>\n` },
+      });
+      const html = md(source);
+
+      expect(html.match(/<li class="custom">/g)).toHaveLength(2);
+      expect(html.includes("<p>")).toBe(kind.startsWith("loose"));
+      expect(html.match(/<input/g)?.length ?? 0).toBe(kind.endsWith("task") ? 2 : 0);
+    });
+  });
+
   it("renders children once when an override falls through", () => {
     const calls: string[] = [];
     const md = createMarkdownProcessor({
