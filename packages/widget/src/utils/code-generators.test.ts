@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
+// `typescript` 7 exposes no JS compiler API; `typescript-api` is a dev-only TS 6 alias.
+import ts from "typescript-api";
 import type { AgentWidgetConfig } from "../types";
 import { DEFAULT_WIDGET_CONFIG } from "../defaults";
 import { createTheme, themeToCssVariables } from "./tokens";
