@@ -438,30 +438,5 @@ export const ensurePluginActive = (
   attachPlugin(plugin, root);
 };
 
-/* ============================================================
-   Back-compat helpers (used by existing tests)
-   ============================================================ */
-
-export const isPerCharAnimation = (type: AgentWidgetStreamAnimationType): boolean => {
-  const plugin = resolveStreamAnimationPlugin(type);
-  return plugin?.wrap === "char";
-};
-
-export const isPerWordAnimation = (type: AgentWidgetStreamAnimationType): boolean => {
-  const plugin = resolveStreamAnimationPlugin(type);
-  return plugin?.wrap === "word";
-};
-
-export const isWrappingAnimation = (type: AgentWidgetStreamAnimationType): boolean =>
-  isPerCharAnimation(type) || isPerWordAnimation(type);
-
-export const streamAnimationContainerClass = (
-  type: AgentWidgetStreamAnimationType
-): string | null => resolveStreamAnimationPlugin(type)?.containerClass ?? null;
-
-export const streamAnimationBubbleClass = (
-  type: AgentWidgetStreamAnimationType
-): string | null => resolveStreamAnimationPlugin(type)?.bubbleClass ?? null;
-
 // Re-export the builtin type literal so tests and consumers can reference it.
 export type { AgentWidgetStreamAnimationBuiltinType };
