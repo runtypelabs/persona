@@ -1,5 +1,15 @@
 # @runtypelabs/persona
 
+## 4.37.1
+
+### Patch Changes
+
+- 255d078: Honor `features.artifacts.allowedTypes` for streamed artifacts, including their transcript blocks and continuation events.
+- d197388: Remove unused internal rendering and utility code.
+- 9bd4724: Keep keyboard focus on Reconnect while a retry is in progress and prevent duplicate attempts. Share conversation-clear cleanup between the header action and public controller, and apply the existing safe minification pass to CommonJS to keep its bundled dependencies within the size budget.
+- 5a59497: Show compact connection notices with a Reconnect action for interrupted responses. Preserve the execution checkpoint after automatic retries stop so Reconnect continues the same response, while ordinary request activity uses the existing working indicator.
+- 7b47ee5: Show terminal execution failures in the transcript while keeping the connection indicator online. Preserve error callbacks, failed run outcomes, and reconnect cleanup. Hosts that render their own failure notice can set `executionErrorDisplay: "host"` to prevent duplicate messages.
+
 ## 4.37.0
 
 ### Minor Changes
