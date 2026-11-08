@@ -17,7 +17,11 @@ voiceRecognition: {
 }
 ```
 
-`transcript` keeps short interim text beside the waveform and capture controls, wrapping the controls below only when the transcript needs more room. `waveform` emphasizes capture amplitude; providers without an audio graph show a truthful Listening status instead of simulated bars. `inline` mirrors the live transcript into the existing editor. On the transcript surface, interim text is muted and italic by default. The inline editor retains its ordinary text styling. Final text becomes normal editable composer text. Measured bars stop animating under reduced motion.
+`transcript` keeps short interim text beside the waveform and capture controls, wrapping the controls below only when the transcript needs more room. `waveform` emphasizes capture amplitude. `inline` mirrors the live transcript into the existing editor. On the transcript surface, interim text is muted and italic by default. The inline editor retains its ordinary text styling. Final text becomes normal editable composer text. Measured bars stop animating under reduced motion.
+
+Browser dictation requests an independent microphone stream when `waveform: true` or `display: 'waveform'` is set. An explicit `waveform: false` disables measurement in either display. If measurement cannot start, transcription continues with a Listening status. Custom providers supply levels through `onLevel`; Persona does not open another stream for them. Microphone measurement ends on Finish, Cancel, recognition errors, or page navigation, including permission requests that resolve after capture ends. Page navigation interrupts dictation and restores the original editable draft without submitting speech.
+
+Browser dictation uses `voiceRecognition.pauseDuration` (2000 ms by default) after speech ends. Where speech activity events are unavailable, changed transcript revisions restart the inactivity timer. Duplicate revisions do not extend the pause.
 
 The dedicated surface replaces the composer contents during recording and processing, then restores the editor at review. Cancel restores the original draft, leaving mentions, attachments, modes, and quoted context in place. Final transcription is appended to the original draft. Finish ends capture; `completionBehavior: 'review'` keeps the result for editing. The default `'send'` submits through the same composer pipeline as a manual send, including mention resolution, attachment handling, send locks and `onBeforeSend`.
 

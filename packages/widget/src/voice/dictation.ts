@@ -1,4 +1,5 @@
-import type { DictationState, DictationProviderConfig, VoiceProvider, VoiceResult, VoiceStatus } from '../types';
+import type { DictationState, DictationProviderConfig, VoiceProvider } from '../types';
+import { createBrowserDictationProvider } from './browser-dictation-provider';
 
 type DictationCallbacks = {
   onState: (state: DictationState, levelOnly: boolean) => void;
@@ -28,7 +29,7 @@ export class DictationController {
     this.callbacks.onState(this.state, levelOnly);
   }
 
-  start(config: DictationProviderConfig, options: { autoSend: boolean; pauseDuration?: number }): boolean {
+  start(config: DictationProviderConfig, options: { autoSend: boolean; pauseDuration?: number; measureAudioLevel?: boolean }): boolean {
     if (this.destroyed || this.state.phase === 'recording' || this.state.phase === 'processing') return false;
     this.release();
     const generation = ++this.generation;
@@ -42,7 +43,7 @@ export class DictationController {
       const source = config.custom;
       const provider = config.type === 'custom'
         ? (typeof source === 'function' ? source() : source)
-        : createBrowserDictationProvider(config.browser, options.pauseDuration);
+        : createBrowserDictationProvider(config.browser, options.pauseDuration, options.measureAudioLevel);
       if (!provider || provider.type === 'runtype') throw new Error('Dictation requires a speech-to-text provider.');
       this.provider = provider;
       const result = (text: string, isFinal: boolean) => {
@@ -140,49 +141,4 @@ export class DictationController {
     ++this.generation;
     this.release();
   }
-}
-
-// A dictation-only browser adapter. It never acquires an audio graph or fabricates levels.
-interface SpeechResult { isFinal: boolean; 0: { transcript: string } }
-interface Recognition {
-  lang: string; continuous: boolean; interimResults: boolean;
-  onresult: ((event: { results: ArrayLike<SpeechResult> }) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start(): void; stop(): void; abort(): void;
-}
-function createBrowserDictationProvider(config: DictationProviderConfig['browser'], pauseDuration = 2000): VoiceProvider {
-  const root = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
-  const Constructor = root.SpeechRecognition ?? root.webkitSpeechRecognition;
-  if (!Constructor) throw new Error('Browser speech recognition is unavailable.');
-  const recognition = new Constructor();
-  recognition.lang = config?.language ?? 'en-US';
-  recognition.continuous = config?.continuous ?? true;
-  recognition.interimResults = true;
-  let output = '';
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let closed = false;
-  let onResult: (result: VoiceResult) => void = () => {};
-  let onError: (error: Error) => void = () => {};
-  let onStatus: (status: VoiceStatus) => void = () => {};
-  const clear = () => { clearTimeout(timer); timer = undefined; };
-  recognition.onresult = (event) => {
-    if (closed) return;
-    output = Array.from(event.results).map((result) => result[0].transcript).join(' ');
-    onResult({ text: output, provider: 'browser', isFinal: false });
-    clear();
-    if (output.trim()) timer = setTimeout(() => { onStatus('processing'); recognition.stop(); }, pauseDuration);
-  };
-  recognition.onend = () => { if (!closed) { clear(); onResult({ text: output, provider: 'browser' }); onStatus('idle'); } };
-  recognition.onerror = ({ error }) => { if (!closed && error !== 'no-speech') onError(new Error(error)); };
-  return {
-    type: 'browser',
-    connect: async () => {},
-    startListening: async () => { recognition.start(); },
-    stopListening: async () => { clear(); recognition.stop(); },
-    disconnect: async () => { closed = true; clear(); recognition.abort(); recognition.onresult = null; recognition.onend = null; recognition.onerror = null; },
-    onResult: (callback) => { onResult = callback; },
-    onError: (callback) => { onError = callback; },
-    onStatusChange: (callback) => { onStatus = callback; },
-  };
 }

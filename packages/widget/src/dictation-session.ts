@@ -42,11 +42,27 @@ export function createDictationSession(options: DictationSessionOptions) {
     options.syncText();
   };
 
+  const dictationActions = (): DictationRenderContext["actions"] => ({
+    cancel: () => { controller.cancel(); },
+    finish: () => { controller.finish(); },
+    ...(options.getConfig().voiceRecognition?.dictation?.showSend && !options.isSendBlocked()
+      ? { send: () => { if (!options.isSendBlocked()) controller.finish(true) || controller.send(); } } : {}),
+  });
+
   const controller = new DictationController({
     onReview: writeDictationText,
     onSend: () => { if (!options.isSendBlocked()) options.onSend(); },
     onState: (state, levelOnly) => {
           const config = options.getConfig();
+          if (levelOnly && dictationRender) {
+            const context: DictationRenderContext = {
+              instanceId: options.instanceId, state, config,
+              actions: dictationActions(),
+              defaultRenderer: () => createDictationRenderer(context, options.rendererDeps),
+            };
+            dictationRender.update?.(context);
+            return;
+          }
           const textarea = options.getTextarea();
           const footer = options.getFooter();
           const previousPhase = dictationPhase;
@@ -63,8 +79,7 @@ export function createDictationSession(options: DictationSessionOptions) {
           if (state.phase === "error") writeDictationText();
           const context: DictationRenderContext = {
             instanceId: options.instanceId, state, config,
-            actions: { cancel: () => { controller.cancel(); }, finish: () => { controller.finish(); },
-              ...(config.voiceRecognition?.dictation?.showSend && !options.isSendBlocked() ? { send: () => { if (!options.isSendBlocked()) controller.finish(true) || controller.send(); } } : {}) },
+            actions: dictationActions(),
             defaultRenderer: () => createDictationRenderer(context, options.rendererDeps),
           };
           const visible = ["recording", "processing", "error"].includes(state.phase);
@@ -108,7 +123,11 @@ export function createDictationSession(options: DictationSessionOptions) {
       dictationLogicalEnd = draft.logicalEnd;
       dictationEditorReadOnly = draft.readOnly;
       dictationContentEditable = draft.contentEditable;
-      return controller.start(provider, capture);
+      const config = options.getConfig().voiceRecognition?.dictation;
+      return controller.start(provider, {
+        ...capture,
+        measureAudioLevel: config?.waveform ?? config?.display === "waveform",
+      });
     },
     getState: () => controller.getState(),
     refresh: () => controller.refresh(),
