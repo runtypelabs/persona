@@ -157,7 +157,8 @@ it.each([false, true])("offers accessible same-response recovery (composer bar=%
   const busy = status.querySelector<HTMLButtonElement>("[data-persona-reconnect]")!;
   expect(busy).toBe(originalAction);
   expect(document.activeElement).toBe(originalAction);
-  expect(busy.disabled).toBe(true);
+  expect(busy.disabled).toBe(false);
+  expect(busy.getAttribute("aria-disabled")).toBe("true");
   expect(busy.getAttribute("aria-busy")).toBe("true");
   expect(busy.getAttribute("aria-label")).toContain(busy.textContent);
   expect(status.textContent).toContain("Reconnecting");
@@ -265,7 +266,7 @@ it("keeps the same focused action available after a manual attempt fails", async
   const action = status.querySelector<HTMLButtonElement>("[data-persona-reconnect]")!;
   action.focus();
   action.click();
-  await vi.waitFor(() => expect(action.disabled).toBe(false));
+  await vi.waitFor(() => expect(action.getAttribute("aria-disabled")).toBe("false"));
   expect(status.querySelector("[data-persona-reconnect]")).toBe(action);
   expect(document.activeElement).toBe(action);
 });

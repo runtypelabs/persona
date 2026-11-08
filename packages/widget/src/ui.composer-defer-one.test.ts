@@ -20,15 +20,18 @@ const openStream = () => {
   const encoder = new TextEncoder();
   let push!: (frame: string) => void;
   let close!: () => void;
+  let fail!: (error: Error) => void;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       push = (frame) => controller.enqueue(encoder.encode(frame));
       close = () => controller.close();
+      fail = (error) => controller.error(error);
     },
   });
   return {
     push,
     close,
+    fail,
     response: { ok: true, status: 200, headers: new Headers(), body } as unknown as Response,
   };
 };
@@ -240,7 +243,7 @@ describe("streamingSubmitBehavior: defer-one", () => {
     expect(textareaOf(mount).value).toBe("");
   });
 
-  it("auto-sends the queued item when the assistant turn completes", async () => {
+  it.each([undefined, true])("auto-sends after a recoverable notice and successful completion (recoverable=%s)", async (recoverable) => {
     const { mount, controller } = makeController();
     await startStreaming(mount);
     type(mount, "queued message");
@@ -250,15 +253,16 @@ describe("streamingSubmitBehavior: defer-one", () => {
       "queued message"
     );
 
-    const completed = new Promise<void>((resolve) => {
-      controller.on("assistant:complete", () => resolve());
-    });
+    const finished = vi.fn();
+    controller.on("run:finished", finished);
+    stream.push(`data: ${JSON.stringify({ type: "error", error: "Retrying", recoverable })}\n\n`);
+    await flush(30);
+    expect(controller.getComposerState().pendingSubmission?.text).toBe("queued message");
+    expect(finished).not.toHaveBeenCalled();
     stream.push(unifiedFrames());
     stream.close();
-    await completed;
-    await flush(30);
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    await flush(30);
+    await vi.waitFor(() => expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: "success" }), expect.any(Object)));
+    await vi.waitFor(() => expect(controller.getComposerState().pendingSubmission).toBeUndefined());
 
     expect(controller.getComposerState().pendingSubmission).toBeUndefined();
     const users = controller.getMessages().filter((m) => m.role === "user");
@@ -285,16 +289,26 @@ describe("streamingSubmitBehavior: defer-one", () => {
     expect(users.map((m) => m.content)).not.toContain("queued message");
   });
 
-  it("stays pending after a stream error", async () => {
+  it.each([
+    ["execution error", { type: "execution_error", error: "boom" }],
+    ["nonrecoverable error", { type: "error", error: "boom", recoverable: false }],
+    ["transport error", null],
+  ] as const)("stays pending after a %s", async (_name, frame) => {
     const { mount, controller } = makeController();
     await startStreaming(mount);
     type(mount, "queued message");
     pressEnter(mount);
     await flush();
 
-    stream.push('data: {"type":"error","error":"boom"}\n\n');
-    stream.close();
-    await flush(30);
+    const finished = vi.fn();
+    controller.on("run:finished", finished);
+    if (frame) {
+      stream.push(`data: ${JSON.stringify(frame)}\n\n`);
+      stream.close();
+    } else {
+      stream.fail(new TypeError("Failed to fetch"));
+    }
+    await vi.waitFor(() => expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: "error" }), expect.any(Object)));
     await new Promise((resolve) => setTimeout(resolve, 5));
     await flush(20);
 

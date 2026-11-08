@@ -7194,6 +7194,6 @@
   text-underline-offset: 0.125rem;
   cursor: pointer;
 }
-.persona-connection-notice__action:disabled { opacity: 0.6; cursor: default; }
+.persona-connection-notice__action[aria-disabled="true"] { opacity: 0.6; cursor: default; }
 .persona-connection-notice__action:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .persona-widget-footer--pill .persona-pill-composer__status { margin: 0 0.5rem; }
