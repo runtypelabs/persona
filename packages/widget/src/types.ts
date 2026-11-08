@@ -1873,7 +1873,7 @@ export type PersonaArtifactCustomAction = {
 export type AgentWidgetArtifactsFeature = {
   /** Enables artifact UI. Defaults to true in V5; V4 requires explicit opt-in. */
   enabled?: boolean;
-  /** If set, artifact events for other types are ignored */
+  /** A nonempty list ignores incoming artifact events for other types. Unset or empty allows all types; manual upserts and restored artifacts are unaffected. */
   allowedTypes?: PersonaArtifactKind[];
   /**
    * Where artifact bodies render. A single mode applies to all artifacts;
@@ -9802,6 +9802,8 @@ export type AgentWidgetStreamCheckpoint = {
   media: Array<[string, { mediaType?: string; toolCallId?: string; parts: string[] }]>;
   artifactContent: Array<[string, { markdown: string; title?: string; file?: PersonaArtifactFileMeta; props?: Record<string, unknown> }]>;
   artifactTools: string[];
+  /** Optional so checkpoints saved before artifact filtering remain readable. */
+  ignoredArtifactIds?: string[];
 };
 
 export type AgentWidgetEvent =
