@@ -1,0 +1,141 @@
+{
+  "scenario": "reconnect",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 556,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Help me finish this response.",
+            "createdAt": "2026-11-08T09:14:31.479Z"
+          }
+        ]
+      }
+    },
+    {
+      "at": 564,
+      "url": "reconnectStream",
+      "body": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 1
+      }
+    },
+    {
+      "at": 875,
+      "url": "reconnectStream",
+      "body": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 2
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 524,
+      "type": "widget:opened",
+      "detail": {
+        "open": true,
+        "source": "auto",
+        "timestamp": 1794129271478
+      }
+    },
+    {
+      "at": 525,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1794129271479
+      }
+    },
+    {
+      "at": 525,
+      "type": "run:started",
+      "detail": {
+        "runId": "run-ast_mw7m8trr_1qs7czyu",
+        "timestamp": 1794129271479
+      }
+    },
+    {
+      "at": 541,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mw7m8trr_slud7kqv",
+        "role": "user",
+        "content": "Help me finish this response.",
+        "createdAt": "2026-11-08T09:14:31.479Z",
+        "sequence": 1794129270984,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 559,
+      "type": "stream:paused",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3"
+      }
+    },
+    {
+      "at": 564,
+      "type": "stream:resuming",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 1
+      }
+    },
+    {
+      "at": 875,
+      "type": "stream:resuming",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3",
+        "attempt": 2
+      }
+    },
+    {
+      "at": 12881,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1794129271513-c9c41d4202caa8",
+        "role": "assistant",
+        "content": "Here is the beginning of your response. The connection is restored and this same response is complete.",
+        "createdAt": "2026-11-08T09:14:31.513Z",
+        "streaming": false,
+        "sequence": 1794129271512,
+        "agentMetadata": {
+          "textBlockId": "recovery-text",
+          "executionId": "exec_verify_1",
+          "iteration": 0
+        }
+      }
+    },
+    {
+      "at": 12883,
+      "type": "stream:resumed",
+      "detail": {
+        "executionId": "exec_verify_1",
+        "after": "3"
+      }
+    },
+    {
+      "at": 12886,
+      "type": "run:finished",
+      "detail": {
+        "runId": "run-ast_mw7m8trr_1qs7czyu",
+        "timestamp": 1794129283840,
+        "outcome": "success"
+      }
+    }
+  ]
+}

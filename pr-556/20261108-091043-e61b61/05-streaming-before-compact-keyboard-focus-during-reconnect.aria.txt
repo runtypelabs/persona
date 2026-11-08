@@ -1,0 +1,19 @@
+- generic
+  - StaticText "ready scenario=reconnect mode=inline theme=light"
+  - generic
+    - generic
+      - button "Close chat" [ref=e4]
+      - generic
+        - paragraph
+        - paragraph
+      - button "Clear chat" [ref=e5]
+      - status
+    - generic
+      - button "Show conversation" [ref=e1]
+      - generic
+        - status
+          - button "Reconnect to this response" [disabled, ref=e2]
+        - form
+          - textbox "Send a message…" [ref=e3]
+          - button "Start voice recognition" [disabled, ref=e6]
+          - button "Stop generating" [ref=e7]

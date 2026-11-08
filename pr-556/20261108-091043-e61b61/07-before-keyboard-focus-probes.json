@@ -1,0 +1,38 @@
+{
+  "normal": [
+    {
+      "activeTag": "BUTTON",
+      "activeLabel": "Reconnect now",
+      "reconnectFocused": true,
+      "disabled": false,
+      "ariaDisabled": null,
+      "attempts": 1
+    },
+    {
+      "activeTag": "BODY",
+      "activeLabel": null,
+      "reconnectFocused": false,
+      "disabled": true,
+      "ariaDisabled": null,
+      "attempts": 2
+    }
+  ],
+  "compact": [
+    {
+      "activeTag": "BUTTON",
+      "activeLabel": "Reconnect now",
+      "reconnectFocused": true,
+      "disabled": false,
+      "ariaDisabled": null,
+      "attempts": 1
+    },
+    {
+      "activeTag": "BODY",
+      "activeLabel": null,
+      "reconnectFocused": false,
+      "disabled": true,
+      "ariaDisabled": null,
+      "attempts": 2
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "normal": [
+    {
+      "activeTag": "BUTTON",
+      "activeLabel": "Reconnect now",
+      "reconnectFocused": true,
+      "disabled": false,
+      "ariaDisabled": "false",
+      "attempts": 1
+    },
+    {
+      "activeTag": "BUTTON",
+      "activeLabel": "Reconnect to this response",
+      "reconnectFocused": true,
+      "disabled": false,
+      "ariaDisabled": "true",
+      "attempts": 2
+    },
+    {
+      "activeTag": "BUTTON",
+      "activeLabel": "Reconnect to this response",
+      "reconnectFocused": true,
+      "disabled": false,
+      "ariaDisabled": "true",
+      "attempts": 2
+    }
+  ],
+  "compact": [
+    {
+      "activeTag": "BUTTON",
+      "activeLabel": "Reconnect now",
+      "reconnectFocused": true,
+      "disabled": false,
+      "ariaDisabled": "false",
+      "attempts": 1
+    },
+    {
+      "activeTag": "BUTTON",
+      "activeLabel": "Reconnect to this response",
+      "reconnectFocused": true,
+      "disabled": false,
+      "ariaDisabled": "true",
+      "attempts": 2
+    },
+    {
+      "activeTag": "BUTTON",
+      "activeLabel": "Reconnect to this response",
+      "reconnectFocused": true,
+      "disabled": false,
+      "ariaDisabled": "true",
+      "attempts": 2
+    }
+  ]
+}

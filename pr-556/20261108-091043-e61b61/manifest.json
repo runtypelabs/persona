@@ -1,0 +1,199 @@
+{
+  "runId": "20261108-091043-e61b61",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "before keyboard focus during reconnect",
+      "note": null,
+      "files": [
+        "02-streaming-before-keyboard-focus-during-reconnect.png",
+        "02-streaming-before-keyboard-focus-during-reconnect.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%7D",
+      "at": "2026-11-08T09:13:58.614Z",
+      "head": "9fb3b62d2638f538c378beb0ab8fcc55daa9be29",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "before keyboard reconnect",
+      "note": null,
+      "files": [
+        "01-streaming-before-keyboard-reconnect.gif",
+        "01-streaming-before-keyboard-reconnect.webm",
+        "01-streaming-before-keyboard-reconnect.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%7D",
+      "at": "2026-11-08T09:14:09.943Z",
+      "head": "9fb3b62d2638f538c378beb0ab8fcc55daa9be29",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "before keyboard reconnect requests",
+      "note": "3 request(s) crossed the network boundary, 9 controller event(s)",
+      "files": [
+        "03-streaming-before-keyboard-reconnect-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%7D",
+      "at": "2026-11-08T09:14:10.209Z",
+      "head": "9fb3b62d2638f538c378beb0ab8fcc55daa9be29",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "before compact keyboard focus during reconnect",
+      "note": null,
+      "files": [
+        "05-streaming-before-compact-keyboard-focus-during-reconnect.png",
+        "05-streaming-before-compact-keyboard-focus-during-reconnect.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-08T09:14:33.445Z",
+      "head": "9fb3b62d2638f538c378beb0ab8fcc55daa9be29",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "before compact keyboard reconnect",
+      "note": null,
+      "files": [
+        "04-streaming-before-compact-keyboard-reconnect.gif",
+        "04-streaming-before-compact-keyboard-reconnect.webm",
+        "04-streaming-before-compact-keyboard-reconnect.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-08T09:14:46.876Z",
+      "head": "9fb3b62d2638f538c378beb0ab8fcc55daa9be29",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "before compact keyboard reconnect requests",
+      "note": "3 request(s) crossed the network boundary, 10 controller event(s)",
+      "files": [
+        "06-streaming-before-compact-keyboard-reconnect-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-08T09:14:47.032Z",
+      "head": "9fb3b62d2638f538c378beb0ab8fcc55daa9be29",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after keyboard focus during reconnect",
+      "note": null,
+      "files": [
+        "02-streaming-after-keyboard-focus-during-reconnect.png",
+        "02-streaming-after-keyboard-focus-during-reconnect.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%7D",
+      "at": "2026-11-08T09:13:59.583Z",
+      "head": "9bd4724b93a8843d201423981a87aa9019678092",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after keyboard reconnect",
+      "note": null,
+      "files": [
+        "01-streaming-after-keyboard-reconnect.gif",
+        "01-streaming-after-keyboard-reconnect.webm",
+        "01-streaming-after-keyboard-reconnect.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%7D",
+      "at": "2026-11-08T09:14:11.048Z",
+      "head": "9bd4724b93a8843d201423981a87aa9019678092",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after keyboard reconnect requests",
+      "note": "3 request(s) crossed the network boundary, 9 controller event(s)",
+      "files": [
+        "03-streaming-after-keyboard-reconnect-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%7D",
+      "at": "2026-11-08T09:14:11.244Z",
+      "head": "9bd4724b93a8843d201423981a87aa9019678092",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after compact keyboard focus during reconnect",
+      "note": null,
+      "files": [
+        "05-streaming-after-compact-keyboard-focus-during-reconnect.png",
+        "05-streaming-after-compact-keyboard-focus-during-reconnect.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-08T09:14:32.772Z",
+      "head": "9bd4724b93a8843d201423981a87aa9019678092",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after compact keyboard reconnect",
+      "note": null,
+      "files": [
+        "04-streaming-after-compact-keyboard-reconnect.gif",
+        "04-streaming-after-compact-keyboard-reconnect.webm",
+        "04-streaming-after-compact-keyboard-reconnect.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-08T09:14:46.459Z",
+      "head": "9bd4724b93a8843d201423981a87aa9019678092",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after compact keyboard reconnect requests",
+      "note": "3 request(s) crossed the network boundary, 10 controller event(s)",
+      "files": [
+        "06-streaming-after-compact-keyboard-reconnect-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%2C+%22launcher%22%3A+%7B%22enabled%22%3A+true%2C+%22mountMode%22%3A+%22composer-bar%22%7D%7D",
+      "at": "2026-11-08T09:14:46.623Z",
+      "head": "9bd4724b93a8843d201423981a87aa9019678092",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "before keyboard focus probes",
+      "note": "Read-only activeElement, accessible state and request counts during keyboard activation.",
+      "files": [
+        "07-before-keyboard-focus-probes.json"
+      ],
+      "url": "http://127.0.0.1:4398/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%7D",
+      "at": "2026-11-08T09:13:58.614Z",
+      "head": "9fb3b62d2638f538c378beb0ab8fcc55daa9be29",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "after keyboard focus probes",
+      "note": "Read-only activeElement, accessible state and request counts during keyboard activation.",
+      "files": [
+        "07-after-keyboard-focus-probes.json"
+      ],
+      "url": "http://127.0.0.1:4397/verify.html?scenario=reconnect&config=%7B%22future%22%3A+%7B%22v5Defaults%22%3A+true%7D%2C+%22layout%22%3A+%7B%22embedded%22%3A+true%2C+%22showHeader%22%3A+true%7D%2C+%22reconnect%22%3A+%7B%22maxAttempts%22%3A+2%2C+%22backoffMs%22%3A+%5B30000%5D%7D%7D",
+      "at": "2026-11-08T09:13:59.583Z",
+      "head": "9bd4724b93a8843d201423981a87aa9019678092",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Normal780x900 and compact390x900: before loses keyboard focus; after retains focus and blocks repeated Enter/Space. Same theme/config and settled animation. Each trace has one dispatch, two resumes with the same execution/cursor, and one successful completion."
+    },
+    {
+      "feature": "other-streaming-entry-points",
+      "pass": false,
+      "skipped": true,
+      "note": "Browser proof covers same-response reconnect; other paths remain automated-suite coverage."
+    }
+  ]
+}
