@@ -27,8 +27,8 @@ import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-hi
  * effects alongside screenshots. Not registered in examples-nav.
  */
 
-type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "internal-error" | "execution-error" | "browser-history" | "turn-activity" | "operator" | "slow-start" | "reconnect" | "reconnect-exhausted";
-const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "internal-error", "execution-error", "browser-history", "turn-activity", "operator", "slow-start", "reconnect", "reconnect-exhausted"];
+type Scenario = "echo" | "artifacts" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "internal-error" | "execution-error" | "browser-history" | "turn-activity" | "operator" | "slow-start" | "reconnect" | "reconnect-exhausted";
+const SCENARIOS: Scenario[] = ["echo", "artifacts", "markdown", "tool", "reasoning", "approval", "error", "internal-error", "execution-error", "browser-history", "turn-activity", "operator", "slow-start", "reconnect", "reconnect-exhausted"];
 
 const params = new URLSearchParams(window.location.search);
 const scenarioParam = params.get("scenario") ?? "echo";
@@ -146,6 +146,18 @@ const sequenced = (frames: MockSSEFrame[]) => frames.map((frame, seq) => ({ ...f
 
 function scenarioFrames(kind: Scenario, userText: string, executionId: string): MockSSEFrame[] {
   switch (kind) {
+    case "artifacts":
+      return [
+        start(executionId),
+        { type: "artifact_start", executionId, id: `${executionId}-markdown`, artifactType: "markdown", title: "Allowed report" },
+        { type: "artifact_delta", executionId, id: `${executionId}-markdown`, delta: "# Allowed report\n\nThis markdown artifact is allowed." },
+        { type: "artifact_complete", executionId, id: `${executionId}-markdown` },
+        { type: "artifact_start", executionId, id: `${executionId}-component`, artifactType: "component", title: "Filtered component", component: "FilteredExample" },
+        { type: "artifact_update", executionId, id: `${executionId}-component`, props: { text: "This component is filtered." } },
+        { type: "artifact_complete", executionId, id: `${executionId}-component` },
+        ...buildAssistantTurnFrames({ executionId, text: "Artifact stream finished.", chunkSize: 12 }),
+        complete(executionId),
+      ];
     case "markdown":
       return [start(executionId), ...buildAssistantTurnFrames({ executionId, text: MARKDOWN_REPLY, chunkSize: 12 }), complete(executionId)];
     case "tool":
@@ -312,7 +324,11 @@ const baseConfig: AgentWidgetConfig = {
     inputPlaceholder: "Send a message…",
   },
   suggestionChips: [],
-  features: { showToolCalls: true, showReasoning: true },
+  features: {
+    showToolCalls: true,
+    showReasoning: true,
+    ...(scenario === "artifacts" ? { artifacts: { enabled: true, allowedTypes: ["markdown" as const], display: "inline" as const } } : {}),
+  },
   ...(recoveryScenario ? {
     reconnect: { maxAttempts: 2, backoffMs: [scenario === "reconnect" ? 6000 : 250] },
     reconnectStream: async ({ executionId, after, signal }) => {

@@ -262,26 +262,6 @@ export function validateFile(
 }
 
 /**
- * Get file parts from content.
- */
-export function getFileParts(content: MessageContent): FileContentPart[] {
-  if (typeof content === 'string') {
-    return [];
-  }
-  return content.filter((part): part is FileContentPart => part.type === 'file');
-}
-
-/**
- * Check if content contains any files.
- */
-export function hasFiles(content: MessageContent): boolean {
-  if (typeof content === 'string') {
-    return false;
-  }
-  return content.some(part => part.type === 'file');
-}
-
-/**
  * Get file extension from filename
  */
 export function getFileExtension(filename: string): string {

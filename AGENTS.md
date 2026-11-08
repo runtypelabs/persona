@@ -110,7 +110,6 @@ The widget uses a layered architecture:
    - `actions.ts` - AI action parsing and handling
    - `component-parser.ts` / `component-middleware.ts` - Dynamic component system
    - `tokens.ts` / `theme.ts` - Design tokens and theme utilities
-   - `virtual-scroller.ts` - Performance optimization for long message lists
    - `event-stream-*.ts` - SSE event buffering, capture, control, and storage
    - `ask-user-question-tool.ts` / `suggest-replies-tool.ts` - Built-in LOCAL client tool definitions advertised via `features.*.expose`
 

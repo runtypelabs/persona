@@ -29,6 +29,7 @@ import {
   resolveArtifactDisplayMode
 } from "./utils/artifact-display";
 import { extractTextFromJson } from "./utils/formatting";
+import { artifactKindAllowedByFeature } from "./utils/artifact-gate";
 
 /** Persona's optional text_start extension; not part of the generated API contract.
  * The transport is untrusted, so validate phase before attaching it to messages. */
@@ -105,6 +106,7 @@ export { resolveApproval, resumeFlow } from "./client-resume";
 export type StreamContext = {
   streamGeneration: () => number;
   streamReaders: Set<ReadableStreamDefaultReader<Uint8Array>>;
+  ignoredArtifactIds: Set<string>;
   /** Read live: `updateConfig()` may swap the config mid-stream. */
   config: () => AgentWidgetConfig;
   createStreamParser: () => AgentWidgetStreamParser;
@@ -393,6 +395,11 @@ export async function streamResponse(
 
   // Track tool call IDs for artifact emit tools so we can suppress their UI
   const artifactToolCallIds = new Set<string>();
+  // Admit an artifact at its start so filtering also suppresses its later
+  // deltas, updates, completion, and synthetic transcript block. Keep denied
+  // IDs in the cursor checkpoint when a transport resumes after the start.
+  const ignoredArtifactIds = ctx.ignoredArtifactIds;
+  checkpoint?.ignoredArtifactIds?.forEach(id => ignoredArtifactIds.add(id));
   // Track artifact block messages (reference card or inline block) so we can
   // update them on artifact_complete
   const artifactCardMessages = new Map<string, AgentWidgetMessage>();
@@ -1607,6 +1614,16 @@ export async function streamResponse(
         payload.type === "artifact_update" ||
         payload.type === "artifact_complete"
       ) {
+        const artifactId = String(payload.id);
+        if (payload.type === "artifact_start") {
+          if (!artifactKindAllowedByFeature(ctx.config(), payload.artifactType as PersonaArtifactKind)) {
+            ignoredArtifactIds.add(artifactId);
+            continue;
+          }
+          ignoredArtifactIds.delete(artifactId);
+        } else if (ignoredArtifactIds.has(artifactId)) {
+          continue;
+        }
         if (payload.type === "artifact_start") {
           const at = payload.artifactType as PersonaArtifactKind;
           const artId = String(payload.id);
@@ -1811,7 +1828,7 @@ export async function streamResponse(
       const advanceCursor = () => {
         if (frameId !== null && frameId !== "") {
           onEvent({ type: "cursor", id: frameId,
-            ...(ctx.config().backgroundConversations ? { checkpoint: {
+            ...(ctx.config().backgroundConversations || ignoredArtifactIds.size > 0 ? { checkpoint: {
               textBlockId: currentTextBlockId,
               openAssistant: assistantMessage !== null,
               sealedFlowMessageId: lastSealedFlowBubble?.id ?? null,
@@ -1822,6 +1839,7 @@ export async function streamResponse(
               nestedParents: [...nestedBlockParent], nestedRaw: [...nestedBlockRaw],
               media: [...mediaBuffers].map(([id, media]) => [id, { ...media, parts: [...media.parts] }]),
               artifactContent: [...artifactContent].map(([id, content]) => [id, { ...content, props: content.props ? { ...content.props } : undefined }]), artifactTools: [...artifactToolCallIds],
+              ...(ignoredArtifactIds.size > 0 ? { ignoredArtifactIds: [...ignoredArtifactIds] } : {}),
             } satisfies AgentWidgetStreamCheckpoint } : {}),
           });
         }

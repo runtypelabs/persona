@@ -1,7 +1,7 @@
 import { loadActivityUi } from "./activity-ui-loader";
 import { createChunkLoader } from "./utils/chunk-loader";
 export type TurnActivityUiModule = import("./turn-activity-ui").TurnActivityRuntime;
-const { setLoader, load, provide } = createChunkLoader<TurnActivityUiModule>({
+const { setLoader, load } = createChunkLoader<TurnActivityUiModule>({
   fallbackImport: () => import("@runtypelabs/persona/turn-activity-ui"),
 });
 export const setTurnActivityUiLoader = setLoader;
@@ -10,5 +10,4 @@ export const loadTurnActivityUi = () => Promise.all([load(), loadActivityUi()]).
   Object.assign(activity.turnUi, turn);
   return ready = turn;
 });
-export const provideTurnActivityUi = provide;
 export const getTurnActivityUiSync = () => ready;

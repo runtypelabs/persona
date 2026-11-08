@@ -910,14 +910,6 @@ export const navigateToPage = (
 };
 
 /**
- * Re-export of the post-render nav-state sync, for ui.ts to call after pill
- * toggles in grouped multi-select mode.
- */
-export const refreshNavState = (sheet: HTMLElement): void => {
-  syncNavState(sheet);
-};
-
-/**
  * Test seam: reset the one-shot truncation warning so each test can assert
  * the warn fires exactly once.
  */

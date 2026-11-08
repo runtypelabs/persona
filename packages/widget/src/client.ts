@@ -174,6 +174,9 @@ export class AgentWidgetClient {
   #onSSEEvent?: SSEEventCallback;
   #streamGeneration = 0;
   #streamReaders = new Set<ReadableStreamDefaultReader<Uint8Array>>();
+  // Shared by dispatch and its approval/tool continuation streams. Replace
+  // at a turn/conversation boundary so obsolete streams retain their own set.
+  #ignoredArtifactIds = new Set<string>();
   
   // Client token mode properties
   /**
@@ -348,6 +351,7 @@ export class AgentWidgetClient {
   /** @internal Invalidate all readers at a local conversation/identity boundary. */
   public cancelStreams(): void {
     this.#streamGeneration += 1;
+    this.#ignoredArtifactIds = new Set();
     // Durable detachment explicitly closes its attachment. Other transports
     // retain their existing customFetch producer teardown contract; invalidate
     // their events without introducing a new reader.cancel() side effect.
@@ -1192,6 +1196,7 @@ export class AgentWidgetClient {
    */
   public async dispatch(options: DispatchOptions, onEvent: SSEHandler) {
     options.signal?.throwIfAborted();
+    this.#ignoredArtifactIds = new Set();
     // Fetch the stream processor in parallel with the request; a failure here
     // is retried by the awaited load in #streamResponse.
     loadClientStream().catch(() => {});
@@ -1400,6 +1405,7 @@ export class AgentWidgetClient {
         config: () => this.#config,
         streamGeneration: () => this.#streamGeneration,
         streamReaders: this.#streamReaders,
+        ignoredArtifactIds: this.#ignoredArtifactIds,
         createStreamParser: this.#createStreamParser,
         parseSSEEvent: this.#parseSSEEvent,
         onSSEEvent: (eventType, payload) => this.#onSSEEvent?.(eventType, payload),
