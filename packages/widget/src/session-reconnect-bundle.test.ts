@@ -19,7 +19,6 @@ const dist = (f: string) => resolve(__dirname, "..", "dist", f);
 
 // Chunk-only literals: user-facing reconnect failure copy emitted nowhere else.
 const RUNTIME_MARKERS = [
-  "Connection lost and the response could not be resumed.",
   "Durable session reconnect failed.",
 ];
 

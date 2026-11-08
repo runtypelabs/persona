@@ -159,8 +159,8 @@ describe("streamingSubmitBehavior: defer-one", () => {
     expect(status?.textContent).toContain("already queued");
   });
 
-  it("keeps a notice in the status line when the chat status changes under it", async () => {
-    const { mount } = makeController();
+  it.each([false, true])("keeps a notice in the status line when chat status changes (composer bar=%s)", async (composerBar) => {
+    const { mount } = makeController({ future: { v5Defaults: true }, launcher: { enabled: true, mountMode: composerBar ? "composer-bar" : "floating" } });
     await startStreaming(mount);
     type(mount, "queued message");
     pressEnter(mount);
@@ -174,6 +174,37 @@ describe("streamingSubmitBehavior: defer-one", () => {
     await flush(50);
     const status = mount.querySelector<HTMLElement>("[data-persona-composer-notice]");
     expect(status?.textContent).toContain("already queued");
+    expect(status?.style.display).toBe("");
+    expect(status?.getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("holds a queued message through exhaustion and releases it only after terminal-only manual recovery", async () => {
+    const reconnect = vi.fn(async () => new Response(null, { status: 503 }));
+    const { mount, controller } = makeController({
+      future: { v5Defaults: true }, reconnectStream: reconnect, reconnect: { maxAttempts: 1 },
+    });
+    const completed = vi.fn();
+    controller.on("assistant:complete", completed);
+    await startStreaming(mount);
+    stream.push('id: 1\nevent: text_delta\ndata: {"type":"text_delta","id":"partial","delta":"Partial","executionId":"exec-1"}\n\n');
+    await flush();
+    type(mount, "queued message");
+    pressEnter(mount);
+    await flush();
+    stream.close();
+    await vi.waitFor(() => expect(mount.textContent).toContain("Couldn’t reconnect"));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(controller.getComposerState().pendingSubmission?.text).toBe("queued message");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(reconnect).toHaveBeenCalledOnce();
+    expect(completed).not.toHaveBeenCalled();
+    reconnect.mockResolvedValueOnce(new Response('id: 2\nevent: execution_complete\ndata: {"type":"execution_complete","kind":"agent","success":true}\n\n'));
+    vi.mocked(global.fetch).mockResolvedValueOnce(new Response(unifiedFrames()));
+    mount.querySelector<HTMLButtonElement>("[data-persona-reconnect]")!.click();
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect(controller.getComposerState().pendingSubmission).toBeUndefined();
+    expect(reconnect).toHaveBeenCalledTimes(2);
+    expect(completed).toHaveBeenCalled();
   });
 
   it("card Edit restores the snapshot into the draft and drops the card", async () => {

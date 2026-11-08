@@ -456,15 +456,9 @@ export const createAttachmentControls = (config?: AgentWidgetConfig): Attachment
 
 export const createStatusText = (config?: AgentWidgetConfig): HTMLElement => {
   const statusConfig = config?.statusIndicator ?? {};
-  const alignClass =
-    statusConfig.align === "left"
-      ? "persona-text-left"
-      : statusConfig.align === "center"
-        ? "persona-text-center"
-        : "persona-text-right";
   const statusText = createElement(
     "div",
-    `persona-mt-2 ${alignClass} persona-text-xs persona-text-persona-muted`
+    "persona-mt-2 persona-text-xs persona-text-persona-muted"
   );
   statusText.setAttribute("data-persona-composer-status", "");
 

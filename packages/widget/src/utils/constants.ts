@@ -4,8 +4,8 @@ export const statusCopy: Record<AgentWidgetSessionStatus, string> = {
   idle: "Online",
   connecting: "Connecting…",
   connected: "Streaming…",
-  error: "Offline",
-  paused: "Connection lost…",
+  error: "Connection interrupted",
+  paused: "Connection interrupted. Retrying…",
   resuming: "Reconnecting…"
 };
 

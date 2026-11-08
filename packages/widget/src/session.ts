@@ -179,6 +179,8 @@ function connectionConfigChanged(
   return CONNECTION_CONFIG_KEYS.some((key) => prev[key] !== next[key]);
 }
 
+export type ConnectionRecoveryState = "none" | "waiting" | "reconnecting" | "interrupted";
+
 export type SessionCallbacks = {
   onConversationExecutionState?: (state: ConversationExecutionState) => void;
   onRunStarted?: (event: AgentWidgetRunStartedEvent) => void;
@@ -186,6 +188,7 @@ export type SessionCallbacks = {
   onMessagesChanged: (messages: AgentWidgetMessage[]) => void;
   onStatusChanged: (status: AgentWidgetSessionStatus) => void;
   onStreamingChanged: (streaming: boolean) => void;
+  onConnectionRecoveryChanged?: () => void;
   onError?: (error: Error) => void;
   onVoiceStatusChanged?: (status: VoiceStatus) => void;
   onArtifactsState?: (state: {
@@ -356,7 +359,7 @@ export class AgentWidgetSession {
     this.#runFinishTimer = setTimeout(() => {
       this.#runFinishTimer = null;
       if (this.#activeRun !== run) return;
-      if (!this.#runFailed && (this.streaming || this.#reconnecting ||
+      if (!this.#runFailed && (this.streaming || this.#reconnecting || this.#connectionInterrupted ||
           this.#isAwaitPending() || this.webMcpAwaitBatches.size ||
           this.webMcpResolveControllers.size)) return;
       this.#finishRun(this.#runFailed ? "error" : "success");
@@ -391,6 +394,9 @@ export class AgentWidgetSession {
   // True while a reconnect run is active (guards against re-entry from a second
   // drop and tells the dispatch/connectStream catches to stay quiet).
   #reconnecting = false;
+  #connectionInterrupted = false;
+  #interruptedMessageIds = new Set<string>();
+  #reconnectGeneration = 0;
   #streamCheckpoint: AgentWidgetStreamCheckpoint | undefined;
   #backgroundCommitEvents: Array<{ event: AgentWidgetEvent; readOnlyReplay: boolean }> | null = null;
   #backgroundController: BackgroundConversationController | null = null;
@@ -2970,7 +2976,7 @@ export class AgentWidgetSession {
       // first, which already flipped us into `resuming` and armed reconnect.
       // The subsequent dispatch rejection must NOT paint a dispatch-error
       // bubble: the turn is being resumed, not failed.
-      if (this.status === "resuming" || this.#reconnecting) return;
+      if (this.status === "resuming" || this.#reconnecting || this.#connectionInterrupted) return;
       if (this.#voiceDelegation) this.#voiceDelegation.failed = true;
       // Check if this is an abort error (user canceled, navigated away, etc.)
       // In these cases, don't show fallback - the request was intentionally interrupted
@@ -3148,7 +3154,7 @@ export class AgentWidgetSession {
       );
     } catch (error) {
       if (this.#activeRun !== run) return;
-      if (this.status === "resuming" || this.#reconnecting) return;
+      if (this.status === "resuming" || this.#reconnecting || this.#connectionInterrupted) return;
       // Check if this is an abort error (a prior in-flight stream was canceled,
       // the user navigated away, etc.). In these cases, don't show fallback or
       // fire onError - the request was intentionally interrupted.
@@ -3250,8 +3256,9 @@ export class AgentWidgetSession {
         options?.assistantMessageId,
         options?.seedContent,
         this.abortController?.signal,
-        options?.readOnlyReplay ? this.messages : undefined,
-        options?.readOnlyReplay ? this.#streamCheckpoint : undefined
+        options?.readOnlyReplay ? this.messages : options?.preserveAssistantId
+          ? this.messages.filter(message => message.id === options.assistantMessageId) : undefined,
+        options?.preserveAssistantId || options?.readOnlyReplay ? this.#streamCheckpoint : undefined
       );
       this.#flushApprovalSettles(streamToken);
     } catch (error) {
@@ -4089,9 +4096,15 @@ export class AgentWidgetSession {
         this.#beginReconnect();
         return;
       }
+      if (event.status === "error" && event.terminal) {
+        this.#appendExecutionError(new Error(event.error ?? "The run stopped before it could finish."));
+      }
       if (event.status === "error") this.#emitConversationExecutionState("failed");
       else if (event.terminal && event.status === "idle") this.#emitConversationExecutionState("completed");
-      this.#setStatus(event.status);
+      this.#setStatus(
+        event.status === "error" && event.terminal ? "idle" : event.status,
+        event.status === "error"
+      );
       if (event.status === "connecting") {
         this.#setStreaming(true);
       } else if (event.status === "idle" || event.status === "error") {
@@ -4137,8 +4150,9 @@ export class AgentWidgetSession {
         this.#scheduleWebMcpBatchFlush();
       }
     } else if (event.type === "error") {
+      if (event.source === "execution") this.#appendExecutionError(event.error);
       this.#emitConversationExecutionState("failed");
-      this.#setStatus("error");
+      this.#setStatus(event.source === "execution" ? "idle" : "error", true);
       // Terminal error: drop the resume handle so no reconnect arms.
       this.#clearResumable();
       // Mirror the idle/status handler: don't tear down streaming while a
@@ -4325,15 +4339,50 @@ export class AgentWidgetSession {
     // Flip the visible state synchronously — the bubble stays open and a
     // `resuming` status is observable immediately (e.g. right after
     // `resumeFromHandle`). The heavy backoff loop is loaded lazily below.
+    const generation = ++this.#reconnectGeneration;
+    const interruptedAssistantId = this.#resumable.assistantMessageId;
+    const reopenAssistant = this.#interruptedMessageIds.has(interruptedAssistantId) && this.#streamCheckpoint?.openAssistant !== false;
+    this.#interruptedMessageIds.clear();
+    this.#connectionInterrupted = false;
     this.#reconnecting = true;
+    if (reopenAssistant) {
+      const message = this.messages.find(message => message.id === interruptedAssistantId);
+      if (message) {
+        message.streaming = true;
+        this.callbacks.onMessagesChanged([...this.messages]);
+      }
+    }
     this.callbacks.onReconnect?.({ phase: "paused", handle: this.#resumable });
     this.#setStreaming(true);
     this.#setStatus("resuming");
     void this.#loadReconnectController().then((controller) => {
       // The run may have been torn down (new turn / cancel / hydrate) while the
       // module was loading; only start the loop if we're still reconnecting.
-      if (this.#reconnecting && this.#resumable) controller.begin();
+      if (generation === this.#reconnectGeneration && this.#reconnecting && this.#resumable) controller.begin();
+    }).catch((error: unknown) => {
+      if (generation !== this.#reconnectGeneration || !this.#reconnecting || !this.#resumable) return;
+      this.#markConnectionInterrupted();
+      this.callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
     });
+  }
+
+  #markConnectionInterrupted(): void {
+    this.#connectionInterrupted = true;
+    this.#interruptedMessageIds.clear();
+    this.#reconnecting = false;
+    this.abortController = null;
+    let changed = false;
+    for (const message of this.messages) {
+      if (message.streaming) {
+        this.#interruptedMessageIds.add(message.id);
+        message.streaming = false;
+        changed = true;
+      }
+    }
+    if (changed) this.callbacks.onMessagesChanged([...this.messages]);
+    this.#setStreaming(false);
+    this.#setStatus("idle");
+    this.callbacks.onConnectionRecoveryChanged?.();
   }
 
   /**
@@ -4373,20 +4422,18 @@ export class AgentWidgetSession {
         return { ...session.config, reconnectStream: session.#getReconnectStream() };
       },
       getResumable: () => session.#resumable,
-      clearResumable: () => session.#clearResumable(),
+      markInterrupted: () => session.#markConnectionInterrupted(),
       getStatus: () => session.status,
       setStatus: (status) => session.#setStatus(status),
-      setStreaming: (streaming) => session.#setStreaming(streaming),
       setReconnecting: (value) => {
         session.#reconnecting = value;
+        session.callbacks.onConnectionRecoveryChanged?.();
       },
       setAbortController: (controller) => {
         session.abortController = controller;
       },
       getMessages: () => session.messages,
       isAwaitPending: () => session.#isAwaitPending(),
-      notifyMessagesChanged: () =>
-        session.callbacks.onMessagesChanged([...session.messages]),
       resumeConnect: (body, assistantMessageId, seedContent) =>
         session.connectStream(body, {
           assistantMessageId,
@@ -4395,15 +4442,8 @@ export class AgentWidgetSession {
           seedContent,
           readOnlyReplay: !!session.config.backgroundConversations,
         }),
-      appendMessage: (message) => session.#appendMessage(message),
       settleParked: (executionId) => session.#settleParkedReconnect(executionId),
-      nextSequence: () => session.#nextSequence(),
       emitReconnect: (event) => session.callbacks.onReconnect?.(event),
-      buildErrorContent: (message) =>
-        buildDispatchErrorContent(
-          new Error(message),
-          session.config.errorMessage
-        ),
       onError: (error) => session.callbacks.onError?.(error),
     };
   }
@@ -4416,7 +4456,19 @@ export class AgentWidgetSession {
       this.#reconnectController?.wake();
       return;
     }
-    this.#beginReconnect();
+    if (this.#connectionInterrupted) this.#beginReconnect();
+  }
+
+  /** A local forced close is not a completed assistant message. */
+  public isReconnectInterruptedMessage(messageId: string): boolean {
+    return this.#interruptedMessageIds.has(messageId);
+  }
+
+  /** Current attachment recovery; a healthy stream or user await cannot be reconnected manually. */
+  public getConnectionRecoveryState(): ConnectionRecoveryState {
+    if (this.#reconnecting && this.status !== "connected") return this.status === "paused" ? "waiting" : "reconnecting";
+    return this.#connectionInterrupted && this.#resumable &&
+      typeof this.#getReconnectStream() === "function" ? "interrupted" : "none";
   }
 
   /**
@@ -4554,6 +4606,7 @@ export class AgentWidgetSession {
    * chunk: it only delegates to the controller if one was already created.
    */
   #teardownReconnect(): void {
+    this.#reconnectGeneration += 1;
     this.#reconnecting = false;
     this.#reconnectController?.teardown();
     this.#clearResumable();
@@ -4567,7 +4620,11 @@ export class AgentWidgetSession {
     }
     const had = this.#resumable !== null;
     this.#resumable = null;
+    const wasInterrupted = this.#connectionInterrupted;
+    this.#connectionInterrupted = false;
+    this.#interruptedMessageIds.clear();
     this.#streamCheckpoint = undefined;
+    if (wasInterrupted) this.callbacks.onConnectionRecoveryChanged?.();
     if (had) this.config.onExecutionState?.(null);
   }
 
@@ -4599,8 +4656,8 @@ export class AgentWidgetSession {
     return this.#resumable;
   }
 
-  #setStatus(status: AgentWidgetSessionStatus) {
-    if (status === "error") {
+  #setStatus(status: AgentWidgetSessionStatus, runFailed = status === "error") {
+    if (runFailed) {
       this.#runFailed = true;
       this.#scheduleRunFinish();
     }
@@ -4721,7 +4778,16 @@ export class AgentWidgetSession {
   /** Preserve streamed output and give its failure a distinct transcript row. */
   #appendDispatchError(error: unknown): void {
     for (const message of this.messages) message.streaming = false;
-    const content = buildDispatchErrorContent(error, this.config.errorMessage);
+    this.#appendErrorMessage(buildDispatchErrorContent(error, this.config.errorMessage));
+  }
+
+  #appendExecutionError(error: Error): void {
+    if (this.#runFailed || this.config.executionErrorDisplay === "host") return;
+    const fallback = `This run failed.\n\n${error.message}`;
+    this.#appendErrorMessage(buildDispatchErrorContent(error, this.config.errorMessage ?? fallback));
+  }
+
+  #appendErrorMessage(content: string): void {
     if (content) {
       this.#appendMessage({
         id: generateAssistantMessageId(),

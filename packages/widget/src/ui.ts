@@ -166,7 +166,7 @@ import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme, getColorScheme } from "./utils/theme";
 import { resolveTokenValue, resolveThemeDefaults } from "./utils/tokens";
 import { deepMerge } from "./utils/deep-merge";
-import { Activity, Check, Copy } from "lucide";
+import { Activity, Check, Copy, CircleAlert } from "lucide";
 import { renderLucideIcon } from "./utils/icons";
 import { renderIconNode } from "./utils/icon-node";
 import { createElement } from "./utils/dom";
@@ -1475,25 +1475,60 @@ export const createAgentExperience = (
 
   // Get status indicator config
   const statusConfig = config.statusIndicator ?? {};
-  const _getStatusText = (status: AgentWidgetSessionStatus, statusConfig = config.statusIndicator ?? {}): string => {
-    if (status === "idle") return statusConfig.idleText ?? statusCopy.idle;
-    if (status === "connecting") return statusConfig.connectingText ?? statusCopy.connecting;
-    if (status === "connected") return statusConfig.connectedText ?? statusCopy.connected;
-    if (status === "error") return statusConfig.errorText ?? statusCopy.error;
-    if (status === "paused") return statusConfig.pausedText ?? statusCopy.paused;
-    if (status === "resuming") return statusConfig.resumingText ?? statusCopy.resuming;
-    return statusCopy[status];
+  const getStatusIndicatorConfig = () => {
+    const current = config.statusIndicator ?? {};
+    return isComposerBar() && current.mode === undefined ? { ...current, mode: "transient" as const } : current;
   };
+  const _getStatusText = (status: AgentWidgetSessionStatus, statusConfig = config.statusIndicator ?? {}): string =>
+    statusConfig[`${status}Text`] ?? statusCopy[status];
 
   /** Update statusText element, rendering a link for idle status when idleLink is configured. */
   function applyStatusToElement(el: HTMLElement, text: string, statusCfg: typeof statusConfig, status: string): void {
-    if (!isComposerBar() && (statusCfg.mode === "transient" || el.classList.contains("persona-mb-2"))) {
-      placeStatusIndicator(el, composerForm, statusCfg);
-      applyStatusIndicatorState(el, statusCfg, status);
-    }
-    // A composer lock reason owns the status region until the lock clears, and
-    // a notice until its timer ends (which re-applies the status).
+    if (isComposerBar() && statusCfg.mode === undefined) statusCfg = { ...statusCfg, mode: "transient" };
+    const recovery = session?.getConnectionRecoveryState() ?? "none";
+    placeStatusIndicator(el, composerForm, statusCfg);
+    applyStatusIndicatorState(el, statusCfg, status, recovery);
+    // Lock reasons and temporary notices own this region until they clear.
     if (el.hasAttribute(COMPOSER_REASON_ATTR) || el.hasAttribute(COMPOSER_NOTICE_ATTR)) return;
+    const connectionNotice = recovery !== "none" || status === "paused" || status === "resuming" || status === "error";
+    const compact = statusCfg.mode === "transient" && connectionNotice;
+    el.classList.toggle("persona-connection-notice", compact);
+    if (connectionNotice) {
+      let label = el.querySelector<HTMLElement>(".persona-connection-notice__label");
+      if (!label) {
+        el.replaceChildren();
+        label = document.createElement("span");
+        label.className = "persona-connection-notice__label";
+        el.append(label);
+      }
+      label.textContent = recovery === "interrupted"
+        ? statusCfg.errorText ?? "Couldn’t reconnect."
+        : text;
+      const icon = el.querySelector("svg");
+      if (compact && !icon) {
+        const nextIcon = renderIconNode(CircleAlert, 14, "currentColor", 1.75);
+        if (nextIcon) {
+          nextIcon.setAttribute("aria-hidden", "true");
+          el.prepend(nextIcon);
+        }
+      } else if (!compact) icon?.remove();
+      let reconnect = el.querySelector<HTMLButtonElement>("[data-persona-reconnect]");
+      if (recovery !== "none") {
+        if (!reconnect) {
+          reconnect = document.createElement("button");
+          reconnect.type = "button";
+          reconnect.className = "persona-connection-notice__action";
+          reconnect.setAttribute("data-persona-reconnect", "");
+          reconnect.textContent = "Reconnect";
+          reconnect.addEventListener("click", () => session.reconnectNow());
+          el.append(reconnect);
+        }
+        reconnect.disabled = recovery === "reconnecting";
+        reconnect.setAttribute("aria-label", recovery === "waiting" ? "Reconnect now" : "Reconnect to this response");
+        reconnect.setAttribute("aria-busy", String(reconnect.disabled));
+      } else reconnect?.remove();
+      return;
+    }
     if (status === "idle" && statusCfg.idleLink) {
       el.textContent = "";
       const link = document.createElement("a");
@@ -6175,7 +6210,8 @@ export const createAgentExperience = (
       if (
         message.role === "assistant" &&
         (previous?.streaming || coalescedStreamingIds.has(message.id)) &&
-        message.streaming === false
+        message.streaming === false &&
+        !session.isReconnectInterruptedMessage(message.id)
       ) {
         eventBus.emit("assistant:complete", message);
       }
@@ -8064,23 +8100,16 @@ export const createAgentExperience = (
     sendButtonWrapper.toggleAttribute("data-persona-send-hidden", hidden);
   }
 
-  /** Render the active reason. Pill mode has no status row, so it gets a title. */
+  /** Render the active lock reason in the shared status region. */
   function renderComposerLockReason(): void {
     const reason = composerLockReason();
-    if (isComposerBar()) {
-      const root = composerForm ?? footer;
-      if (reason) root.setAttribute("title", reason);
-      else root.removeAttribute("title");
-      footer.toggleAttribute(COMPOSER_REASON_ATTR, Boolean(reason));
-      return;
-    }
     if (reason) {
       statusText.setAttribute("role", "status");
       statusText.setAttribute("aria-live", "polite");
       statusText.setAttribute(COMPOSER_REASON_ATTR, "");
       statusText.removeAttribute(COMPOSER_NOTICE_ATTR); // the reason outranks a notice
       statusText.textContent = reason;
-      applyStatusIndicatorState(statusText, config.statusIndicator ?? {}, "idle");
+      applyStatusIndicatorState(statusText, getStatusIndicatorConfig(), "idle");
       return;
     }
     if (!statusText.hasAttribute(COMPOSER_REASON_ATTR)) return;
@@ -8887,18 +8916,14 @@ export const createAgentExperience = (
     onMessagesChanged(messages) {
       handleMessagesChanged(messages);
     },
+    onConnectionRecoveryChanged() {
+      if (!session) return;
+      const status = session.getStatus();
+      applyStatusToElement(statusText, _getStatusText(status), config.statusIndicator ?? {}, status);
+    },
     onStatusChanged(status) {
       const currentStatusConfig = config.statusIndicator ?? {};
-      const getCurrentStatusText = (s: AgentWidgetSessionStatus): string => {
-        if (s === "idle") return currentStatusConfig.idleText ?? statusCopy.idle;
-        if (s === "connecting") return currentStatusConfig.connectingText ?? statusCopy.connecting;
-        if (s === "connected") return currentStatusConfig.connectedText ?? statusCopy.connected;
-        if (s === "error") return currentStatusConfig.errorText ?? statusCopy.error;
-        if (s === "paused") return currentStatusConfig.pausedText ?? statusCopy.paused;
-        if (s === "resuming") return currentStatusConfig.resumingText ?? statusCopy.resuming;
-        return statusCopy[s];
-      };
-      applyStatusToElement(statusText, getCurrentStatusText(status), currentStatusConfig, status);
+      applyStatusToElement(statusText, _getStatusText(status), currentStatusConfig, status);
       syncScrollToBottomButton();
       eventStreamView?.update();
       // A paused/resuming durable turn gates the history button too.
@@ -8939,7 +8964,8 @@ export const createAgentExperience = (
       // streaming lifecycle (Principles 8 + 15).
       syncScrollToBottomButton();
       eventStreamView?.update();
-      announce(streaming ? "Responding…" : "Response complete.");
+      announce(streaming ? "Responding…" : session.getConnectionRecoveryState() === "interrupted"
+        ? "Connection interrupted." : "Response complete.");
       // Composer-bar peek: streaming state is one of the two visibility
       // triggers (the other is composer hover), so re-evaluate now.
       syncComposerBarPeek();
@@ -9873,13 +9899,13 @@ export const createAgentExperience = (
   /** Transient message in the status region; a lock reason always outranks it. */
   function showComposerNotice(text: string, ms = 4000): void {
     announce(text);
-    if (isComposerBar() || !statusText) return;
+    if (!statusText) return;
     if (statusText.hasAttribute(COMPOSER_REASON_ATTR)) return;
     statusText.setAttribute(COMPOSER_NOTICE_ATTR, "");
     statusText.setAttribute("role", "status");
     statusText.setAttribute("aria-live", "polite");
     statusText.textContent = text;
-    applyStatusIndicatorState(statusText, config.statusIndicator ?? {}, "idle");
+    applyStatusIndicatorState(statusText, getStatusIndicatorConfig(), "idle");
     if (composerNoticeTimer) clearTimeout(composerNoticeTimer);
     composerNoticeTimer = setTimeout(() => {
       composerNoticeTimer = null;
@@ -10919,7 +10945,8 @@ export const createAgentExperience = (
   // `defer-one` auto-send: a turn that COMPLETED releases the queued item. An
   // explicit Stop or a stream error never reaches this seam, so the item stays
   // pending for the user to send, edit, or remove.
-  const pendingSubmissionUnsub = eventBus.on("assistant:complete", () => {
+  const pendingSubmissionUnsub = eventBus.on("run:finished", (event) => {
+    if (event.outcome !== "success") return;
     const pending = composerStore.getState().pendingSubmission;
     const generation = composerConversationGeneration;
     const restart = restartGeneration;
@@ -11669,9 +11696,9 @@ export const createAgentExperience = (
       updateCopy();
       renderSuggestions();
       setComposerDisabled(session.isStreaming());
-      if (config.statusIndicator?.mode === "transient" && !isComposerBar()) {
+      if (!composerIsPluginOwned) {
         const status = session.getStatus();
-        applyStatusToElement(statusText, _getStatusText(status), config.statusIndicator, status);
+        applyStatusToElement(statusText, _getStatusText(status), getStatusIndicatorConfig(), status);
       }
       // The rebuilt mic is stamped idle by its builder. A rebuild mid-recording
       // has to restore the live state, which also re-arms the level loop
@@ -12905,31 +12932,15 @@ export const createAgentExperience = (
       }
 
       // Update status indicator visibility and text
-      const statusIndicatorConfig = config.statusIndicator ?? {};
+      const statusIndicatorConfig = getStatusIndicatorConfig();
       placeStatusIndicator(statusText, composerForm, statusIndicatorConfig);
       applyStatusIndicatorState(statusText, statusIndicatorConfig, session?.getStatus() ?? "idle");
 
       // Update status text if status is currently set
       if (session) {
         const currentStatus = session.getStatus();
-        const getCurrentStatusText = (s: AgentWidgetSessionStatus): string => {
-          if (s === "idle") return statusIndicatorConfig.idleText ?? statusCopy.idle;
-          if (s === "connecting") return statusIndicatorConfig.connectingText ?? statusCopy.connecting;
-          if (s === "connected") return statusIndicatorConfig.connectedText ?? statusCopy.connected;
-          if (s === "error") return statusIndicatorConfig.errorText ?? statusCopy.error;
-          if (s === "paused") return statusIndicatorConfig.pausedText ?? statusCopy.paused;
-          if (s === "resuming") return statusIndicatorConfig.resumingText ?? statusCopy.resuming;
-          return statusCopy[s];
-        };
-        applyStatusToElement(statusText, getCurrentStatusText(currentStatus), statusIndicatorConfig, currentStatus);
+        applyStatusToElement(statusText, _getStatusText(currentStatus), statusIndicatorConfig, currentStatus);
       }
-
-      // Update status text alignment
-      statusText.classList.remove("persona-text-left", "persona-text-center", "persona-text-right");
-      const alignClass = statusIndicatorConfig.align === "left" ? "persona-text-left"
-        : statusIndicatorConfig.align === "center" ? "persona-text-center"
-        : "persona-text-right";
-      statusText.classList.add(alignClass);
 
       // Composer baseline config is read at build time, so it re-syncs here.
       // After the control updates above, so controls this update created (mic,
