@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@mcp-b/global": "^6.0.3",
-    "@mcp-b/webmcp-polyfill": "^6.0.3",
     "@runtypelabs/persona": "workspace:^",
+    "@w3c/webmcp-polyfill": "^0.1.0",
     "alasql": "^4.22.0",
     "echarts": "^6.1.0",
     "flint-chart": "^1.0.1",

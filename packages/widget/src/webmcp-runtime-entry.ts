@@ -9,7 +9,7 @@
  *
  * This module must not VALUE-import `./webmcp-bridge`: the chunk is bundled
  * `noExternal`, so it would get its own dead copies of the title map and the
- * polyfill-loader slot, and would inline the whole `@mcp-b/webmcp-polyfill`
+ * polyfill-loader slot, and would inline the whole `@w3c/webmcp-polyfill`
  * via the bare-specifier fallback. Everything stateful is injected through
  * `WebMcpBridgeDeps`; the few pure helpers it shares are duplicated locally.
  */
@@ -26,6 +26,7 @@ import type {
   ModelContextToolInfo,
   WebMcpPolyfillModule,
 } from "./webmcp-bridge";
+import { hasWebMcpPolyfillBaseline } from "./webmcp-polyfill-baseline";
 
 /** Core-owned state and loaders the runtime must reach through injection. */
 export interface WebMcpBridgeDeps {
@@ -406,7 +407,7 @@ export class WebMcpBridge {
   }
 
   /**
-   * Lazily install `@mcp-b/webmcp-polyfill` the first time the bridge needs the
+   * Lazily install `@w3c/webmcp-polyfill` the first time the bridge needs the
    * registry. Idempotent and memoized. Dynamic import keeps the polyfill out of
    * the main bundle and prevents it from installing `document.modelContext` for
    * widget consumers that never enable WebMCP.
@@ -438,11 +439,15 @@ export class WebMcpBridge {
       const mod = await this.#deps.loadPolyfill();
       // Idempotent: no-ops if `document.modelContext` already exists (native or
       // a prior install by the host page).
-      if ("installWebMCP" in mod) mod.installWebMCP();
-      else mod.initializeWebMCPPolyfill();
+      // `installWebMCP()` is the official polyfill's entry point, which does
+      // not check for the APIs it needs: skip it on an older engine rather
+      // than leave a `document.modelContext` getter that throws. A loader
+      // supplying the legacy initializer brings its own (older) baseline.
+      if (!("installWebMCP" in mod)) mod.initializeWebMCPPolyfill();
+      else if (hasWebMcpPolyfillBaseline()) mod.installWebMCP();
       if (!this.#getModelContext()) {
-        // v6 deliberately no-ops instead of half-installing: insecure page,
-        // or an engine without the APIs its core needs.
+        // Nothing was installed: an insecure page, or an engine without the
+        // APIs the polyfill needs.
         log.warn(
           "WebMCP polyfill did not install document.modelContext: WebMCP consumption disabled. " +
             "It requires a secure context (HTTPS or localhost) and Chrome/Firefox 126+ or Safari 18+.",
@@ -453,7 +458,7 @@ export class WebMcpBridge {
       this.#installed = true;
     } catch (err) {
       log.warn(
-        "Failed to load @mcp-b/webmcp-polyfill: WebMCP consumption disabled.",
+        "Failed to load @w3c/webmcp-polyfill: WebMCP consumption disabled.",
         err,
       );
       this.#installed = false;
@@ -481,7 +486,7 @@ export class WebMcpBridge {
       // A `document.modelContext` IS present but doesn't expose the strict-core
       // surface we consume (`getTools` / `executeTool`). This usually means a
       // different or older WebMCP polyfill (or a native impl on a divergent
-      // draft) installed the global first: which `@mcp-b/webmcp-polyfill`
+      // draft) installed the global first: which `@w3c/webmcp-polyfill`
       // correctly declines to overwrite. Warn once so integrators understand
       // why WebMCP is inert instead of seeing a silent no-op.
       if (!this.#incompatibleContextWarned) {
@@ -490,7 +495,7 @@ export class WebMcpBridge {
           "document.modelContext is present but does not expose getTools()/executeTool(): " +
             "WebMCP consumption is disabled. Another (incompatible or older) WebMCP polyfill " +
             "likely installed document.modelContext before Persona. Remove it, or use a polyfill " +
-            "implementing the strict standard surface (e.g. @mcp-b/webmcp-polyfill).",
+            "implementing the strict standard surface (e.g. @w3c/webmcp-polyfill).",
         );
       }
       return null;

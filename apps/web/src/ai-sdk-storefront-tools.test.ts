@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Exercise the example's actual registered callbacks and store, without mounting
 // Next.js. The document registry is the only replaced boundary.
-vi.mock("@mcp-b/webmcp-polyfill", () => ({ installWebMCP: () => undefined }));
+vi.mock("@w3c/webmcp-polyfill", () => ({ installWebMCP: () => undefined }));
 
 type Tool = { name: string; execute(input: unknown): unknown };
 let tools: Map<string, Tool>;

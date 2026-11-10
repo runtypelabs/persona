@@ -7,8 +7,8 @@ import type {
 } from "./types";
 
 // ---------------------------------------------------------------------------
-// Mock the strict @mcp-b/webmcp-polyfill. The bridge dynamically imports it and
-// calls `initializeWebMCPPolyfill()` for the v5 automatic fallback.
+// Mock the official @w3c/webmcp-polyfill. The bridge dynamically imports it and
+// calls `installWebMCP()` for the automatic fallback.
 // We stub the install as a no-op and provide `document.modelContext` ourselves,
 // modeling the strict producer-preview surface the bridge consumes:
 //   - getTools(): async; inputSchema in either generation (see
@@ -19,8 +19,8 @@ import type {
 
 const polyfillMock = { initThrows: false };
 
-vi.mock("@mcp-b/webmcp-polyfill", () => ({
-  initializeWebMCPPolyfill: vi.fn(() => {
+vi.mock("@w3c/webmcp-polyfill", () => ({
+  installWebMCP: vi.fn(() => {
     if (polyfillMock.initThrows) throw new Error("init boom");
   }),
 }));
@@ -367,7 +367,7 @@ describe("setWebMcpPolyfillLoader", () => {
     expect(await bridge.snapshotForDispatch()).toEqual([]);
     expect(bridge.isOperational()).toBe(false);
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to load @mcp-b/webmcp-polyfill"),
+      expect.stringContaining("Failed to load @w3c/webmcp-polyfill"),
       expect.any(Error),
     );
     warn.mockRestore();
@@ -484,7 +484,7 @@ describe("WebMcpBridge.executeToolCall", () => {
   it("warns once and degrades cleanly when document.modelContext is present but incompatible", async () => {
     // A different / older WebMCP polyfill (or divergent native draft) squats
     // document.modelContext without the strict getTools()/executeTool() surface.
-    // @mcp-b's installWebMCP correctly declines to overwrite it, so
+    // The polyfill's installWebMCP correctly declines to overwrite it, so
     // Persona must (a) report non-operational, (b) surface an actionable error
     // distinct from "not available", and (c) warn exactly once.
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);

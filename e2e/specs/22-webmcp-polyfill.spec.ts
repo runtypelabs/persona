@@ -5,7 +5,8 @@ import { expect, test } from "@playwright/test";
 import { sseEvent, textTurnStream } from "../fixtures/fake-history-api";
 
 // Only the HTTP boundary is scripted. Test the actual published runtimes:
-// either the host's preinstalled v5 or the storefront's explicitly installed v6.
+// either the host's preinstalled `@mcp-b` v5 ("v5") or the official polyfill the
+// storefront installs itself ("v6", the object-input generation).
 const legacyPolyfill = readFileSync(
   createRequire(
     resolve(__dirname, "../../packages/widget/package.json")
@@ -69,7 +70,7 @@ for (const version of ["v5", "v6"]) {
         ).toBe(true);
       }
       if (approve && version === "v6") {
-        // A same-origin child exposes the same tool names through v6 discovery.
+        // A same-origin child exposes the same tool names through frame discovery.
         // Persona must still send and execute only the parent document's tools.
         await page.evaluate(() => {
           const frame = document.createElement("iframe");
@@ -219,7 +220,7 @@ test("storefront rejects invalid quantities without mutating the cart", async ({
 
 for (const modern of [true, false]) {
   test(`CDN fallback ${
-    modern ? "installs v6 with upstream result semantics" : "stays inert without the v6 browser baseline"
+    modern ? "installs the official polyfill with its result semantics" : "installs nothing without the polyfill's browser baseline"
   }`, async ({ page }) => {
     await page.route("**/webmcp-compat-fixture", (route) =>
       route.fulfill({

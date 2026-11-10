@@ -122,7 +122,7 @@ The action middleware example demonstrates:
 ### WebMCP Demo
 - **WebMCP page**: `http://localhost:5173/webmcp-demo.html`
   - Demonstrates the widget consuming **page-provided tools** via WebMCP (`document.modelContext`)
-  - The page registers five storefront tools (`search_products`, `view_product`, `add_to_cart`, `remove_from_cart`, `apply_promo`) on the polyfilled `document.modelContext` (`@mcp-b/webmcp-polyfill`); the widget snapshots them per turn and sends them to the agent as `clientTools[]`
+  - The page registers five storefront tools (`search_products`, `view_product`, `add_to_cart`, `remove_from_cart`, `apply_promo`) on the polyfilled `document.modelContext` (`@w3c/webmcp-polyfill`); the widget snapshots them per turn and sends them to the agent as `clientTools[]`
   - When the agent calls one, the widget executes it on the page (behind an `onConfirm` gate for writes) and resumes the turn with the result
   - The catalog (`webmcp-catalog.ts`), selected-product state, and on-page **Cart** panel are the visible side effects: `search_products` filters the static catalog, `view_product` focuses details, and cart/promo tools update the cart
 

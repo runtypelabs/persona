@@ -8691,7 +8691,7 @@ export type AgentWidgetConfig = {
   approval?: AgentWidgetApprovalConfig | false;
   /**
    * WebMCP: consume page-registered tools (`document.modelContext.registerTool`).
-   * When `enabled`, the widget installs `@mcp-b/webmcp-polyfill`, snapshots the
+   * When `enabled`, the widget installs `@w3c/webmcp-polyfill`, snapshots the
    * current document's registry on every dispatch, ships it as `clientTools[]`,
    * and executes returned `webmcp:*` calls with confirm-by-default gating.
    * The automatic fallback is the upstream polyfill (v6): it needs a secure

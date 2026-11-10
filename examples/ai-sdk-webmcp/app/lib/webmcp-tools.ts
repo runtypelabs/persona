@@ -1,6 +1,6 @@
 // Register the storefront's page tools on `document.modelContext` via WebMCP.
 //
-// `@mcp-b/webmcp-polyfill` polyfills the strict standard surface
+// `@w3c/webmcp-polyfill` polyfills the strict standard surface
 // (registerTool / getTools / executeTool). We install it explicitly so the
 // global exists before the Persona widget's first dispatch. The widget also
 // lazily installs it from its WebMCP bridge, but the *producer* page should
@@ -12,7 +12,7 @@
 // change from the vanilla web app demo: the tool surface and behavior are
 // identical.
 
-import { installWebMCP } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@w3c/webmcp-polyfill";
 import { findBySku, searchCatalog } from "./catalog";
 import {
   addToCart,

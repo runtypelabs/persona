@@ -12,7 +12,7 @@ import {
   type AgentWidgetInitHandle,
   type ComponentRenderer,
 } from "@runtypelabs/persona";
-import { installWebMCP } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@w3c/webmcp-polyfill";
 import type { ChartAssemblyInput } from "flint-chart";
 import type { ECharts, EChartsOption } from "echarts";
 import { fitFlintInputToCanvas } from "./analytics-chart-layout";
