@@ -97,8 +97,13 @@ const CONFIG_DRAWER_FOCUSABLE_SELECTOR =
 function listConfigDrawerFocusables(panel: Element): HTMLElement[] {
   return Array.from(panel.querySelectorAll<HTMLElement>(CONFIG_DRAWER_FOCUSABLE_SELECTOR)).filter((el) => {
     if (el.getAttribute('aria-hidden') === 'true') return false;
-    const style = window.getComputedStyle(el);
-    return style.visibility !== 'hidden' && style.display !== 'none';
+    if (window.getComputedStyle(el).visibility === 'hidden') return false;
+    // `display` is not inherited: controls in a collapsed section compute as
+    // visible but cannot take focus, which would strand the Tab trap.
+    for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+      if (window.getComputedStyle(node).display === 'none') return false;
+    }
+    return true;
   });
 }
 

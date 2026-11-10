@@ -392,14 +392,48 @@ describe("rebuildComposer (composer ctx requestRender)", () => {
     state.gated = false;
     const { mount, controller } = makeController({
       plugins: [plugin], future: { v5Defaults },
-      statusIndicator: { mode: "transient", connectingText: "Connecting now" },
+      statusIndicator: { mode: "transient", errorText: "Connection interrupted now" },
     });
-    controller.injectTestMessage({ type: "status", status: "connecting" });
+    controller.injectTestMessage({ type: "status", status: "error" });
     state.ctx!.requestRender();
     const status = mount.querySelector<HTMLElement>("[data-persona-composer-status]")!;
     expect(status.style.display).toBe("");
-    expect(status.textContent).toBe("Connecting now");
+    expect(status.textContent).toBe("Connection interrupted now");
     expect(status.nextElementSibling?.matches("[data-persona-composer-form]")).toBe(true);
+  });
+
+  it.each([
+    { composerBar: true, mode: undefined },
+    { composerBar: true, mode: "always" },
+    { composerBar: false, mode: "always" },
+  ] as const)("restores exhausted recovery after a public composer rebuild (%j)", async ({ composerBar, mode }) => {
+    const { plugin, state } = createGatePlugin();
+    state.gated = false;
+    const reconnect = vi.fn(async () => new Response(null, { status: 503 }));
+    const { mount, controller } = makeController({
+      plugins: [plugin], future: { v5Defaults: false },
+      launcher: { enabled: true, mountMode: composerBar ? "composer-bar" : "floating" },
+      statusIndicator: { mode }, reconnectStream: reconnect, reconnect: { maxAttempts: 1 },
+    });
+    await controller.connectStream(new Response(
+      'id: 1\nevent: text_delta\ndata: {"type":"text_delta","id":"partial","delta":"Partial response","executionId":"exec-rebuild"}\n\n',
+    ).body!);
+    await vi.waitFor(() => expect(mount.querySelector("[data-persona-composer-status]")?.textContent).toContain("Couldn’t reconnect"));
+    state.ctx!.requestRender();
+    const status = mount.querySelector<HTMLElement>("[data-persona-composer-status]")!;
+    const action = status.querySelector<HTMLButtonElement>("[data-persona-reconnect]")!;
+    expect(status.style.display).toBe("");
+    expect(status.textContent).toContain("Couldn’t reconnect");
+    expect(action).not.toBeNull();
+    expect(action.disabled).toBe(false);
+    reconnect.mockResolvedValueOnce(new Response(
+      'id: 2\nevent: execution_complete\ndata: {"type":"execution_complete","kind":"agent","success":true}\n\n',
+    ));
+    action.click();
+    await vi.waitFor(() => expect(status.querySelector("[data-persona-reconnect]")).toBeNull());
+    expect(reconnect).toHaveBeenCalledTimes(2);
+    expect(reconnect).toHaveBeenLastCalledWith(expect.objectContaining({ executionId: "exec-rebuild", after: "1" }));
+    expect(status.style.display).toBe(mode === "always" ? "" : "none");
   });
 
   it("does not stamp copy onto a plugin-owned composer's input", () => {

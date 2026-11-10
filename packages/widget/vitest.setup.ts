@@ -20,6 +20,12 @@ import "./src/session-actions-eager";
 // And the visitor-history shell (`history-shell.js` chunk in the IIFE).
 import "./src/history-shell-eager";
 
+// idiomorph calls `CSS.escape`, which every browser has and jsdom does not.
+// Widget ids are simple, so quoting is enough for its attribute selectors.
+(globalThis as { CSS?: unknown }).CSS ??= {
+  escape: (value: string) => value.replace(/["\\]/g, "\\$&"),
+};
+
 // Isolated attachTooltip tests should not wait on the product 200ms default.
 // Widget mounts re-apply `config.tooltip` (200 / 300) on create/update.
 const silenceTooltipDelay = (): void => {

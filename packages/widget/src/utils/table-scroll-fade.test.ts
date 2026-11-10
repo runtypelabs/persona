@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { wrapScrollableTables, refreshTableScrollFades } from "./table-scroll-fade";
 
 // Off-edge fade value: a themeable token reference, not a resolved px length.
@@ -59,9 +59,13 @@ describe("refreshTableScrollFades", () => {
   beforeEach(() => {
     const built = makeContainerWithTable();
     container = built.container;
+    // Direction is read from computed style, which is empty when disconnected.
+    document.body.append(container);
     wrapScrollableTables(container);
     wrapper = built.table.parentElement!;
   });
+
+  afterEach(() => container.remove());
 
   it("marks an overflowing table scrollable and fades only the right edge at start", () => {
     stubMetrics(wrapper, { scrollWidth: 600, clientWidth: 300, scrollLeft: 0 });

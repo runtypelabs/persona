@@ -19,7 +19,7 @@ export type FormsUiModule = {
   ) => void;
 };
 
-const { setLoader, load, provide, getSync } = createChunkLoader<FormsUiModule>({
+const { setLoader, load, getSync } = createChunkLoader<FormsUiModule>({
   fallbackImport: () => import("@runtypelabs/persona/forms-ui"),
 });
 
@@ -29,8 +29,5 @@ export const setFormsUiLoader = setLoader;
 /** Load the forms UI. Memoized; retries after rejection. */
 export const loadFormsUi = load;
 
-/** Eagerly supply the module (tests that assert synchronous form renders). */
-export const provideFormsUi = provide;
-
-/** Synchronous access once loaded/provided; null before that. */
+/** Synchronous access once loaded; null before that. */
 export const getFormsUiSync = getSync;

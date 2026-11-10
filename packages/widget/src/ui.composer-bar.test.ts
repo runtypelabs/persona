@@ -179,7 +179,7 @@ describe("createAgentExperience composer-bar mode", () => {
     expect(wrapper!.style.left).toBe("50%");
     expect(wrapper!.style.transform).toBe("translateX(-50%)");
     expect(wrapper!.style.width).toBe("900px");
-    expect(wrapper!.style.maxWidth).toBe("calc(100vw - 32px)");
+    expect(wrapper!.style.maxWidth).toBe("calc(-32px + 100vw)");
     // Critical regression check: the previous implementation set
     // `width: calc(100% - 32px)` inline in createWrapper and never
     // cleared it. Make sure it's gone after expanding.
@@ -244,7 +244,7 @@ describe("createAgentExperience composer-bar mode", () => {
     expect(wrapper!.style.left).toBe("50%");
     expect(wrapper!.style.transform).toBe("translate(-50%, -50%)");
     expect(wrapper!.style.width).toBe("640px");
-    expect(wrapper!.style.maxWidth).toBe("calc(100vw - 32px)");
+    expect(wrapper!.style.maxWidth).toBe("calc(-32px + 100vw)");
     expect(wrapper!.style.maxHeight).toBe("70vh");
 
     controller.destroy();

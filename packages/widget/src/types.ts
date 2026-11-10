@@ -1873,7 +1873,7 @@ export type PersonaArtifactCustomAction = {
 export type AgentWidgetArtifactsFeature = {
   /** Enables artifact UI. Defaults to true in V5; V4 requires explicit opt-in. */
   enabled?: boolean;
-  /** If set, artifact events for other types are ignored */
+  /** A nonempty list ignores incoming artifact events for other types. Unset or empty allows all types; manual upserts and restored artifacts are unaffected. */
   allowedTypes?: PersonaArtifactKind[];
   /**
    * Where artifact bodies render. A single mode applies to all artifacts;
@@ -5035,18 +5035,20 @@ export type AgentWidgetStatusIndicatorConfig = {
   /** Show the indicator. Explicit false also hides transient connection states. */
   visible?: boolean;
   /**
-   * "always" shows status beneath the composer; "transient" shows connecting,
-   * reconnecting, and error status above it, hiding normal idle/streaming status.
-   * Available in both defaults states. Default: "always" in v4, "transient" in v5.
+   * "always" shows status beneath the composer; "transient" shows connection
+   * interruptions and recovery above it, hiding normal request activity.
+   * Default: "always" in v4 and "transient" in v5. Composer-bar layouts default
+   * to "transient" in both versions; an explicit mode overrides that default.
    */
   mode?: "always" | "transient";
-  /** Text alignment. Default: 'right'. */
+  /** Text alignment. Defaults to left in transient mode and right in always mode. */
   align?: 'left' | 'center' | 'right';
   idleText?: string;
   /** URL to open in a new tab when the idle text is clicked. */
   idleLink?: string;
   connectingText?: string;
   connectedText?: string;
+  /** Override both generic connection errors and the notice after automatic reconnect attempts stop. */
   errorText?: string;
   /** Status text while a dropped durable stream is awaiting reconnect. */
   pausedText?: string;
@@ -7550,8 +7552,8 @@ export type AgentWidgetMarkdownTableToken = {
   align: Array<"left" | "center" | "right" | null>;
   /**
    * Rendered `<tr>` HTML for the header row. The structured `header` / `rows` /
-   * `align` fields are not reconstructable from the bundled parser and arrive
-   * empty, so a table override composes from these two instead.
+   * `align` fields arrive empty, so a table override composes from these two
+   * instead.
    */
   headerHtml?: string;
   /** Rendered `<tr>` HTML for the body rows. See `headerHtml`. */
@@ -7583,8 +7585,8 @@ export type AgentWidgetMarkdownListToken = {
   loose: boolean;
   items: unknown[];
   /**
-   * Rendered `<li>` HTML for the list body. `items` is not reconstructable from
-   * the bundled parser and arrives empty, so a list override wraps this.
+   * Rendered `<li>` HTML for the list body. `items` arrives empty, so a list
+   * override wraps this.
    */
   itemsHtml?: string;
 };
@@ -7631,11 +7633,11 @@ export type AgentWidgetMarkdownEmToken = {
  * Each method receives the token and should return an HTML string.
  * Return `false` to use the default renderer.
  *
- * The bundled parser hands the widget positional arguments rather than tokens,
- * so `raw` and `tokens` are not always recoverable: they arrive as `""` and
- * `[]` on the tokens where the parser does not supply them. Every field the
- * parser does supply (`href`, `title`, `text`, `depth`, `lang`, ...) is
- * populated. `text` is already-rendered inline HTML, not raw markdown.
+ * These are the widget's tokens, not the parser's: `raw` and `tokens` arrive as
+ * `""` and `[]` (a heading's `raw` is its plain text). The other fields (`href`,
+ * `title`, `text`, `depth`, `lang`, ...) are populated. `text` is
+ * already-rendered inline HTML, not raw markdown, and `title` and image `text`
+ * are HTML-escaped, so an override can interpolate them.
  *
  * @example
  * ```typescript
@@ -8302,8 +8304,8 @@ export type AgentWidgetConfig = {
    */
   targetProviders?: Record<string, TargetResolver>;
   /**
-   * Override the detail shown when a dispatch fails, in either error display
-   * mode (connection refused, CORS, 4xx/5xx, malformed stream). Provide a static string, or a function of the error so you can
+   * Override the detail shown for dispatch and terminal run failures in either
+   * error display mode. Provide a static string, or a function of the error so you can
    * tailor the message per failure and decide whether to surface the raw
    * reason. When omitted, a default message is shown that includes the
    * underlying error detail.
@@ -8325,6 +8327,12 @@ export type AgentWidgetConfig = {
    * ```
    */
   errorMessage?: string | ((error: Error) => string);
+  /**
+   * Terminal run failure presentation. Defaults to "inline".
+   * Use "host" when the embedding application renders its own failure notice.
+   * Failure callbacks and run outcomes remain unchanged.
+   */
+  executionErrorDisplay?: "inline" | "host";
   /** Dispatch failure presentation. Defaults to "bubble" in V4, "block" in V5. */
   errorDisplay?: "bubble" | "block";
   /**
@@ -8962,10 +8970,10 @@ export type AgentWidgetConfig = {
    * ```
    *
    * Resolve with a `text/event-stream` `Response`. Throw or resolve non-ok to
-   * signal "this attempt failed" (the widget backs off and retries, then gives
-   * up after the bounded attempts). Reconnect only ever arms on the durable
-   * lane (streams carrying SSE `id:` lines); without this hook a drop finalizes
-   * exactly as before.
+   * signal "this attempt failed". The widget backs off and retries, then
+   * retains its checkpoint for manual Reconnect after the bounded attempts.
+   * Reconnect only arms on streams carrying SSE `id:` lines; without this hook
+   * a drop finalizes exactly as before.
    */
   reconnectStream?: (ctx: {
     executionId: string;
@@ -8977,7 +8985,7 @@ export type AgentWidgetConfig = {
    * (`backoffMs: [1000, 2000, 4000, 8000, 8000]`).
    */
   reconnect?: {
-    /** Max reconnect attempts before giving up and finalizing. @default backoffMs.length */
+    /** Automatic attempts before pausing for manual Reconnect. @default backoffMs.length */
     maxAttempts?: number;
     /** Per-attempt delay (ms) before each retry. @default [1000, 2000, 4000, 8000, 8000] */
     backoffMs?: number[];
@@ -8985,7 +8993,8 @@ export type AgentWidgetConfig = {
   /**
    * Called whenever the durable resume handle changes: created when a durable
    * turn starts streaming, updated as the cursor advances (throttled), and
-   * `null` when the turn finishes, errors, or is torn down. Persist
+   * `null` when the turn finishes, reports an execution error, or is torn down.
+   * Automatic reconnect exhaustion retains the handle for manual recovery. Persist
    * `{ executionId, lastEventId }` next to your `conversationId` and pass it
    * back via {@link resume} on the next mount to survive a tab reload.
    */
@@ -9793,6 +9802,8 @@ export type AgentWidgetStreamCheckpoint = {
   media: Array<[string, { mediaType?: string; toolCallId?: string; parts: string[] }]>;
   artifactContent: Array<[string, { markdown: string; title?: string; file?: PersonaArtifactFileMeta; props?: Record<string, unknown> }]>;
   artifactTools: string[];
+  /** Optional so checkpoints saved before artifact filtering remain readable. */
+  ignoredArtifactIds?: string[];
 };
 
 export type AgentWidgetEvent =
@@ -9807,10 +9818,17 @@ export type AgentWidgetEvent =
        * connection. The durable-reconnect drop detection keys off this.
        */
       terminal?: boolean;
+      /** Failure detail from a terminal execution completion. */
+      error?: string;
       /** @internal Execution identity for background status before text appears. */
       executionId?: string;
     }
-  | { type: "error"; error: Error }
+  | {
+      type: "error";
+      error: Error;
+      /** A failed run received over a working stream, independent of connectivity. */
+      source?: "execution";
+    }
   /**
    * Durable-session reconnect cursor. Carries the SSE `id:` line (the durable
    * row seq) of a fully-parsed frame so the session can track `lastEventId`

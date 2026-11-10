@@ -87,8 +87,9 @@ createAgentExperience(el, {
 ```
 
 Resolve with the events `Response`. Throw, or resolve with a non-ok response, to
-signal that this attempt failed: the widget then backs off and retries, and gives
-up after the bounded attempts.
+signal that this attempt failed. The widget backs off and retries until the
+automatic attempt budget ends. It keeps the execution and cursor available for
+manual reconnect, including when your transport later refreshes its credentials.
 
 That is all you need for the in-session case. The widget:
 
@@ -100,7 +101,9 @@ That is all you need for the in-session case. The widget:
   coming back `online`,
 - seeds the resumed bubble with the text already shown, so the replayed
   post-cursor deltas append rather than overwrite,
-- on the graceful terminal, finalizes the message and returns to `idle`.
+- on the graceful terminal, finalizes the message and returns to `idle`,
+- after automatic retries stop, preserves the partial response and offers
+  **Reconnect** to attach to the same execution again.
 
 Tune the backoff if you want:
 
@@ -178,13 +181,35 @@ While reconnecting, the widget surfaces two statuses in addition to the usual
 - `paused`: a durable stream dropped and a reconnect is pending.
 - `resuming`: a reconnect attempt is in flight.
 
-The in-progress bubble and the typing indicator stay visible throughout. Override
-the status copy:
+During automatic recovery, the existing working indicator remains active. In
+`statusIndicator.mode: "transient"`, a compact connection notice appears above the
+composer with a **Reconnect** action. The action is disabled during an in-flight
+request and can accelerate the next attempt during a backoff wait. Composer-bar
+layouts use the same notice row.
+
+Transient mode hides normal `connecting`, `connected`, and `idle` status. The
+existing working indicator covers ordinary request activity. Transient mode is
+the default with `future.v5Defaults: true`. Standard v4 layouts keep the
+always-visible status; composer-bar layouts default to transient notices.
+Set `statusIndicator.visible: false` to hide the status region, or select
+`mode: "always"` to retain status beneath the composer. Explicit labels and
+alignment still apply, and composer lock reasons and temporary notices take
+priority over connection status.
+
+After the automatic retry budget ends, the session returns to `idle` and the
+notice says "Couldn’t reconnect." The saved execution, cursor, and any retained
+parser state remain available for **Reconnect**. This
+attachment failure does not report that the server execution succeeded or failed.
+Generic transport errors say "Connection interrupted" and offer no **Reconnect**
+action when the stream has no recoverable checkpoint.
+
+Override the connection copy:
 
 ```ts
 statusIndicator: {
-  pausedText: "Connection lost, hold on…",
+  pausedText: "Waiting to reconnect…",
   resumingText: "Reconnecting…",
+  errorText: "Connection interrupted. Reconnect to continue.",
 },
 ```
 
@@ -196,8 +221,16 @@ widget.on("stream:resuming", (e) => { /* e.executionId, e.after, e.attempt */ })
 widget.on("stream:resumed",  (e) => { /* e.executionId, e.after */ });
 ```
 
-And `controller.reconnect()` triggers a manual retry (for a "Reconnect" button),
-which also short-circuits the current backoff if one is already running.
+`controller.reconnect()` performs the same action as **Reconnect**. It resumes
+an interrupted execution or short-circuits a pending backoff. It does nothing
+during a healthy stream, a user approval wait, or after the checkpoint clears.
+Reconnect never dispatches a fresh run. A run's **Retry** action starts a fresh
+attempt instead.
+
+A terminal success or execution error clears the checkpoint. Stop, a new message,
+conversation replacement, client configuration replacement, and widget destruction
+also clear it. Late responses from an older reconnect cannot restore a cleared
+checkpoint or update a newer run.
 
 ---
 

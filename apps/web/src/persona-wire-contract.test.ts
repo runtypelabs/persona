@@ -18,7 +18,7 @@ const eventSchema: z.ZodType<RuntypeExecutionStreamEvent> = z.discriminatedUnion
   z.object({ ...envelope, type: z.literal("text_start"), id: z.string() }),
   z.object({ ...envelope, type: z.literal("text_delta"), id: z.string(), delta: z.string() }),
   z.object({ ...envelope, type: z.literal("text_complete"), id: z.string() }),
-  z.object({ ...envelope, type: z.literal("tool_start"), toolCallId: z.string(), toolName: z.string(), toolType: z.string(), parameters: z.record(z.unknown()).optional() }),
+  z.object({ ...envelope, type: z.literal("tool_start"), toolCallId: z.string(), toolName: z.string(), toolType: z.string(), parameters: z.record(z.string(), z.unknown()).optional() }),
   z.object({ ...envelope, type: z.literal("tool_complete"), toolCallId: z.string(), success: z.boolean() }),
 ]);
 

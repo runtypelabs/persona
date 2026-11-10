@@ -1,6 +1,5 @@
 import "@runtypelabs/persona/widget.css";
 import {
-  DEFAULT_WIDGET_CONFIG,
   initAgentWidget,
   markdownPostprocessor,
   type AgentWidgetConfig,
@@ -28,8 +27,8 @@ import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-hi
  * effects alongside screenshots. Not registered in examples-nav.
  */
 
-type Scenario = "echo" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "internal-error" | "browser-history" | "turn-activity" | "operator";
-const SCENARIOS: Scenario[] = ["echo", "markdown", "tool", "reasoning", "approval", "error", "internal-error", "browser-history", "turn-activity", "operator"];
+type Scenario = "echo" | "artifacts" | "markdown" | "tool" | "reasoning" | "approval" | "error" | "internal-error" | "execution-error" | "browser-history" | "turn-activity" | "operator" | "slow-start" | "reconnect" | "reconnect-exhausted";
+const SCENARIOS: Scenario[] = ["echo", "artifacts", "markdown", "tool", "reasoning", "approval", "error", "internal-error", "execution-error", "browser-history", "turn-activity", "operator", "slow-start", "reconnect", "reconnect-exhausted"];
 
 const params = new URLSearchParams(window.location.search);
 const scenarioParam = params.get("scenario") ?? "echo";
@@ -147,6 +146,18 @@ const sequenced = (frames: MockSSEFrame[]) => frames.map((frame, seq) => ({ ...f
 
 function scenarioFrames(kind: Scenario, userText: string, executionId: string): MockSSEFrame[] {
   switch (kind) {
+    case "artifacts":
+      return [
+        start(executionId),
+        { type: "artifact_start", executionId, id: `${executionId}-markdown`, artifactType: "markdown", title: "Allowed report" },
+        { type: "artifact_delta", executionId, id: `${executionId}-markdown`, delta: "# Allowed report\n\nThis markdown artifact is allowed." },
+        { type: "artifact_complete", executionId, id: `${executionId}-markdown` },
+        { type: "artifact_start", executionId, id: `${executionId}-component`, artifactType: "component", title: "Filtered component", component: "FilteredExample" },
+        { type: "artifact_update", executionId, id: `${executionId}-component`, props: { text: "This component is filtered." } },
+        { type: "artifact_complete", executionId, id: `${executionId}-component` },
+        ...buildAssistantTurnFrames({ executionId, text: "Artifact stream finished.", chunkSize: 12 }),
+        complete(executionId),
+      ];
     case "markdown":
       return [start(executionId), ...buildAssistantTurnFrames({ executionId, text: MARKDOWN_REPLY, chunkSize: 12 }), complete(executionId)];
     case "tool":
@@ -194,6 +205,11 @@ function scenarioFrames(kind: Scenario, userText: string, executionId: string): 
         { type: "tool_complete", executionId, toolCallId: `${executionId}-check`, success: true, result: "All checks passed", executionTime: 620 },
         ...buildAssistantTurnFrames({ executionId, turnId: `${executionId}-final`, text: "The example works. The final answer stays outside the activity disclosure.", chunkSize: 20 }),
         complete(executionId),
+      ];
+    case "execution-error":
+      return [
+        start(executionId),
+        { type: "execution_error", executionId, kind: "agent", error: "The remote run could not finish." },
       ];
     case "reasoning":
       return [
@@ -271,26 +287,63 @@ if (rawConfig) {
   }
 }
 
+const recoveryScenario = scenario === "reconnect" || scenario === "reconnect-exhausted";
+let resumeAttempt = 0;
+const replayResponse = (frames: MockSSEFrame[]): Response => new Response(
+  frames.map(frame => `id: ${frame.seq}\ndata: ${JSON.stringify(frame)}\n\n`).join(""),
+  { headers: { "Content-Type": "text/event-stream" } },
+);
+
+const waitForResponse = (ms: number, signal?: AbortSignal | null): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    if (signal?.aborted) abort();
+    else signal?.addEventListener("abort", abort, { once: true });
+  });
+
 const baseConfig: AgentWidgetConfig = {
-  ...DEFAULT_WIDGET_CONFIG,
   apiUrl: "https://verify.invalid/chat",
   // Every load starts from the empty state the scenario expects.
   persistState: false,
   colorScheme: theme,
   launcher: {
-    ...DEFAULT_WIDGET_CONFIG.launcher,
     enabled: mode === "launcher",
     width: mode === "launcher" ? "min(420px, 95vw)" : "100%",
     title: "Verify fixture",
   },
   copy: {
-    ...DEFAULT_WIDGET_CONFIG.copy,
     welcomeTitle: "Verify fixture",
     welcomeSubtitle: `Scenario: ${scenario}. Replies are scripted in-page; no backend.`,
     inputPlaceholder: "Send a message…",
   },
   suggestionChips: [],
-  features: { showToolCalls: true, showReasoning: true },
+  features: {
+    showToolCalls: true,
+    showReasoning: true,
+    ...(scenario === "artifacts" ? { artifacts: { enabled: true, allowedTypes: ["markdown" as const], display: "inline" as const } } : {}),
+  },
+  ...(recoveryScenario ? {
+    reconnect: { maxAttempts: 2, backoffMs: [scenario === "reconnect" ? 6000 : 250] },
+    reconnectStream: async ({ executionId, after, signal }) => {
+      resumeAttempt += 1;
+      requests.push({ at: now(), url: "reconnectStream", body: { executionId, after, attempt: resumeAttempt } });
+      if (resumeAttempt <= (scenario === "reconnect-exhausted" ? 2 : 1)) {
+        return new Response(null, { status: 503 });
+      }
+      await waitForResponse(scenario === "reconnect" ? 12000 : 1000, signal);
+      return replayResponse([
+        { type: "text_delta", id: "recovery-text", executionId, delta: " The connection is restored and this same response is complete.", seq: 4 },
+        { ...complete(executionId), seq: 5 },
+      ]);
+    },
+  } : {}),
   ...(scenario === "browser-history" ? {
     features: { showToolCalls: true, history: { enabled: true, provider: browserHistoryProvider(), presentation: "panel" as const } },
   } : {}),
@@ -333,6 +386,14 @@ const baseConfig: AgentWidgetConfig = {
     }
     turn += 1;
     const executionId = `exec_verify_${turn}`;
+    if (scenario === "slow-start") await waitForResponse(8000, init?.signal);
+    if (recoveryScenario) {
+      return replayResponse(sequenced([
+        start(executionId),
+        { type: "text_start", id: "recovery-text", executionId, role: "assistant" },
+        { type: "text_delta", id: "recovery-text", executionId, delta: "Here is the beginning of your response." },
+      ]));
+    }
     const frames = scenarioFrames(scenario, latestUserText(payload), executionId).map(frame =>
       scenario === "turn-activity" && frame.type === "text_start"
         ? { ...frame, phase: frame.id === `${executionId}-final-text` ? "final_answer" : "commentary" }
@@ -406,6 +467,9 @@ const controller: AgentWidgetController = initAgentWidget({
 const RECORDED_EVENTS = [
   "run:started",
   "run:finished",
+  "stream:paused",
+  "stream:resuming",
+  "stream:resumed",
   "user:message",
   "assistant:complete",
   "approval:requested",

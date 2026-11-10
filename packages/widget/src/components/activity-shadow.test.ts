@@ -20,6 +20,8 @@ const reasoning: AgentWidgetMessage = {
   reasoning: { id: "reasoning", status: "complete", chunks: ["Checking the source"] },
 };
 const shadow = "0 3px 9px rgb(20, 40, 60)";
+const serializedShadow = "rgb(20, 40, 60) 0px 3px 9px";
+const probeShadow = "rgb(1, 2, 3) 0px 0px 1px";
 const stylesheet = document.createElement("style");
 let controller: AgentWidgetController | undefined;
 beforeAll(() => {
@@ -36,6 +38,14 @@ const mount = (config: AgentWidgetConfig) => {
   document.body.append(host);
   return host;
 };
+// Computed values resolve var(), so check the resolved shadow and then override
+// the token on the node to prove that this token is the one it reads.
+const expectShadowToken = (node: HTMLElement, token: string, resolved: string) => {
+  expect(getComputedStyle(node).boxShadow).toBe(resolved);
+  node.style.setProperty(token, probeShadow);
+  expect(getComputedStyle(node).boxShadow).toBe(probeShadow);
+  node.style.removeProperty(token);
+};
 const builders = { tool: (config: AgentWidgetConfig) => createToolBubble(tool, config), reasoning: (config: AgentWidgetConfig) => createReasoningBubble(reasoning, config) };
 
 describe.each([false, true])("activity shadows (V5 %s)", v5Defaults => {
@@ -44,11 +54,9 @@ describe.each([false, true])("activity shadows (V5 %s)", v5Defaults => {
     const host = mount(config);
     for (const [kind, build] of Object.entries(builders)) {
       const node = build(config); host.append(node);
-      // JSDOM preserves CSS variable expressions: check the actual cascade and
-      // transported values together. Browser verification resolves the variables.
-      expect(getComputedStyle(node).boxShadow).toBe(layout === "row"
-        ? `var(--persona-consumer-${kind === "tool" ? "tool" : "reasoning"}Bubble-shadow, none)`
-        : kind === "tool" ? "var(--persona-tool-bubble-shadow)" : "var(--persona-reasoning-bubble-shadow)");
+      // Check the actual cascade and the transported values together.
+      if (layout === "row") expectShadowToken(node, `--persona-consumer-${kind}Bubble-shadow`, "none");
+      else expectShadowToken(node, `--persona-${kind}-bubble-shadow`, v5Defaults ? "none" : "rgba(0, 0, 0, 0.05) 0px 1px 2px");
       expect(host.style.getPropertyValue(`--persona-consumer-${kind}Bubble-shadow`)).toBe("");
       const cardShadow = host.style.getPropertyValue(`--persona-${kind}-bubble-shadow`);
       expect(v5Defaults ? cardShadow === "none" : cardShadow !== "none" && cardShadow !== "").toBe(true);
@@ -56,7 +64,7 @@ describe.each([false, true])("activity shadows (V5 %s)", v5Defaults => {
     if (layout === "row") {
       const group = createActivityGroup(tool, config, true, "Search (2)").bubble;
       host.append(group);
-      expect(getComputedStyle(group).boxShadow).toBe("var(--persona-consumer-toolBubble-shadow, none)");
+      expectShadowToken(group, "--persona-consumer-toolBubble-shadow", "none");
     }
   });
 
@@ -81,8 +89,8 @@ describe.each([false, true])("activity shadows (V5 %s)", v5Defaults => {
       let config = mergeWithDefaults({ future: { v5Defaults }, features: { toolCallDisplay: { layout } },
         toolCall: { shadow }, theme: { components: { toolBubble: { shadow: "none" } } },
       });
-      expect(createToolBubble(tool, config).style.boxShadow).toBe(shadow);
-      expect(createActivityGroup(tool, config, true, "Search (2)").bubble.style.boxShadow).toBe(shadow);
+      expect(createToolBubble(tool, config).style.boxShadow).toBe(serializedShadow);
+      expect(createActivityGroup(tool, config, true, "Search (2)").bubble.style.boxShadow).toBe(serializedShadow);
       config = mergeConfigUpdate(config, { toolCall: { shadow: "  " } });
       expect(createToolBubble(tool, config).style.boxShadow).toBe("none");
       expect(createActivityGroup(tool, config, true, "Search (2)").bubble.style.boxShadow).toBe("none");
@@ -106,8 +114,10 @@ describe.each([false, true])("activity shadows (V5 %s)", v5Defaults => {
     expect(host.querySelector("[data-persona-tool-group]")).not.toBeNull();
     expect(rows()).toHaveLength(5);
     const checkRows = (legacy = false) => {
-      for (const node of rows()) expect(getComputedStyle(node).boxShadow).toBe(legacy && node.dataset.activityKind === "tool"
-        ? shadow : `var(--persona-consumer-${node.dataset.activityKind}Bubble-shadow, none)`);
+      for (const node of rows()) {
+        if (legacy && node.dataset.activityKind === "tool") expect(getComputedStyle(node).boxShadow).toBe(serializedShadow);
+        else expectShadowToken(node, `--persona-consumer-${node.dataset.activityKind}Bubble-shadow`, legacy ? serializedShadow : "none");
+      }
     };
     checkRows();
     controller.update({ toolCall: { shadow }, theme: { components: { reasoningBubble: { shadow } } } });

@@ -5,9 +5,6 @@ import {
   createSkeletonPlaceholder,
   createStreamCaret,
   resolveStreamAnimation,
-  streamAnimationContainerClass,
-  streamAnimationBubbleClass,
-  isWrappingAnimation,
   resolveStreamAnimationPlugin,
   registerStreamAnimationPlugin,
   unregisterStreamAnimationPlugin,
@@ -234,41 +231,6 @@ describe("resolveStreamAnimation", () => {
     expect(resolved.speed).toBe(50);
     expect(resolved.duration).toBe(1800);
     expect(resolved.placeholder).toBe("none");
-  });
-});
-
-describe("streamAnimationContainerClass / streamAnimationBubbleClass", () => {
-  it("returns null for 'none'", () => {
-    expect(streamAnimationContainerClass("none")).toBeNull();
-    expect(streamAnimationBubbleClass("none")).toBeNull();
-  });
-
-  it("maps per-unit types to container classes", () => {
-    expect(streamAnimationContainerClass("typewriter")).toBe("persona-stream-typewriter");
-    expect(streamAnimationContainerClass("letter-rise")).toBe("persona-stream-letter-rise");
-    expect(streamAnimationContainerClass("word-fade")).toBe("persona-stream-word-fade");
-    expect(streamAnimationContainerClass("glyph-cycle")).toBe("persona-stream-glyph-cycle");
-    expect(streamAnimationContainerClass("wipe")).toBe("persona-stream-wipe");
-  });
-
-  it("puts pop-bubble on the bubble, not the content container", () => {
-    expect(streamAnimationContainerClass("pop-bubble")).toBeNull();
-    expect(streamAnimationBubbleClass("pop-bubble")).toBe("persona-stream-pop");
-  });
-});
-
-describe("isWrappingAnimation", () => {
-  it("is true for char and word modes", () => {
-    expect(isWrappingAnimation("typewriter")).toBe(true);
-    expect(isWrappingAnimation("letter-rise")).toBe(true);
-    expect(isWrappingAnimation("glyph-cycle")).toBe(true);
-    expect(isWrappingAnimation("word-fade")).toBe(true);
-    expect(isWrappingAnimation("wipe")).toBe(true);
-  });
-
-  it("is false for container-only modes and none", () => {
-    expect(isWrappingAnimation("none")).toBe(false);
-    expect(isWrappingAnimation("pop-bubble")).toBe(false);
   });
 });
 

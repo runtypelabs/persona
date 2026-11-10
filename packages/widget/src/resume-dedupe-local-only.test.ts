@@ -164,7 +164,7 @@ describe("local-only failure notices", () => {
     session.destroy();
   });
 
-  it("marks the reconnect give-up bubble local-only", async () => {
+  it("keeps reconnect exhaustion out of the transcript and retains the recovery checkpoint", async () => {
     const { session, state } = track({
       apiUrl: "http://test",
       reconnectStream: async () => {
@@ -181,7 +181,10 @@ describe("local-only failure notices", () => {
     await vi.waitFor(() => expect(state.errors).toHaveLength(1));
 
     const notice = state.messages.find((m) => m.id === "reconnect-failed-exec_5");
-    expect(notice?.localOnly).toBe(true);
+    expect(notice).toBeUndefined();
+    expect(state.messages.map(message => message.content)).toEqual(["tell me", "Once"]);
+    expect(session.getConnectionRecoveryState()).toBe("interrupted");
+    expect(session.getResumableHandle()).toMatchObject({ executionId: "exec_5", lastEventId: "5" });
     session.destroy();
   });
 });

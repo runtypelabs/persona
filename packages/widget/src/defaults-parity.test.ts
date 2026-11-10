@@ -4,10 +4,10 @@
  * Locked 4.22.0 defaults contract. The fixture was captured before the v5
  * defaults work began and must not be regenerated as part of later changes.
  *
- * JSDOM does not perform browser layout or resolve inherited custom
- * properties. This test therefore records the DOM-facing computed declarations
- * it can reliably expose, alongside the resolved config and emitted token map.
- * The Playwright visual harness covers physical layout separately.
+ * JSDOM does not perform browser layout. This test therefore records the
+ * DOM-facing computed declarations it can reliably expose, alongside the
+ * resolved config and emitted token map. The Playwright visual harness covers
+ * physical layout separately.
  */
 
 import { readFileSync } from "node:fs";
@@ -81,9 +81,10 @@ afterEach(() => document.body.replaceChildren());
 
 type DefaultsSnapshot = ReturnType<typeof snapshot>;
 
-// JSDOM leaves some computed declarations as var(...) strings. Resolve a
-// whole-value reference against that snapshot's own emitted tokens before
-// comparing, so deleting an unreachable fallback is not a visual regression.
+// The fixture was captured when JSDOM left computed declarations as var(...)
+// strings. Resolve a whole-value reference against that snapshot's own emitted
+// tokens before comparing, so deleting an unreachable fallback is not a visual
+// regression.
 // Unknown references stay verbatim; changes to actual tokens still fail the
 // independent, complete themeCssVariables comparison. The fixture stays intact.
 const resolveComputedTokens = (value: DefaultsSnapshot): DefaultsSnapshot => ({
@@ -106,6 +107,37 @@ const resolveComputedTokens = (value: DefaultsSnapshot): DefaultsSnapshot => ({
     ])
   ) as DefaultsSnapshot["computedStyles"],
 });
+
+// The fixture holds authored declarations. Pass them back through the engine so
+// they compare as computed values: #171717 and rgb(23, 23, 23) are one color, and
+// a unitless line-height resolves against the font-size captured beside it.
+const canonicalizeComputedStyles = (value: DefaultsSnapshot): DefaultsSnapshot => ({
+  ...value,
+  computedStyles: Object.fromEntries(
+    Object.entries(value.computedStyles).map(([name, declarations]) => {
+      const probe = document.createElement("div");
+      document.body.appendChild(probe);
+      const authored = Object.entries(declarations).filter(([, declaration]) => declaration !== "");
+      for (const [property, declaration] of authored) probe.style.setProperty(property, declaration);
+      const computed = getComputedStyle(probe);
+      const canonical = Object.fromEntries(Object.entries(declarations).map(([property, declaration]) =>
+        [property, declaration === "" ? "" : computed.getPropertyValue(property)]));
+      probe.remove();
+      return [name, canonical];
+    })
+  ) as DefaultsSnapshot["computedStyles"],
+});
+
+// JSDOM exposed nothing for these declarations when the fixture was captured, so
+// the baseline holds "". Lock what it computes now instead of ignoring the keys.
+const newlyComputed: Record<string, Record<string, string>> = {
+  header: { position: "static", "border-radius": "0px", margin: "0px", "font-size": "16px", "line-height": "24px", width: "auto", height: "auto" },
+  userBubble: { margin: "0px 0px 0px auto", width: "auto", height: "auto" },
+  assistantBubble: { padding: "0px", margin: "0px", "font-size": "16px", "line-height": "24px", height: "auto" },
+  composer: { position: "static", margin: "0px auto", "font-size": "16px", "line-height": "24px", height: "auto" },
+  launcher: { margin: "0px", "font-size": "16px", width: "auto", height: "auto" },
+  toolBubble: { padding: "0px", margin: "0px", "font-size": "16px", "line-height": "24px", height: "auto" },
+};
 
 describe("4.22.0 defaults parity (flag off)", () => {
   it("matches the committed baseline", () => {
@@ -148,7 +180,16 @@ describe("4.22.0 defaults parity (flag off)", () => {
     // Resolve computed declarations before adapting the token map for comparison.
     // The baseline stylesheet uses rem; this JSDOM harness assumes a 16px root.
     const resolvedActual = resolveComputedTokens(actual);
-    const resolvedBaseline = resolveComputedTokens(baseline);
+    const resolvedBaseline = canonicalizeComputedStyles(resolveComputedTokens(baseline));
+    for (const [element, declarations] of Object.entries(newlyComputed)) {
+      for (const [property, value] of Object.entries(declarations)) {
+        const key = `${element} ${property}`;
+        const styles = element as keyof DefaultsSnapshot["computedStyles"];
+        expect(baseline.computedStyles[styles][property], key).toBe("");
+        expect(resolvedActual.computedStyles[styles][property], key).toBe(value);
+        resolvedActual.computedStyles[styles][property] = "";
+      }
+    }
     resolvedActual.themeCssVariables = { ...actual.themeCssVariables };
     for (const [key, [oldValue, newValue]] of Object.entries(activatedTokens)) {
       expect(baseline.themeCssVariables[key], key).toBe(oldValue);
@@ -181,6 +222,13 @@ describe("4.22.0 defaults parity (flag off)", () => {
     resolvedActual.mergedDefaultConfig.tooltip = {
       ...resolvedActual.mergedDefaultConfig.tooltip,
       delayMs: baseline.mergedDefaultConfig.tooltip.delayMs,
+    };
+    // Connection copy now describes an interrupted transport; explicit overrides remain optional.
+    expect(baseline.mergedDefaultConfig.statusIndicator.errorText).toBe("Offline");
+    expect(actual.mergedDefaultConfig.statusIndicator).not.toHaveProperty("errorText");
+    resolvedActual.mergedDefaultConfig.statusIndicator = {
+      ...resolvedActual.mergedDefaultConfig.statusIndicator,
+      errorText: baseline.mergedDefaultConfig.statusIndicator.errorText,
     };
     // Additive controls preserve V4 appearance; keep the historical fixture intact.
     const tools = resolvedActual.mergedDefaultConfig.features!.toolCallDisplay!;

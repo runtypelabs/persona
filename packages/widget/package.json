@@ -1,6 +1,6 @@
 {
   "name": "@runtypelabs/persona",
-  "version": "4.36.0",
+  "version": "4.37.1",
   "description": "Themeable, pluggable streaming agent widget for websites, in plain JS with support for voice input and reasoning / tool output.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -179,7 +179,7 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && node scripts/build-bundles.mjs && node scripts/terser-global.mjs dist/index.global.js dist/install.global.js dist/launcher.global.js dist/client-stream.js dist/theme-editor.js dist/activity-ui.js && pnpm run check:dist-vite8 && pnpm run check:size",
+    "build": "rimraf dist && pnpm run build:styles && node scripts/build-bundles.mjs && node scripts/terser-global.mjs dist/index.global.js dist/install.global.js dist/launcher.global.js dist/client-stream.js dist/theme-editor.js dist/activity-ui.js dist/index.cjs && pnpm run check:dist-vite8 && pnpm run check:size",
     "check:size": "node scripts/check-size.mjs",
     "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:styles": "node scripts/build-styles.mjs",
@@ -195,10 +195,10 @@
   },
   "dependencies": {
     "@mcp-b/webmcp-polyfill": "^6.0.3",
-    "dompurify": "^3.4.13",
-    "idiomorph": "^0.7.4",
-    "lucide": "^1.18.0",
-    "marked": "^12.0.2",
+    "dompurify": "^3.4.17",
+    "idiomorph": "^0.8.0",
+    "lucide": "^1.70.0",
+    "marked": "^18.1.3",
     "partial-json": "^0.1.7"
   },
   "devDependencies": {
@@ -208,14 +208,15 @@
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/ui": "^5.1.0",
     "acorn": "^8.19.0",
-    "fake-indexeddb": "^6.2.5",
-    "jsdom": "^28.1.0",
+    "fake-indexeddb": "^6.2.7",
+    "jsdom": "^31.0.0",
     "lightningcss": "^1.33.0",
     "rimraf": "^6.1.4",
     "size-limit": "^14.3.0",
     "terser": "^5.51.2",
     "tsdown": "^0.23.7",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
+    "typescript-api": "npm:typescript@^6.0.3",
     "vitest": "^5.1.0",
     "webmcp-polyfill-v5": "npm:@mcp-b/webmcp-polyfill@5.1.0"
   },

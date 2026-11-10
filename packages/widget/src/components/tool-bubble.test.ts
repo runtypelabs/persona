@@ -28,7 +28,7 @@ describe("createToolBubble shadow", () => {
   it("applies a custom shadow inline from config.toolCall.shadow", () => {
     const config = { toolCall: { shadow: "0 8px 24px rgba(0,0,0,0.15)" } } as AgentWidgetConfig;
     const bubble = createToolBubble(makeMessage(), config);
-    expect(bubble.style.boxShadow).toBe("0 8px 24px rgba(0,0,0,0.15)");
+    expect(bubble.style.boxShadow).toBe("rgba(0, 0, 0, 0.15) 0px 8px 24px");
   });
 
   it('maps an empty shadow string to "none"', () => {

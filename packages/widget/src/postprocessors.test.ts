@@ -179,6 +179,215 @@ describe("markdown renderer overrides receive the documented token", () => {
     expect(md("# Title")).toContain("Title");
     expect(md("# Title")).toContain("<h1");
   });
+
+  it("hands overrides rendered inline HTML as text, not markdown tokens", () => {
+    const seen: string[] = [];
+    const md = createMarkdownProcessor({
+      renderer: {
+        paragraph(token) {
+          seen.push(token.text);
+          return false;
+        },
+      },
+    });
+    md("a **b** `c`");
+
+    expect(seen).toEqual(["a <strong>b</strong> <code>c</code>"]);
+  });
+
+  it("escapes source text before an override can interpolate it", () => {
+    const seen: Record<string, string | null> = {};
+    const md = createMarkdownProcessor({
+      renderer: {
+        link(token) {
+          seen.title = token.title;
+          return false;
+        },
+        image(token) {
+          seen.alt = token.text;
+          seen.imageTitle = token.title;
+          return false;
+        },
+        codespan(token) {
+          seen.code = token.text;
+          return false;
+        },
+        text(token) {
+          seen.text = token.text;
+          return false;
+        },
+      },
+    });
+    md('[x](https://a.com "<b>") ![<i>](https://a.com/i.png "\'t") `<s>`');
+    md("1 < 2 & 3");
+
+    expect(seen).toMatchObject({
+      title: "&lt;b&gt;",
+      alt: "&lt;i&gt;",
+      imageTitle: "&#39;t",
+      code: "&lt;s&gt;",
+      text: "1 &lt; 2 &amp; 3",
+    });
+  });
+
+  it("does not double-escape an entity in a title", () => {
+    let title: string | null = null;
+    const md = createMarkdownProcessor({
+      renderer: {
+        link(token) {
+          title = token.title;
+          return false;
+        },
+      },
+    });
+    md('[x](https://a.com "a &amp; b")');
+
+    expect(title).toBe("a &amp; b");
+  });
+
+  it("escapes an angle-bracket autolink href and leaves a bare URL's alone", () => {
+    const hrefs: string[] = [];
+    const md = createMarkdownProcessor({
+      renderer: {
+        link(token) {
+          hrefs.push(token.href);
+          return false;
+        },
+      },
+    });
+    md("<https://a.com/?x=1&y=2>");
+    md("https://b.com/?x=1&y=2");
+
+    expect(hrefs).toEqual(["https://a.com/?x=1&amp;y=2", "https://b.com/?x=1&y=2"]);
+  });
+
+  it("gives heading() the plain text as raw, for slugs", () => {
+    let raw = "";
+    const md = createMarkdownProcessor({
+      renderer: {
+        heading(token) {
+          raw = token.raw;
+          return false;
+        },
+      },
+    });
+    md("## Some *emphasis* and `code`");
+
+    expect(raw).toBe("Some emphasis and code");
+  });
+
+  describe.each([
+    ["tight", "- one\n- two"],
+    ["loose", "- one\n\n- two"],
+    ["task", "- [x] one\n- [ ] two"],
+    ["loose task", "- [x] one\n\n- [ ] two"],
+  ])("listitem override on a %s list", (kind, source) => {
+    it("matches the default output when it falls through", () => {
+      const md = createMarkdownProcessor({ renderer: { listitem: () => false } });
+
+      expect(md(source)).toBe(createMarkdownProcessor()(source));
+    });
+
+    it("receives the item's rendered content", () => {
+      const md = createMarkdownProcessor({
+        renderer: { listitem: (token) => `<li class="custom">${token.text}</li>\n` },
+      });
+      const html = md(source);
+
+      expect(html.match(/<li class="custom">/g)).toHaveLength(2);
+      expect(html.includes("<p>")).toBe(kind.startsWith("loose"));
+      expect(html.match(/<input/g)?.length ?? 0).toBe(kind.endsWith("task") ? 2 : 0);
+    });
+  });
+
+  it("renders children once when an override falls through", () => {
+    const calls: string[] = [];
+    const md = createMarkdownProcessor({
+      renderer: {
+        blockquote: () => false,
+        list: () => false,
+        listitem: () => false,
+        paragraph: () => false,
+        strong: () => false,
+        table: () => false,
+        link: () => false,
+        heading: () => false,
+        text(token) {
+          calls.push(token.text);
+          return false;
+        },
+      },
+    });
+    const html = md(
+      "# h\n\n> > **deep**\n\n- [l](https://a.com)\n  - nested\n\n| c |\n| - |\n| d |"
+    );
+
+    expect(calls).toEqual(["h", "deep", "l", "nested", "c", "d"]);
+    expect(html).toContain('<a href="https://a.com">l</a>');
+    expect(html).toContain("<table>\n<thead>\n<tr>\n<th>c</th>\n</tr>\n</thead>\n<tbody><tr>");
+    expect(html).toContain("<ul>\n<li>");
+  });
+
+  it("keeps deep fall-through nesting linear", () => {
+    let calls = 0;
+    const md = createMarkdownProcessor({
+      renderer: {
+        blockquote: () => false,
+        text() {
+          calls += 1;
+          return false;
+        },
+      },
+    });
+    md(`${">".repeat(24)} deep`);
+
+    expect(calls).toBe(1);
+  });
+
+  it("keeps rendered children out of the html override on fall-through", () => {
+    const seen: string[] = [];
+    const md = createMarkdownProcessor({
+      renderer: {
+        paragraph: () => false,
+        html(token) {
+          seen.push(token.text);
+          return false;
+        },
+      },
+    });
+    expect(md("a <b>x</b>")).toContain("<p>a <b>x</b></p>");
+    expect(seen).toEqual(["<b>", "</b>"]);
+  });
+
+  it("keeps the ordered list start on fall-through", () => {
+    const md = createMarkdownProcessor({ renderer: { list: () => false } });
+
+    expect(md("3. a")).toContain('<ol start="3">');
+    expect(md("1. a")).toContain("<ol>");
+  });
+
+  it("separates a custom task checkbox from its label", () => {
+    const md = createMarkdownProcessor({
+      renderer: { checkbox: ({ checked }) => `<i data-checked="${checked}"></i>` },
+    });
+
+    expect(md("- [x] done")).toContain('<i data-checked="true"></i> done');
+  });
+
+  it("lets a block text token's inline children reach the text override once", () => {
+    const seen: string[] = [];
+    const md = createMarkdownProcessor({
+      renderer: {
+        text(token) {
+          seen.push(token.text);
+          return `[${token.text}]`;
+        },
+      },
+    });
+
+    expect(md("- item")).toContain("[item]");
+    expect(seen).toEqual(["item"]);
+  });
 });
 
 describe("escapeHtml", () => {

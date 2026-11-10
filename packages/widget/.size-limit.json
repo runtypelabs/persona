@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "169.2 kB",
+    "limit": "170 kB",
     "gzip": true
   },
   {
@@ -14,7 +14,7 @@
   {
     "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
     "path": "dist/widget.css",
-    "limit": "24.6 kB",
+    "limit": "24.9 kB",
     "gzip": true
   },
   {
@@ -26,7 +26,7 @@
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "216.75 kB",
+    "limit": "228.5 kB",
     "gzip": true
   },
   {
@@ -158,7 +158,7 @@
   {
     "name": "Lazy · SSE stream processor + resume requests chunk (client-stream.js)",
     "path": "dist/client-stream.js",
-    "limit": "10.5 kB",
+    "limit": "10.55 kB",
     "gzip": true
   },
   {

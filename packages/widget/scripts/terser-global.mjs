@@ -1,4 +1,4 @@
-// Second minification pass over the CDN IIFEs and selected standalone ESM entries.
+// Second minification pass over the CDN IIFEs and selected library entries.
 //
 // tsdown (Rolldown + the Oxc minifier) produces the bundle; terser then
 // re-minifies the already-minified output. ESM mode preserves its exports;
@@ -40,10 +40,12 @@ for (const file of files) {
   const mapFile = `${file}.map`;
   const input = readFileSync(file, "utf8");
   const core = file.endsWith("index.global.js");
+  const commonjs = file.endsWith(".cjs");
   const notices = new Set();
   let result = await minify(input, {
     ecma: 2020,
-    module: !file.endsWith(".global.js"),
+    module: file.endsWith(".js") && !file.endsWith(".global.js"),
+    toplevel: commonjs,
     compress: {
       passes: 2, keep_fargs: false,
       hoist_funs: file.endsWith("theme-editor.js") || file.endsWith("activity-ui.js"),
@@ -52,9 +54,9 @@ for (const file of files) {
       ...(file.endsWith("activity-ui.js") ? { evaluate: false, sequences: false } : {}),
       // Separate conditional branches compress slightly better in the stream parser.
       ...(file.endsWith("client-stream.js") ? { conditionals: false } : {}),
-      // Delay expression folding until the second core pass: the resulting
-      // repeated structure compresses better under the unchanged Brotli budget.
-      ...(core ? { evaluate: false } : {}),
+      // Repeated expressions compress better under the CommonJS gzip budget.
+      // The core delays expression folding until its second pass for Brotli.
+      ...(core || commonjs ? { evaluate: false } : {}),
     },
     mangle: true,
     format: { comments: core ? (_node, comment) => {

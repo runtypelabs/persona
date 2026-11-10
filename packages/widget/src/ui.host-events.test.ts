@@ -24,6 +24,46 @@ afterEach(() => {
 });
 
 describe.each([false, true])("host events (v5Defaults=%s)", (v5Defaults) => {
+  it.each(["controller", "header"])("clears storage independently and notifies before composer cleanup via %s", (source) => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const controller = createAgentExperience(root, {
+      apiUrl: "/chat", launcher: { mountMode: "composer-bar" }, persistState: false,
+      future: { v5Defaults }, clearChatHistoryStorageKey: "custom-chat-history",
+    });
+    controllers.push(controller);
+    controller.injectUserMessage({ content: "hello" });
+    const input = root.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]")!;
+    input.value = "unsent draft";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const calls: string[] = [];
+    const failure = new DOMException("Storage unavailable", "SecurityError");
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation((key) => {
+      if (key === "persona-chat-history") {
+        calls.push("default");
+        throw failure;
+      }
+      if (key === "custom-chat-history") calls.push("custom");
+    });
+    const onClear = (event: Event) => {
+      calls.push("event");
+      expect((event as CustomEvent).detail.instanceId).toBe(controller.instanceId);
+      expect(controller.getMessages()).toEqual([]);
+      expect(controller.getComposerState().text).toBe("unsent draft");
+    };
+    window.addEventListener("persona:clear-chat", onClear);
+    try {
+      if (source === "controller") controller.clearChat();
+      else root.querySelector<HTMLButtonElement>("[aria-label='Clear chat']")!.click();
+    } finally {
+      window.removeEventListener("persona:clear-chat", onClear);
+    }
+    expect(calls).toEqual(["default", "custom", "event"]);
+    expect(error).toHaveBeenCalledWith("[AgentWidget] Failed to clear default localStorage:", failure);
+    expect(controller.getComposerState().text).toBe("");
+  });
+
   it("isolates message events and includes public identity on clear notifications", () => {
     const first = mount(v5Defaults);
     const second = mount(v5Defaults);

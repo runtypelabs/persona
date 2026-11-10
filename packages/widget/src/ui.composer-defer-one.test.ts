@@ -20,15 +20,18 @@ const openStream = () => {
   const encoder = new TextEncoder();
   let push!: (frame: string) => void;
   let close!: () => void;
+  let fail!: (error: Error) => void;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       push = (frame) => controller.enqueue(encoder.encode(frame));
       close = () => controller.close();
+      fail = (error) => controller.error(error);
     },
   });
   return {
     push,
     close,
+    fail,
     response: { ok: true, status: 200, headers: new Headers(), body } as unknown as Response,
   };
 };
@@ -159,8 +162,8 @@ describe("streamingSubmitBehavior: defer-one", () => {
     expect(status?.textContent).toContain("already queued");
   });
 
-  it("keeps a notice in the status line when the chat status changes under it", async () => {
-    const { mount } = makeController();
+  it.each([false, true])("keeps a notice in the status line when chat status changes (composer bar=%s)", async (composerBar) => {
+    const { mount } = makeController({ future: { v5Defaults: true }, launcher: { enabled: true, mountMode: composerBar ? "composer-bar" : "floating" } });
     await startStreaming(mount);
     type(mount, "queued message");
     pressEnter(mount);
@@ -174,6 +177,37 @@ describe("streamingSubmitBehavior: defer-one", () => {
     await flush(50);
     const status = mount.querySelector<HTMLElement>("[data-persona-composer-notice]");
     expect(status?.textContent).toContain("already queued");
+    expect(status?.style.display).toBe("");
+    expect(status?.getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("holds a queued message through exhaustion and releases it only after terminal-only manual recovery", async () => {
+    const reconnect = vi.fn(async () => new Response(null, { status: 503 }));
+    const { mount, controller } = makeController({
+      future: { v5Defaults: true }, reconnectStream: reconnect, reconnect: { maxAttempts: 1 },
+    });
+    const completed = vi.fn();
+    controller.on("assistant:complete", completed);
+    await startStreaming(mount);
+    stream.push('id: 1\nevent: text_delta\ndata: {"type":"text_delta","id":"partial","delta":"Partial","executionId":"exec-1"}\n\n');
+    await flush();
+    type(mount, "queued message");
+    pressEnter(mount);
+    await flush();
+    stream.close();
+    await vi.waitFor(() => expect(mount.textContent).toContain("Couldn’t reconnect"));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(controller.getComposerState().pendingSubmission?.text).toBe("queued message");
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(reconnect).toHaveBeenCalledOnce();
+    expect(completed).not.toHaveBeenCalled();
+    reconnect.mockResolvedValueOnce(new Response('id: 2\nevent: execution_complete\ndata: {"type":"execution_complete","kind":"agent","success":true}\n\n'));
+    vi.mocked(global.fetch).mockResolvedValueOnce(new Response(unifiedFrames()));
+    mount.querySelector<HTMLButtonElement>("[data-persona-reconnect]")!.click();
+    await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    expect(controller.getComposerState().pendingSubmission).toBeUndefined();
+    expect(reconnect).toHaveBeenCalledTimes(2);
+    expect(completed).toHaveBeenCalled();
   });
 
   it("card Edit restores the snapshot into the draft and drops the card", async () => {
@@ -209,7 +243,7 @@ describe("streamingSubmitBehavior: defer-one", () => {
     expect(textareaOf(mount).value).toBe("");
   });
 
-  it("auto-sends the queued item when the assistant turn completes", async () => {
+  it.each([undefined, true])("auto-sends after a recoverable notice and successful completion (recoverable=%s)", async (recoverable) => {
     const { mount, controller } = makeController();
     await startStreaming(mount);
     type(mount, "queued message");
@@ -219,15 +253,16 @@ describe("streamingSubmitBehavior: defer-one", () => {
       "queued message"
     );
 
-    const completed = new Promise<void>((resolve) => {
-      controller.on("assistant:complete", () => resolve());
-    });
+    const finished = vi.fn();
+    controller.on("run:finished", finished);
+    stream.push(`data: ${JSON.stringify({ type: "error", error: "Retrying", recoverable })}\n\n`);
+    await flush(30);
+    expect(controller.getComposerState().pendingSubmission?.text).toBe("queued message");
+    expect(finished).not.toHaveBeenCalled();
     stream.push(unifiedFrames());
     stream.close();
-    await completed;
-    await flush(30);
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    await flush(30);
+    await vi.waitFor(() => expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: "success" }), expect.any(Object)));
+    await vi.waitFor(() => expect(controller.getComposerState().pendingSubmission).toBeUndefined());
 
     expect(controller.getComposerState().pendingSubmission).toBeUndefined();
     const users = controller.getMessages().filter((m) => m.role === "user");
@@ -254,16 +289,26 @@ describe("streamingSubmitBehavior: defer-one", () => {
     expect(users.map((m) => m.content)).not.toContain("queued message");
   });
 
-  it("stays pending after a stream error", async () => {
+  it.each([
+    ["execution error", { type: "execution_error", error: "boom" }],
+    ["nonrecoverable error", { type: "error", error: "boom", recoverable: false }],
+    ["transport error", null],
+  ] as const)("stays pending after a %s", async (_name, frame) => {
     const { mount, controller } = makeController();
     await startStreaming(mount);
     type(mount, "queued message");
     pressEnter(mount);
     await flush();
 
-    stream.push('data: {"type":"error","error":"boom"}\n\n');
-    stream.close();
-    await flush(30);
+    const finished = vi.fn();
+    controller.on("run:finished", finished);
+    if (frame) {
+      stream.push(`data: ${JSON.stringify(frame)}\n\n`);
+      stream.close();
+    } else {
+      stream.fail(new TypeError("Failed to fetch"));
+    }
+    await vi.waitFor(() => expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: "error" }), expect.any(Object)));
     await new Promise((resolve) => setTimeout(resolve, 5));
     await flush(20);
 

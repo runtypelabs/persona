@@ -17,5 +17,6 @@ import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { provideMarkdownParsers } from "./markdown-parsers-loader";
 import { stabilizeStreamingMarkdown } from "./utils/streaming-markdown";
+import { convertRendererOverrides } from "./utils/markdown-renderer-overrides";
 
-provideMarkdownParsers({ Marked, DOMPurify, stabilizeStreamingMarkdown });
+provideMarkdownParsers({ Marked, DOMPurify, stabilizeStreamingMarkdown, convertRendererOverrides });

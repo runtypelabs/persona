@@ -4,8 +4,8 @@
 // Slides marked transition:'morph' use GSAP Flip to animate elements whose
 // ids match across the two slides (PowerPoint "Morph" behaviour).
 
-import Reveal from 'reveal.js'
-import 'reveal.js/dist/reveal.css'
+import Reveal, { type RevealApi } from 'reveal.js'
+import 'reveal.js/reveal.css'
 import { anim, resetXform } from './anim'
 import { chartSnapshotSvg, mountChart } from './charts'
 import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
@@ -77,7 +77,7 @@ export function startPresentation(
      *  re-render the deck on remote doc changes (slidesEl, deck, buildSection) */
     onDocChange?: (ctx: {
       slidesEl: HTMLElement
-      deck: Reveal.Api
+      deck: RevealApi
       buildSection: (s: BentoDoc['slides'][number], i: number) => HTMLElement
     }) => void
     broadcast?: PresentBroadcast

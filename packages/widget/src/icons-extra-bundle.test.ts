@@ -18,7 +18,7 @@ const dist = (f: string) => resolve(__dirname, "..", "dist", f);
 
 // Path-data fragments of extra-tier icons: shopping-cart and bell.
 const DATA_MARKERS = [
-  "M2.05 2.05h2l2.66 12.42",
+  "m2.05 2.05 1.099-.028a1 1 0 0 1 1.008.815",
   "M10.268 21a2 2 0 0 0 3.464 0",
 ];
 
