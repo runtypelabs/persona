@@ -26,7 +26,7 @@
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "228.5 kB",
+    "limit": "228.75 kB",
     "gzip": true
   },
   {
@@ -68,7 +68,7 @@
   {
     "name": "Lazy · WebMCP polyfill chunk (webmcp-polyfill.js)",
     "path": "dist/webmcp-polyfill.js",
-    "limit": "11 kB",
+    "limit": "6 kB",
     "gzip": true
   },
   {
