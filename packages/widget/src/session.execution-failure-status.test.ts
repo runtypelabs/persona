@@ -147,12 +147,12 @@ describe("execution failure connection status", () => {
     session.destroy();
   });
 
-  it("leaves recoverable notices streaming until a successful completion", async () => {
+  it.each([undefined, true])("leaves recoverable notices streaming until a successful completion (recoverable=%s)", async (recoverable) => {
     const errors = vi.fn();
     const outcomes: AgentWidgetRunFinishedEvent[] = [];
     const session = new AgentWidgetSession({
       apiUrl: "https://example.test/chat", customFetch: async () => response([
-        { type: "error", error: "Retrying", recoverable: true },
+        { type: "error", error: "Retrying", recoverable },
         { type: "execution_complete", kind: "agent", success: true },
       ]),
     }, {

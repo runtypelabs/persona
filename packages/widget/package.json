@@ -1,6 +1,6 @@
 {
   "name": "@runtypelabs/persona",
-  "version": "4.37.0",
+  "version": "4.37.1",
   "description": "Themeable, pluggable streaming agent widget for websites, in plain JS with support for voice input and reasoning / tool output.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -179,7 +179,7 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && node scripts/build-bundles.mjs && node scripts/terser-global.mjs dist/index.global.js dist/install.global.js dist/launcher.global.js dist/client-stream.js dist/theme-editor.js dist/activity-ui.js && pnpm run check:dist-vite8 && pnpm run check:size",
+    "build": "rimraf dist && pnpm run build:styles && node scripts/build-bundles.mjs && node scripts/terser-global.mjs dist/index.global.js dist/install.global.js dist/launcher.global.js dist/client-stream.js dist/theme-editor.js dist/activity-ui.js dist/index.cjs && pnpm run check:dist-vite8 && pnpm run check:size",
     "check:size": "node scripts/check-size.mjs",
     "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:styles": "node scripts/build-styles.mjs",

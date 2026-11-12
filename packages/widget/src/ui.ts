@@ -1520,12 +1520,14 @@ export const createAgentExperience = (
           reconnect.className = "persona-connection-notice__action";
           reconnect.setAttribute("data-persona-reconnect", "");
           reconnect.textContent = "Reconnect";
-          reconnect.addEventListener("click", () => session.reconnectNow());
+          reconnect.addEventListener("click", () => {
+            if (session.getConnectionRecoveryState() !== "reconnecting") session.reconnectNow();
+          });
           el.append(reconnect);
         }
-        reconnect.disabled = recovery === "reconnecting";
+        reconnect.setAttribute("aria-disabled", String(recovery === "reconnecting"));
         reconnect.setAttribute("aria-label", recovery === "waiting" ? "Reconnect now" : "Reconnect to this response");
-        reconnect.setAttribute("aria-busy", String(reconnect.disabled));
+        reconnect.setAttribute("aria-busy", String(recovery === "reconnecting"));
       } else reconnect?.remove();
       return;
     }
@@ -11449,6 +11451,54 @@ export const createAgentExperience = (
 
   refreshCloseButton();
 
+  const clearStoredChatState = () => {
+    const clearStorageKey = (key: string, label: string) => {
+      try {
+        localStorage.removeItem(key);
+        if (config.debug) {
+          console.log(`[AgentWidget] Cleared ${label} localStorage key: ${key}`);
+        }
+      } catch (error) {
+        console.error(`[AgentWidget] Failed to clear ${label} localStorage:`, error);
+      }
+    };
+    clearStorageKey(DEFAULT_CHAT_HISTORY_STORAGE_KEY, "default");
+    if (config.clearChatHistoryStorageKey && config.clearChatHistoryStorageKey !== DEFAULT_CHAT_HISTORY_STORAGE_KEY) {
+      clearStorageKey(config.clearChatHistoryStorageKey, "custom");
+    }
+
+    // Dispatch custom event for external handlers (e.g., localStorage clearing in examples)
+    const clearEvent = new CustomEvent("persona:clear-chat", {
+      detail: { instanceId, timestamp: new Date().toISOString() }
+    });
+    window.dispatchEvent(clearEvent);
+
+    // Remove any stored draft before the terminal clear mutation is queued.
+    clearPersistedDraft();
+    if (storageAdapter?.clear) {
+      runStorageMutation(
+        () => storageAdapter.clear!(),
+        "[AgentWidget] Failed to clear storage adapter:"
+      );
+    }
+    persistentMetadata = {};
+    actionManager.syncFromMetadata();
+    // Pending attachments belong to the cleared conversation: drop the tiles
+    // and abort anything still uploading.
+    discardConversationContinuity(session.getActiveConversationId(), true, false);
+    clearComposerDraft();
+    // The draft, quote, and any deferred submission belong to it too.
+    clearPersistedDraft();
+    setPendingSubmission(undefined);
+    setComposerQuote(undefined);
+    cancelMessageEdit();
+
+    // Clear event stream buffer and store, and reset throughput tracking
+    eventStreamBuffer?.clear();
+    throughputTracker?.reset();
+    eventStreamView?.update();
+  };
+
   // Setup clear chat button click handler
   const setupClearChatButton = () => {
     const { clearChatButton } = panelElements;
@@ -11477,58 +11527,7 @@ export const createAgentExperience = (
       // Drop any open ask_user_question sheets: their source messages are gone.
       removeAskUserQuestionSheet(panelElements.composerOverlay);
 
-      // Always clear the default localStorage key
-      try {
-        localStorage.removeItem(DEFAULT_CHAT_HISTORY_STORAGE_KEY);
-        if (config.debug) {
-          console.log(`[AgentWidget] Cleared default localStorage key: ${DEFAULT_CHAT_HISTORY_STORAGE_KEY}`);
-        }
-      } catch (error) {
-        console.error("[AgentWidget] Failed to clear default localStorage:", error);
-      }
-
-      // Also clear custom localStorage key if configured
-      if (config.clearChatHistoryStorageKey && config.clearChatHistoryStorageKey !== DEFAULT_CHAT_HISTORY_STORAGE_KEY) {
-        try {
-          localStorage.removeItem(config.clearChatHistoryStorageKey);
-          if (config.debug) {
-            console.log(`[AgentWidget] Cleared custom localStorage key: ${config.clearChatHistoryStorageKey}`);
-          }
-        } catch (error) {
-          console.error("[AgentWidget] Failed to clear custom localStorage:", error);
-        }
-      }
-
-      // Dispatch custom event for external handlers (e.g., localStorage clearing in examples)
-      const clearEvent = new CustomEvent("persona:clear-chat", {
-        detail: { instanceId, timestamp: new Date().toISOString() }
-      });
-      window.dispatchEvent(clearEvent);
-
-      // Remove any stored draft before the terminal clear mutation is queued.
-      clearPersistedDraft();
-      if (storageAdapter?.clear) {
-        runStorageMutation(
-          () => storageAdapter.clear!(),
-          "[AgentWidget] Failed to clear storage adapter:"
-        );
-      }
-      persistentMetadata = {};
-      actionManager.syncFromMetadata();
-      // Pending attachments belong to the cleared conversation: drop the tiles
-      // and abort anything still uploading.
-      discardConversationContinuity(session.getActiveConversationId(), true, false);
-      clearComposerDraft();
-      // The draft, quote, and any deferred submission belong to it too.
-      clearPersistedDraft();
-      setPendingSubmission(undefined);
-      setComposerQuote(undefined);
-      cancelMessageEdit();
-
-      // Clear event stream buffer and store, and reset throughput tracking
-      eventStreamBuffer?.clear();
-      throughputTracker?.reset();
-      eventStreamView?.update();
+      clearStoredChatState();
     });
   };
 
@@ -12988,58 +12987,7 @@ export const createAgentExperience = (
       messageCache.clear();
       resumeAutoScroll();
 
-      // Always clear the default localStorage key
-      try {
-        localStorage.removeItem(DEFAULT_CHAT_HISTORY_STORAGE_KEY);
-        if (config.debug) {
-          console.log(`[AgentWidget] Cleared default localStorage key: ${DEFAULT_CHAT_HISTORY_STORAGE_KEY}`);
-        }
-      } catch (error) {
-        console.error("[AgentWidget] Failed to clear default localStorage:", error);
-      }
-
-      // Also clear custom localStorage key if configured
-      if (config.clearChatHistoryStorageKey && config.clearChatHistoryStorageKey !== DEFAULT_CHAT_HISTORY_STORAGE_KEY) {
-        try {
-          localStorage.removeItem(config.clearChatHistoryStorageKey);
-          if (config.debug) {
-            console.log(`[AgentWidget] Cleared custom localStorage key: ${config.clearChatHistoryStorageKey}`);
-          }
-        } catch (error) {
-          console.error("[AgentWidget] Failed to clear custom localStorage:", error);
-        }
-      }
-
-      // Dispatch custom event for external handlers (e.g., localStorage clearing in examples)
-      const clearEvent = new CustomEvent("persona:clear-chat", {
-        detail: { instanceId, timestamp: new Date().toISOString() }
-      });
-      window.dispatchEvent(clearEvent);
-
-      // Remove any stored draft before the terminal clear mutation is queued.
-      clearPersistedDraft();
-      if (storageAdapter?.clear) {
-        runStorageMutation(
-          () => storageAdapter.clear!(),
-          "[AgentWidget] Failed to clear storage adapter:"
-        );
-      }
-      persistentMetadata = {};
-      actionManager.syncFromMetadata();
-      // Pending attachments belong to the cleared conversation: drop the tiles
-      // and abort anything still uploading.
-      discardConversationContinuity(session.getActiveConversationId(), true, false);
-      clearComposerDraft();
-      // The draft, quote, and any deferred submission belong to it too.
-      clearPersistedDraft();
-      setPendingSubmission(undefined);
-      setComposerQuote(undefined);
-      cancelMessageEdit();
-
-      // Clear event stream buffer and store, and reset throughput tracking
-      eventStreamBuffer?.clear();
-      throughputTracker?.reset();
-      eventStreamView?.update();
+      clearStoredChatState();
     },
     setMessage(message: string): boolean {
       if (!textarea || dictationCapturing()) return false;
