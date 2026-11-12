@@ -62,6 +62,9 @@ export class DictationController {
           this.publish({ audioLevel: Math.max(0, Math.min(1, audioLevel)) }, true);
         }
       });
+      provider.onLevelUnavailable?.(() => {
+        if (current() && this.state.phase === 'recording') this.publish({ audioLevel: null }, true);
+      });
       provider.onError((error) => { if (current()) this.fail(error); });
       provider.onProcessingStart?.(() => { if (current()) this.publish({ phase: 'processing', audioLevel: null }); });
       provider.onStatusChange((status) => {

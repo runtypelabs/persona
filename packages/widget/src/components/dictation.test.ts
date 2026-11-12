@@ -69,3 +69,21 @@ it('preserves transcript text nodes across level-only updates and still applies 
   observer.disconnect();
   view.destroy!();
 });
+
+
+it('restores the listening fallback when waveform measurement becomes unavailable', () => {
+  const ctx = context();
+  ctx.config.voiceRecognition!.dictation!.display = 'waveform';
+  const view = createDictationRenderer(ctx, { renderLucideIcon, attachTooltip });
+  const waveform = view.element.querySelector<HTMLElement>('[data-persona-dictation-waveform]')!;
+  const status = view.element.querySelector<HTMLElement>('[role="status"]')!;
+  view.update!({ ...ctx, state: { ...ctx.state, audioLevel: 0 } });
+  expect(waveform.hidden).toBe(false);
+  expect(status.className).toBe('persona-sr-only');
+  view.update!(ctx);
+  expect(waveform.hidden).toBe(true);
+  expect(status.textContent).toBe('Listening…');
+  expect(status.className).toBe('');
+  expect(view.element.dataset.phase).toBe('recording');
+  view.destroy!();
+});

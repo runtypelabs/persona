@@ -7,13 +7,15 @@ function mockProvider() {
   let status: (status: VoiceStatus) => void = () => {};
   let error: (error: Error) => void = () => {};
   let level: (level: number) => void = () => {};
+  let levelUnavailable: () => void = () => {};
   const provider: VoiceProvider = {
     type: 'custom', connect: vi.fn(async () => {}), disconnect: vi.fn(async () => {}),
     startListening: vi.fn(async () => {}), stopListening: vi.fn(async () => { status('processing'); }),
     onResult: (callback) => { result = callback; }, onError: (callback) => { error = callback; },
+    onLevelUnavailable: (callback) => { levelUnavailable = callback; },
     onStatusChange: (callback) => { status = callback; }, onLevel: (callback) => { level = callback; },
   };
-  return { provider, result: (text: string, isFinal = true) => result({ text, isFinal, provider: 'custom' }), status: (value: VoiceStatus) => status(value), error: (message: string) => error(new Error(message)), level: (value: number) => level(value) };
+  return { provider, result: (text: string, isFinal = true) => result({ text, isFinal, provider: 'custom' }), status: (value: VoiceStatus) => status(value), error: (message: string) => error(new Error(message)), level: (value: number) => level(value), levelUnavailable: () => levelUnavailable() };
 }
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const setup = () => {
@@ -41,8 +43,9 @@ describe('independent dictation lifecycle', () => {
     expect(controller.send()).toBe(false);
   });
 
-  it('keeps review editable without an automatic send', async () => {
+  it('keeps review editable without an automatic send for providers without measurement availability events', async () => {
     const mock = mockProvider();
+    delete mock.provider.onLevelUnavailable;
     const { controller, onSend } = setup();
     controller.start({ type: 'custom', custom: mock.provider }, { autoSend: false });
     await flush();
@@ -64,6 +67,9 @@ describe('independent dictation lifecycle', () => {
     first.result('cancelled');
     controller.start({ type: 'custom', custom: second.provider }, { autoSend: false });
     await flush();
+    second.level(0.6);
+    first.levelUnavailable();
+    expect(controller.getState().audioLevel).toBe(0.6);
     first.result('old recording'); first.error('late error'); first.status('idle');
     expect(controller.getState().phase).toBe('recording');
     controller.destroy();
@@ -97,6 +103,28 @@ describe('independent dictation lifecycle', () => {
     await flush(); controller.cancel(); connect(); await flush();
     expect(mock.provider.startListening).not.toHaveBeenCalled();
     expect(mock.provider.disconnect).toHaveBeenCalled();
+  });
+
+  it('clears unavailable measurements without ending transcription and preserves measured silence', async () => {
+    const mock = mockProvider();
+    const { controller, onState, onReview } = setup();
+    controller.start({ type: 'custom', custom: mock.provider }, { autoSend: false });
+    await flush();
+    mock.level(0.7);
+    mock.level(0);
+    expect(controller.getState().audioLevel).toBe(0);
+    mock.levelUnavailable();
+    expect(controller.getState()).toMatchObject({ phase: 'recording', audioLevel: null });
+    expect(onState).toHaveBeenLastCalledWith(controller.getState(), true);
+    expect(mock.provider.stopListening).not.toHaveBeenCalled();
+    expect(mock.provider.disconnect).not.toHaveBeenCalled();
+    mock.result('Still transcribing', false);
+    expect(controller.getState().interimTranscript).toBe('Still transcribing');
+    controller.finish();
+    mock.levelUnavailable();
+    expect(controller.getState().phase).toBe('processing');
+    mock.result('Finished transcription');
+    expect(onReview).toHaveBeenCalledExactlyOnceWith('Finished transcription');
   });
 
   it('reports errors without committing draft text, and keeps levels instance-local', async () => {

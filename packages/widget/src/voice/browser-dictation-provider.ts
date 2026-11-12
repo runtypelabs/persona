@@ -47,6 +47,7 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
   let onError: (error: Error) => void = () => {}
   let onStatus: (status: VoiceStatus) => void = () => {}
   let onLevel: (level: number) => void = () => {}
+  let onLevelUnavailable: () => void = () => {}
 
   const clearPause = () => { clearTimeout(pauseTimer); pauseTimer = undefined }
   const releaseAudio = () => {
@@ -68,7 +69,7 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
     if (closed || !capturing || !stream) return
     releaseAudio()
     measuredLevel = undefined
-    onLevel(0)
+    onLevelUnavailable()
   }
   const disconnect = async () => {
     if (closed) return
@@ -195,5 +196,6 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
     onError: (callback) => { onError = callback },
     onStatusChange: (callback) => { onStatus = callback },
     onLevel: (callback) => { onLevel = callback },
+    onLevelUnavailable: (callback) => { onLevelUnavailable = callback },
   }
 }

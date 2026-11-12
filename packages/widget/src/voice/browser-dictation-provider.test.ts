@@ -43,15 +43,16 @@ function setup(pauseDuration = 2000, measureAudioLevel = true) {
   const getUserMedia = vi.fn(() => permission.promise)
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
   const provider = createBrowserDictationProvider(undefined, pauseDuration, measureAudioLevel)
-  const result = vi.fn(), error = vi.fn(), status = vi.fn(), level = vi.fn()
+  const result = vi.fn(), error = vi.fn(), status = vi.fn(), level = vi.fn(), levelUnavailable = vi.fn()
   provider.onResult(result)
   provider.onError(error)
   provider.onStatusChange(status)
   provider.onLevel?.(level)
+  provider.onLevelUnavailable?.(levelUnavailable)
   const flush = async () => { await Promise.resolve(); await Promise.resolve() }
   const ready = async () => { permission.resolve(stream); await flush(); resume.resolve(); await flush() }
   const transcript = () => recognition.onresult?.({ results: [{ 0: { transcript: 'Hello there' } }] })
-  return { provider, track, recognition, audio, meter, source, permission, resume, stream, stopTrack, root, result, error, status, level, ready, flush, transcript, getUserMedia }
+  return { provider, track, recognition, audio, meter, source, permission, resume, stream, stopTrack, root, result, error, status, level, levelUnavailable, ready, flush, transcript, getUserMedia }
 }
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
@@ -227,6 +228,7 @@ it('softens measured level decay without inventing amplitude during silence', as
   expect(h.level).toHaveBeenLastCalledWith(expect.closeTo(0.32))
   await vi.advanceTimersByTimeAsync(1500)
   expect(h.level).toHaveBeenLastCalledWith(0)
+  expect(h.levelUnavailable).not.toHaveBeenCalled()
   await h.provider.disconnect()
 })
 
@@ -332,7 +334,8 @@ it.each(['sampling', 'resume'] as const)('releases an externally ended meter tra
   await h.flush()
   if (phase === 'sampling') { h.resume.resolve(); await h.flush(); await vi.advanceTimersByTimeAsync(50) }
   h.track.dispatchEvent(new Event('ended'))
-  expect(h.level).toHaveBeenLastCalledWith(0)
+  expect(h.levelUnavailable).toHaveBeenCalledOnce()
+  expect(h.level.mock.calls.every(([value]) => value > 0)).toBe(true)
   expect(h.stopTrack).toHaveBeenCalledOnce()
   expect(h.audio.close).toHaveBeenCalledOnce()
   expect(h.source.disconnect).toHaveBeenCalledOnce()
@@ -344,6 +347,7 @@ it.each(['sampling', 'resume'] as const)('releases an externally ended meter tra
   expect(h.meter.getFloatTimeDomainData).toHaveBeenCalledTimes(sampleCount)
   expect(h.recognition.stop).not.toHaveBeenCalled()
   expect(h.recognition.abort).not.toHaveBeenCalled()
+  expect(h.status).not.toHaveBeenCalled()
   h.transcript()
   await h.provider.stopListening()
   h.recognition.onend?.()
@@ -359,6 +363,7 @@ it('removes track end handlers before intentionally stopping the meter', async (
   h.stopTrack.mockImplementation(() => h.track.dispatchEvent(new Event('ended')))
   await h.provider.stopListening()
   expect(h.level).not.toHaveBeenCalled()
+  expect(h.levelUnavailable).not.toHaveBeenCalled()
   expect(h.stopTrack).toHaveBeenCalledOnce()
   h.recognition.onend?.()
 })
@@ -369,7 +374,8 @@ it('rejects an already ended acquired meter track before creating audio resource
   h.track.readyState = 'ended'
   h.permission.resolve(h.stream)
   await h.flush()
-  expect(h.level).toHaveBeenLastCalledWith(0)
+  expect(h.levelUnavailable).toHaveBeenCalledOnce()
+  expect(h.level).not.toHaveBeenCalled()
   expect(h.audio.createAnalyser).not.toHaveBeenCalled()
   expect(h.stopTrack).toHaveBeenCalledOnce()
   h.transcript()
@@ -386,6 +392,7 @@ it('does not report meter unavailability twice if resume rejects after its track
   h.track.dispatchEvent(new Event('ended'))
   h.resume.reject(new Error('Audio context closed'))
   await h.flush()
+  expect(h.levelUnavailable).toHaveBeenCalledOnce()
   expect(h.stopTrack).toHaveBeenCalledOnce()
   expect(h.audio.close).toHaveBeenCalledOnce()
   await h.provider.disconnect()
