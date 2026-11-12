@@ -1,0 +1,53 @@
+{
+  "runId": "20261112-101320-d711a4",
+  "entries": [
+    {
+      "feature": "voice-browser",
+      "label": "resumed speech missing end",
+      "note": null,
+      "files": [
+        "01-voice-browser-resumed-speech-missing-end.gif",
+        "01-voice-browser-resumed-speech-missing-end.webm",
+        "01-voice-browser-resumed-speech-missing-end.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22voiceRecognition%22%3A%7B%22enabled%22%3Atrue%2C%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A4000%2C%22dictation%22%3A%7B%22display%22%3A%22transcript%22%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-12T10:16:31.179Z",
+      "head": "7e4d8a18ff598bf58027db140ac0318741545f5b",
+      "diffHash": "5c005c3d5c18"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "automatic review after missing speechend",
+      "note": "Real analyser over synthesized mic stream; omitted resumed speechend; no sends",
+      "files": [
+        "02-voice-browser-automatic-review-after-missing-speechend.png",
+        "02-voice-browser-automatic-review-after-missing-speechend.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22voiceRecognition%22%3A%7B%22enabled%22%3Atrue%2C%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A4000%2C%22dictation%22%3A%7B%22display%22%3A%22transcript%22%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-12T10:16:31.274Z",
+      "head": "7e4d8a18ff598bf58027db140ac0318741545f5b",
+      "diffHash": "5c005c3d5c18"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "silence fallback review",
+      "note": "0 request(s) crossed the network boundary, 15 controller event(s)",
+      "files": [
+        "03-voice-browser-silence-fallback-review.page.json",
+        "03-voice-browser-silence-fallback-review.voice.json"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22voiceRecognition%22%3A%7B%22enabled%22%3Atrue%2C%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A4000%2C%22dictation%22%3A%7B%22display%22%3A%22transcript%22%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-12T10:16:31.342Z",
+      "head": "7e4d8a18ff598bf58027db140ac0318741545f5b",
+      "diffHash": "5c005c3d5c18"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "voice-browser",
+      "pass": true,
+      "skipped": false,
+      "note": "Dictation mic UI remained recording during six seconds of sound without transcript changes; missing resumed speechend completed after4059ms silence, preserving late correction in editable review with zero requests. Scripted recognition and synthesized mic; real MediaStream/AudioContext/analyser. Read-aloud and legacy voice entry not exercised."
+    }
+  ]
+}

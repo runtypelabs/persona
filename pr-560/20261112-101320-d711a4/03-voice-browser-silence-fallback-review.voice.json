@@ -1,0 +1,43 @@
+{
+  "marks": {},
+  "latenciesMs": {},
+  "utterances": [],
+  "sockets": [],
+  "outputTracks": [],
+  "timeline": [
+    {
+      "at": 123,
+      "type": "mic",
+      "detail": {
+        "state": "idle | Start voice recognition"
+      }
+    },
+    {
+      "at": 107720,
+      "type": "tts:cancel"
+    },
+    {
+      "at": 107725,
+      "type": "recognition:start",
+      "detail": {
+        "scenario": "missing-second-speechend"
+      }
+    },
+    {
+      "at": 108725,
+      "type": "proof:first-silence"
+    },
+    {
+      "at": 110226,
+      "type": "proof:resumed-speech"
+    },
+    {
+      "at": 116225,
+      "type": "proof:second-silence-no-speechend"
+    },
+    {
+      "at": 120285,
+      "type": "recognition:end"
+    }
+  ]
+}

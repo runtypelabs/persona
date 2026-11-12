@@ -1,0 +1,173 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": "browser",
+  "requests": [],
+  "events": [
+    {
+      "at": 107629,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1794478534644
+      }
+    },
+    {
+      "at": 107735.5999994278,
+      "type": "dictation:state",
+      "detail": {
+        "phase": "recording",
+        "recordingId": 1,
+        "transcript": "",
+        "interimTranscript": "",
+        "error": null,
+        "instanceId": "verify-host",
+        "timestamp": 1794478534648
+      }
+    },
+    {
+      "at": 107633,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1794478534648
+      }
+    },
+    {
+      "at": 107736.5,
+      "type": "dictation:state",
+      "detail": {
+        "phase": "recording",
+        "recordingId": 1,
+        "transcript": "",
+        "interimTranscript": "Hello there",
+        "error": null,
+        "instanceId": "verify-host",
+        "timestamp": 1794478534649
+      }
+    },
+    {
+      "at": 107634,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1794478534649
+      }
+    },
+    {
+      "at": 110238,
+      "type": "dictation:state",
+      "detail": {
+        "phase": "recording",
+        "recordingId": 1,
+        "transcript": "",
+        "interimTranscript": "Hello there again",
+        "error": null,
+        "instanceId": "verify-host",
+        "timestamp": 1794478537150
+      }
+    },
+    {
+      "at": 110135,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1794478537151
+      }
+    },
+    {
+      "at": 120289.29999923706,
+      "type": "dictation:state",
+      "detail": {
+        "phase": "processing",
+        "recordingId": 1,
+        "transcript": "",
+        "interimTranscript": "Hello there again",
+        "error": null,
+        "instanceId": "verify-host",
+        "timestamp": 1794478547202
+      }
+    },
+    {
+      "at": 120190,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1794478547205
+      }
+    },
+    {
+      "at": 120296.0999994278,
+      "type": "dictation:state",
+      "detail": {
+        "phase": "processing",
+        "recordingId": 1,
+        "transcript": "",
+        "interimTranscript": "Hello there, again.",
+        "error": null,
+        "instanceId": "verify-host",
+        "timestamp": 1794478547209
+      }
+    },
+    {
+      "at": 120193,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1794478547209
+      }
+    },
+    {
+      "at": 120306.69999980927,
+      "type": "dictation:state",
+      "detail": {
+        "phase": "processing",
+        "recordingId": 1,
+        "transcript": "Hello there, again.",
+        "interimTranscript": "",
+        "error": null,
+        "instanceId": "verify-host",
+        "timestamp": 1794478547219
+      }
+    },
+    {
+      "at": 120204,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1794478547219
+      }
+    },
+    {
+      "at": 120311.69999980927,
+      "type": "dictation:state",
+      "detail": {
+        "phase": "review",
+        "recordingId": 1,
+        "transcript": "Hello there, again.",
+        "interimTranscript": "",
+        "error": null,
+        "instanceId": "verify-host",
+        "timestamp": 1794478547224
+      }
+    },
+    {
+      "at": 120209,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1794478547224
+      }
+    }
+  ]
+}
