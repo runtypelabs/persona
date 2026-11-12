@@ -69,8 +69,8 @@ export function createDictationRenderer(initial: DictationRenderContext, { rende
     if (state.phase !== previous.phase || state.error !== previous.error || !status.textContent) {
       status.textContent = state.phase === 'recording' ? 'Listening…' : state.phase === 'processing' ? 'Transcribing…' : state.error ?? '';
     }
-    finalText.textContent = state.transcript;
-    interimText.textContent = state.interimTranscript;
+    if (finalText.textContent !== state.transcript) finalText.textContent = state.transcript;
+    if (interimText.textContent !== state.interimTranscript) interimText.textContent = state.interimTranscript;
     interimText.style.fontStyle = config.interimText?.fontStyle ?? 'italic';
     interimText.style.color = config.interimText?.color ?? 'var(--persona-input-placeholder, var(--persona-text-muted, #71717a))';
     status.style.fontStyle = state.phase === 'recording' && !waveformOnly ? config.interimText?.fontStyle ?? 'italic' : 'normal';

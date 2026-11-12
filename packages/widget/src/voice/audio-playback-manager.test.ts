@@ -92,6 +92,20 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
     expect(seen.at(-1)).toMatchObject({ reason: "drained", queuedAudioMs: 0 });
   });
 
+  it("reports zero scheduled audio when the final source ends before the clock reaches its end time", () => {
+    const player = new AudioPlaybackManager();
+    const seen: VoicePlaybackMetrics[] = [];
+    player.onPlaybackMetrics((metrics) => seen.push(metrics));
+    player.enqueue(pcm(2400));
+    player.enqueue(pcm(2400));
+    const ctx = MockAudioContext.instances[0];
+    ctx.currentTime = 0.1;
+    ctx.sources[0].onended?.();
+    ctx.currentTime = (4800 - 64) / 24_000;
+    ctx.sources[1].onended?.();
+    expect(seen.at(-1)).toMatchObject({ reason: "drained", queuedAudioMs: 0 });
+  });
+
   it("counts one underrun per refill and measures from the first late chunk to release", () => {
     let now = 0;
     vi.spyOn(performance, "now").mockImplementation(() => now);

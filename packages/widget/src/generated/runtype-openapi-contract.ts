@@ -538,6 +538,11 @@ export type RuntypeExecutionStreamEvent = ({
   parameters?: Record<string, unknown>;
   seq: number;
   stepId?: string;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   toolCallId?: string;
   toolId?: string;
   toolName?: string;

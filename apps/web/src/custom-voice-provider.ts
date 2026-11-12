@@ -138,7 +138,7 @@ class WebSpeechVoiceProvider implements VoiceProvider {
   // Level capture: a second, analysis-only stream. Web Speech gives us no
   // access to its own audio, so amplitude has to come from somewhere else.
   private readonly reportLevel: boolean;
-  private readonly onLevelUnavailable?: (reason: string) => void;
+  private readonly reportLevelUnavailable?: (reason: string) => void;
   private levelStream: MediaStream | null = null;
   private levelContext: AudioContext | null = null;
   private levelSource: MediaStreamAudioSourceNode | null = null;
@@ -149,7 +149,7 @@ class WebSpeechVoiceProvider implements VoiceProvider {
   constructor(options: WebSpeechVoiceProviderOptions = {}) {
     this.language = options.language ?? "en-US";
     this.reportLevel = options.reportLevel ?? true;
-    this.onLevelUnavailable = options.onLevelUnavailable;
+    this.reportLevelUnavailable = options.onLevelUnavailable;
   }
 
   /**
@@ -172,7 +172,7 @@ class WebSpeechVoiceProvider implements VoiceProvider {
             .webkitAudioContext)
         : undefined;
     if (!navigator?.mediaDevices?.getUserMedia || !AudioCtor) {
-      this.onLevelUnavailable?.("this browser exposes no microphone capture API");
+      this.reportLevelUnavailable?.("this browser exposes no microphone capture API");
       return;
     }
 
@@ -204,7 +204,7 @@ class WebSpeechVoiceProvider implements VoiceProvider {
         error instanceof Error && error.name === "NotAllowedError"
           ? "microphone permission was denied for level capture"
           : `level capture failed to start (${(error as Error)?.name ?? "unknown error"})`;
-      this.onLevelUnavailable?.(reason);
+      this.reportLevelUnavailable?.(reason);
     }
   }
 

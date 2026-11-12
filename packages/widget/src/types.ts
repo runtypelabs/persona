@@ -5755,6 +5755,9 @@ export interface VoiceProvider {
    */
   onLevel?(callback: (level: number) => void): void;
 
+  /** Register for unavailable capture measurements. Speech recognition may remain active. */
+  onLevelUnavailable?(callback: () => void): void;
+
   /** Returns the current interruption mode (only meaningful for Runtype provider) */
   getInterruptionMode?(): "none" | "cancel" | "barge-in";
 

@@ -49,3 +49,41 @@ describe('dictation renderer', () => {
     view.destroy!();
   });
 });
+
+it('preserves transcript text nodes across level-only updates and still applies config and phase changes', () => {
+  const ctx = context();
+  const view = createDictationRenderer(ctx, { renderLucideIcon, attachTooltip });
+  const interim = view.element.querySelector<HTMLElement>('[data-persona-dictation-interim]')!;
+  const text = interim.firstChild;
+  const observer = new MutationObserver(() => {});
+  observer.observe(interim, { subtree: true, childList: true, characterData: true });
+  view.update!({ ...ctx, state: { ...ctx.state, audioLevel: 0.5 } });
+  view.update!({ ...ctx, state: { ...ctx.state, audioLevel: 0.5 } });
+  expect(interim.firstChild).toBe(text);
+  expect(observer.takeRecords()).toHaveLength(0);
+  view.update!({ ...ctx, config: { voiceRecognition: { dictation: { display: 'waveform', showCancel: false } } }, state: { ...ctx.state, audioLevel: 0.5 } });
+  expect(view.element.querySelector<HTMLElement>('[data-persona-dictation-transcript]')!.hidden).toBe(true);
+  expect(view.element.querySelector<HTMLButtonElement>('[data-persona-dictation-action="cancel"]')!.hidden).toBe(true);
+  view.update!({ ...ctx, state: { ...ctx.state, phase: 'processing' } });
+  expect(view.element.querySelector('[role="status"]')!.textContent).toBe('Transcribing…');
+  observer.disconnect();
+  view.destroy!();
+});
+
+
+it('restores the listening fallback when waveform measurement becomes unavailable', () => {
+  const ctx = context();
+  ctx.config.voiceRecognition!.dictation!.display = 'waveform';
+  const view = createDictationRenderer(ctx, { renderLucideIcon, attachTooltip });
+  const waveform = view.element.querySelector<HTMLElement>('[data-persona-dictation-waveform]')!;
+  const status = view.element.querySelector<HTMLElement>('[role="status"]')!;
+  view.update!({ ...ctx, state: { ...ctx.state, audioLevel: 0 } });
+  expect(waveform.hidden).toBe(false);
+  expect(status.className).toBe('persona-sr-only');
+  view.update!(ctx);
+  expect(waveform.hidden).toBe(true);
+  expect(status.textContent).toBe('Listening…');
+  expect(status.className).toBe('');
+  expect(view.element.dataset.phase).toBe('recording');
+  view.destroy!();
+});

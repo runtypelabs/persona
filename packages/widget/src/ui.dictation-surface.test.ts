@@ -11,14 +11,16 @@ const controllers: ReturnType<typeof createAgentExperience>[] = [];
 function mockProvider() {
   let result: (value: VoiceResult) => void = () => {};
   let level: (value: number) => void = () => {};
+  let levelUnavailable: () => void = () => {};
   let status: (value: VoiceStatus) => void = () => {};
   const provider: VoiceProvider = {
     type: 'custom', connect: vi.fn(async () => {}), disconnect: vi.fn(async () => {}),
     startListening: vi.fn(async () => { status('listening'); }), stopListening: vi.fn(async () => { status('processing'); }),
     onResult: (callback) => { result = callback; }, onLevel: (callback) => { level = callback; },
+    onLevelUnavailable: (callback) => { levelUnavailable = callback; },
     onStatusChange: (callback) => { status = callback; }, onError: () => {},
   };
-  return { provider, result: (text: string, isFinal = true) => result({ text, isFinal, provider: 'custom' }), level: (value: number) => level(value) };
+  return { provider, result: (text: string, isFinal = true) => result({ text, isFinal, provider: 'custom' }), level: (value: number) => level(value), levelUnavailable: () => levelUnavailable() };
 }
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const settle = async () => { await new Promise((resolve) => setTimeout(resolve, 0)); await flush(); };
@@ -173,6 +175,61 @@ describe('dictation surface', () => {
     expect(destroy).toHaveBeenCalledTimes(1);
   });
 
+  it('restores the waveform listening label through level-only updates without stopping dictation', async () => {
+    const { controller, mount, input, mock } = setup();
+    controller.update({ voiceRecognition: { dictation: { display: 'waveform' } } });
+    mount.querySelector<HTMLButtonElement>('[data-persona-composer-mic]')!.click();
+    await settle();
+    const surface = mount.querySelector<HTMLElement>('[data-persona-dictation]')!;
+    const waveform = surface.querySelector<HTMLElement>('[data-persona-dictation-waveform]')!;
+    const status = surface.querySelector<HTMLElement>('[role="status"]')!;
+    const events = vi.fn(); controller.on('dictation:state', events);
+    mock.level(0);
+    expect(waveform.hidden).toBe(false);
+    expect(status.className).toBe('persona-sr-only');
+    mock.levelUnavailable();
+    expect(controller.getDictationState()).toMatchObject({ phase: 'recording', audioLevel: null });
+    expect(waveform.hidden).toBe(true);
+    expect(status.textContent).toBe('Listening…');
+    expect(status.className).toBe('');
+    expect(events).not.toHaveBeenCalled();
+    expect(mock.provider.stopListening).not.toHaveBeenCalled();
+    expect(mock.provider.disconnect).not.toHaveBeenCalled();
+    mock.result('Dictation still works', false);
+    mount.querySelector<HTMLButtonElement>('[data-persona-dictation-action="finish"]')!.click();
+    await flush();
+    mock.result('Dictation still works');
+    expect(input.value).toBe('Dictation still works');
+    expect(controller.getDictationState().phase).toBe('review');
+  });
+
+  it.each(['transcript', 'inline'] as const)('keeps %s composer controls and draft unchanged on level samples', async (display) => {
+    const { controller, mount, input, mock } = setup();
+    controller.update({ voiceRecognition: { dictation: { display, waveform: true } } });
+    controller.setMessage('draft');
+    controller.startDictation(); await settle();
+    mock.result('spoken words', false);
+    const form = mount.querySelector<HTMLElement>('[data-persona-composer-form]')!;
+    const surface = mount.querySelector<HTMLElement>('[data-persona-dictation]')!;
+    const controls = Array.from(form.children).filter((node) => node !== surface);
+    const observers = controls.map((node) => {
+      const observer = new MutationObserver(() => {});
+      observer.observe(node, { attributes: true, subtree: true, childList: true, characterData: true });
+      return observer;
+    });
+    const valueSetter = vi.spyOn(input, 'value', 'set');
+    mock.level(0.5); mock.level(0.5); mock.level(0.2);
+    expect(valueSetter).not.toHaveBeenCalled();
+    expect(observers.flatMap((observer) => observer.takeRecords())).toHaveLength(0);
+    observers.forEach((observer) => observer.disconnect());
+    controller.update({ voiceRecognition: { dictation: { display: 'waveform', showFinish: false } } });
+    expect(surface.dataset.display).toBe('waveform');
+    expect(surface.querySelector<HTMLButtonElement>('[data-persona-dictation-action="finish"]')!.hidden).toBe(true);
+    controller.cancelDictation();
+    expect(input.value).toBe('draft');
+    expect(input.readOnly).toBe(false);
+  });
+
   it('blocks programmatic sends while capture owns the draft and supports Escape cancel', async () => {
     const { controller, input, mount, mock } = setup();
     controller.setMessage('draft'); controller.startDictation(); await settle(); mock.result('interim', false);
@@ -242,6 +299,37 @@ describe('dictation surface', () => {
     late?.({ results: [{ 0: { transcript: 'late words' }, isFinal: true }] });
     expect(input.value).toBe('draft spoken words');
     delete (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition;
+  });
+
+  it.each([false, true])('restores an editable draft after page navigation and permits another browser recording (cached=%s)', async (persisted) => {
+    const recognizers: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; abort: ReturnType<typeof vi.fn> }[] = [];
+    class FakeRecognition {
+      start = vi.fn(); stop = vi.fn(); abort = vi.fn();
+      constructor() { recognizers.push(this); }
+    }
+    Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: FakeRecognition });
+    try {
+      const { controller, input } = setup({ voiceRecognition: { enabled: true, dictation: { display: 'inline' } } });
+      controller.setMessage('original draft');
+      controller.startDictation();
+      await vi.waitFor(() => expect(recognizers[0]?.start).toHaveBeenCalledOnce());
+      const recognition = recognizers[0] as typeof recognizers[number] & { onresult: (event: unknown) => void };
+      recognition.onresult({ results: [{ 0: { transcript: 'unsubmitted speech' } }] });
+      expect(input.value).toBe('original draft unsubmitted speech');
+      window.dispatchEvent(Object.assign(new Event('pagehide'), { persisted }));
+      expect(controller.getDictationState().phase).toBe('idle');
+      window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted }));
+      expect(input.value).toBe('original draft');
+      expect(input.readOnly).toBe(false);
+      expect(controller.getMessages()).toHaveLength(0);
+      expect(controller.startDictation()).toBe(true);
+      await vi.waitFor(() => expect(recognizers[1]?.start).toHaveBeenCalledOnce());
+      expect(controller.getDictationState().phase).toBe('recording');
+      controller.cancelDictation();
+      expect(input.readOnly).toBe(false);
+    } finally {
+      delete (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition;
+    }
   });
 
   it('retains realtime conversation controls when dictation falls back to browser speech', () => {

@@ -1,6 +1,6 @@
 # Bundle sizes and loading boundaries
 
-The size checks retain the existing limits. `packages/widget/.size-limit.json`
+`packages/widget/.size-limit.json`
 measures gzip in decimal kB; `scripts/check-size.mjs` measures Brotli quality 11
 in binary KiB. The original Brotli ceilings are 131 KiB for the CDN widget,
 20 KiB for its stylesheet, and less than 20 KiB for the deferred launcher.
@@ -36,7 +36,7 @@ Each new chunk has an explicit gzip budget in the same size-limit file.
 | `activity-ui.js` | 12.25 | Before reveal when tool/reasoning messages or whole-turn activity are enabled |
 | `turn-activity-ui.js` | 2.37 | Before reveal only for `turnActivity.enabled`; 2.5 kB gzip budget |
 | `loading-label-runtime.js` | 2.70 | Before reveal for animated waiting labels, enabled tool/reasoning/turn UI, or artifact UI; 2.75 kB gzip budget |
-| `dictation-runtime.js` | 4.66 | Before reveal when voice recognition is enabled |
+| `dictation-runtime.js` | 5.70 | Before reveal when voice recognition is enabled |
 | `client-dispatch.js` | 5.28 | The CDN client initializes a session, sends a message, or submits feedback |
 | `config-diagnostics.js` | 1.60 | Debug migration diagnostics are enabled |
 | `background-runtime.js` | 0.67 | Background conversation work is enabled |
@@ -44,6 +44,15 @@ Each new chunk has an explicit gzip budget in the same size-limit file.
 
 The activity chunk owns per-widget disclosure timers, grouped rendering, and the `expansion.animation: "height"` implementation (the V5 default at 160ms/ease-out; opt-in for V4). Disclosure motion stays out of the core and the shared loading-label chunk. The activity entry uses safe Terser function hoisting while retaining repeated expressions and separate statements for better gzip compression. It measures 12,250 bytes gzip, meeting its unchanged 12,250-byte ceiling. Its transcript-owned overflow controller refreshes current scroll bodies after streaming renders, observes their size changes, delegates scroll events, and disconnects observations on replacement and widget destruction. Shared preview normalization, duration formatting, and legacy tool-section builders avoid duplicated rendering work.
 The stream parser is 10,496 bytes gzip under its unchanged 10,500-byte ceiling. Phase support shares existing text parsing and block bookkeeping; disabling conditional folding in its safe minification pass preserves compression. The opt-in turn view is 2,369 bytes gzip / 2,102 bytes Brotli.
+
+Browser dictation now handles transcript revisions and speech pauses independently
+of voice calls. Its optional meter releases microphone tracks and `AudioContext`
+resources when capture ends or the page navigates. With the same tsdown configuration and toolchain, the chunk
+grows from 4,674 bytes gzip at `bfcc0102` to 5,704 bytes, an increase of 1,030 bytes.
+Brotli grows from 4,174 to 5,099 bytes. An extra safe minification pass saves
+38 bytes gzip. The dictation gzip ceiling is 5.75 kB, leaving 46 bytes of headroom.
+Other chunk ceilings are unchanged. Reproduce the current measurement with
+`pnpm build:widget` and `pnpm --filter @runtypelabs/persona size`.
 
 The shared loading-label module owns builtin effects, configuration resolution,
 and custom-hook lifecycle factories. With tools, reasoning, and artifacts disabled,

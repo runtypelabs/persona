@@ -328,7 +328,8 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     const now = performance.now();
     if (reason === "queue" && now - this.#lastMetricsAt < 250) return;
     this.#lastMetricsAt = now;
-    const scheduledMs = this.#ctx ? Math.max(0, this.#nextStartTime - this.#ctx.currentTime) * 1000 : 0;
+    const scheduledMs = this.#ctx && this.#pendingCount > 0
+      ? Math.max(0, this.#nextStartTime - this.#ctx.currentTime) * 1000 : 0;
     const metrics: VoicePlaybackMetrics = {
       reason,
       queuedAudioMs: scheduledMs + this.#pendingSamples / this.#sampleRate * 1000,
