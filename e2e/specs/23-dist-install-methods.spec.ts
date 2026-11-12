@@ -9,7 +9,8 @@ import { textTurnStream } from "../fixtures/fake-history-api";
  *
  * Covers what Node/jsdom can't: classic-script evaluation of the IIFEs, the
  * installer's sibling-URL derivation from its own `src`, the deferred launcher
- * (`launcher.global.js` → first click → `index.global.js`), and the lazy ESM
+ * (`launcher.global.js` → first click → `index.global.js`), the launcher's
+ * embedded critical styles and the pre-click warm-up, and the lazy ESM
  * sibling chunks (`icons-extra.js`, `markdown-parsers.js`, `client-stream.js`)
  * that `index.global.js` / `launcher.global.js` `import()` by URL. Each scenario
  * ends with a streamed reply so the dispatch path's chunks actually execute.
@@ -330,6 +331,11 @@ test("a failed renderer keeps the launcher and retries without an incomplete pan
   let fail!: () => void;
   const failure = new Promise<void>(resolve => { fail = resolve; });
   await page.route("**/dist/activity-ui.js*", async route => {
+    // The idle warm-up's prefetch is speculative and never reaches the widget;
+    // the scenario is the renderer failing when the open actually imports it.
+    if (route.request().headers()["sec-purpose"]?.includes("prefetch")) {
+      return route.fulfill({ contentType: "text/javascript", body: readFileSync(join(DIST, "activity-ui.js")) });
+    }
     attempts++;
     if (attempts === 1) {
       await failure;
@@ -434,15 +440,16 @@ for (const variant of ["siteAgentConfig", "data-config attribute"] as const) {
     // Critical launcher painted from the tiny bundle; the full widget has not run.
     await expect(page.locator(sel.launcherButton).first()).toBeVisible();
     expect(h.requested).toContain("/dist/launcher.global.js");
-    expect(h.requested).toContain("/dist/widget.css");
     expect(await hasGlobal(page, "AgentWidgetLauncher")).toBe(true);
     expect(await hasGlobal(page, "AgentWidget")).toBe(false);
     await expect
       .poll(async () => (await events(page)).find((e) => e.name === "persona:launcher-shown"))
       .toEqual({ name: "persona:launcher-shown", deferred: true });
 
-    // The extra-tier icon arrives from the launcher's sibling chunk.
+    // The extra-tier icon arrives from the launcher's sibling chunk, and the
+    // full stylesheet with the idle warm-up rather than ahead of the launcher.
     await expect.poll(() => h.requested.includes("/dist/icons-extra.js")).toBe(true);
+    await expect.poll(() => h.requested.includes("/dist/widget.css")).toBe(true);
     await expect(page.locator(`${sel.launcherSurface} svg`).first()).toBeAttached();
 
     // First click hands off to the full widget and opens the panel.
@@ -459,6 +466,206 @@ for (const variant of ["siteAgentConfig", "data-config attribute"] as const) {
     expectClean(h);
   });
 }
+
+/**
+ * The launcher bundle embeds the part of widget.css its own markup matches, so
+ * the installer paints it without the stylesheet. That is only invisible if the
+ * embedded rules are complete: these scenarios hold widget.css back, capture
+ * the launcher, then let the stylesheet land and require that nothing changed.
+ */
+const LAUNCHER_SHAPES: Array<[name: string, config: Record<string, unknown>]> = [
+  ["pill (V4 default)", {}],
+  ["circle (V5 default)", { future: { v5Defaults: true } }],
+  ["teaser", { launcher: { teaser: { text: "Need a hand choosing?", delayMs: 0, frequency: "always" } } }],
+  ["circle teaser, top-left", { future: { v5Defaults: true },
+    launcher: { position: "top-left", teaser: { text: "Ask me anything", delayMs: 0, frequency: "always" } } }],
+  ["custom copy, icons and position", { launcher: { position: "bottom-left", title: "Ask the docs",
+    subtitle: "Usually replies in a minute", agentIconName: "sparkles", callToActionIconName: "arrow-up-right",
+    agentIconBackgroundColor: "#7c3aed", border: "2px solid #7c3aed", shadow: "0 8px 24px rgba(0,0,0,.3)" } }],
+  ["icon only", { launcher: { textHidden: true, callToActionIconHidden: true, position: "top-right" } }],
+  ["dark scheme with a brand", { colorScheme: "dark", brand: { accent: "#f97316", neutral: "#1c1917" } }],
+];
+
+/** Every computed property and box of the launcher subtree, pseudo-elements included. */
+const launcherStyles = (page: Page) =>
+  page.evaluate(() => {
+    const root = document.querySelector("[data-persona-launcher-critical]")!;
+    const read = (el: Element, pseudo?: string) => {
+      const style = getComputedStyle(el, pseudo);
+      const out: Record<string, string> = {};
+      for (let i = 0; i < style.length; i++) out[style[i]] = style.getPropertyValue(style[i]);
+      return out;
+    };
+    return [root, ...root.querySelectorAll("*")].map((el) => {
+      const box = el.getBoundingClientRect();
+      return {
+        el: `${el.tagName}.${el.getAttribute("class") ?? ""}[${el.getAttribute("data-role") ?? ""}]`,
+        box: [box.x, box.y, box.width, box.height],
+        style: read(el), before: read(el, "::before"), after: read(el, "::after"),
+      };
+    });
+  });
+
+const settled = (page: Page) =>
+  page.evaluate(async () => {
+    await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => {})));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+
+test.describe("critical launcher styles", () => {
+  // Each shape takes a dozen full-page captures; one worker at a time keeps
+  // them from starving the timing-sensitive scenarios around them.
+  test.describe.configure({ mode: "serial" });
+  for (const [name, config] of LAUNCHER_SHAPES) launcherStyleScenario(name, config);
+});
+
+function launcherStyleScenario(name: string, config: Record<string, unknown>) {
+  test(`paints without widget.css and is unchanged when it lands: ${name}`, async ({ page }) => {
+    let releaseCss!: () => void;
+    const css = new Promise<void>((resolve) => { releaseCss = resolve; });
+    const h = await serveDist(page, {
+      "/critical.html": page_(`
+        <script>window.siteAgentConfig = ${JSON.stringify({ apiUrl: "/api/chat", config })};</script>
+        <script src="/dist/install.global.js"></script>`),
+    });
+    await page.route("**/dist/widget.css", async (route) => {
+      await css;
+      await route.fulfill({ contentType: "text/css", body: readFileSync(join(DIST, "widget.css")) });
+    });
+    await page.goto(`${ORIGIN}/critical.html`);
+
+    // Painted from the launcher bundle alone: the stylesheet has not arrived.
+    await expect(page.locator(sel.launcherButton).first()).toBeVisible();
+    if ((config.launcher as { teaser?: unknown } | undefined)?.teaser) {
+      await expect(page.locator(".persona-launcher-teaser")).toBeVisible();
+    }
+    await expect(page.locator("style[data-persona-launcher-css]")).toHaveCount(1);
+    const sheetLoaded = () =>
+      page.evaluate(() => Boolean(document.querySelector<HTMLLinkElement>("link[data-persona]")?.sheet));
+    expect(await sheetLoaded()).toBe(false);
+    await settled(page);
+
+    const capture = async () => {
+      const resting = { styles: await launcherStyles(page), pixels: await page.screenshot() };
+      // Hover and keyboard focus pull in the state rules.
+      await page.locator(sel.launcherButton).first().hover();
+      await settled(page);
+      const hovered = { styles: await launcherStyles(page), pixels: await page.screenshot() };
+      // A click on the page resets where sequential focus starts, so Tab lands
+      // on the same control in both captures and matches :focus-visible.
+      await page.mouse.click(1, 1);
+      await page.keyboard.press("Tab");
+      await settled(page);
+      expect(await page.evaluate(() => Boolean(document.activeElement?.closest("[data-persona-launcher-critical]"))),
+        "Tab focuses a launcher control").toBe(true);
+      const focused = { styles: await launcherStyles(page), pixels: await page.screenshot() };
+      await page.mouse.click(1, 1);
+      await settled(page);
+      return { resting, hovered, focused };
+    };
+    // A first pass is discarded: hovering and focusing a teaser changes how it
+    // rests afterwards, so both compared passes must start from that state.
+    await capture();
+    const before = await capture();
+    // The launcher is styled at all: pinned to a corner (the button itself, or
+    // the surface around it when a teaser shares the corner), not in page flow.
+    expect(before.resting.styles.some((entry) => entry.style.position === "fixed")).toBe(true);
+    // And focus is visibly different from rest, so the comparison below means something.
+    expect(before.focused.pixels.equals(before.resting.pixels)).toBe(false);
+
+    releaseCss();
+    await expect.poll(sheetLoaded).toBe(true);
+    await settled(page);
+    const after = await capture();
+
+    for (const state of ["resting", "hovered", "focused"] as const) {
+      expect(after[state].styles, `${state}: computed styles`).toEqual(before[state].styles);
+      expect(after[state].pixels.equals(before[state].pixels), `${state}: pixels`).toBe(true);
+    }
+    expect((await events(page)).filter((e) => e.name === "persona:error")).toEqual([]);
+    expectClean(h);
+  });
+}
+
+test("critical launcher: the embedded rules are dropped once the full widget takes over", async ({ page }) => {
+  const h = await serveDist(page, {
+    "/handoff.html": page_(`
+      <script>window.siteAgentConfig = { apiUrl: "/api/chat", config: {} };</script>
+      <script src="/dist/install.global.js"></script>`),
+  });
+  await page.goto(`${ORIGIN}/handoff.html`);
+  await expect(page.locator(sel.launcherButton).first()).toBeVisible();
+  await expect(page.locator("style[data-persona-launcher-css]")).toHaveCount(1);
+  await page.locator(sel.launcherButton).first().click();
+  await expect(page.locator(sel.panel).first()).toBeVisible();
+  await expect(page.locator("style[data-persona-launcher-css]")).toHaveCount(0);
+  await expect(page.locator(sel.launcherSurface)).toHaveCount(1);
+  await chatRoundTrip(page, h);
+  expectClean(h);
+});
+
+for (const [name, widgetConfig] of [
+  ["default config", {}],
+  ["V5 with artifacts, mentions and turn activity", {
+    future: { v5Defaults: true }, contextMentions: { enabled: true }, turnActivity: { enabled: true },
+  }],
+] as const) {
+  test(`warm-up fetches everything the first open and first turn load: ${name}`, async ({ page }) => {
+    const h = await serveDist(page, {
+      "/warm.html": page_(`
+        <script>window.siteAgentConfig = ${JSON.stringify({ apiUrl: "/api/chat", config: widgetConfig })};</script>
+        <script src="/dist/install.global.js"></script>`),
+    });
+    await page.goto(`${ORIGIN}/warm.html`);
+    await expect(page.locator(sel.launcherButton).first()).toBeVisible();
+    // The idle pass: stylesheet, main bundle and the chunks this config needs.
+    await expect.poll(() => h.requested.includes("/dist/client-stream.js")).toBe(true);
+    await page.waitForLoadState("networkidle");
+    expect(await hasGlobal(page, "AgentWidget"), "warming must not evaluate the widget").toBe(false);
+    const warmed = new Set(h.requested);
+
+    await page.locator(sel.launcherButton).first().click();
+    await expect(page.locator(sel.panel).first()).toBeVisible();
+    await chatRoundTrip(page, h);
+    await page.waitForLoadState("networkidle");
+
+    // Route interception bypasses the HTTP cache, so warmed files are requested
+    // again here; what matters is that the open and the first turn ask for
+    // nothing the warm-up had not already fetched. With a real cache that is
+    // an open without a network round trip.
+    const late = [...new Set(h.requested)].filter((path) => path.startsWith("/dist/") && !warmed.has(path));
+    expect(late, "files first requested after the click").toEqual([]);
+    expectClean(h);
+  });
+}
+
+test("a dropped speculative fetch does not fail the open that follows", async ({ page }) => {
+  const h = await serveDist(page, {
+    "/blip.html": page_(`
+      <script>window.siteAgentConfig = { apiUrl: "/api/chat", config: { persistState: false } };</script>
+      <script src="/dist/install.global.js"></script>`),
+  });
+  // The warm-up's request for one chunk fails; every later one succeeds.
+  let attempts = 0;
+  await page.route("**/dist/activity-ui.js*", async (route) => {
+    attempts++;
+    if (attempts === 1) return route.abort("connectionreset");
+    return route.fulfill({ contentType: "text/javascript", headers: { "access-control-allow-origin": "*" },
+      body: readFileSync(join(DIST, "activity-ui.js")) });
+  });
+  await page.goto(`${ORIGIN}/blip.html`);
+  await expect(page.locator(sel.launcherButton).first()).toBeVisible();
+  await expect.poll(() => attempts).toBe(1);
+  await page.waitForLoadState("networkidle");
+
+  // One click opens the panel: the failed warm-up left nothing behind.
+  await page.locator(sel.launcherButton).first().click();
+  await expect(page.locator(sel.composer).first()).toBeVisible();
+  expect(attempts).toBe(2);
+  expect((await events(page)).filter((e) => e.name === "persona:error")).toEqual([]);
+  expect(h.pageErrors).toEqual([]);
+  await chatRoundTrip(page, h);
+});
 
 test("installer: explicit cssUrl/jsUrl override with a query string still derives sibling URLs", async ({ page }) => {
   const h = await serveDist(page, {

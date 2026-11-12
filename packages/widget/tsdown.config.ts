@@ -2,6 +2,7 @@ import { transform as transformCss } from "lightningcss";
 import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, posix, sep, resolve, dirname } from "node:path";
 import { defineConfig, type UserConfig } from "tsdown";
+import { launcherCriticalCss } from "./scripts/launcher-critical-css.mjs";
 
 /**
  * Widget bundle definitions for Rolldown + Oxc. build-bundles.mjs runs bounded
@@ -256,8 +257,13 @@ export default defineConfig([
   ]),
   iife("install", "src/install.ts", "SiteAgentInstaller"),
   // Critical-path launcher: the extra icon data loads from a sibling
-  // `icons-extra.js` derived from the launcher script's own src.
-  iife("launcher", "src/launcher-global.ts", "AgentWidgetLauncher", ["@runtypelabs/persona/icons-extra"]),
+  // `icons-extra.js` derived from the launcher script's own src. It embeds the
+  // part of widget.css its own markup can match, so the installer paints it
+  // without waiting for the full stylesheet.
+  {
+    ...iife("launcher", "src/launcher-global.ts", "AgentWidgetLauncher", ["@runtypelabs/persona/icons-extra"]),
+    plugins: [...base.plugins, launcherCriticalCss(() => readFileSync("src/styles/widget.css"))],
+  },
 
   {
     ...base,

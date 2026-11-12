@@ -10,21 +10,129 @@ Measurements from the October 18, 2026 reasoning layout, shared panel theme, too
 | File | Gzip kB | Existing limit kB |
 | --- | ---: | ---: |
 | `index.global.js` | 166.44 | 167 |
-| `launcher.global.js` | 17.44 | 19.75 |
+| `launcher.global.js` | 19.86 | 20 |
 | `widget.css` | 23.66 | 24 |
-| `install.global.js` | 3.00 | 3 |
+| `install.global.js` | 4.00 | 4.1 |
 | `index.js` | 203.99 | 215.75 |
 | `index.cjs` | 203.71 | 216.75 |
 | `theme-editor.js` | 40.47 | 40.5 |
 | `voice-runtime.js` | 13.48 | 14 |
 | `history-shell.js` | 13.63 | 13.75 |
 
-The installer is 2,998 bytes gzip; the table rounds to two decimal places.
+The launcher and installer rows are from the November 12, 2026 loading change
+described under [Loading sequence](#loading-sequence): the launcher gained its own
+share of the stylesheet, the installer the warm-up, and together they replaced
+the stylesheet on the launcher's critical path.
 The CDN widget is 131.00 KiB Brotli (134,139 bytes, with 5 bytes of headroom).
 The theme editor is 40,468 bytes gzip under its unchanged 40,500-byte ceiling.
 The remaining headroom is small: run both
 size checks when changing core code. These are per-file budgets, not a claim
 that the complete interaction downloads only the core file.
+
+## Loading sequence
+
+What a script-tag install downloads, and when. Sizes are Brotli quality 11.
+
+A deferred install (the floating launcher) paints the launcher from two files:
+
+| Before the launcher paints | KiB |
+| --- | ---: |
+| `install.global.js` | 3.44 |
+| `launcher.global.js`, with the launcher's share of `widget.css` embedded | 16.57 |
+| **Total** | **20.01** |
+
+Until November 2026 the launcher also waited for all of `widget.css`, making
+that total 37.67 KiB (2.60 + 14.67 + 20.40). The launcher's markup matches
+about 9 kB of the 164 kB stylesheet. `scripts/launcher-critical-css.mjs` selects
+those rules at build time from the launcher bundle's own code: a rule is dropped
+only when a selector names a `persona-` class, `data-*` attribute or id the
+bundle never mentions. The rules are copied unchanged and in order, so nothing
+restyles when the full stylesheet arrives; `e2e/specs/23-dist-install-methods.spec.ts`
+compares every computed property and the rendered pixels of the launcher before
+and after, at rest, hovered and focused, across the launcher shapes. `check-size.mjs`
+and `.size-limit.json` budget the two files together as "launcher paint".
+
+When the embedded rules cannot be relied on, the installer starts `widget.css`
+alongside the launcher as it always did and waits for it if needed: a page whose
+`style-src` blocks inline styles, or assets rerouted away from the installer's
+own directory (`version`, `cdn`, `cssUrl`/`jsUrl`), where the launcher bundle may
+be an older release without them.
+
+Once the launcher is up, the installer warms everything the first open and first
+turn load, in parallel: `widget.css` (applied at once), `index.global.js`, and
+the lazy chunks the configuration needs. The chunk list comes from
+`utils/renderer-chunks.ts`, which `renderer-preparation.ts` also loads from, so
+the installer and the widget cannot disagree about it. The warm-up runs when the
+page is idle, or sooner when a pointer or focus reaches the launcher, which also
+evaluates the main bundle. `Save-Data` and 2G-class connections skip the idle
+pass and warm on intent only.
+
+The click then runs from cache. Before this, a first open fetched
+`composer-actions-runtime.js`, `activity-ui.js`, `loading-label-runtime.js`,
+`dictation-runtime.js` and `icons-extra.js` (34 KiB for a default configuration)
+one round trip after the main bundle, and the first send fetched
+`client-dispatch.js`; the earlier prefetch covered only `index.global.js`,
+`markdown-parsers.js` and `client-stream.js`, and nothing in Safari, which has
+no `rel=prefetch`.
+
+Two mechanisms, chosen by whether the load is speculative:
+
+- Idle and intent passes fill the HTTP cache only (`rel=prefetch`, or `fetch()`
+  where prefetch is unsupported). A `modulepreload` that fails is remembered by
+  the module map for the life of the page, and the widget's later `import()` of
+  that URL then fails without a request. One dropped speculative fetch must not
+  cost the visitor an open.
+- An open, or an eager install, uses `modulepreload` for the chunks the reveal
+  waits on: the import follows at once and shares the request and its outcome.
+  They are fetched and compiled alongside the main bundle instead of after it
+  has run. The main bundle's `<script>` is marked `fetchpriority="high"`, and
+  the first turn's chunks (`client-dispatch.js`, `client-stream.js`) are not
+  requested until the widget is up, so nothing competes with the reveal.
+
+An eager install (inline, docked, auto-expanded or restored-open) used to load
+the stylesheet, then the bundle, then the chunks, each waiting for the last. It
+now requests all three together.
+
+### Measurements
+
+Chromium against the built files, Brotli-encoded, default configuration. Two
+harnesses, because they stress different things.
+
+Each response delayed by 120 ms plus its size at 1.6 Mbit/s, with the launcher
+clicked after the page has gone idle (medians of five runs; three for the eager
+install):
+
+| | Before | After |
+| --- | ---: | ---: |
+| Requests after the first click | 5 (34.2 KiB) | 0 |
+| First click to panel | 423 ms | 253 ms |
+| Requests after the first send | 1 (4.9 KiB) | 0 |
+| First send to reply rendered | 235 ms | 74 ms |
+| Eager install, navigation to panel | 2,002 ms | 1,512 ms |
+
+`scripts/compressed-preview/measure.mjs`, which throttles one shared connection
+and clicks the launcher the moment it appears, so the click always beats the
+warm-up (medians of 14 runs, V5 defaults):
+
+| | Before | After |
+| --- | ---: | ---: |
+| 1 Mbit/s, 100 ms: launcher clickable | 810 ms | 646 ms |
+| 1 Mbit/s, 100 ms: navigation to widget ready | 2,903 ms | 2,915 ms |
+| 10 Mbit/s, 40 ms: launcher clickable | 295 ms | 283 ms |
+| 10 Mbit/s, 40 ms: navigation to widget ready | 617 ms | 627 ms |
+
+The second table is the case the change helps least. The launcher appears
+sooner on a slow link because it no longer shares the connection with the
+stylesheet, but a visitor who clicks at once still has to download every byte,
+and the stylesheet they used to get before the launcher now arrives after the
+click. The total is unchanged within run-to-run noise. On a fast link the
+stylesheet was already arriving in parallel, so the launcher gains little.
+
+The warm-up moves bytes earlier; it does not remove them. A visitor who never
+opens the widget now downloads the five chunks above as well, at idle and low
+priority: about 248 KiB in total for a default configuration, against 206 KiB.
+The launcher's rules are also sent twice, once embedded and once in
+`widget.css` (1.8 KiB).
 
 ## Separately loaded code
 
