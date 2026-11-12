@@ -12,7 +12,7 @@ import { resolve } from "node:path";
  * static import — npm surface unchanged), so only the IIFE is asserted clean.
  *
  * Also guards the chunk itself against two regressions: bundling the
- * `@mcp-b/webmcp-polyfill` (a value edge into core webmcp-bridge would inline
+ * `@w3c/webmcp-polyfill` (a value edge into core webmcp-bridge would inline
  * its bare-specifier fallback) and carrying a duplicated title map (the deps
  * are injected instead).
  *
@@ -47,7 +47,7 @@ describe("webmcp-runtime bundle split", () => {
       expect(chunk.includes(marker), `chunk is missing "${marker}"`).toBe(true);
     }
     // No polyfill inlined: `registerTool` / `cfworker` only exist inside
-    // @mcp-b/webmcp-polyfill (the class merely CALLS the injected module's
+    // @w3c/webmcp-polyfill (the class merely CALLS the injected module's
     // initializer, so both initializer names legitimately appear here).
     expect(chunk.includes("registerTool")).toBe(false);
     expect(chunk.includes("cfworker")).toBe(false);

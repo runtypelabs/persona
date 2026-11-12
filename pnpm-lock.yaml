@@ -203,14 +203,14 @@ importers:
   apps/web:
     dependencies:
       '@mcp-b/global':
-        specifier: ^6.0.0
-        version: 6.0.0
-      '@mcp-b/webmcp-polyfill':
-        specifier: ^6.0.0
-        version: 6.0.0
+        specifier: ^6.0.3
+        version: 6.0.3
       '@runtypelabs/persona':
         specifier: workspace:^
         version: link:../../packages/widget
+      '@w3c/webmcp-polyfill':
+        specifier: ^0.1.0
+        version: 0.1.0
       alasql:
         specifier: ^4.22.0
         version: 4.22.0
@@ -309,15 +309,15 @@ importers:
 
   examples/ai-sdk-webmcp:
     dependencies:
-      '@mcp-b/webmcp-polyfill':
-        specifier: ^6.0.0
-        version: 6.0.0
       '@runtypelabs/persona':
         specifier: workspace:^
         version: link:../../packages/widget
       '@vercel/functions':
         specifier: ^3.11.0
         version: 3.11.0(@aws-sdk/credential-provider-web-identity@3.972.80)(ws@8.22.1)
+      '@w3c/webmcp-polyfill':
+        specifier: ^0.1.0
+        version: 0.1.0
       ai:
         specifier: ^7.0.163
         version: 7.0.163(zod@4.6.7)
@@ -765,8 +765,8 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(@vitest/ui@5.1.0)(jsdom@31.0.0)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.1)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0))
       webmcp-types:
-        specifier: 0.1.10
-        version: 0.1.10
+        specifier: 0.1.9
+        version: 0.1.9
 
   packages/persona-wire:
     devDependencies:
@@ -801,9 +801,9 @@ importers:
 
   packages/widget:
     dependencies:
-      '@mcp-b/webmcp-polyfill':
-        specifier: ^5.1.0
-        version: 5.1.0
+      '@w3c/webmcp-polyfill':
+        specifier: ^0.1.0
+        version: 0.1.0
       dompurify:
         specifier: ^3.4.17
         version: 3.4.17
@@ -868,9 +868,12 @@ importers:
       vitest:
         specifier: ^5.1.0
         version: 5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(@vitest/ui@5.1.0)(jsdom@31.0.0)(vite@8.3.6(@types/node@26.6.6)(esbuild@0.28.1)(jiti@1.21.7)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.0))
+      webmcp-polyfill-v5:
+        specifier: npm:@mcp-b/webmcp-polyfill@5.1.0
+        version: '@mcp-b/webmcp-polyfill@5.1.0'
       webmcp-polyfill-v6:
-        specifier: npm:@mcp-b/webmcp-polyfill@6.0.0
-        version: '@mcp-b/webmcp-polyfill@6.0.0'
+        specifier: npm:@mcp-b/webmcp-polyfill@6.0.3
+        version: '@mcp-b/webmcp-polyfill@6.0.3'
 
 packages:
 
@@ -1907,24 +1910,24 @@ packages:
     resolution: {integrity: sha512-6QEf6yqFbETdwGITKq57aYoPfX/3K8XFNwsAlx0C1M7o8cb79sv1M3w+tWuWvIcSbNqrLF7OD7YpZMVVz335hQ==}
     engines: {node: '>=20.0.0'}
 
-  '@mcp-b/global@6.0.0':
-    resolution: {integrity: sha512-+hEFkUK4km6cFwUXZfbotZRKLVI4CkFkWjeRYn2fUtM5TY7mSq0GL2eAAGJbr978CjgrMQ7SudoA/6WA3nLOFg==}
+  '@mcp-b/global@6.0.3':
+    resolution: {integrity: sha512-ga4Z92+gAgFjy9mlGiYK5HQ6fLXTsWjIuaAQbGBtzPmB8IaFm1hFMb4PCJtiGmjrZStjbRSKEeuyQJ5Q11n5mw==}
     engines: {node: '>=20'}
 
-  '@mcp-b/transports@6.0.0':
-    resolution: {integrity: sha512-bifpmIr9zf2b6CvgNlZEntMGANapfaMY1lbcY2Wxa/Fd6jWhui14AjEvKuZNykIzYp3+18JV2XBcrCE9xxCw7w==}
+  '@mcp-b/transports@6.0.3':
+    resolution: {integrity: sha512-j+HReArxaFmgdPY21T1ZzFDJSBf66yEOUmCUkKUZS147uL9J6DLjHUTWpzWT2NIa4ub2x4QAb49ITbohPQINjg==}
     engines: {node: '>=20'}
 
   '@mcp-b/webmcp-polyfill@5.1.0':
     resolution: {integrity: sha512-KL09hniFssPY8HBO3qzurWPqm+1JYRwV3wx6x2XSySgo+6BL1XHGsHGIoAO7U9zzigv7TA5keNBoZ+3P1jq18g==}
     engines: {node: '>=20'}
 
-  '@mcp-b/webmcp-polyfill@6.0.0':
-    resolution: {integrity: sha512-Z1wYbaYjwEM1FjxHFyw1oRgDAuLCjcQYeAOHtNNlqZ3n1aVA44Ci0kQrnpi7gySZbeiva2zMEU8XO6EG5MS8FA==}
+  '@mcp-b/webmcp-polyfill@6.0.3':
+    resolution: {integrity: sha512-pD8iKBXpDKLeYyqDcWPiNFI0JuK7/f+/RxspA6qW81kcDdabWUTt7A0fH+cJx6EIjpoHkk4o3QPci7yQPuHofA==}
     engines: {node: '>=20'}
 
-  '@mcp-b/webmcp-ts-sdk@6.0.0':
-    resolution: {integrity: sha512-vpdxaIE2cdf4S6xCrTVENW/d9ixycASF/AhXRnOCMk+0GvKGHjkiMgrmYUPT8+qoXjMM9Mr9oKGnTh4kR2WoIA==}
+  '@mcp-b/webmcp-ts-sdk@6.0.3':
+    resolution: {integrity: sha512-KNbsRW/lE05vE2lSrxNMgZuufuNyXYPRYMqoeKoFX3Se+9KzAOXdniTeGCIyoHJZbn6Zl0WQgDtijqgJmGLrHA==}
     engines: {node: '>=20'}
 
   '@mcp-b/webmcp-types@5.1.0':
@@ -3323,6 +3326,9 @@ packages:
 
   '@vitest/utils@5.1.0':
     resolution: {integrity: sha512-V+qgCwkvVw+s1t1S5TaoBHsLi5Sz/YmohCMoOu0mZ8ZQst2bKhRYARAQucWpVg8D0mv0x5MHcWXY5QdOsoiGBQ==}
+
+  '@w3c/webmcp-polyfill@0.1.0':
+    resolution: {integrity: sha512-FNzmob4B72T9cHDVODskyFjNi0JaZgcD1U0eFmuc2J4o3Lr5k1xabZ5rjw1AuvzgvdxRfvNr9FHUP9yG1s/StA==}
 
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
@@ -5533,9 +5539,6 @@ packages:
     resolution: {integrity: sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==}
     engines: {node: '>=20'}
 
-  webmcp-types@0.1.10:
-    resolution: {integrity: sha512-U4GQ1RpJ0tqCUt2ALMV9Pnhi+hsy8L31f/Q1v4mLVhW64r5sYhh+2+SjP/Lq4/9jP33vZgNkuRZARJl65A/ZIg==}
-
   webmcp-types@0.1.9:
     resolution: {integrity: sha512-ibdkppgRDkQ/nvH541YS48kVt96OiuDr+d9JHnirAtI5k0coaFdo2QqCipbXyfwrteDC6xXwPoUGC9uS5ZGwfw==}
 
@@ -6815,14 +6818,14 @@ snapshots:
       tinyglobby: 0.2.17
       yaml: 2.9.0
 
-  '@mcp-b/global@6.0.0':
+  '@mcp-b/global@6.0.3':
     dependencies:
-      '@mcp-b/transports': 6.0.0
-      '@mcp-b/webmcp-polyfill': 6.0.0
-      '@mcp-b/webmcp-ts-sdk': 6.0.0
+      '@mcp-b/transports': 6.0.3
+      '@mcp-b/webmcp-polyfill': 6.0.3
+      '@mcp-b/webmcp-ts-sdk': 6.0.3
       '@modelcontextprotocol/server': 2.0.0
 
-  '@mcp-b/transports@6.0.0':
+  '@mcp-b/transports@6.0.3':
     dependencies:
       '@modelcontextprotocol/core': 2.0.0
       '@modelcontextprotocol/server': 2.0.0
@@ -6832,13 +6835,13 @@ snapshots:
       '@mcp-b/webmcp-types': 5.1.0
       '@standard-schema/spec': 1.1.0
 
-  '@mcp-b/webmcp-polyfill@6.0.0':
+  '@mcp-b/webmcp-polyfill@6.0.3':
     dependencies:
       webmcp-types: 0.1.9
 
-  '@mcp-b/webmcp-ts-sdk@6.0.0':
+  '@mcp-b/webmcp-ts-sdk@6.0.3':
     dependencies:
-      '@mcp-b/webmcp-polyfill': 6.0.0
+      '@mcp-b/webmcp-polyfill': 6.0.3
       '@modelcontextprotocol/server': 2.0.0
       '@standard-schema/spec': 1.1.0
       webmcp-types: 0.1.9
@@ -7818,6 +7821,10 @@ snapshots:
       '@vitest/pretty-format': 5.1.0
       convert-source-map: 2.0.0
       tinyrainbow: 3.2.0
+
+  '@w3c/webmcp-polyfill@0.1.0':
+    dependencies:
+      webmcp-types: 0.1.9
 
   '@workflow/serde@4.1.0': {}
 
@@ -9959,8 +9966,6 @@ snapshots:
   webidl-conversions@3.0.1: {}
 
   webidl-conversions@8.0.1: {}
-
-  webmcp-types@0.1.10: {}
 
   webmcp-types@0.1.9: {}
 

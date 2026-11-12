@@ -2,7 +2,7 @@
  * Client-side helper that guarantees a usable `document.modelContext` before we
  * register the theme-editor WebMCP tools.
  *
- * Backed by `@mcp-b/webmcp-polyfill`. `installWebMCP()` is idempotent
+ * Backed by `@w3c/webmcp-polyfill`. `installWebMCP()` is idempotent
  * and preserves a native `document.modelContext` when the browser ships one, so
  * this is a no-op on supporting browsers. Never throws.
  */
@@ -27,7 +27,7 @@ export async function ensureModelContext(): Promise<ModelContext | null> {
   }
 
   try {
-    const { installWebMCP } = await import('@mcp-b/webmcp-polyfill');
+    const { installWebMCP } = await import('@w3c/webmcp-polyfill');
     installWebMCP();
     // Read through `unknown` so our local `ModelContext` shape is the contract,
     // decoupled from the polyfill's published types.

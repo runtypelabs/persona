@@ -167,3 +167,20 @@ kB, and Brotli, binary KiB; Before is main 3120c86, local build):
 | `dist/widget.css` (Brotli) | 20.10 KiB | 20.25 KiB | 20.1 → 20.3 KiB |
 
 `index.js` and `index.cjs` stay within their budgets (209.59 kB and 209.31 kB gzip).
+
+## Official WebMCP polyfill fallback
+
+The automatic WebMCP fallback moves to `@w3c/webmcp-polyfill`. The bridge
+runtime gains the browser-baseline check that the official installer lacks and
+the warning for a fallback that installs nothing; the npm entries inline that
+runtime. Main sat 30 B under the `index.cjs` budget (gzip, decimal kB; Before
+is main f81943e3, CI build):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.cjs` | 228.47 kB | 228.64 kB | 228.5 → 228.75 kB |
+| `dist/webmcp-polyfill.js` | n/a | 5.6 kB | 11 → 6 kB |
+
+`index.js` grows by the same code and stays within its budget (211.52 →
+211.68 kB). The polyfill chunk has no transitive dependencies now, so its
+budget drops; the slack above 5.6 kB is for upstream patch releases.

@@ -10,7 +10,7 @@ import {
   type VoiceResult,
   type VoiceStatus,
 } from "@runtypelabs/persona";
-import { installWebMCP } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@w3c/webmcp-polyfill";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { createWebSpeechVoiceProvider } from "./custom-voice-provider";
 

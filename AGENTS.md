@@ -205,7 +205,7 @@ The widget builds to multiple formats via tsdown (Rolldown + Oxc), from the sing
 - `dist/index.global.js` - IIFE (for script tag / CDN usage)
 - `dist/install.global.js` - IIFE installer bootstrap (reads `window.siteAgentConfig`; the script-tag entry point)
 - `dist/launcher.global.js` - IIFE critical launcher bundle (deferred-loading fast path; see "Deferred Launcher Loading")
-- `dist/webmcp-polyfill.js` - Self-contained ESM chunk with `@mcp-b/webmcp-polyfill`; lazy-imported by the IIFE bundle (which marks the polyfill external) only when `config.webmcp.enabled` is true and the page has no `document.modelContext`. URL is derived from the widget script's `src` by the loader registered in `index-global.ts`.
+- `dist/webmcp-polyfill.js` - Self-contained ESM chunk with the official `@w3c/webmcp-polyfill` (Apache-2.0, see `packages/widget/LICENSE.webmcp-polyfill`); lazy-imported by the IIFE bundle (which marks the polyfill external) only when `config.webmcp.enabled` is true and the page has no `document.modelContext`. URL is derived from the widget script's `src` by the loader registered in `index-global.ts`.
 - `dist/index.d.ts` / `dist/index.d.cts` - TypeScript declarations (shared declaration chunks are hashed)
 - `dist/widget.css` - Prefixed, hand-authored utility CSS (for consumers who import styles separately)
 

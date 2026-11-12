@@ -20,6 +20,7 @@ import { THEME_EDITOR_PRESETS, getThemeEditorPreset } from '../presets';
 import { ALL_TABS, CONFIGURE_SUB_GROUPS } from '../sections';
 import {
   toolResult,
+  type ToolResult,
   type WebMcpTool,
   type ThemeEditorLike,
   type EditTarget,
@@ -206,19 +207,10 @@ export function createThemeEditorTools(
           description: p.description,
           tags: p.tags ?? [],
         })),
-        tools: [
-          { tool: 'set_brand_colors', hint: 'Recolor primary/secondary/accent and generate shade scales.' },
-          { tool: 'assign_color_role', hint: 'Recolor a widget region with family + intensity.' },
-          { tool: 'set_typography', hint: 'Set font family, size, weight, line height.' },
-          { tool: 'set_roundness', hint: 'Set corner roundness or granular radii.' },
-          { tool: 'set_color_scheme', hint: 'Set light/dark/auto and edit target.' },
-          { tool: 'apply_preset', hint: 'Apply a built-in preset.' },
-          { tool: 'configure_widget', hint: 'Toggle launcher position, features, and layout.' },
-          { tool: 'set_copy_and_suggestions', hint: 'Set welcome copy, placeholder, and suggestion chips.' },
-          { tool: 'set_theme_fields', hint: 'Set any field by id or dot-path.' },
-          { tool: 'check_contrast', hint: 'Audit WCAG contrast.' },
-          { tool: 'manage_session', hint: 'Undo, redo, reset, or export the theme.' },
-        ],
+        tools: tools.filter((tool) => tool !== getThemeOverview).map((tool) => ({
+          tool: tool.name,
+          hint: tool.description,
+        })),
       };
       if (verbosity === 'full') {
         fieldIndex ??= buildFieldIndex();
@@ -753,7 +745,7 @@ export function createThemeEditorTools(
     },
   };
 
-  return [
+  const tools = [
     getThemeOverview,
     setBrandColors,
     assignColorRole,
@@ -767,6 +759,32 @@ export function createThemeEditorTools(
     checkContrast,
     manageSession,
   ];
+  return tools.map(withToolErrorResult);
+}
+
+/**
+ * Report a thrown validation error as an `isError` result instead. The
+ * upstream WebMCP runtime replaces thrown callback errors with a generic
+ * "Tool execution failed", which would hide the actionable "Valid: ..." hints
+ * the model needs to correct its call.
+ */
+export function withToolErrorResult(tool: WebMcpTool): WebMcpTool {
+  const { execute } = tool;
+  const toErrorResult = (error: unknown): ToolResult => ({
+    isError: true,
+    content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
+  });
+  return {
+    ...tool,
+    execute: (input) => {
+      try {
+        const result = execute(input);
+        return result instanceof Promise ? result.catch(toErrorResult) : result;
+      } catch (error) {
+        return toErrorResult(error);
+      }
+    },
+  };
 }
 
 // ─── Field value validation (escape hatch) ──────────────────────

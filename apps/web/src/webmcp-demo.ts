@@ -8,7 +8,7 @@ import {
   type AgentWidgetConfig,
   type WebMcpConfirmInfo,
 } from "@runtypelabs/persona";
-import { installWebMCP } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@w3c/webmcp-polyfill";
 import { setupMountMode, renderInlineMount } from "./mount-mode";
 import type { Mode } from "./examples-nav";
 import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp-catalog";
@@ -20,7 +20,7 @@ import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp
 //
 // 1. Install the polyfill and register the page tools.
 //
-// `@mcp-b/webmcp-polyfill` polyfills the strict standard surface on
+// `@w3c/webmcp-polyfill` polyfills the strict standard surface on
 // `document.modelContext` (registerTool / getTools / executeTool). We call
 // `installWebMCP()` explicitly so the order is obvious: it is
 // idempotent and no-ops if a native `document.modelContext` is already present.
@@ -30,7 +30,7 @@ import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp
 
 /**
  * Minimal structural view of the producer surface we use here. The full type
- * lives in `@mcp-b/webmcp-types`; declaring just `registerTool` keeps this demo
+ * lives in `webmcp-types`; declaring just `registerTool` keeps this demo
  * self-contained.
  */
 interface RegisterableModelContext {

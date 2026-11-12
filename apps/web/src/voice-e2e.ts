@@ -6,7 +6,7 @@ import {
   type AgentWidgetController,
   type VoicePlaybackMetrics,
 } from "@runtypelabs/persona";
-import { installWebMCP } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@w3c/webmcp-polyfill";
 
 /**
  * Internal fixture page for the Playwright full-duplex voice suite (see

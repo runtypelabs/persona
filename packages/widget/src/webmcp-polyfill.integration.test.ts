@@ -11,6 +11,7 @@ import { JSDOM } from "jsdom";
 import { MessageChannel } from "node:worker_threads";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { WebMcpBridge } from "./webmcp-bridge-public";
 import { setWebMcpPolyfillLoader } from "./webmcp-bridge";
 import type { ModelContextCoreLike } from "./webmcp-bridge";
@@ -33,12 +34,26 @@ type TestContext = ModelContextCoreLike & {
   ): Promise<void>;
 };
 
-// Run the actual published distributions, not version-shaped mocks. The v6
-// alias is test-only: Persona's automatic fallback deliberately stays on v5.
+const require = createRequire(import.meta.url);
+// The official package exports no script build, so reach its standalone
+// `dist/polyfill.js` (which installs as soon as it runs) beside the entry.
+const officialScript = (): string =>
+  readFileSync(
+    join(dirname(require.resolve("@w3c/webmcp-polyfill")), "polyfill.js"),
+    "utf8"
+  );
+const mcpbScript = (alias: string) => (): string =>
+  readFileSync(require.resolve(`${alias}/iife`), "utf8");
+
+// Run the actual published distributions, not version-shaped mocks, as a host
+// page would install them. The `@mcp-b` aliases are test-only: v5 stands in for
+// pages on an older, JSON-string runtime, and v6 for pages still on the
+// deprecated wrapper. Persona's own fallback is the official polyfill.
 describe.each([
-  { version: "v5", module: "@mcp-b/webmcp-polyfill", legacy: true },
-  { version: "v6", module: "webmcp-polyfill-v6", legacy: false },
-])("WebMcpBridge with published $version", ({ module, legacy }) => {
+  { version: "@mcp-b v5", script: mcpbScript("webmcp-polyfill-v5"), legacy: true },
+  { version: "@mcp-b v6", script: mcpbScript("webmcp-polyfill-v6"), legacy: false },
+  { version: "@w3c", script: officialScript, legacy: false },
+])("WebMcpBridge with published $version", ({ script, legacy }) => {
   const dom = new JSDOM("<!doctype html><body></body>", {
     url: "https://example.test",
     runScripts: "outside-only",
@@ -49,8 +64,8 @@ describe.each([
   let context: TestContext;
 
   beforeAll(() => {
-    // v5 also runs without the newer browser APIs required by v6. These are
-    // intentionally absent to exercise the compatibility of our fallback.
+    // v5 also runs without the newer browser APIs the later runtimes need.
+    // These are intentionally absent to prove a host-installed v5 still works.
     Object.defineProperty(browser, "isSecureContext", { value: true });
     if (legacy) {
       Object.defineProperty(browser.Promise, "withResolvers", {
@@ -72,13 +87,8 @@ describe.each([
     vi.stubGlobal("window", browser);
     vi.stubGlobal("document", browser.document);
     vi.stubGlobal("location", browser.location);
-    // A true Window realm is required by v6's native Window.window getter.
-    browser.eval(
-      readFileSync(
-        createRequire(import.meta.url).resolve(`${module}/iife`),
-        "utf8"
-      )
-    );
+    // A true Window realm is required by the native Window.window getter.
+    browser.eval(script());
     context = (browser.document as unknown as { modelContext: TestContext })
       .modelContext;
   });
@@ -307,7 +317,7 @@ describe.each([
   });
 
   it.runIf(legacy)(
-    "lazily installs the real v5 fallback without v6 browser APIs",
+    "lazily installs a legacy runtime from a custom loader without v6 browser APIs",
     async () => {
       const runtime = (
         browser as unknown as {
@@ -340,4 +350,128 @@ describe.each([
       expect(consumer.isOperational()).toBe(true);
     }
   );
+});
+
+// Persona's own fallback: a fresh realm per test, because the official
+// polyfill has no uninstall.
+describe("WebMcpBridge official fallback", () => {
+  const realms: Array<{ close(): void }> = [];
+  const channels: MessageChannel[] = [];
+
+  const createRealm = ({ modern }: { modern: boolean }) => {
+    const dom = new JSDOM("<!doctype html><body></body>", {
+      url: "https://example.test",
+      runScripts: "outside-only",
+    });
+    const browser = dom.window;
+    realms.push(browser);
+    Object.defineProperty(browser, "isSecureContext", { value: true });
+    if (!modern) {
+      // A pre-126 engine. `AbortSignal` is the realm's own (stubbed below), so
+      // the bridge's baseline check sees the gap.
+      Object.defineProperty(browser.Promise, "withResolvers", {
+        value: undefined,
+      });
+      Object.defineProperty(browser.AbortSignal, "any", { value: undefined });
+    }
+    Object.defineProperty(browser, "MessageChannel", {
+      value: class extends MessageChannel {
+        constructor() {
+          super();
+          channels.push(this);
+        }
+      },
+    });
+    vi.stubGlobal("AbortController", browser.AbortController);
+    vi.stubGlobal("AbortSignal", browser.AbortSignal);
+    vi.stubGlobal("window", browser);
+    vi.stubGlobal("document", browser.document);
+    vi.stubGlobal("location", browser.location);
+    // The script build installs when evaluated, so evaluating it in this realm
+    // is the install: nothing runs until the bridge calls `installWebMCP()`.
+    const source = officialScript();
+    const installWebMCP = vi.fn(() => {
+      browser.eval(source);
+    });
+    return { browser, runtime: { installWebMCP } };
+  };
+
+  afterEach(() => {
+    setWebMcpPolyfillLoader(null);
+    for (const channel of channels.splice(0)) {
+      channel.port1.close();
+      channel.port2.close();
+    }
+    for (const realm of realms.splice(0)) realm.close();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("installs the official polyfill and applies its callback semantics", async () => {
+    const { browser, runtime } = createRealm({ modern: true });
+    expect(
+      (browser.document as unknown as { modelContext?: unknown }).modelContext
+    ).toBeUndefined();
+    const load = vi.fn(async () => runtime);
+    setWebMcpPolyfillLoader(load);
+    const consumer = new WebMcpBridge({
+      enabled: true,
+      onConfirm: vi.fn(async () => true),
+    });
+    expect(await consumer.snapshotForDispatch()).toEqual([]);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(runtime.installWebMCP).toHaveBeenCalledTimes(1);
+    expect(consumer.isOperational()).toBe(true);
+
+    const context = (browser.document as unknown as { modelContext: TestContext })
+      .modelContext;
+    const registration = new browser.AbortController();
+    const register = (name: string, execute: ToolCallback) =>
+      context.registerTool(
+        { name, description: `Run ${name}`, execute },
+        { signal: registration.signal }
+      );
+    await register("echo", (input) => ({ received: input }));
+    await register("silent", () => undefined);
+    await register("thrower", () => {
+      throw new Error("Quantity must be positive");
+    });
+
+    expect(
+      await consumer.executeToolCall("webmcp:echo", { quantity: 2 })
+    ).toEqual({
+      content: [
+        { type: "text", text: JSON.stringify({ received: { quantity: 2 } }) },
+      ],
+    });
+    expect((await consumer.executeToolCall("webmcp:silent", {})).isError).toBe(
+      true
+    );
+    const thrown = await consumer.executeToolCall("webmcp:thrower", {});
+    expect(thrown.isError).toBe(true);
+    expect(JSON.stringify(thrown)).not.toContain("Quantity must be positive");
+    expect(
+      (browser.navigator as unknown as { modelContext?: unknown }).modelContext
+    ).toBeUndefined();
+    registration.abort();
+  });
+
+  it("warns and installs nothing on engines without the polyfill's baseline", async () => {
+    const { browser, runtime } = createRealm({ modern: false });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setWebMcpPolyfillLoader(async () => runtime);
+    const consumer = new WebMcpBridge({
+      enabled: true,
+      onConfirm: vi.fn(async () => true),
+    });
+    expect(await consumer.snapshotForDispatch()).toEqual([]);
+    expect(consumer.isOperational()).toBe(false);
+    // Upstream has no baseline check of its own: running it here would leave a
+    // `document.modelContext` getter that throws. The bridge must not call it.
+    expect(runtime.installWebMCP).not.toHaveBeenCalled();
+    expect("modelContext" in browser.document).toBe(false);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("did not install document.modelContext"),
+    );
+  });
 });

@@ -239,10 +239,10 @@ export default defineConfig([
   // CDN bundle. Every sibling-URL chunk and lazy subpath stays out of it: the
   // loaders' default imports are left in place as dead externals, never invoked
   // because `index-global.ts` registers loaders that fetch the standalone chunk
-  // from a sibling URL instead. The WebMCP polyfill (and its ~22 kB transitive
-  // @cfworker/json-schema) likewise loads from `webmcp-polyfill.js`.
+  // from a sibling URL instead. The WebMCP polyfill likewise loads from
+  // `webmcp-polyfill.js`.
   iife("index", "src/index-global.ts", "AgentWidget", [
-    "@mcp-b/webmcp-polyfill",
+    "@w3c/webmcp-polyfill",
     "./runtype-tts-entry",
     "./markdown-parsers-entry",
     "./client-stream",

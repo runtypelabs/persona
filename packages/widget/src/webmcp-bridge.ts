@@ -1,7 +1,7 @@
 /**
  * WebMCP consumption bridge.
  *
- * Owns the per-widget lifecycle of `@mcp-b/webmcp-polyfill`:
+ * Owns the per-widget lifecycle of the WebMCP polyfill:
  *   - installs the polyfill (lazily, only when enabled) so `document.modelContext`
  *     is present;
  *   - snapshots the host page's tool registry per dispatch turn for
@@ -20,10 +20,13 @@
  * Only tools owned by this document are exposed: the wire addresses tools by
  * name, not by frame. Callbacks must validate their own input.
  *
- * The automatic fallback stays on v5 to preserve its browser requirements and
- * result semantics. Host pages may install v5 or v6 themselves; Persona does
- * not replace an existing context. v5's initializeWebMCPPolyfill() and v6's
- * installWebMCP() are both accepted by custom loaders.
+ * The automatic fallback is the official polyfill (`@w3c/webmcp-polyfill`).
+ * It needs a secure context and Chrome/Firefox 126+ or Safari 18+, and
+ * follows upstream result semantics: callbacks must return JSON-serializable
+ * values, and thrown errors reach the model only as a generic failure (return
+ * an `isError` result instead). Host pages may install any runtime
+ * themselves; Persona never replaces an existing context. installWebMCP() and
+ * the older initializeWebMCPPolyfill() are both accepted by custom loaders.
  *
  * Every chat-path call passes one confirm gate before execution, regardless of
  * annotations.readOnlyHint. The one exception is a voice fast-tier
@@ -37,7 +40,7 @@ import type { ClientToolDefinition } from "./types";
 export const WEBMCP_TOOL_PREFIX = "webmcp:";
 
 /**
- * Minimal structural view of the `@mcp-b/webmcp-polyfill` strict-core surface
+ * Minimal structural view of the WebMCP polyfill's strict-core surface
  * that Persona consumes. We declare only what we use rather than depending on
  * `@mcp-b/webmcp-types` so the widget's type surface stays self-contained.
  */
@@ -125,14 +128,14 @@ export const getWebMcpToolDisplayTitle = (
   toolName: string,
 ): string | undefined => webMcpToolDisplayTitles.get(stripWebMcpPrefix(toolName));
 
-/** The slice of `@mcp-b/webmcp-polyfill` the bridge consumes on install. */
+/** The slice of a WebMCP polyfill module the bridge consumes on install. */
 export type WebMcpPolyfillModule =
   | { initializeWebMCPPolyfill: () => void }
   | { installWebMCP: () => void };
 
 /**
  * Override how the polyfill module is obtained. By default the bridge does
- * `import("@mcp-b/webmcp-polyfill")`, which bundlers resolve for npm
+ * `import("@w3c/webmcp-polyfill")`, which bundlers resolve for npm
  * consumers. The IIFE/CDN build can't resolve a bare specifier at runtime, so
  * its entry (`index-global.ts`) registers a loader that imports the
  * self-contained `webmcp-polyfill.js` chunk from a URL derived from the
@@ -241,4 +244,4 @@ export const isWebMcpToolName = (name: string): boolean =>
  * the whole polyfill into the chunk).
  */
 export const loadWebMcpPolyfillModule = (): Promise<WebMcpPolyfillModule> =>
-  polyfillLoader ? polyfillLoader() : import("@mcp-b/webmcp-polyfill");
+  polyfillLoader ? polyfillLoader() : import("@w3c/webmcp-polyfill");

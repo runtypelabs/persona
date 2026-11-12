@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ThemeEditorState } from '../state';
-import { createThemeEditorTools } from './tools';
-import type { WebMcpTool } from './types';
+import { createThemeEditorTools, withToolErrorResult } from './tools';
+import { toolResult, type WebMcpTool } from './types';
 
 function toolMap(state: ThemeEditorState, opts?: Parameters<typeof createThemeEditorTools>[1]) {
   const tools = createThemeEditorTools(state, opts);
@@ -14,6 +14,53 @@ async function call(tool: WebMcpTool, input: unknown): Promise<any> {
   const res = await tool.execute(input);
   return res.structuredContent;
 }
+
+describe('withToolErrorResult', () => {
+  const descriptor = {
+    name: 'custom_tool',
+    description: 'A host-authored tool',
+    inputSchema: { type: 'object' },
+    annotations: { readOnlyHint: true },
+  };
+
+  it('preserves synchronous success, input, and tool metadata', () => {
+    const input = { value: 'example' };
+    const result = toolResult(input);
+    const wrapped = withToolErrorResult({
+      ...descriptor,
+      execute: (received) => {
+        expect(received).toBe(input);
+        return result;
+      },
+    });
+    expect(wrapped).toMatchObject(descriptor);
+    expect(wrapped.execute(input)).toBe(result);
+  });
+
+  it('preserves asynchronous success', async () => {
+    const result = toolResult({ ok: true });
+    const wrapped = withToolErrorResult({ ...descriptor, execute: async () => result });
+    expect(await wrapped.execute({})).toBe(result);
+  });
+
+  it.each([false, true])('preserves actionable failures (async: %s)', async (asynchronous) => {
+    for (const error of [new Error('Valid: light, dark'), 'Retry after saving']) {
+      const wrapped = withToolErrorResult({
+        ...descriptor,
+        execute: () => {
+          if (asynchronous) return Promise.reject(error);
+          throw error;
+        },
+      });
+      const result = wrapped.execute({});
+      expect(result instanceof Promise).toBe(asynchronous);
+      expect(await result).toEqual({
+        isError: true,
+        content: [{ type: 'text', text: error instanceof Error ? error.message : error }],
+      });
+    }
+  });
+});
 
 describe('createThemeEditorTools', () => {
   let state: ThemeEditorState;
@@ -50,6 +97,9 @@ describe('createThemeEditorTools', () => {
     expect(out.summary.brand.primary).toMatch(/^#/);
     expect(out.presets.map((p: any) => p.id)).toContain('default-dark');
     expect(out.availableRoles.some((r: any) => r.role === 'header')).toBe(true);
+    expect(out.tools).toEqual([...tools.values()]
+      .filter((tool) => tool.name !== overview.name)
+      .map((tool) => ({ tool: tool.name, hint: tool.description })));
   });
 
   it('set_brand_colors generates a full scale and applies to light + dark', async () => {
@@ -118,9 +168,9 @@ describe('createThemeEditorTools', () => {
   it('apply_preset validates id and applies', async () => {
     const out = await call(tools.get('apply_preset')!, { presetId: 'default-dark' });
     expect(out.applied.appliedPreset.id).toBe('default-dark');
-    await expect(tools.get('apply_preset')!.execute({ presetId: 'nope' })).rejects.toThrow(
-      /Valid presets/
-    );
+    const invalid = await tools.get('apply_preset')!.execute({ presetId: 'nope' });
+    expect(invalid.isError).toBe(true);
+    expect(invalid.content[0]).toMatchObject({ type: 'text', text: expect.stringMatching(/Valid presets/) });
   });
 
   it('apply_preset installs both Persona default slots with automatic scheme selection', async () => {

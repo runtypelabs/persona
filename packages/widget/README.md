@@ -254,28 +254,38 @@ Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payl
 
 ### WebMCP compatibility
 
-Persona supports host-installed `@mcp-b/webmcp-polyfill` v5 and v6 without
-replacing their registry. Producer pages using v5 call
-`initializeWebMCPPolyfill()`; pages using v6 call `installWebMCP()` before
-registering tools. Both initializer exports also work with custom Persona
-polyfill loaders. Tool execution supports both JSON-string and object-input
-contracts with one invocation, not a failed-call retry.
+When a page has no `document.modelContext`, Persona lazily installs the
+official WebMCP polyfill, [`@w3c/webmcp-polyfill`](https://www.npmjs.com/package/@w3c/webmcp-polyfill).
+It requires HTTPS or localhost and Chrome/Firefox 126+ or Safari 18+; elsewhere
+it does nothing and Persona logs that WebMCP is disabled. Producer pages should
+call `installWebMCP()` from that package themselves before registering tools.
 
-When no registry exists, Persona lazily installs v5. This preserves the previous
-browser requirements and callback-result behavior. The demos use v6 explicitly;
-that runtime requires HTTPS/localhost and Chrome/Firefox 126+ or Safari 18+.
+Persona never replaces an existing registry. Pages that install another
+runtime (`@mcp-b/webmcp-polyfill` v3–v6, `@mcp-b/global`, or a hand-written
+JSON-string facade) keep working: tool input is passed in one invocation that
+satisfies both the JSON-string and the object-input contract, never as a
+failed-call retry.
+
+The official polyfill does not register declarative form tools
+(`<form toolname>`) yet. A page that relies on them should install
+`@mcp-b/webmcp-polyfill` itself, which adds that layer on top.
 
 Only the current document's tools are exposed, even when the registry also
 discovers tools in related frames. The dispatch protocol addresses tools by
 name and does not support frame-qualified calls.
 
-Callback semantics belong to the installed runtime. In v6, callbacks receive
+Callback semantics belong to the installed runtime. Under the official
+polyfill (and `@mcp-b/webmcp-polyfill` v6), callbacks receive
 `(input, { signal })`; validate input, forward the signal to cancellable work,
 and return a JSON-serializable value. Return an MCP result with `isError: true`
-for an actionable error message: v6 replaces thrown callback errors with a
-generic error and rejects `undefined` and other non-serializable results. v5's
-existing result conversion remains unchanged. Registration cleanup uses an
-AbortSignal in both versions.
+for an actionable error message: thrown callback errors are replaced with a
+generic error, and `undefined` and other non-serializable results are rejected.
+A host-installed `@mcp-b/webmcp-polyfill` v5 keeps its own result conversion.
+Registration cleanup uses an AbortSignal in every version.
+
+`initializeWebMCPPolyfill` is still exported from the CDN polyfill chunk as a
+deprecated alias of `installWebMCP`; the official polyfill has no uninstall
+API. That chunk bundles the polyfill under Apache-2.0 (`LICENSE.webmcp-polyfill`).
 
 ### Custom Markdown rendering during streaming
 

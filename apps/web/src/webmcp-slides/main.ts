@@ -11,9 +11,9 @@ import {
   initAgentWidget,
   markdownPostprocessor,
 } from "@runtypelabs/persona";
-// `@mcp-b/webmcp-polyfill` polyfills the strict standard surface on
+// `@w3c/webmcp-polyfill` polyfills the strict standard surface on
 // `document.modelContext`; it must be initialized before tools register.
-import { installWebMCP } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@w3c/webmcp-polyfill";
 
 import { DeckStore, createSeedDeck } from "./store";
 import { THEMES, getTheme } from "./themes";

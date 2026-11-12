@@ -29,8 +29,8 @@ export type { StreamAnimationPlugin, StreamAnimationContext } from "./types";
 // ---------------------------------------------------------------------------
 // Deferred WebMCP polyfill loading.
 //
-// This bundle is built with `@mcp-b/webmcp-polyfill` external: the bridge's
-// default `import("@mcp-b/webmcp-polyfill")` is a bare specifier no browser
+// This bundle is built with `@w3c/webmcp-polyfill` external: the bridge's
+// default `import("@w3c/webmcp-polyfill")` is a bare specifier no browser
 // can resolve, so register a loader that imports the self-contained
 // `webmcp-polyfill.js` chunk from a sibling URL instead. Mirrors how
 // `install.ts` derives `launcher.global.js` from a `jsUrl` override.
@@ -80,7 +80,7 @@ const siblingChunk =
 setWebMcpPolyfillLoader(
   siblingChunk(
     "webmcp-polyfill.js",
-    "install @mcp-b/webmcp-polyfill on the page themselves before enabling config.webmcp",
+    "install @w3c/webmcp-polyfill on the page themselves before enabling config.webmcp",
   ),
 );
 
