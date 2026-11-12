@@ -21,7 +21,7 @@ type BrowserWindow = Window & {
   webkitAudioContext?: typeof AudioContext
 }
 
-/** Browser transcription with optional, independent microphone amplitude measurement. */
+/** Browser transcription with independent microphone silence detection and optional amplitude reporting. */
 export function createBrowserDictationProvider(config: DictationProviderConfig['browser'], pauseDuration = 2000, measureAudioLevel = false): VoiceProvider {
   const root = window as BrowserWindow
   const Constructor = root.SpeechRecognition ?? root.webkitSpeechRecognition
@@ -36,6 +36,8 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
   let speechEventsObserved = false
   let speechActive = false
   let measuredLevel: number | undefined
+  let audioActive: boolean | undefined
+  let pauseSource: 'audio' | 'recognition' | 'transcript' | undefined
   let pauseTimer: ReturnType<typeof setTimeout> | undefined
   let sampleTimer: ReturnType<typeof setInterval> | undefined
   let stream: MediaStream | undefined
@@ -49,7 +51,14 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
   let onLevel: (level: number) => void = () => {}
   let onLevelUnavailable: () => void = () => {}
 
-  const clearPause = () => { clearTimeout(pauseTimer); pauseTimer = undefined }
+  const measurementUsable = () => context?.state === 'running' && observedTracks.length > 0
+    && observedTracks.every((track) => !track.muted && track.readyState !== 'ended')
+  const clearPause = () => { clearTimeout(pauseTimer); pauseTimer = undefined; pauseSource = undefined }
+  const invalidateMeasurement = () => {
+    if (pauseSource === 'audio') clearPause()
+    audioActive = undefined
+    measuredLevel = undefined
+  }
   const releaseAudio = () => {
     clearInterval(sampleTimer)
     sampleTimer = undefined
@@ -68,8 +77,8 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
   const onMeterEnded = () => {
     if (closed || !capturing || !stream) return
     releaseAudio()
-    measuredLevel = undefined
-    onLevelUnavailable()
+    invalidateMeasurement()
+    if (measureAudioLevel) onLevelUnavailable()
   }
   const disconnect = async () => {
     if (closed) return
@@ -112,15 +121,27 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
       const samples = new Float32Array(meter.fftSize)
       sampleTimer = setInterval(() => {
         if (closed || !capturing) return
+        if (!measurementUsable()) {
+          const wasAvailable = audioActive !== undefined
+          invalidateMeasurement()
+          if (wasAvailable && measureAudioLevel) onLevelUnavailable()
+          return
+        }
         meter.getFloatTimeDomainData(samples)
         const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length)
+        if (audioActive === undefined) clearPause()
+        // WHY: A low amplitude threshold favors keeping noisy recordings open over cutting off quiet speech.
+        audioActive = rms >= 0.005
+        if (audioActive) clearPause()
+        else if (!pauseTimer && (output.trim() || speechActive)) startPause('audio')
         const target = Math.min(1, rms * 4)
         const weight = measuredLevel === undefined || target > measuredLevel ? 0.65 : 0.2
         measuredLevel = measuredLevel === undefined ? target : measuredLevel + (target - measuredLevel) * weight
-        onLevel(measuredLevel < 0.005 ? 0 : measuredLevel)
+        if (measureAudioLevel) onLevel(measuredLevel < 0.005 ? 0 : measuredLevel)
       }, 50)
     } catch {
       releaseAudio()
+      invalidateMeasurement()
     }
   }
   const stopListening = async () => {
@@ -130,10 +151,16 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
     releaseAudio()
     recognition.stop()
   }
-  const startPause = () => {
+  const startPause = (origin: 'audio' | 'recognition' | 'transcript') => {
     clearPause()
     if (!capturing) return
+    pauseSource = origin
     pauseTimer = setTimeout(() => {
+      if (origin === 'audio' && !measurementUsable()) {
+        invalidateMeasurement()
+        if (measureAudioLevel) onLevelUnavailable()
+        return
+      }
       onStatus('processing')
       void stopListening().catch(fail)
     }, pauseDuration)
@@ -150,7 +177,8 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
     speechEventsObserved = true
     if (!speechActive && !firstSpeechEvent) return
     speechActive = false
-    startPause()
+    if (audioActive === undefined) startPause('recognition')
+    else if (!audioActive && !pauseTimer) startPause('audio')
   }
   recognition.onresult = (event) => {
     if (closed) return
@@ -158,9 +186,9 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
     if (next !== output) {
       output = next
       onResult({ text: output, provider: 'browser', isFinal: false })
-      if (!speechEventsObserved) {
+      if (audioActive === undefined && !speechEventsObserved) {
         clearPause()
-        if (output.trim()) startPause()
+        if (output.trim()) startPause('transcript')
       }
     }
   }
@@ -188,7 +216,7 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
       if (capturing) return
       capturing = true
       try { recognition.start() } catch (error) { fail(error); throw error }
-      if (!closed && capturing && measureAudioLevel) void measure()
+      if (!closed && capturing) void measure()
     },
     stopListening,
     disconnect,

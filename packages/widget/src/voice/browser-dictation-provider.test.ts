@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createBrowserDictationProvider } from './browser-dictation-provider'
+import { DictationController } from './dictation'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -141,8 +142,9 @@ describe('measured browser dictation', () => {
     const h = setup()
     await h.provider.startListening()
     await h.ready()
+    h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
     h.transcript()
-    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(2050)
     expect(h.status).toHaveBeenCalledWith('processing')
     expect(h.recognition.stop).toHaveBeenCalledOnce()
     expect(h.stopTrack).toHaveBeenCalledOnce()
@@ -413,12 +415,17 @@ it('honors a configured speech pause duration', async () => {
   await h.flush()
 })
 
-it('does not request a second microphone stream unless measurement is requested', async () => {
+it('detects silence without reporting amplitude when the waveform is disabled', async () => {
   const h = setup(2000, false)
   await h.provider.startListening()
-  expect(h.getUserMedia).not.toHaveBeenCalled()
+  expect(h.getUserMedia).toHaveBeenCalledOnce()
+  await h.ready()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
   h.transcript()
-  await h.provider.stopListening()
+  await vi.advanceTimersByTimeAsync(2050)
+  expect(h.recognition.stop).toHaveBeenCalledOnce()
+  expect(h.level).not.toHaveBeenCalled()
+  expect(h.levelUnavailable).not.toHaveBeenCalled()
   h.recognition.onend?.()
   expect(h.result).toHaveBeenLastCalledWith(expect.objectContaining({ isFinal: true }))
 })
@@ -439,4 +446,158 @@ it.each([
 it('explains how to proceed when browser speech recognition is unsupported', () => {
   vi.stubGlobal('window', new EventTarget())
   expect(() => createBrowserDictationProvider(undefined)).toThrow('type your message')
+})
+
+
+it('finishes after resumed speech becomes silent even if the browser omits its second speechend', async () => {
+  const h = setup(4000)
+  await h.provider.startListening()
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  await vi.advanceTimersByTimeAsync(50)
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
+  h.recognition.onspeechend?.()
+  await vi.advanceTimersByTimeAsync(2000)
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.1))
+  h.recognition.onspeechstart?.()
+  h.recognition.onresult?.({ results: [{ 0: { transcript: 'Hello there again' } }] })
+  await vi.advanceTimersByTimeAsync(6000)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
+  await vi.advanceTimersByTimeAsync(4049)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(h.recognition.stop).toHaveBeenCalledOnce()
+  expect(h.stopTrack).toHaveBeenCalledOnce()
+  h.recognition.onresult?.({ results: [{ 0: { transcript: 'Hello there, again.' } }] })
+  h.recognition.onend?.()
+  expect(h.result).toHaveBeenLastCalledWith({ text: 'Hello there, again.', provider: 'browser', isFinal: true })
+  expect(h.audio.close).toHaveBeenCalledOnce()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('keeps quiet continuous measured speech open across delayed transcripts and misleading speechend', async () => {
+  const h = setup(4000)
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.006))
+  await h.provider.startListening()
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  await vi.advanceTimersByTimeAsync(50)
+  h.recognition.onspeechend?.()
+  await vi.advanceTimersByTimeAsync(12000)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  await h.provider.disconnect()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('does not extend measured silence for delayed transcript corrections or duplicate speechend', async () => {
+  const h = setup(4000)
+  await h.provider.startListening()
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  await vi.advanceTimersByTimeAsync(50)
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
+  await vi.advanceTimersByTimeAsync(2050)
+  h.recognition.onspeechend?.()
+  h.recognition.onresult?.({ results: [{ 0: { transcript: 'Hello, there' } }] })
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(h.recognition.stop).toHaveBeenCalledOnce()
+  h.recognition.onend?.()
+  expect(h.result).toHaveBeenLastCalledWith(expect.objectContaining({ text: 'Hello, there', isFinal: true }))
+})
+
+it('does not start a silence deadline before any speech or transcript', async () => {
+  const h = setup()
+  await h.provider.startListening()
+  await h.ready()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
+  await vi.advanceTimersByTimeAsync(10000)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  await h.provider.disconnect()
+})
+
+it.each(['suspended', 'muted', 'ended'] as const)('does not mistake an %s microphone meter for silence', async (kind) => {
+  const h = setup()
+  await h.provider.startListening()
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
+  await vi.advanceTimersByTimeAsync(1000)
+  if (kind === 'suspended') h.audio.state = 'suspended'
+  if (kind === 'muted') Object.assign(h.track, { muted: true })
+  if (kind === 'ended') h.track.dispatchEvent(new Event('ended'))
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  expect(h.levelUnavailable).toHaveBeenCalledOnce()
+  if (kind !== 'ended') {
+    h.audio.state = 'running'
+    Object.assign(h.track, { muted: false })
+    await vi.advanceTimersByTimeAsync(2050)
+    expect(h.recognition.stop).toHaveBeenCalledOnce()
+  }
+  await h.provider.disconnect()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('retains speech event timing when microphone measurement is denied', async () => {
+  const h = setup()
+  await h.provider.startListening()
+  h.permission.reject(new Error('Microphone denied'))
+  await h.flush()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  await vi.advanceTimersByTimeAsync(6000)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  h.recognition.onspeechend?.()
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(h.recognition.stop).toHaveBeenCalledOnce()
+  h.recognition.onend?.()
+})
+
+
+it.each(['suspended', 'muted', 'ended'] as const)('checks meter availability at the silence deadline when %s between samples', async (kind) => {
+  const h = setup()
+  await h.provider.startListening()
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
+  await vi.advanceTimersByTimeAsync(2049)
+  if (kind === 'suspended') h.audio.state = 'suspended'
+  if (kind === 'muted') Object.assign(h.track, { muted: true })
+  if (kind === 'ended') h.track.readyState = 'ended'
+  await vi.advanceTimersByTimeAsync(1)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  expect(h.levelUnavailable).toHaveBeenCalledOnce()
+  await h.provider.disconnect()
+})
+
+it('settles measured auto-finish into review without sending and retains the browser final correction', async () => {
+  const h = setup(4000)
+  const callbacks = { onState: vi.fn(), onReview: vi.fn(), onSend: vi.fn() }
+  const controller = new DictationController(callbacks)
+  controller.start({ type: 'custom', custom: h.provider }, { autoSend: false })
+  await vi.advanceTimersByTimeAsync(0)
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  h.recognition.onspeechend?.()
+  await vi.advanceTimersByTimeAsync(50)
+  h.recognition.onspeechstart?.()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
+  await vi.advanceTimersByTimeAsync(4050)
+  expect(controller.getState().phase).toBe('processing')
+  expect(callbacks.onSend).not.toHaveBeenCalled()
+  h.recognition.onresult?.({ results: [{ 0: { transcript: 'Hello, there.' } }] })
+  h.recognition.onend?.()
+  expect(controller.getState()).toMatchObject({ phase: 'review', transcript: 'Hello, there.' })
+  expect(callbacks.onReview).toHaveBeenCalledExactlyOnceWith('Hello, there.')
+  expect(callbacks.onSend).not.toHaveBeenCalled()
+  expect(h.stopTrack).toHaveBeenCalledOnce()
+  controller.destroy()
+  expect(vi.getTimerCount()).toBe(0)
 })
