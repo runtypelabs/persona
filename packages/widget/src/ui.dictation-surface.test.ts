@@ -317,8 +317,7 @@ describe('dictation surface', () => {
       recognition.onresult({ results: [{ 0: { transcript: 'unsubmitted speech' } }] });
       expect(input.value).toBe('original draft unsubmitted speech');
       window.dispatchEvent(Object.assign(new Event('pagehide'), { persisted }));
-      expect(controller.getDictationState().phase).toBe(persisted ? 'idle' : 'error');
-      if (!persisted) expect(controller.getDictationState().error).toContain('page navigation');
+      expect(controller.getDictationState().phase).toBe('idle');
       window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted }));
       expect(input.value).toBe('original draft');
       expect(input.readOnly).toBe(false);

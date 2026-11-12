@@ -11725,6 +11725,7 @@ export const createAgentExperience = (
   // freeze. `pagehide` covers navigation and bfcache; `visibilitychange` covers
   // the mobile tab/app switch that never fires `pagehide`.
   const handleDraftLifecycleFlush = () => {
+    if (dictationCapturing()) dismissDictation();
     flushDraftPersist();
   };
   const handleDraftVisibilityFlush = () => {
