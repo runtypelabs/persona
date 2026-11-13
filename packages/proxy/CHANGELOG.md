@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.38.0
+
+### Patch Changes
+
+- 405deb4: Add `WEBMCP_UI_SDK_AGENT`, a server-pinned settings copilot that drives the generic `snapshot`, `query` and `act` page tools published by the UI SDK agent bridge, for the UI SDK Agent Bridge demo.
+
 ## 4.37.0
 
 ### Patch Changes
