@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Persona over the OpenAI Realtime WebSocket</title>
+    <link rel="stylesheet" href="/persona/widget.css" />
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; background: #f7f8fb; color: #121826; }
+      main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+      #persona-root { height: 640px; display: flex; border: 1px solid #e3e5ea; border-radius: 12px; overflow: hidden; background: #fff; }
+      code { font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Persona over a WebSocket</h1>
+      <p>
+        The widget's stream transport is <code>createWebSocketTransport</code> with an OpenAI Realtime codec.
+        The browser connects straight to the Realtime socket with an ephemeral client secret from
+        <code>POST /session</code>; the real API key stays on the server.
+      </p>
+      <div id="persona-root"></div>
+    </main>
+    <script src="/persona/index.global.js"></script>
+    <script type="module">
+      import { createOpenAIRealtimeCodec } from "/openai-realtime-codec.js";
+
+      const AgentWidget = window.AgentWidget;
+      const { createWebSocketTransport } = await AgentWidget.loadWebSocketTransport();
+
+      let session = null;
+      const mint = async () => {
+        const response = await fetch("/session", { method: "POST" });
+        if (!response.ok) throw new Error(`Could not start a session: ${response.status}`);
+        session = await response.json();
+        return session;
+      };
+      // Re-mint a secret that expires within a minute; a reconnect then authenticates again.
+      const fresh = async () =>
+        session && (!session.expiresAt || session.expiresAt * 1000 - Date.now() > 60_000) ? session : mint();
+
+      await mint();
+      const transport = createWebSocketTransport({
+        url: async () => (await fresh()).url,
+        protocols: async () => ["realtime", `openai-insecure-api-key.${(await fresh()).value}`],
+        codec: createOpenAIRealtimeCodec(),
+        awaitReady: true,
+      });
+
+      AgentWidget.initAgentWidget({
+        target: "#persona-root",
+        useShadowDom: false,
+        config: {
+          apiUrl: "/unused",
+          transport,
+          launcher: { enabled: false },
+          welcome: { title: "OpenAI Realtime", subtitle: "Streamed over a WebSocket.", variant: "card" },
+          copy: { inputPlaceholder: "Ask anything..." },
+        },
+      });
+    </script>
+  </body>
+</html>

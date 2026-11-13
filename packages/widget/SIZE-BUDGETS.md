@@ -167,3 +167,127 @@ kB, and Brotli, binary KiB; Before is main 3120c86, local build):
 | `dist/widget.css` (Brotli) | 20.10 KiB | 20.25 KiB | 20.1 → 20.3 KiB |
 
 `index.js` and `index.cjs` stay within their budgets (209.59 kB and 209.31 kB gzip).
+
+## Stream transports and the client-session socket
+
+`config.transport` (the transport seam), the Runtype client-session socket
+(`runtype-client-session-v1`), and MPA navigation recovery. The socket itself
+(`createWebSocketTransport`, the Runtype codec and its controller) is the new
+lazy `websocket-transport.js` chunk, fetched only when an init response
+advertises `realtime` or a host calls `loadWebSocketTransport()`. The
+navigation-record helpers ride in `session-actions.js`, which a running page
+tool has already loaded. What stays in the core is what must run before any
+chunk can load: the intent hooks (launcher hover/focus, open, composer focus,
+visibility), the `pagehide` navigation record, the bfcache reattach cursor,
+the preconnect hint, and the transport routing in the client and session.
+Raises, each to the smallest budget that fits with room for the CI build's
+few extra bytes (gzip, decimal kB, and Brotli, binary KiB; Before is main
+f81943e3 and After is this change rebased on main 7e4d8a18, local builds):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` | 169.69 kB | 171.64 kB | 170 → 171.7 kB |
+| `dist/index.cjs` | 228.47 kB | 231.20 kB | 228.5 → 231.25 kB |
+| `dist/client-stream.js` | 10.54 kB | 10.62 kB | 10.55 → 10.65 kB |
+| `dist/session-actions.js` | 2.87 kB | 3.54 kB | 3.25 → 3.55 kB |
+| `dist/client-dispatch.js` | 5.56 kB | 5.69 kB | 5.7 → 5.8 kB |
+| `dist/websocket-transport.js` | (new) | 5.45 kB | 5.5 kB |
+| `dist/index.global.js` (Brotli) | 134.67 KiB | 136.29 KiB | 134.9 → 136.35 KiB |
+
+`index.js` stays within its budget (214.44 kB gzip of 215.75 kB).
+
+The last steps on `index.global.js` (171.5 → 171.7 kB, 136.2 → 136.35 KiB),
+`index.cjs` (230.9 → 231.25 kB) and `session-actions.js` (3.4 → 3.55 kB)
+buy the watching tab: a tab that follows a turn started in another tab
+never owns, resumes or answers it. It shows that turn's questions and
+approvals read-only, with no controls that do nothing, and settles them once
+the owning tab answers. Which turns are watched is live session state, marked
+on the messages only for rendering, so a stored transcript never makes the
+owning tab's own question or approval read-only; and a watched question
+settles only when a later stream leg of its turn arrives, never on another
+message of the leg that paused (the 171.55 → 171.7 kB and 231.15 → 231.25 kB
+part of these steps). The navigated page-tool resume moved into
+`session-actions.js` to keep the CDN bundle's share of this small;
+`index.cjs` inlines that chunk, so the move does not help it.
+
+`websocket-transport.js` carries the stream edge cases as well as the happy
+path: an `end` or stream `error` that arrives before the stream is claimed is
+buffered and applied on claim; a turn the backend hands to the socket after
+the socket was disabled, or that the socket refused before any data, is read
+over HTTP from its start instead (`recoverStream`); a connect still resolving
+its URL or credentials when the page is hidden never opens a socket; and a
+request aborted while the socket opened is never sent. Whether a running page
+tool caused a navigation is decided in `session-actions.js`, next to the
+navigation hold, so the core only stores the answer for `pagehide`.
+
+### `realtime.connect`
+
+`realtime.connect` chooses when the socket connects (`'load'`, `'open'`,
+`'focus'`, `'input'` or a host hook) and, when `realtime` is explicit, lets that
+trigger start the client session. The default `'focus'` keeps its wiring in the
+core; the other triggers and the hook machinery live in
+`websocket-transport.js`, which any of them loads at mount because it is about
+to open a socket anyway. The core keeps the trigger check, the explicit-session
+rule and the loader call. Raises (gzip, decimal kB, and Brotli, binary KiB;
+Before is the watching-tab After above, local builds):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` | 171.64 kB | 171.89 kB | 171.7 → 171.95 kB |
+| `dist/index.cjs` | 231.20 kB | 231.39 kB | 231.25 → 231.45 kB |
+| `dist/websocket-transport.js` | 5.47 kB | 5.71 kB | 5.5 → 5.75 kB |
+| `dist/index.global.js` (Brotli) | 136.29 KiB | 136.40 KiB | 136.35 → 136.45 KiB |
+
+### Watch-path state across reconnects and tabs
+
+A watched question settles on the stream cursor (a later non-await frame of its
+execution past the question's pause), so a reconnect that replays the paused
+turn from its start never settles it. The page-tool navigation record moved to
+the tab's session storage, so another tab's save or exit can neither drop nor
+consume it. A question sheet mounted again while it slides out is kept.
+Raises (gzip, decimal kB, and Brotli, binary KiB; Before is the
+`realtime.connect` After above, local builds):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` | 171.89 kB | 172.08 kB | 171.95 → 172.15 kB |
+| `dist/index.cjs` | 231.39 kB | 231.61 kB | 231.45 → 231.65 kB |
+| `dist/index.global.js` (Brotli) | 136.40 KiB | 136.61 KiB | 136.45 → 136.65 KiB |
+
+`websocket-transport.js` (5.73 kB of 5.75 kB) also keeps unread frames when a
+stream's next leg arrives before anyone claimed it, and drops its buffer on a
+claim that an attach replays.
+
+### Turn ownership across tabs, navigation, and replays
+
+A tab keeps a record of the executions it owns (a boot resume handle or
+navigation record, and its own requests) and never watches one of them as
+another tab's turn. A page-tool call counts as answered once its `/resume` is
+sent, so the next page never answers it twice, and reconnects when the old
+page already answered. A tab with no resume handle of its own keeps the stored
+one when it saves. The
+socket transport reads a replay whole: until the backend acknowledges an
+attach, frames and ends of the relay it replaces are dropped. A connect
+attempt settles only itself. `update()` connects at once when it changes
+`realtime.connect` or replaces the client. Raises (Before is the watch-path
+After above, local builds):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` | 172.08 kB | 172.37 kB | 172.15 → 172.4 kB |
+| `dist/index.cjs` | 231.61 kB | 232.04 kB | 231.65 → 232.1 kB |
+| `dist/websocket-transport.js` | 5.73 kB | 5.95 kB | 5.75 → 6 kB |
+| `dist/session-actions.js` | 3.54 kB | 3.62 kB | 3.55 → 3.65 kB |
+| `dist/index.global.js` (Brotli) | 136.61 KiB | 137.03 KiB | 136.65 → 137.1 KiB |
+
+Exact turn ownership (`clientTurnId`, no time window), three-state page-tool
+answers carried across a navigation, and a stored transcript that always
+travels with its resume cursor. Raises (Before is the After above, local
+builds):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.global.js` | 172.37 kB | 172.47 kB | 172.4 → 172.5 kB |
+| `dist/index.cjs` | 232.04 kB | 232.17 kB | 232.1 → 232.2 kB |
+| `dist/websocket-transport.js` | 5.95 kB | 5.96 kB | 6 kB (unchanged) |
+| `dist/session-actions.js` | 3.62 kB | 3.68 kB | 3.65 → 3.7 kB |

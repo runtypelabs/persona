@@ -826,13 +826,13 @@ export const ensureAskUserQuestionSheet = (
     `[${SHEET_SENTINEL}="${escapeAttrValue(toolCallId)}"]`
   );
   if (existing) {
+    // Mounted again while sliding out: keep it.
+    existing.classList.remove("persona-ask-sheet-leave");
     syncSheetFromMessage(existing, message, config);
-    return;
   }
-
-  const { payload } = parseAskUserQuestionPayload(message);
-  const sheet = buildSheet(message, config, payload);
-  overlay.appendChild(sheet);
+  const sheet = existing ?? overlay.appendChild(buildSheet(message, config, parseAskUserQuestionPayload(message).payload));
+  // Another tab owns this question: show it here, but only that tab answers it.
+  sheet.toggleAttribute("inert", message.agentMetadata?.observed === true);
 };
 
 /**
@@ -856,7 +856,9 @@ export const removeAskUserQuestionSheet = (
       getComputedStyle(sheet).getPropertyValue("--persona-ask-sheet-duration") || "180",
       10
     );
-    const remove = () => sheet.remove();
+    const remove = () => {
+      if (sheet.classList.contains("persona-ask-sheet-leave")) sheet.remove();
+    };
     setTimeout(remove, Number.isFinite(duration) ? duration : 180);
   });
 };

@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import type { DispatchOptions, SSEHandler, HistoryClientError } from "./client";
 import type { ClientResumeHost } from "./client-resume";
+import type { PersonaTransportRequest } from "./transport";
 import type { builtInClientToolsForDispatch } from "./ask-user-question-tool";
 import { serializeWithToolPairs } from "./utils/tool-pair-replay";
 import { divergentDisplayProjection } from "./utils/history-messages";
@@ -389,6 +390,7 @@ export class ClientDispatch {
         ? { conversationRevision: data.conversationRevision }
         : {}),
       ...(data.durableRecovery ? { durableRecovery: data.durableRecovery } : {}),
+      ...readRealtimeAdvertisement(data),
       ...(data.visitor ? { visitor: data.visitor } : {}),
       config: {
         welcomeMessage: data.config.welcomeMessage,
@@ -587,18 +589,23 @@ export class ClientDispatch {
             });
           }
 
-          return fetch(this.host.getClientApiUrl('chat'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Persona-Version': VERSION,
-              ...(recoveryVisitorToken
-                ? { 'X-Visitor-Token': recoveryVisitorToken }
-                : {}),
+          return this.host.transportFetch({
+            kind: 'dispatch',
+            url: this.host.getClientApiUrl('chat'),
+            body: chatRequest as unknown as Record<string, unknown>,
+            init: {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Persona-Version': VERSION,
+                ...(recoveryVisitorToken
+                  ? { 'X-Visitor-Token': recoveryVisitorToken }
+                  : {}),
+              },
+              body: JSON.stringify(chatRequest),
+              signal: options.signal,
             },
-            body: JSON.stringify(chatRequest),
-            signal: options.signal,
-          });
+          }, (request) => fetch(request.url, request.init));
         });
       };
       let result = await send();
@@ -717,33 +724,7 @@ export class ClientDispatch {
       }
     }
 
-    // Use customFetch if provided, otherwise use default fetch
-    let response: Response;
-    if (this.host.customFetch) {
-      try {
-        response = await this.host.customFetch(
-          this.host.apiUrl,
-          {
-            method: "POST",
-            headers,
-            body: JSON.stringify(payload),
-            signal: options.signal
-          },
-          payload
-        );
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        onEvent({ type: "error", error: err });
-        throw err;
-      }
-    } else {
-      response = await fetch(this.host.apiUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        signal: options.signal
-      });
-    }
+    const response = await this.#send(options, onEvent, headers, payload);
 
     if (!response.ok || !response.body) {
       const error = new Error(
@@ -790,33 +771,7 @@ export class ClientDispatch {
       }
     }
 
-    // Use customFetch if provided, otherwise use default fetch
-    let response: Response;
-    if (this.host.customFetch) {
-      try {
-        response = await this.host.customFetch(
-          this.host.apiUrl,
-          {
-            method: "POST",
-            headers,
-            body: JSON.stringify(payload),
-            signal: options.signal
-          },
-          payload as unknown as AgentWidgetRequestPayload
-        );
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        onEvent({ type: "error", error: err });
-        throw err;
-      }
-    } else {
-      response = await fetch(this.host.apiUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        signal: options.signal
-      });
-    }
+    const response = await this.#send(options, onEvent, headers, payload as unknown as AgentWidgetRequestPayload);
 
     if (!response.ok || !response.body) {
       const error = new Error(
@@ -832,6 +787,36 @@ export class ClientDispatch {
     } finally {
       onEvent({ type: "status", status: "idle" });
     }
+  }
+
+  /**
+   * POST a proxy/agent payload through the transport. The default HTTP leg is
+   * the host's `customFetch` when configured (whose throws are reported as
+   * stream errors, as before) or `fetch`.
+   */
+  async #send(
+    options: DispatchOptions,
+    onEvent: SSEHandler,
+    headers: Record<string, string>,
+    payload: AgentWidgetRequestPayload
+  ): Promise<Response> {
+    const customFetch = this.host.customFetch;
+    const next = async (request: PersonaTransportRequest): Promise<Response> => {
+      if (!customFetch) return fetch(request.url, request.init);
+      try {
+        return await customFetch(request.url, request.init, (request.body ?? payload) as AgentWidgetRequestPayload);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        onEvent({ type: "error", error: err });
+        throw err;
+      }
+    };
+    return this.host.transportFetch({
+      kind: "dispatch",
+      url: this.host.apiUrl,
+      body: payload as unknown as Record<string, unknown>,
+      init: { method: "POST", headers, body: JSON.stringify(payload), signal: options.signal },
+    }, next);
   }
 
   #latestMentionContext(
@@ -1098,5 +1083,14 @@ const readWebMcpInitConfig = (
     ?.requireConfirmFor;
   return Array.isArray(list) && list.length
     ? { webmcp: { requireConfirmFor: list as string[] } }
+    : {};
+};
+
+/** The optional `realtime` socket advertisement, kept only when well formed. */
+const readRealtimeAdvertisement = ({ realtime }: Pick<RuntypeClientInitResponse, "realtime">): Pick<ClientSession, "realtime"> => {
+  // The contract types the shape; the payload is still untrusted at runtime.
+  return realtime && typeof realtime.protocol === "string" && typeof realtime.url === "string" &&
+    /^wss?:\/\//i.test(realtime.url)
+    ? { realtime: { protocol: realtime.protocol, url: realtime.url } }
     : {};
 };

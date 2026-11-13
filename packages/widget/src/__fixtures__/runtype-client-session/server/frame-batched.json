@@ -1,0 +1,5 @@
+{
+  "type": "frame",
+  "executionId": "aex_01jq8z9m4tq6w8y0a2c4e6g8j0",
+  "sse": "id: 42.0\nevent: text_delta\ndata: {\"type\":\"text_delta\",\"delta\":\"Hel\"}\n\nid: 42\nevent: text_delta\ndata: {\"type\":\"text_delta\",\"delta\":\"lo\"}\n\n"
+}

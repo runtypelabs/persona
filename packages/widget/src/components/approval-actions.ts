@@ -487,6 +487,16 @@ export const createBuiltInApprovalPlugin = (
         if (options === undefined) requestDeny();
         else requestDeny(options);
       };
+      const statusCard = (label: string): HTMLElement => {
+        const card = buildPending(state, expansionState, message, approval, approvalConfig, approve, deny, false);
+        const status = createElement("div", "persona-approval-status");
+        status.setAttribute("role", "status");
+        status.textContent = label;
+        card.querySelector(".persona-approval-actions")?.replaceWith(status);
+        return card;
+      };
+      // Another tab owns this turn and answers its approval; this tab shows it without controls.
+      if (approval.status === "pending" && message.agentMetadata?.observed) return statusCard("Waiting for approval");
 
       if (approval.status !== "pending") {
         teardownMessage(state, message.id);
@@ -498,14 +508,7 @@ export const createBuiltInApprovalPlugin = (
         if (approvalConfig?.resolvedDisplay === "row") {
           return buildPending(state, expansionState, message, approval, approvalConfig, approve, deny, false, false, resolvedLabel);
         }
-        if (approvalConfig?.resolvedDisplay === "status-line") {
-          const card = buildPending(state, expansionState, message, approval, approvalConfig, approve, deny, false);
-          const status = createElement("div", "persona-approval-status");
-          status.setAttribute("role", "status");
-          status.textContent = resolvedLabel;
-          card.querySelector(".persona-approval-actions")?.replaceWith(status);
-          return card;
-        }
+        if (approvalConfig?.resolvedDisplay === "status-line") return statusCard(resolvedLabel);
         // Approved → render nothing; the tool call takes over the transcript.
         // (An empty hidden element, not null, suppresses the legacy fallback.)
         if (approval.status === "approved") {

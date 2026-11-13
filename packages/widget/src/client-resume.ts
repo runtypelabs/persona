@@ -13,6 +13,7 @@ import type {
   ClientToolDefinition
 } from "./types";
 import type { WebMcpBridge } from "./webmcp-runtime-entry";
+import type { PersonaTransportNext, PersonaTransportRequest } from "./transport";
 import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
 import { DEFAULT_CLIENT_API_BASE } from "./utils/constants";
 
@@ -35,7 +36,11 @@ export type ClientResumeHost = {
   initSession(): Promise<ClientSession>;
   readVisitorToken(): Promise<string | null>;
   isClientTokenMode(): boolean;
+  /** Route a stream-producing request through the configured transport. */
+  transportFetch(request: PersonaTransportRequest, next: PersonaTransportNext): Promise<Response>;
 };
+
+const httpNext: PersonaTransportNext = (request) => fetch(request.url, request.init);
 
 /** See `AgentWidgetClient.resolveApproval`. */
 export async function resolveApproval(
@@ -57,12 +62,16 @@ export async function resolveApproval(
     decision,
     streamResponse: true,
   };
-  const post = (path: string, extra?: Record<string, unknown>) =>
-    fetch(`${h.clientApiBase()}${path}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ ...extra, ...body }),
-    });
+  const post = (path: string, extra?: Record<string, unknown>) => {
+    const payload = { ...extra, ...body };
+    return h.transportFetch({
+      kind: 'approve',
+      url: `${h.clientApiBase()}${path}`,
+      executionId: approval.executionId,
+      body: payload,
+      init: { method: 'POST', headers, body: JSON.stringify(payload) },
+    }, httpNext);
+  };
   const ownerRoute = `/v1/agents/${approval.agentId}/approve`;
 
   if (!h.isClientTokenMode()) return post(ownerRoute);
@@ -161,12 +170,18 @@ export async function resumeFlow(
           // eslint-disable-next-line no-console
           console.debug("[AgentWidgetClient] client token resume", resumeRequest);
         }
-        return fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(resumeRequest),
-          signal: options?.signal,
-        });
+        return h.transportFetch({
+          kind: 'resume',
+          url,
+          executionId,
+          body: resumeRequest,
+          init: {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(resumeRequest),
+            signal: options?.signal,
+          },
+        }, httpNext);
       },
       { emptyMeansReplace: true }
     );
@@ -180,10 +195,16 @@ export async function resumeFlow(
     return response;
   }
 
-  return fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    signal: options?.signal,
-  });
+  return h.transportFetch({
+    kind: 'resume',
+    url,
+    executionId,
+    body,
+    init: {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: options?.signal,
+    },
+  }, httpNext);
 }

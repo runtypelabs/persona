@@ -211,6 +211,10 @@ import {
   statusCopy,
   DEFAULT_OVERLAY_Z_INDEX,
 } from "./utils/constants";
+import { addPreconnectHint } from "./utils/preconnect";
+import type { PersonaTransportWarmReason } from "./transport";
+import { loadWebSocketTransport } from "./websocket-transport-loader";
+import { getSessionActionsSync } from "./session-actions-loader";
 import {
   applyStreamBuffer,
   createSkeletonPlaceholder,
@@ -5457,10 +5461,28 @@ export const createAgentExperience = (
       selectedArtifactId: lastArtifactsState.selectedId,
       ...(currentStoredDraft ? { draft: currentStoredDraft } : {})
     };
-    runStorageMutation(
-      () => storageAdapter.save!(payload),
-      "[AgentWidget] Failed to persist state:"
-    );
+    // INVARIANT: the stored transcript and its resume cursor come from one save. A tab without a handle
+    // keeps another tab's stored handle together with the transcript and artifacts it describes.
+    const keepStoredResume = (stored: AgentWidgetStoredState | null | undefined) => {
+      const theirs = stored?.metadata?.durableResume as { executionId?: unknown } | undefined;
+      return typeof theirs?.executionId === "string" && !session?.ownsExecution(theirs.executionId)
+        ? storageAdapter.save!({
+          ...payload,
+          messages: stored!.messages ?? [],
+          artifacts: stored!.artifacts,
+          metadata: { ...persistentMetadata, durableResume: theirs },
+        })
+        : storageAdapter.save!(payload);
+    };
+    runStorageMutation(() => {
+      if (!personaOwnsClientTokenRecovery || persistentMetadata.durableResume || !storageAdapter.load) {
+        return storageAdapter.save!(payload);
+      }
+      const stored = storageAdapter.load();
+      return stored && typeof (stored as Promise<unknown>).then === "function"
+        ? (stored as Promise<AgentWidgetStoredState | null>).then(keepStoredResume)
+        : keepStoredResume(stored as AgentWidgetStoredState | null);
+    }, "[AgentWidget] Failed to persist state:");
   }
 
   // --- Draft persistence (roadmap section 12) --------------------------------
@@ -7404,6 +7426,11 @@ export const createAgentExperience = (
     transform: MessageTransform
   ) => {
     if (messages.length > 0) warmClientStream();
+    const s = sessionRef.current;
+    // Marked for rendering only: the session's messages, and so storage, never carry `observed`.
+    if (s?.observed.size) {
+      messages = messages.map((m) => (s.isObserved(m) ? { ...m, agentMetadata: { ...m.agentMetadata, observed: true } } : m));
+    }
     renderMessagesWithPluginsImpl(container, messages, transform);
     pruneUserMessageCollapse(messages);
     syncUserMessageCollapse();
@@ -8672,6 +8699,33 @@ export const createAgentExperience = (
         }),
   };
 
+  // MPA navigation: page-tool calls in flight when the page unloads, so the
+  // next page answers them with an arrival result instead of re-running them.
+  let navigationTarget: string | null = null;
+  // Calls running when the page itself started a navigation; null until a `navigate` event is seen.
+  let navigatingCalls: ReturnType<AgentWidgetSession["getInflightBrowserToolCalls"]> | null = null;
+  // The record is this tab's (its next page reads it), so it lives in the tab's session storage, not the shared transcript.
+  const navigationRecord = (record?: unknown, peek?: boolean) => {
+    try {
+      const store = mount.ownerDocument.defaultView?.sessionStorage;
+      const key = `${currentKeyPrefix()}navigation`;
+      const stored = store?.getItem(key);
+      if (record) store?.setItem(key, JSON.stringify(record));
+      else if (!peek) store?.removeItem(key);
+      return stored ? (JSON.parse(stored) as unknown) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const recordNavigation = (calls = session?.getInflightBrowserToolCalls() ?? []) => {
+    navigationRecord(calls.length ? { calls, to: navigationTarget, at: Date.now() } : undefined);
+    if (!calls.length) return;
+    // WORKAROUND(#561): a watching tab's save replaces the shared metadata; re-save this tab's resume handle for the next page.
+    persistState();
+    // Informational for the server; the socket may not flush before unload.
+    void session.getClient().realtimeNavigating({ executionId: calls[0].executionId, url: navigationTarget ?? undefined }, 0);
+  };
+
   // Runtype client-token widgets already possess the session, conversation,
   // and exact-browser visitor credential needed by the public reconnect route.
   // Install Persona's existing reconnect hooks by default so this mode follows
@@ -8680,14 +8734,46 @@ export const createAgentExperience = (
     const hostExecutionState = config.onExecutionState;
     const recoveryWindow = mount.ownerDocument.defaultView;
     let pageExitInProgress = false;
-    const markPageExit = () => (pageExitInProgress = true);
-    const markPageActive = () => (pageExitInProgress = false);
+    const recoveryNavigation = (recoveryWindow as (Window & { navigation?: EventTarget }) | null)?.navigation;
+    const markPageExit = () => {
+      pageExitInProgress = true;
+      // Without the Navigation API the cause is unknown, so every running call is recorded.
+      const live = session.getInflightBrowserToolCalls();
+      recordNavigation(recoveryNavigation
+        ? (navigatingCalls ?? []).map((c) => live.find((l) => l.executionId === c.executionId && l.toolCallId === c.toolCallId) ?? c)
+        : live);
+    };
+    const markPageActive = () => {
+      pageExitInProgress = false;
+      navigatingCalls = null;
+    };
     recoveryWindow?.addEventListener("pagehide", markPageExit);
     recoveryWindow?.addEventListener("pageshow", markPageActive);
     destroyCallbacks.push(() => {
       recoveryWindow?.removeEventListener("pagehide", markPageExit);
       recoveryWindow?.removeEventListener("pageshow", markPageActive);
     });
+    // Widget-initiated navigations (a page tool assigning `location`): tell the
+    // client-session socket first, bounded, then let the navigation proceed.
+    let navigationBypass = false;
+    const handleNavigate = (event: Event) => {
+      navigationTarget = (event as Event & { destination?: { url?: string } }).destination?.url ?? null;
+      // Page tools only run once the session-actions chunk is loaded, so without it none are running.
+      navigatingCalls = getSessionActionsSync()?.holdWidgetNavigation(event, !navigationBypass, {
+        calls: () => session.getInflightBrowserToolCalls(),
+        realtime: () => session.getClient().hasRealtime(),
+        record: recordNavigation,
+        notify: (url) =>
+          session.getClient().realtimeNavigating({ executionId: session.getResumableHandle()?.executionId, url }, 150),
+        proceed: (url, replace) => {
+          navigationBypass = true;
+          if (replace) recoveryWindow?.location.replace(url);
+          else recoveryWindow?.location.assign(url);
+        },
+      }) ?? [];
+    };
+    recoveryNavigation?.addEventListener("navigate", handleNavigate);
+    destroyCallbacks.push(() => recoveryNavigation?.removeEventListener("navigate", handleNavigate));
     config = {
       ...config,
       reconnectStream:
@@ -9098,6 +9184,15 @@ export const createAgentExperience = (
     visitorStore?.destroy();
     visitorStore = null;
   });
+  if (personaOwnsClientTokenRecovery) {
+    // This page continues these turns: nothing may announce them as another tab's first.
+    const own = readStoredResumableHandle();
+    if (own) session.markOwnExecution(own.executionId);
+    const navigated = navigationRecord(undefined, true) as { calls?: Array<{ executionId?: unknown }> } | undefined;
+    for (const call of Array.isArray(navigated?.calls) ? navigated.calls : []) {
+      if (typeof call?.executionId === "string") session.markOwnExecution(call.executionId);
+    }
+  }
 
   // Mirror read-aloud playback state into the action buttons, and surface it as
   // a controller event (parallel to message:copy / message:feedback).
@@ -9735,6 +9830,62 @@ export const createAgentExperience = (
     releaseSessionInitHook();
   });
 
+  // Stream transport: preconnect at mount, connect on the `realtime.connect`
+  // trigger. The default 'focus' (launcher hover/focus, open, composer focus) is
+  // wired here; the others load with the socket chunk, which they need anyway.
+  addPreconnectHint(mount.ownerDocument, config);
+  const transportDoc = mount.ownerDocument;
+  const realtimeOption = () => (typeof config.realtime === "object" && config.realtime.enabled !== false && config.realtime.connect) || "focus";
+  // An explicit `realtime` lets its trigger start the session the socket needs.
+  const connectRealtime = (reason: PersonaTransportWarmReason) => {
+    if (config.realtime && (config.realtime === true || config.realtime.enabled !== false) && !config.transport) warmSession();
+    session.warmTransport(reason);
+  };
+  const handleTransportIntent = (event: Event) => {
+    const target = event.target as Element;
+    if (realtimeOption() === "focus" && (target.closest?.("[data-persona-launcher-surface]") || (composerBindings?.form ?? composerForm)?.contains(target))) {
+      connectRealtime("intent");
+    }
+  };
+  // undefined: not loaded; null: loading; false: the widget was destroyed.
+  let connectTrigger: { sync(replaced?: boolean): void; destroy(): void } | null | false | undefined;
+  const syncConnectTrigger = (replaced?: boolean) => {
+    // A replaced client closed its socket: an open 'focus' widget reconnects as on open.
+    if (replaced && realtimeOption() === "focus" && open) connectRealtime("open");
+    if (connectTrigger) connectTrigger.sync(replaced);
+    else if (connectTrigger === undefined && realtimeOption() !== "focus") {
+      connectTrigger = null;
+      void loadWebSocketTransport().then((mod) => {
+        if (connectTrigger === null) connectTrigger = mod.installRealtimeConnect({
+          mount,
+          mode: realtimeOption,
+          connect: connectRealtime,
+          isOpen: () => open,
+          bus: eventBus,
+          input: () => composerBindings?.input ?? textarea,
+        });
+      }, () => (connectTrigger = undefined));
+    }
+  };
+  syncConnectTrigger();
+  const handleTransportVisibility = () => {
+    if (transportDoc.visibilityState === "visible" && open && sessionInitialized) session.warmTransport("visible");
+  };
+  mount.addEventListener("pointerover", handleTransportIntent);
+  mount.addEventListener("focusin", handleTransportIntent);
+  transportDoc.addEventListener("visibilitychange", handleTransportVisibility);
+  const transportOpenUnsub = eventBus.on("widget:opened", () => {
+    if (realtimeOption() === "focus") connectRealtime("open");
+  });
+  destroyCallbacks.push(() => {
+    mount.removeEventListener("pointerover", handleTransportIntent);
+    mount.removeEventListener("focusin", handleTransportIntent);
+    transportDoc.removeEventListener("visibilitychange", handleTransportVisibility);
+    transportOpenUnsub();
+    if (connectTrigger) connectTrigger.destroy();
+    connectTrigger = false;
+  });
+
   // Wire up optional SSE tap (host) + event stream buffer to capture SSE
   // events. `feedEventStream` stages events while the lazy chunk is in flight.
   if (showEventStreamToggle || config.onSSEEvent) {
@@ -9756,6 +9907,18 @@ export const createAgentExperience = (
         ? historyInternals.getStoredResumableHandle?.()
         : null);
     if (resume && typeof config.reconnectStream === "function") {
+      // A turn to recover: open the client-session socket now, not on intent.
+      session.warmTransport("resume");
+      const record = personaOwnsClientTokenRecovery ? navigationRecord() : undefined;
+      const view = mount.ownerDocument.defaultView;
+      if (record && view) {
+        const arrival = { navigated: true, url: view.location.href, title: mount.ownerDocument.title };
+        void session
+          .resumeNavigatedToolCalls(record, resume, arrival, view.location)
+          .catch(() => false)
+          .then((answered) => answered || session.resumeFromHandle(resume));
+        return;
+      }
       session.resumeFromHandle(resume);
     }
   };
@@ -10990,9 +11153,14 @@ export const createAgentExperience = (
   // transports and capture before it freezes. A fresh navigation still uses
   // the existing teardown/voice-metadata path above.
   let cachedPage = false;
+  // The page keeps its in-memory transcript in the bfcache, so the reattach
+  // cursor must be the in-memory one, not the (possibly older) stored one.
+  let cachedResume: { executionId: string; after: string } | null = null;
   const suspendCachedPage = (event: PageTransitionEvent) => {
     if (!event.persisted || cachedPage) return;
     cachedPage = true;
+    const live = session.getResumableHandle();
+    cachedResume = live ? { executionId: live.executionId, after: live.lastEventId } : null;
     pageHiding = true;
     invalidatePendingRestarts();
     composerConversationGeneration++;
@@ -11013,6 +11181,13 @@ export const createAgentExperience = (
     if (!event.persisted || !cachedPage) return;
     cachedPage = false;
     pageHiding = false;
+    // The client-session socket closed on pagehide; reattach from the cursor.
+    const resume = cachedResume;
+    cachedResume = null;
+    if (resume && personaOwnsClientTokenRecovery && session.getClient().hasRealtime()) {
+      session.warmTransport("resume");
+      session.resumeFromHandle(resume);
+    }
     // Rebuild the provider lazily so the same controls can start a new call.
     // Neither stopped replies nor calls restart automatically on Back.
     if (config.voiceRecognition?.enabled === true && usesSessionVoiceForConfig(config)) session.setupVoice();
@@ -12543,8 +12718,10 @@ export const createAgentExperience = (
       postprocess = buildPostprocessor(config, actionManager, handleResubmitRequested);
       // Re-key the visitor store before any client rebuild sees the new config.
       syncVisitorStore();
+      const previousClient = session.getClient();
       session.updateConfig(config);
       syncSessionInitHook();
+      syncConnectTrigger(session.getClient() !== previousClient);
       if (
         (config.features?.history?.enabled === true) !== previousHistoryEnabled ||
         config.features?.history?.provider !== previousHistoryProvider ||

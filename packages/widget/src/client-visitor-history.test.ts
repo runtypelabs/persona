@@ -4,6 +4,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { AgentWidgetClient, HistoryClientError } from './client';
 import { createAgentExperience } from './ui';
+import { AgentWidgetSession } from './session';
+import { loadSessionActions } from './session-actions-loader';
 import { visitorStoreKeys, createVisitorStore, type VisitorStore } from './utils/visitor-store';
 import type {
   AgentWidgetConfig,
@@ -793,6 +795,138 @@ describe('controller wiring', () => {
     mount.remove();
   });
 
+  it("idle tab saves a draft while another tab's turn streams, then reload resumes with no gap and no duplicate", async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_idle' }), ok({ sessionId: 'sess_owner' })]);
+    const idleMount = document.createElement('div');
+    const ownerMount = document.createElement('div');
+    document.body.append(idleMount, ownerMount);
+    const config = { apiUrl: API_URL, clientToken: CLIENT_TOKEN, sessionInit: 'mount' as const, launcher: { enabled: false } };
+    const idle = createAgentExperience(idleMount, config);
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    const owner = createAgentExperience(ownerMount, config);
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    const storedState = () => JSON.parse(localStorage.getItem(`${KEY_PREFIX}state`) ?? '{}') as {
+      messages?: Array<{ role: string; content: string }>;
+      metadata?: Record<string, unknown>;
+      draft?: { text?: string };
+    };
+    const delta = (id: number, text: string) =>
+      `id: ${id}\nevent: text_delta\ndata: {"type":"text_delta","executionId":"exec_owner","id":"text_owner","delta":"${text}"}\n\n`;
+
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    void owner.connectStream(new ReadableStream<Uint8Array>({ start: (value) => void (streamController = value) }));
+    streamController.enqueue(new TextEncoder().encode(delta(7, 'Hi')));
+    streamController.enqueue(new TextEncoder().encode(delta(8, ' there')));
+    await vi.waitFor(() => expect(storedState().metadata?.durableResume).toEqual({ executionId: 'exec_owner', after: '8' }));
+
+    const textarea = idleMount.querySelector<HTMLTextAreaElement>('[data-persona-composer-input]')!;
+    textarea.value = 'half-typed';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.waitFor(() => expect(storedState().draft?.text).toBe('half-typed'), { timeout: 2000 });
+    expect(storedState().metadata?.durableResume).toEqual({ executionId: 'exec_owner', after: '8' });
+
+    window.dispatchEvent(new Event('pagehide'));
+    idle.destroy();
+    owner.destroy();
+    idleMount.remove();
+    ownerMount.remove();
+
+    const eventsAfter: string[] = [];
+    global.fetch = vi.fn(async (url: unknown) => {
+      const href = String(url);
+      if (!href.includes('/events')) return { ok: true, status: 200, json: async () => initBody({ sessionId: 'sess_reload' }) };
+      eventsAfter.push(new URL(href).searchParams.get('after') ?? '');
+      return new Response(
+        delta(9, '!') +
+          'id: 10\nevent: execution_complete\ndata: {"type":"execution_complete","executionId":"exec_owner","kind":"agent","success":true}\n\n',
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+      );
+    }) as unknown as typeof fetch;
+    const reloadMount = document.createElement('div');
+    document.body.appendChild(reloadMount);
+    const reload = createAgentExperience(reloadMount, config);
+    await vi.waitFor(() => expect(eventsAfter).toEqual(['8']));
+    await vi.waitFor(() => expect(reload.getStatus()).toBe('idle'));
+    const replies = reload.getMessages().filter((m) => m.role === 'assistant').map((m) => m.content);
+    expect(replies).toEqual(['Hi there!']);
+
+    reload.destroy();
+    reloadMount.remove();
+  });
+
+  it("keeps the owning tab's resume handle when another tab on the conversation saves", async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_watcher' }), ok({ sessionId: 'sess_owner' })]);
+    const watcherMount = document.createElement('div');
+    const ownerMount = document.createElement('div');
+    document.body.append(watcherMount, ownerMount);
+    const config = { apiUrl: API_URL, clientToken: CLIENT_TOKEN, sessionInit: 'mount' as const, launcher: { enabled: false } };
+    const watcher = createAgentExperience(watcherMount, config);
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    const owner = createAgentExperience(ownerMount, config);
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    const stored = () =>
+      (JSON.parse(localStorage.getItem(`${KEY_PREFIX}state`) ?? '{}') as { metadata?: Record<string, unknown> }).metadata
+        ?.durableResume;
+
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    void owner.connectStream(new ReadableStream<Uint8Array>({ start: (value) => void (streamController = value) }));
+    streamController.enqueue(new TextEncoder().encode(
+      'id: 7\nevent: text_delta\ndata: {"type":"text_delta","executionId":"exec_owner","id":"text_owner","delta":"Hi"}\n\n'
+    ));
+    await vi.waitFor(() => expect(stored()).toEqual({ executionId: 'exec_owner', after: '7' }));
+
+    // The watcher's save keeps the owner's transcript with the owner's handle; only its own draft lands.
+    watcher.injectAssistantMessage({ content: 'seen from the other tab' });
+    const textarea = watcherMount.querySelector<HTMLTextAreaElement>('[data-persona-composer-input]')!;
+    textarea.value = 'watcher draft';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.waitFor(() => expect(localStorage.getItem(`${KEY_PREFIX}state`)).toContain('watcher draft'), { timeout: 2000 });
+    expect(stored()).toEqual({ executionId: 'exec_owner', after: '7' });
+    expect(localStorage.getItem(`${KEY_PREFIX}state`)).not.toContain('seen from the other tab');
+
+    // The owner ends its turn: its clear is not undone by the merge.
+    streamController.enqueue(new TextEncoder().encode(
+      'id: 8\nevent: execution_complete\ndata: {"type":"execution_complete","executionId":"exec_owner","kind":"agent","success":true}\n\n'
+    ));
+    streamController.close();
+    await vi.waitFor(() => expect(stored()).toBeUndefined());
+    watcher.injectAssistantMessage({ content: 'later' });
+    await vi.waitFor(() => expect(localStorage.getItem(`${KEY_PREFIX}state`)).toContain('later'));
+    expect(stored()).toBeUndefined();
+
+    watcher.destroy();
+    owner.destroy();
+    watcherMount.remove();
+    ownerMount.remove();
+  });
+
+  it("marks the stored handle's and navigation record's executions as this tab's at boot", () => {
+    const marked = vi.spyOn(AgentWidgetSession.prototype, 'markOwnExecution');
+    localStorage.setItem(`${KEY_PREFIX}state`, JSON.stringify({
+      messages: [],
+      metadata: { durableResume: { executionId: 'exec_resume', after: '3' } },
+    }));
+    sessionStorage.setItem(`${KEY_PREFIX}navigation`, JSON.stringify({
+      calls: [{ executionId: 'exec_nav', toolCallId: 'call_1', toolName: 'webmcp:go' }],
+      at: Date.now(),
+    }));
+    installFetch([]);
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      launcher: { enabled: false },
+      reconnectStream: undefined,
+    });
+    expect(marked.mock.calls.slice(0, 2)).toEqual([['exec_resume'], ['exec_nav']]);
+    controller.destroy();
+    mount.remove();
+    sessionStorage.clear();
+  });
+
   it('retains the built-in durable handle during page exit', async () => {
     await seedToken('cvt_stored');
     installFetch([ok({ sessionId: 'sess_ui' })]);
@@ -838,6 +972,77 @@ describe('controller wiring', () => {
       executionId: 'exec_exit',
       after: '7',
     });
+
+    controller.destroy();
+    mount.remove();
+  });
+
+  it.each([
+    ['a visitor-initiated navigation', true, false, undefined],
+    ['a page-initiated navigation', false, false, [{ executionId: 'exec_1', toolCallId: 'call_1', toolName: 'webmcp:lookup', resumeKey: 'call_1' }]],
+    ['a page-initiated same-document navigation followed by an unannounced exit', false, true, undefined],
+  ])('records running page tools as navigating only for %s', async (_label, userInitiated, sameDocument, expected) => {
+    const call = { executionId: 'exec_1', toolCallId: 'call_1', toolName: 'webmcp:lookup', resumeKey: 'call_1' };
+    vi.spyOn(AgentWidgetSession.prototype, 'getInflightBrowserToolCalls').mockReturnValue([call]);
+    await loadSessionActions();
+    const navigation = new EventTarget();
+    vi.stubGlobal('navigation', navigation);
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_ui' })]);
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      sessionInit: 'mount',
+      launcher: { enabled: false },
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    navigation.dispatchEvent(Object.assign(new Event('navigate'), {
+      userInitiated,
+      navigationType: 'push',
+      destination: { url: 'https://example.test/next', sameDocument },
+    }));
+    window.dispatchEvent(new Event('pagehide'));
+    // The record is this tab's: it lives in the tab's session storage, never in the transcript store other tabs share.
+    const record = JSON.parse(sessionStorage.getItem(`${KEY_PREFIX}navigation`) ?? 'null') as { calls?: unknown } | null;
+    expect(record?.calls).toEqual(expected);
+    expect(controller.getPersistentMetadata()).not.toHaveProperty('durableNavigation');
+    sessionStorage.clear();
+
+    controller.destroy();
+    mount.remove();
+  });
+
+  it('records an answer produced after the navigate event with its output at pagehide', async () => {
+    const call = { executionId: 'exec_1', toolCallId: 'call_1', toolName: 'webmcp:lookup', resumeKey: 'call_1' };
+    const inflight = vi.spyOn(AgentWidgetSession.prototype, 'getInflightBrowserToolCalls').mockReturnValue([call]);
+    await loadSessionActions();
+    const navigation = new EventTarget();
+    vi.stubGlobal('navigation', navigation);
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_ui' })]);
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      sessionInit: 'mount',
+      launcher: { enabled: false },
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    navigation.dispatchEvent(Object.assign(new Event('navigate'), {
+      userInitiated: false,
+      navigationType: 'push',
+      destination: { url: 'https://example.test/next', sameDocument: false },
+    }));
+    inflight.mockReturnValue([{ ...call, output: { ok: true } }]);
+    window.dispatchEvent(new Event('pagehide'));
+    const record = JSON.parse(sessionStorage.getItem(`${KEY_PREFIX}navigation`) ?? 'null') as { calls?: unknown } | null;
+    expect(record?.calls).toEqual([{ ...call, output: { ok: true } }]);
+    sessionStorage.clear();
 
     controller.destroy();
     mount.remove();

@@ -1,5 +1,8 @@
 import { createChunkLoader } from "./utils/chunk-loader";
 import type {
+  holdWidgetNavigation,
+  inflightBrowserToolCalls,
+  resumeNavigatedToolCalls,
   resolveApproval,
   resolveAskUserQuestion,
   resolveWebMcpToolCall,
@@ -18,6 +21,9 @@ export type SessionActionsModule = {
   resolveAskUserQuestion: typeof resolveAskUserQuestion;
   resolveWebMcpToolCall: typeof resolveWebMcpToolCall;
   resolveWebMcpToolCallBatch: typeof resolveWebMcpToolCallBatch;
+  inflightBrowserToolCalls: typeof inflightBrowserToolCalls;
+  resumeNavigatedToolCalls: typeof resumeNavigatedToolCalls;
+  holdWidgetNavigation: typeof holdWidgetNavigation;
 };
 
 const { setLoader, load, provide, getSync } = createChunkLoader<SessionActionsModule>({

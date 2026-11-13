@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <title>Realtime compare: socket vs SSE</title>
+  <style>
+    html, body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { padding: 16px; background: #f6f6f6; }
+    h1 { font-size: 16px; margin: 0 0 8px; }
+    #compare-status { font: 12px/1.6 ui-monospace, monospace; margin-bottom: 8px; }
+    #compare-send { display: flex; gap: 8px; margin-bottom: 12px; max-width: 1456px; }
+    #compare-input { flex: 1; font: inherit; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; }
+    #compare-send button { font: inherit; padding: 6px 14px; }
+    .compare-sides { display: flex; gap: 16px; flex-wrap: wrap; }
+    .compare-side { flex: 1 1 360px; max-width: 720px; min-width: 0; }
+    .compare-side h2 { font-size: 14px; margin: 0 0 4px; }
+    .compare-side-status { font: 12px/1.6 ui-monospace, monospace; margin-bottom: 6px; }
+    .compare-host { height: 560px; display: flex; background: #fff; border: 1px solid #ddd; box-sizing: border-box; overflow: hidden; }
+    .compare-readout { font: 12px/1.5 ui-monospace, monospace; margin-top: 8px; }
+    .compare-readout table { border-collapse: collapse; width: 100%; background: #fff; }
+    .compare-readout th, .compare-readout td { border: 1px solid #ddd; padding: 2px 6px; text-align: right; }
+    .compare-readout th:first-child, .compare-readout td:first-child { text-align: left; }
+  </style>
+</head>
+<body>
+  <!--
+    Side-by-side comparison of WebSocket delivery and SSE for one prompt: the
+    left widget uses the client-session socket (`realtime: true`), the right
+    one plain SSE (`realtime: false`). Each widget is its own visitor and
+    conversation. Times are measured in the page from the send click. Also the
+    Playwright fixture for e2e/specs/32-realtime-compare.spec.ts.
+
+    Query parameters:
+      apiUrl=<url>        Runtype API base; default the fake server at http://127.0.0.1:8790
+                          (node e2e/fixtures/fake-runtype-server-cli.ts)
+      clientToken=<ct_>   client token; default ct_fake_demo
+      agentId=<id>        optional agent id
+  -->
+  <h1>Socket vs SSE</h1>
+  <div id="compare-status">booting</div>
+  <form id="compare-send">
+    <input id="compare-input" type="text" autocomplete="off" placeholder="One prompt, sent to both widgets at once" />
+    <button type="submit">Send to both</button>
+  </form>
+  <div class="compare-sides">
+    <section class="compare-side" data-side="socket">
+      <h2>WebSocket (<code>realtime: true</code>)</h2>
+      <div class="compare-side-status" data-role="status">idle</div>
+      <div class="compare-host" data-role="host"></div>
+      <div class="compare-readout" data-role="readout"></div>
+    </section>
+    <section class="compare-side" data-side="sse">
+      <h2>SSE (<code>realtime: false</code>)</h2>
+      <div class="compare-side-status" data-role="status">idle</div>
+      <div class="compare-host" data-role="host"></div>
+      <div class="compare-readout" data-role="readout"></div>
+    </section>
+  </div>
+  <script type="module" src="/src/realtime-compare.ts"></script>
+</body>
+</html>

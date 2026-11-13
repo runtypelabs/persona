@@ -1,0 +1,9 @@
+{
+  "type": "hello",
+  "protocolVersion": "runtype-client-session-v1",
+  "conversationId": "rec_01jq8z6k2re9v0w1m3n5p7s9t2",
+  "connectionId": "c_7f3a9b21e4d84c0f",
+  "beatIntervalMs": 25000,
+  "activeExecutionId": null,
+  "capabilities": []
+}

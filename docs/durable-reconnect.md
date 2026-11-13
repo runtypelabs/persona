@@ -269,6 +269,28 @@ checkpoint or update a newer run.
   widget advances the cursor only on fully-parsed frames to bound this. Plain text
   deltas, the common case, are one frame per row.
 
+## Page navigation and the bfcache
+
+With Persona-owned persistence (`persistState` in client-token mode), a turn
+survives a full page load: the next page reattaches from the stored cursor.
+Two cases need more than the cursor.
+
+- **A page tool that navigates.** A WebMCP tool such as `go_to_page` unloads
+  the page it runs on, so it never posts its result. On `pagehide` the widget
+  records the in-flight page-tool calls in session storage (valid for 60 seconds,
+  same origin only). The next page answers each recorded call through `/resume`
+  with `{ navigated: true, url, title }` and does not run the tool again, even
+  when the server replays the `await`. Without the record, the replayed `await`
+  would run the tool a second time. When the client-session socket is live and
+  the browser has the Navigation API, a navigation started by the tool is held
+  for up to 150 ms so the server hears `navigating` first; user-initiated
+  navigations are never held.
+- **Back/forward cache.** A page restored from the bfcache keeps its in-memory
+  transcript, which can be ahead of the stored cursor. The widget reattaches
+  from the in-memory cursor captured at `pagehide`, so no delta is applied twice.
+
+The pause state is also armed for a turn whose first event is a tool `await`
+(no assistant text yet), so such a turn is recoverable after a reload.
 
 ## Opt-in background conversation switching
 

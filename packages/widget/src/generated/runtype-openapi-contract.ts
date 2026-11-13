@@ -668,6 +668,10 @@ export type RuntypeClientInitResponse = {
   id: string;
   name?: string;
 };
+  realtime?: {
+  protocol: string;
+  url: string;
+};
   sessionId: string;
   targetId?: string;
   visitor?: {
@@ -702,6 +706,7 @@ export type RuntypeClientChatRequest = {
   untrustedContentHint?: boolean;
 }>;
   clientToolsFingerprint?: string;
+  delivery?: "socket";
   identityProof?: {
   provider: string;
   token: string;
@@ -770,6 +775,7 @@ export type RuntypeClientResumeRequest = {
   untrustedContentHint?: boolean;
 }>;
   clientToolsFingerprint?: string;
+  delivery?: "socket";
   executionId: string;
   messages?: Array<{
   content: string | (Array<{

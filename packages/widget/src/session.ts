@@ -7,6 +7,7 @@ import {
 import { isWebMcpToolName } from "./webmcp-bridge";
 import { isBrowserLocalApproval, restoreBrowserToolState } from "./utils/restored-browser-state";
 import type { SessionActionsHost, SessionActionsInternals } from "./session-actions";
+import type { PersonaTransportWarmReason } from "./transport";
 import {
   getSessionActionsSync,
   loadSessionActions,
@@ -65,7 +66,8 @@ import type {
   WidgetHistoryInternals,
   ComposerOptionsPayload,
   ComposerQuote,
-  ComposerResubmitOptions
+  ComposerResubmitOptions,
+  AgentWidgetNavigatingToolCall
 } from "./types";
 import { applyQuoteToContent } from "./utils/composer-quote";
 import { canResubmitUserMessage, findUserTurnBoundary } from "./utils/resubmit-turn";
@@ -170,6 +172,8 @@ const CONNECTION_CONFIG_KEYS = [
   "setStoredConversationId",
   "clearStoredConversationId",
   "clearStoredSessionId",
+  "transport",
+  "realtime",
 ] as const satisfies ReadonlyArray<keyof AgentWidgetConfig>;
 
 function connectionConfigChanged(
@@ -224,6 +228,9 @@ export type SessionHistoryState = {
   recovery: "new_conversation_required" | null;
   sendBlocked: boolean;
 };
+
+/** What one SSE frame of a watched turn carried, collected until its cursor. */
+type ObservedFrame = { exec?: string; awaits?: boolean; other?: boolean; asks: string[] };
 
 /** One prepended history page, plus the cursor for the next older one. */
 export type HistoryOlderPage = {
@@ -368,6 +375,10 @@ export class AgentWidgetSession {
   private streaming = false;
   /** Approval messages decided on a stream, keyed to that stream so it settles only its own. */
   #approvalSettlesAtStreamEnd = new Map<string, object | undefined>();
+  /** Another tab's open question, by message id: its execution and the cursor of its pause. */
+  #observedQuestions = new Map<string, { exec: string; at: [number, number] }>();
+  /** Executions this tab started or recovers; never adopted as another tab's. */
+  readonly #owned = new Set<string>();
   /** The `connectStream` call whose event is being handled, if any. */
   #activeStreamToken: object | undefined;
   private abortController: AbortController | null = null;
@@ -421,7 +432,8 @@ export class AgentWidgetSession {
   //   webMcpInflightKeys: currently executing; cleared on completion of
   //                         EITHER /resume success OR /resume throw. Blocks
   //                         concurrent re-fire during the resolve round-trip.
-  //   webMcpResolvedKeys: /resume HTTP returned 2xx; not cleared on a new
+  //   webMcpResolvedKeys: confirmed: /resume returned 2xx, or 409 for a
+  //                         navigation arrival; not cleared on a new
   //                         dispatch (executionId scoping makes that
   //                         unnecessary). Blocks stale await re-emits
   //                         for the same execution.
@@ -431,6 +443,14 @@ export class AgentWidgetSession {
   // subsequent re-emit will re-trigger.
   private webMcpInflightKeys: Set<string> = new Set();
   private webMcpResolvedKeys: Set<string> = new Set();
+  // Page-tool calls that navigated this page away: keyed like the sets above,
+  // the value is the arrival result posted to /resume instead of re-running
+  // the tool when its `await` is replayed on the new page.
+  private webMcpArrivals: Map<string, unknown> = new Map();
+  // Answers whose /resume has not returned; the batch that produced them removes them when it settles.
+  private webMcpProduced: Map<string, unknown> = new Map();
+  /** Executions another tab started and owns; this tab only shows them. Live state, never stored. */
+  readonly observed: Set<string> = new Set();
   // Per-resolve AbortControllers, kept in a set so multiple `webmcp:*`
   // await resolves in one turn never abort one another. The shared
   // `this.abortController` is intentionally NOT used by resolveWebMcpToolCall:
@@ -533,6 +553,7 @@ export class AgentWidgetSession {
     }));
     this.messages = this.#sortMessages(this.messages);
     this.client = new AgentWidgetClient(config, this.historyInternals);
+    this.#wireRealtime();
     this.#syncVisitorStoreSubscription();
     this.#wireDefaultWebMcpConfirm();
 
@@ -1223,6 +1244,7 @@ export class AgentWidgetSession {
     this.#historyOpenEpoch += 1;
     this.#historyContextEpoch += 1;
     this.cancel();
+    this.client.destroy();
     this.#runActivity = undefined;
     this.cleanupVoice();
     this.#visitorStoreUnsubscribe?.();
@@ -2423,7 +2445,9 @@ export class AgentWidgetSession {
     const prevSSECallback = this.client.getSSEEventCallback();
     this.#historyOpenEpoch += 1;
     this.#historyContextEpoch += 1;
+    this.client.destroy();
     this.client = new AgentWidgetClient(this.config, this.historyInternals);
+    this.#wireRealtime();
     if (artifactDisplayChanged) this.#refreshArtifactReferenceBlocks();
     this.#wireDefaultWebMcpConfirm();
     if (prevSSECallback) {
@@ -3205,6 +3229,8 @@ export class AgentWidgetSession {
       seedContent?: string;
       /** Never execute browser tools from durable background event replay. */
       readOnlyReplay?: boolean;
+      /** Show a turn another tab owns without running its browser tools here. */
+      observeOnly?: boolean;
     }
   ): Promise<void> {
     if (this.streaming && !options?.allowReentry) return;
@@ -3240,6 +3266,7 @@ export class AgentWidgetSession {
     const run = this.#activeRun;
 
     const streamToken = {};
+    let frame: ObservedFrame = { asks: [] };
     try {
       await this.client.processStream(
         stream,
@@ -3248,7 +3275,8 @@ export class AgentWidgetSession {
           const previous = this.#activeStreamToken;
           this.#activeStreamToken = streamToken;
           try {
-            this.handleEvent(event, options?.readOnlyReplay);
+            this.handleEvent(event, options?.readOnlyReplay || options?.observeOnly);
+            if (options?.observeOnly) frame = this.#observeFrame(frame, event);
           } finally {
             this.#activeStreamToken = previous;
           }
@@ -3410,10 +3438,8 @@ export class AgentWidgetSession {
    * `onError` (the resolve never started, so no state needs unwinding). A turn
    * stopped or replaced while the chunk loads drops the resolve.
    */
-  #withActions(
-    run: (actions: SessionActionsModule, host: SessionActionsHost) => Promise<void>
-  ): Promise<void> {
-    const host = (this.#actionsHost ??= {
+  #host(): SessionActionsHost {
+    return (this.#actionsHost ??= {
       s: this as unknown as SessionActionsInternals,
       setStreaming: (streaming) => this.#setStreaming(streaming),
       appendMessage: (message) => this.#appendMessage(message),
@@ -3423,7 +3449,31 @@ export class AgentWidgetSession {
         this.#resumable?.executionId === executionId
           ? this.#resumable.lastEventId
           : undefined,
+      adoptNavigatedRun: (executionId, after) => {
+        this.#beginRun(executionId);
+        this.#adoptBootExecution(executionId);
+        this.#resumable = {
+          executionId,
+          lastEventId: after,
+          assistantMessageId: this.#activeAssistantMessageId ?? "",
+          status: "running",
+        };
+      },
+      reattachNavigatedRun: (executionId) => {
+        if (this.#resumable?.executionId !== executionId) return;
+        this.#resumable.assistantMessageId = generateAssistantMessageId();
+        this.#activeAssistantMessageId = this.#resumable.assistantMessageId;
+        this.#beginReconnect();
+      },
+      enqueueWebMcpAwait: (message) => this.#enqueueWebMcpAwait(message),
+      flushWebMcpAwaits: () => this.#scheduleWebMcpBatchFlush(),
     });
+  }
+
+  #withActions(
+    run: (actions: SessionActionsModule, host: SessionActionsHost) => Promise<void>
+  ): Promise<void> {
+    const host = this.#host();
     const actions = getSessionActionsSync();
     if (actions) return run(actions, host);
     const epoch = this.#actionsEpoch;
@@ -3700,6 +3750,9 @@ export class AgentWidgetSession {
     // a tool with the same key resolved in the prior conversation.
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
+    this.observed.clear();
+    this.#observedQuestions.clear();
+    this.#owned.clear();
     // A fresh conversation must resend the full WebMCP tool list on its next
     // turn: drop the diff-only fingerprint cache (server keys by recordId, so
     // a new conversation has no stored set to match).
@@ -4271,17 +4324,21 @@ export class AgentWidgetSession {
    */
   #trackCursor(id: string): void {
     const executionId = this.agentExecution?.executionId;
-    if (!executionId || !this.#activeAssistantMessageId) return;
+    // A turn can pause on a local tool before any assistant text: keep its
+    // cursor too, or a navigation during that tool cannot be resumed.
+    // A watched turn never becomes this tab's to resume: its owner reconnects it.
+    if (!executionId || this.observed.has(executionId) || (!this.#activeAssistantMessageId && !this.#isAwaitPending())) return;
     // Only track while the run is live. A graceful terminal sets the execution
     // to 'complete'/'error' and clears the handle BEFORE its own frame's
     // trailing cursor fires; without this guard that cursor would re-arm the
     // handle and the next plain `idle` would look like a spurious drop.
     if (this.agentExecution?.status !== "running") return;
+    this.#owned.add(executionId);
     const isNew = this.#resumable === null;
     this.#resumable = {
       executionId,
       lastEventId: id,
-      assistantMessageId: this.#activeAssistantMessageId,
+      assistantMessageId: this.#activeAssistantMessageId ?? "",
       status: "running",
     };
     // Fire immediately when the handle first appears (so the host can persist
@@ -4311,8 +4368,15 @@ export class AgentWidgetSession {
    * `ask_user_question` / local-tool await, or a pending approval). Those end
    * the stream with `idle` and no terminal too, but are NOT drops.
    */
+  /** The message belongs to a turn another tab owns (see `observed`). */
+  isObserved(m: AgentWidgetMessage): boolean {
+    return this.observed.has(m.agentMetadata?.executionId ?? m.approval?.executionId ?? "");
+  }
+
   #isAwaitPending(): boolean {
     return this.messages.some((m) => {
+      // A watched turn's pause is the owning tab's to answer, not this tab's.
+      if (this.isObserved(m)) return false;
       if (
         m.agentMetadata?.awaitingLocalTool === true &&
         m.agentMetadata?.askUserQuestionAnswered !== true
@@ -4472,11 +4536,129 @@ export class AgentWidgetSession {
   }
 
   /**
+   * A watched turn's stream, one SSE frame at a time: the frame's message events
+   * come first, then its `cursor`. A question settles only when a later non-await
+   * frame of its execution arrives with a cursor past the question's pause; a
+   * replay from the start never exceeds it, and sibling awaits of the same pause
+   * move the pause forward instead of settling it.
+   */
+  #observeFrame(frame: ObservedFrame, event: AgentWidgetEvent): ObservedFrame {
+    if (event.type === "message") {
+      const { message } = event;
+      const meta = message.agentMetadata;
+      if (meta?.executionId) frame.exec = meta.executionId;
+      if (meta?.awaitingLocalTool || message.approval?.status === "pending") {
+        frame.awaits = true;
+        if (message.toolCall?.name === "ask_user_question") frame.asks.push(message.id);
+      } else frame.other = true;
+      return frame;
+    }
+    if (event.type !== "cursor") return frame;
+    const match = /^(\d+)(?:\.(\d+))?$/.exec(event.id);
+    const exec = frame.exec;
+    if (!exec || !match) return { asks: [] };
+    // `row.part` cursors; a bare row is the row's last part.
+    const at: [number, number] = [Number(match[1]), match[2] === undefined ? Infinity : Number(match[2])];
+    for (const id of frame.asks) {
+      const question = this.#observedQuestions.get(id);
+      if (!question) this.#observedQuestions.set(id, { exec, at });
+    }
+    let settled = false;
+    for (const [id, question] of this.#observedQuestions) {
+      if (question.exec !== exec || at[0] < question.at[0] || (at[0] === question.at[0] && at[1] <= question.at[1])) continue;
+      if (frame.awaits) {
+        question.at = at;
+      } else if (frame.other) {
+        this.#observedQuestions.delete(id);
+        const meta = this.messages.find((m) => m.id === id)?.agentMetadata;
+        if (meta) {
+          meta.askUserQuestionAnswered = true;
+          settled = true;
+        }
+      }
+    }
+    if (settled) this.callbacks.onMessagesChanged([...this.messages]);
+    return { asks: [] };
+  }
+
+  /** Session hooks for the client-session socket (turns from other tabs). */
+  #wireRealtime(): void {
+    this.client.setRealtimeHandlers({
+      onForeignExecution: (executionId, open) => this.#adoptForeignExecution(executionId, open),
+    });
+  }
+
+  /**
+   * A turn this tab did not start (another tab, or one that began while this
+   * page was loading) is streaming on the conversation. Show it when this
+   * session is idle; never while a local turn or recovery owns the transcript.
+   */
+  #adoptForeignExecution(executionId: string, open: () => Response): boolean {
+    if (
+      this.#owned.has(executionId) ||
+      this.streaming ||
+      this.#reconnecting ||
+      this.#resumable?.executionId === executionId ||
+      // A watched turn resuming after its owner answered a tool is still the other tab's.
+      (!this.observed.has(executionId) && this.agentExecution?.executionId === executionId) ||
+      this.#isAwaitPending()
+    ) {
+      return false;
+    }
+    const body = open().body;
+    if (!body) return false;
+    this.observed.add(executionId);
+    // The tab that started the turn runs its page tools; running them here too would run them twice.
+    void this.connectStream(body, { observeOnly: true });
+    return true;
+  }
+
+  /**
+   * Record `executionId` as this tab's turn (a stored resume handle or
+   * navigation record at boot), so it is never shown as another tab's.
+   */
+  public markOwnExecution(executionId: string): void {
+    this.#owned.add(executionId);
+  }
+
+  /** True when this tab started or recovers `executionId`. */
+  public ownsExecution(executionId: string): boolean {
+    return this.#owned.has(executionId);
+  }
+
+  /** Intent signal for the stream transport (see `AgentWidgetClient.warmTransport`). */
+  public warmTransport(reason: PersonaTransportWarmReason): void {
+    this.client.warmTransport(reason);
+  }
+
+  /** Page-tool calls running now; a navigation would strand them. Empty before any ran. */
+  public getInflightBrowserToolCalls(): AgentWidgetNavigatingToolCall[] {
+    return getSessionActionsSync()?.inflightBrowserToolCalls(this.messages, this.webMcpInflightKeys, this.webMcpResolvedKeys, this.webMcpProduced) ?? [];
+  }
+
+  /**
+   * Boot after a page-tool call navigated the previous page: answer each call
+   * in the navigation `record` with `arrival` through `/resume` instead of
+   * running it again (a replayed `await` is then a no-op). Resolves false when
+   * the record names no call the restored transcript holds.
+   */
+  public async resumeNavigatedToolCalls(
+    record: unknown,
+    resume: { executionId: string; after: string },
+    arrival: unknown,
+    location: { href: string; origin: string }
+  ): Promise<boolean> {
+    this.#owned.add(resume.executionId);
+    return (await loadSessionActions()).resumeNavigatedToolCalls(this.#host(), record, resume, arrival, location);
+  }
+
+  /**
    * Resume a durable turn on boot (tab-reload path). Re-opens the trailing
    * assistant bubble (or mints one), restores the execution/handle, and
    * reconnects from the persisted cursor. No-op without `reconnectStream`.
    */
   public resumeFromHandle(resume: { executionId: string; after: string }): void {
+    this.#owned.add(resume.executionId);
     if (typeof this.config.reconnectStream !== "function") return;
     if (this.#reconnecting) return;
     this.#beginRun(resume.executionId);
