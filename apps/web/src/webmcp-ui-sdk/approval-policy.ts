@@ -12,9 +12,10 @@ export type BridgeComponent = { ref: string; label?: string; confirm?: string };
 
 const READ_ONLY_TOOLS = new Set(["snapshot", "query"]);
 
-// Actions that only move a control's own state. Anything else (`press`, or an
-// action this list does not know) is treated as consequential.
-const FIELD_EDIT_ACTION = /^(set[A-Z]\w*|clear|toggle|increment|decrement|open|close)$/;
+// The actions this page's fields report in their snapshot, all of which only
+// move a control's own state. Anything else (`press`, or an action a later
+// UI SDK version adds) is treated as consequential until it is listed here.
+const FIELD_EDIT_ACTIONS = new Set(["setValue", "setChecked", "setOpen", "setQuery", "clear"]);
 
 export const bareToolName = (toolName: string): string =>
   toolName.replace(/^webmcp[:_]/, "");
@@ -74,7 +75,7 @@ export function isAutoApprovedBridgeCall(
     steps !== null &&
     steps.every(
       (step) =>
-        FIELD_EDIT_ACTION.test(step.action) || markedTargetOf(step, components) !== undefined,
+        FIELD_EDIT_ACTIONS.has(step.action) || markedTargetOf(step, components) !== undefined,
     )
   );
 }

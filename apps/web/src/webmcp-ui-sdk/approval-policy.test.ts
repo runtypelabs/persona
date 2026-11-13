@@ -60,6 +60,7 @@ describe("isAutoApprovedBridgeCall", () => {
 
   test.each([
     ["an unknown action", act({ ref: "Workspace name", action: "submit" })],
+    ["an unlisted action that looks like a setter", act({ ref: "Plan", action: "setUnknown" })],
     ["no steps", act()],
     ["a step without an action", act({ ref: "Workspace name" })],
     ["arguments that are not an object", "setValue"],
