@@ -165,6 +165,8 @@ settings:
 overrides:
   alasql>react-native-fs: '-'
 
+packageExtensionsChecksum: sha256-CSXqXtOgAl4flKMW9u38OaWX4hyFLRMxB+PBqkJagUM=
+
 importers:
 
   .:
@@ -2809,6 +2811,9 @@ packages:
   '@smithy/core@3.36.0':
     resolution: {integrity: sha512-3hJiwG1F5t1SoXqp/yOCmYXziyx7ZVqF63S5W6YU201e/qwVaHPex+E/3vvyY9a3ORq/b+BydeNZpP2saQ9X2g==}
     engines: {node: '>=18.0.0'}
+    deprecated: |-
+      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
+        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
@@ -8139,6 +8144,7 @@ snapshots:
   croact-css-styled@1.1.9:
     dependencies:
       '@daybrush/utils': 1.13.0
+      croact: 1.0.4
       css-styled: 1.0.8
       framework-utils: 1.1.0
 
@@ -8982,6 +8988,7 @@ snapshots:
       '@scena/event-emitter': 1.0.5
       croact: 1.0.4
       croact-moveable: 0.9.0(croact@1.0.4)
+      framework-utils: 1.1.0
       react-moveable: 0.56.0
 
   mri@1.2.0: {}

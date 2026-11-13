@@ -27,3 +27,12 @@ minimumReleaseAgeExclude:
   - "@ui-sdk/web@0.1.0-beta.1"
 overrides:
   "alasql>react-native-fs": "-"
+# enableGlobalVirtualStore has no hidden hoisting dir, so undeclared imports
+# (phantom deps) stop resolving. Declare them here.
+packageExtensions:
+  moveable:
+    dependencies:
+      framework-utils: ^1.1.0
+  croact-css-styled:
+    dependencies:
+      croact: ^1.0.4
