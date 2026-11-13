@@ -785,6 +785,8 @@ export default defineConfig({
         'webmcp-demo': path.resolve(__dirname, 'webmcp-demo.html'),
         // WebMCP: calendar copilot (client-token mode)
         'webmcp-calendar': path.resolve(__dirname, 'webmcp-calendar.html'),
+        // WebMCP: UI SDK agent bridge (generic snapshot/query/act tools, no page-authored tools)
+        'webmcp-ui-sdk': path.resolve(__dirname, 'webmcp-ui-sdk.html'),
         // WebMCP: slide-deck editor (dynamic tool sets, selection context)
         'webmcp-slides': path.resolve(__dirname, 'webmcp-slides.html'),
         // WebMCP: same slide editor, driven by Gemma 4 on-device (LiteRT-LM/WebGPU)
