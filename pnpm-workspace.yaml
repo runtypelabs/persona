@@ -3,6 +3,7 @@ packages:
   - apps/*
   - examples/*
 verifyDepsBeforeRun: false
+enableGlobalVirtualStore: true
 allowBuilds:
   "@google/genai": false
   core-js-pure: false
