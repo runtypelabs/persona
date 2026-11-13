@@ -1,0 +1,319 @@
+/* UI SDK components ship unstyled and render in light DOM. These rules dress
+   them in the showcase's tokens (demo-shared.css). */
+
+.ui-sdk-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.ui-sdk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ui-sdk-field--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ui-sdk-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.ui-sdk-label-row,
+.ui-sdk-slider-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ui-sdk-label-row { justify-content: flex-start; }
+
+.ui-sdk-tag {
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--border-strong);
+  font-family: var(--font-label);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── Select ── */
+
+.ui-sdk-select-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ui-sdk-select-content {
+  min-width: var(--anchor-width);
+  max-height: var(--available-height);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.25rem;
+  border: 1px solid var(--border-strong);
+  background: var(--paper);
+  color: var(--foreground);
+  box-shadow: var(--shadow-md);
+  font-size: 0.85rem;
+}
+
+.ui-sdk-select-item {
+  display: block;
+  padding: 0.4rem 0.5rem;
+  cursor: default;
+}
+
+.ui-sdk-select-item[data-highlighted] {
+  background: var(--signal-soft);
+}
+
+.ui-sdk-select-item[data-selected] {
+  font-weight: 600;
+}
+
+/* ── Segmented control ── */
+
+.ui-sdk-segmented {
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;
+  isolation: isolate;
+  border: 1px solid var(--border-strong);
+  background: var(--paper);
+}
+
+.ui-sdk-segmented-item {
+  position: relative;
+  z-index: 1;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ui-sdk-segmented-item[data-checked] {
+  font-weight: 600;
+}
+
+.ui-sdk-segmented-indicator {
+  position: absolute;
+  z-index: 0;
+  top: var(--segmented-control-indicator-top);
+  left: var(--segmented-control-indicator-left);
+  width: var(--segmented-control-indicator-width);
+  height: var(--segmented-control-indicator-height);
+  background: var(--signal);
+  transition-property: top, left, width, height;
+  transition-duration: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-sdk-segmented-indicator,
+  .ui-sdk-switch,
+  .ui-sdk-switch-thumb {
+    transition: none;
+  }
+}
+
+/* ── Slider ── */
+
+.ui-sdk-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ui-sdk-slider-control {
+  display: flex;
+  align-items: center;
+  height: 1.25rem;
+  touch-action: none;
+}
+
+.ui-sdk-slider-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: var(--border-strong);
+}
+
+.ui-sdk-slider-indicator {
+  position: absolute;
+  inset-block: 0;
+  background: var(--primary);
+}
+
+.ui-sdk-slider-thumb {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--primary);
+  background: var(--paper);
+  translate: -50% -50%;
+  cursor: grab;
+}
+
+.ui-sdk-slider-value {
+  min-width: 2.5ch;
+  font-family: var(--font-label);
+  font-size: 0.8rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Switch ── */
+
+.ui-sdk-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  background: var(--paper);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.ui-sdk-switch[data-checked] {
+  background: var(--signal);
+}
+
+.ui-sdk-switch-thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  background: var(--foreground);
+  transition: translate 120ms ease;
+}
+
+.ui-sdk-switch[data-checked] .ui-sdk-switch-thumb {
+  translate: 16px 0;
+}
+
+/* ── Focus ── */
+
+.ui-sdk-select-trigger:focus-visible,
+.ui-sdk-segmented-item:focus-visible,
+.ui-sdk-slider-thumb:focus-visible,
+.ui-sdk-switch:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Actions + status ── */
+
+.ui-sdk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.ui-sdk-status {
+  margin: 0;
+  font-family: var(--font-label);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.ui-sdk-status[data-tone="dirty"] { color: var(--warn); }
+.ui-sdk-status[data-tone="saved"] { color: var(--ok); }
+.ui-sdk-status[data-tone="warn"] { color: var(--danger); }
+
+/* ── Person confirmation (native dialog) ── */
+
+.ui-sdk-confirm {
+  width: min(420px, calc(100vw - 2rem));
+  padding: 1.25rem;
+  border: 1px solid var(--border-strong);
+  background: var(--paper);
+  color: var(--foreground);
+  box-shadow: var(--shadow-lg);
+}
+
+.ui-sdk-confirm::backdrop {
+  background: rgba(20, 20, 20, 0.45);
+}
+
+.ui-sdk-confirm h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.ui-sdk-confirm p {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.ui-sdk-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ── Activity log + snapshot ── */
+
+.ui-sdk-log-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.2rem 0;
+  font-size: 0.75rem;
+}
+
+.ui-sdk-log-source {
+  flex-shrink: 0;
+  min-width: 5.5ch;
+  padding: 0 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-family: var(--font-label);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--code-fg);
+}
+
+/* The shared event log is a dark surface. */
+.ui-sdk-log-row[data-source="agent"] .ui-sdk-log-source {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.ui-sdk-snapshot {
+  max-height: 220px;
+  margin: 0.5rem 0 0;
+  padding: 0.6rem 0.7rem;
+  overflow: auto;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}

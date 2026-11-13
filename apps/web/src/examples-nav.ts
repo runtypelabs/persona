@@ -310,6 +310,16 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     gallery: false,
   },
   {
+    slug: "webmcp-ui-sdk",
+    href: "/webmcp-ui-sdk.html",
+    title: "UI SDK Agent Bridge",
+    blurb: "The agent operates a UI SDK form through the bridge's WebMCP tools, with no page-authored tools.",
+    badge: "Preview",
+    tier: "start",
+    tags: ["webmcp", "agent", "tool-use", "integration"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "phone-agent-demo",
     href: "/phone-agent-demo.html",
     title: "Phone Agent",

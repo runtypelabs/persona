@@ -179,6 +179,17 @@ To run against your own Runtype flow instead of the in-code definitions, set the
   - **Three game modes** ride on the same tools (see the suggestion chips): **Pictionary** (you draw, big, with the brush, and the agent snapshots and guesses), a **paint-along tutorial** (the agent demos each step on the left half, pauses with the built-in `ask_user_question` answer sheet, then snapshots to check your copy on the right), and **speedruns** (a stroke budget, then `render_replay_gif` opens jspaint's own Render-History-as-GIF window: the animated replay is the shareable trophy)
   - Try: *"Draw a house with a sun in the sky"* → *"Look at the canvas and tell me what you see"* (watch it critique and fix its own drawing) → *"Speedrun the Mona Lisa in 20 strokes"* → *"Clear the canvas"* (approval)
 
+### UI SDK Agent Bridge (Settings Copilot)
+- **Settings page**: `http://localhost:5173/webmcp-ui-sdk.html` (proxy mode: agent defined in code as `WEBMCP_UI_SDK_AGENT`, mounted at `/api/chat/dispatch-ui-sdk`)
+  - A workspace settings form built with [UI SDK](https://ui-sdk.dev) web components (`@ui-sdk/web`, beta). **The page registers no tools of its own.** UI SDK's agent bridge reads every component on the page and `registerTools` publishes three generic WebMCP tools on `document.modelContext`: `snapshot` (what is on the page), `query` (the choices of a list) and `act` (one or more steps on named components). Persona forwards them like any other WebMCP tool
+  - **Two guards, one per owner.** Persona's `webmcp.autoApprove` (`src/webmcp-ui-sdk/approval-policy.ts`) runs reads and field edits straight away and shows the approval bubble for an `act` call that presses a button. Controls marked `data-agent-confirm` are guarded by the page: the bridge hands the step to the `allow` callback passed to `registerTools`, which opens the page's own dialog (`src/webmcp-ui-sdk/person-confirm.ts`). That guard holds for every WebMCP consumer, not only Persona
+  - `allow` must not return `true` for a step that carries `step.confirm`. The bridge only refuses marked controls by itself when no `allow` is given, so an allow-everything callback lets any agent on the page press them
+  - A field marked `data-agent-secret` (Tax ID) reaches the agent as `[redacted]`
+  - **Bridge activity** logs each change with its source (`agent`, or the input a person used such as `mouse`) from `bridge.subscribe`, and **Undo agent changes** restores only the agent's edits through `createHistory(...).undoSource("agent")`
+  - `import "@mcp-b/global"` must run before `registerTools`: the bridge registers only when `document.modelContext` already exists
+  - To run against a saved Runtype agent instead of the in-code definition, set `AGENT_ID_UI_SDK` on the proxy
+  - Try: *"What are the current settings?"* → *"Rename the workspace to Northwind Labs and move it to Europe"* → *"Turn on two-factor sign-in, keep logs for 90 days, then save"* (approval bubble) → *"Delete this workspace"* (page dialog)
+
 ### Component Directive Reference
 
 The Dynamic Components demo also covers smaller custom renderers such as ProductCard, SimpleChart, StatusBadge, and InfoCard. Components are registered and can be invoked via JSON responses with the format `{"component": "ComponentName", "props": {...}}`.

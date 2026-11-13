@@ -211,6 +211,12 @@ importers:
       '@runtypelabs/persona':
         specifier: workspace:^
         version: link:../../packages/widget
+      '@ui-sdk/core':
+        specifier: 0.1.0-beta.1
+        version: 0.1.0-beta.1
+      '@ui-sdk/web':
+        specifier: 0.1.0-beta.1
+        version: 0.1.0-beta.1(@ui-sdk/core@0.1.0-beta.1)
       alasql:
         specifier: ^4.22.0
         version: 4.22.0
@@ -3266,6 +3272,14 @@ packages:
     engines: {node: '>=16.20.0'}
     cpu: [x64]
     os: [win32]
+
+  '@ui-sdk/core@0.1.0-beta.1':
+    resolution: {integrity: sha512-sWsZW8RN6Gviir7REQYuDIafm9hierHQE31OJ+2g+1Pp3lDVKp/dk0+0dxFvqOQRmBveRvlE9FiARgNlQ9dMFw==}
+
+  '@ui-sdk/web@0.1.0-beta.1':
+    resolution: {integrity: sha512-PnlZD27q90B+vNbGcOYhpFjdCaguYqZoYnslgDL+KLYNTqzKgE64eUKp9IfawMpcosKOnk8aGPiaw3uaOTHMpQ==}
+    peerDependencies:
+      '@ui-sdk/core': ^0.1.0-beta.1
 
   '@valibot/to-json-schema@1.8.0':
     resolution: {integrity: sha512-a0M+uwCuQZEPAo65NYkFSJ14O5c213KoSZmPdoCfuFvUhfULi4T2Z6Tpjv6lTVMW9RoLm74RpRAjNEa43KcN+g==}
@@ -7750,6 +7764,12 @@ snapshots:
 
   '@typescript/typescript-win32-x64@7.1.0-beta':
     optional: true
+
+  '@ui-sdk/core@0.1.0-beta.1': {}
+
+  '@ui-sdk/web@0.1.0-beta.1(@ui-sdk/core@0.1.0-beta.1)':
+    dependencies:
+      '@ui-sdk/core': 0.1.0-beta.1
 
   '@valibot/to-json-schema@1.8.0(valibot@1.5.0(typescript@7.0.2))':
     dependencies:

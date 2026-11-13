@@ -14,6 +14,8 @@
     "@mcp-b/global": "^6.0.0",
     "@mcp-b/webmcp-polyfill": "^6.0.0",
     "@runtypelabs/persona": "workspace:^",
+    "@ui-sdk/core": "0.1.0-beta.1",
+    "@ui-sdk/web": "0.1.0-beta.1",
     "alasql": "^4.22.0",
     "echarts": "^6.1.0",
     "flint-chart": "^1.0.1",
