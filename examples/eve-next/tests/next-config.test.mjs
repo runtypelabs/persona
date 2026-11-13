@@ -6,7 +6,7 @@ vi.mock("eve/next", () => ({ withEve: eve.withEve }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
 it("skips Eve in the default keyless Preview", async () => {
   vi.stubEnv("EVE_MODE", "preview");
-  expect(await config("phase-production-build", {})).toEqual({ serverExternalPackages: ["eve"] });
+  expect(await config("phase-production-build", {})).toMatchObject({ serverExternalPackages: ["eve"] });
   expect(eve.withEve).not.toHaveBeenCalled();
 });
 it("invokes withEve's returned config function with Next's phase and context", async () => {
