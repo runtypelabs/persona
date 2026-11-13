@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAgentExperience, type AgentWidgetConfig } from "@runtypelabs/persona";
+import {
+  createAgentExperience,
+  type AgentWidgetConfig,
+  type AgentWidgetRealtimeConnectHook,
+} from "@runtypelabs/persona";
 import { homeDemoConnection } from "./home-demo-connection";
 
 const PROXY_URL = "http://localhost:43111/api/chat/dispatch-docs";
@@ -64,14 +68,29 @@ function mountHome(connection: ReturnType<typeof homeDemoConnection>) {
       close() {}
     }
   );
+  // The widget installs the connect hook once its lazy transport chunk loads; resolve when it does.
+  let hookInstalled: () => void = () => {};
+  const installed = new Promise<void>((resolve) => (hookInstalled = resolve));
+  const pageRealtime = typeof connection.realtime === "object" ? connection.realtime : undefined;
+  const pageHook = typeof pageRealtime?.connect === "function" ? pageRealtime.connect : undefined;
+  const realtime = pageHook
+    ? {
+        ...pageRealtime,
+        connect: (context: Parameters<AgentWidgetRealtimeConnectHook>[0]) => {
+          hookInstalled();
+          return pageHook(context);
+        },
+      }
+    : undefined;
   const mount = document.createElement("div");
   document.body.appendChild(mount);
   controller = createAgentExperience(mount, {
     ...connection,
+    ...(realtime ? { realtime } : {}),
     launcher: { enabled: false },
     persistState: false,
   } as AgentWidgetConfig);
-  return { mount, inits, otherRequests, sockets };
+  return { mount, inits, otherRequests, sockets, installed };
 }
 
 describe("home page chat connection", () => {
@@ -83,21 +102,22 @@ describe("home page chat connection", () => {
 
   it("spends nothing on a page view, then starts the session and opens the socket on hover", async () => {
     const page = mountHome(homeDemoConnection(ENV, PROXY_URL));
+    await page.installed;
     await settle();
     expect(page.inits).toEqual([]);
     expect(page.sockets).toEqual([]);
 
     page.mount.dispatchEvent(new Event("pointerenter"));
-    await vi.waitFor(() => expect(page.sockets).toHaveLength(1), { timeout: 5000 });
+    await vi.waitFor(() => expect(page.sockets).toHaveLength(1));
     expect(page.inits).toEqual(["https://api.example.test/v1/client/init"]);
     expect(page.sockets[0]).toMatch(/^wss:\/\/api\.example\.test\/v1\/client\/socket\?/);
   });
 
   it("starts the session and opens the socket on a keydown for keyboard users", async () => {
     const page = mountHome(homeDemoConnection(ENV, PROXY_URL));
-    await settle();
+    await page.installed;
     page.mount.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab" }));
-    await vi.waitFor(() => expect(page.sockets).toHaveLength(1), { timeout: 5000 });
+    await vi.waitFor(() => expect(page.sockets).toHaveLength(1));
     expect(page.inits).toHaveLength(1);
   });
 
