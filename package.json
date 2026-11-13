@@ -44,5 +44,5 @@
     "typescript-next": "npm:typescript@7.1.0-beta",
     "ws": "^8.22.1"
   },
-  "packageManager": "pnpm@12.15.0"
+  "packageManager": "pnpm@12.18.0"
 }
