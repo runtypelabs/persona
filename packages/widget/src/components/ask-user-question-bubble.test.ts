@@ -98,6 +98,19 @@ describe("createAskUserQuestionBubble", () => {
 });
 
 describe("ensureAskUserQuestionSheet", () => {
+  it("shows another tab's question inert, and becomes answerable only in the owning tab", () => {
+    const overlay = makeOverlay();
+    const watched = makeMessage();
+    watched.agentMetadata = { ...watched.agentMetadata, observed: true };
+    ensureAskUserQuestionSheet(watched, {} as AgentWidgetConfig, overlay);
+    const sheet = overlay.querySelector("[data-persona-ask-sheet-for]")!;
+    expect(sheet.hasAttribute("inert")).toBe(true);
+    expect(sheet.querySelectorAll("button").length).toBeGreaterThan(0);
+
+    ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
+    expect(overlay.querySelector("[data-persona-ask-sheet-for]")!.hasAttribute("inert")).toBe(false);
+  });
+
   it("mounts a sheet in the overlay with real pills when args are complete", () => {
     const overlay = makeOverlay();
     ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
@@ -227,6 +240,17 @@ describe("removeAskUserQuestionSheet", () => {
     // The implementation defers removal with setTimeout: flush it.
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(overlay.querySelector('[data-persona-ask-sheet-for="tool-1"]')).toBeNull();
+  });
+
+  it("keeps a sheet that is mounted again while it slides out", async () => {
+    const overlay = makeOverlay();
+    ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
+    removeAskUserQuestionSheet(overlay, "tool-1");
+    ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const sheet = overlay.querySelector('[data-persona-ask-sheet-for="tool-1"]');
+    expect(sheet).not.toBeNull();
+    expect(sheet!.classList.contains("persona-ask-sheet-leave")).toBe(false);
   });
 });
 

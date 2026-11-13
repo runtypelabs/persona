@@ -7,8 +7,8 @@
     "build": "pnpm --filter @runtypelabs/persona build && vite build && pnpm --filter bento-slides build:web",
     "preview": "vite preview",
     "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
-    "test:run": "vitest run src",
-    "runtype:ensure": "node runtype/ensure-docs-agent.ts"
+    "test:run": "vitest run src runtype",
+    "runtype:ensure": "node runtype/ensure-agents.ts"
   },
   "dependencies": {
     "@mcp-b/global": "^6.0.0",

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <title>Realtime MPA demo: shop</title>
+  <style>
+    html, body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { padding: 16px; background: #f6f6f6; }
+    nav { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+    #mpa-status { font: 12px/1.6 ui-monospace, monospace; margin-bottom: 8px; }
+    #mpa-host { width: 720px; height: 680px; max-width: 100%; display: flex; background: #fff; border: 1px solid #ddd; box-sizing: border-box; }
+  </style>
+</head>
+<body data-page="first">
+  <!--
+    Two-page (MPA) demo of the client-session socket: a reply keeps streaming
+    across a full page navigation, and a page tool that navigates is answered
+    on arrival instead of running again. Also the Playwright fixture for
+    e2e/specs/31-realtime-socket.spec.ts.
+
+    Query parameters (kept on every link between the two pages):
+      apiUrl=<url>        Runtype API base; default the fake server at http://127.0.0.1:8790
+                          (node e2e/fixtures/fake-runtype-server-cli.ts)
+      clientToken=<ct_>   client token; default ct_fake_demo
+      realtime=0          turn the socket off (pure SSE)
+  -->
+  <nav>
+    <strong>Shop</strong>
+    <a id="mpa-link" data-mpa-link href="realtime-mpa-next.html">Go to checkout</a>
+  </nav>
+  <div id="mpa-status">booting</div>
+  <div id="mpa-host"></div>
+  <script type="module" src="/src/realtime-mpa.ts"></script>
+</body>
+</html>

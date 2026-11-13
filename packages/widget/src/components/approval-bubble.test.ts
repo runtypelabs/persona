@@ -162,6 +162,16 @@ beforeEach(() => {
 
 let expansionState: Map<string, boolean>;
 
+describe("createApprovalBubble in a tab watching another tab's turn", () => {
+  it("shows the pending request without approve or deny controls", () => {
+    const watched = { ...makeMessage(), agentMetadata: { observed: true } };
+    const bubble = createApprovalBubble(watched);
+    expect(bubble.querySelector("[data-approval-title]")).not.toBeNull();
+    expect(bubble.querySelectorAll("[data-approval-action]")).toHaveLength(0);
+    expect(createApprovalBubble(makeMessage()).querySelectorAll("[data-approval-action]")).toHaveLength(2);
+  });
+});
+
 describe("humanizeToolName", () => {
   it("converts snake_case to a sentence", () => {
     expect(humanizeToolName("add_to_cart")).toBe("Add to cart");

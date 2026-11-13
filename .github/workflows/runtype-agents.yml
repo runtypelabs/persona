@@ -1,7 +1,8 @@
 name: Runtype agents
 
 # Converges the config-as-code Runtype agents behind the showcase site
-# (apps/web/runtype/) and deploys them to the `live` alias. The docs agent
+# (apps/web/runtype/: the docs agent and the realtime demo agent) and their
+# client tokens, and deploys the agents to the `live` alias. The docs agent
 # reuses the proxy's DOCS_ASSISTANT_AGENT prompt, so edits there trigger this too.
 #
 # Deliberately NOT run on pull_request: a same-repo PR can edit the script it
@@ -49,11 +50,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The agent definition imports DOCS_ASSISTANT_AGENT from the built proxy.
+      # Both agent definitions import DOCS_ASSISTANT_AGENT from the built proxy.
       - name: Build proxy
         run: pnpm build:proxy
 
-      - name: Ensure docs agent
+      - name: Ensure agents and client tokens
         working-directory: apps/web
         env:
           RUNTYPE_API_KEY: ${{ secrets.RUNTYPE_API_KEY }}

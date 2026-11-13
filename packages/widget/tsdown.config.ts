@@ -38,6 +38,7 @@ const SUBPATH_CHUNKS = [
   "@runtypelabs/persona/animations-extra",
   "@runtypelabs/persona/approval-ui",
   "@runtypelabs/persona/session-reconnect",
+  "@runtypelabs/persona/websocket-transport",
   "@runtypelabs/persona/webmcp-runtime",
   "@runtypelabs/persona/icons-extra",
   "@runtypelabs/persona/artifacts-ui",
@@ -295,6 +296,7 @@ export default defineConfig([
   lazyChunk("animations-extra"),
   lazyChunk("approval-ui"),
   lazyChunk("session-reconnect"),
+  lazyChunk("websocket-transport"),
   lazyChunk("webmcp-runtime"),
   lazyChunk("icons-extra"),
   // The markdown parsers load through their own sibling chunk; the icons-extra

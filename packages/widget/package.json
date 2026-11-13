@@ -97,6 +97,11 @@
       "import": "./dist/session-reconnect.js",
       "require": "./dist/session-reconnect.cjs"
     },
+    "./websocket-transport": {
+      "types": "./dist/websocket-transport.d.ts",
+      "import": "./dist/websocket-transport.js",
+      "require": "./dist/websocket-transport.cjs"
+    },
     "./webmcp-runtime": {
       "types": "./dist/webmcp-runtime.d.ts",
       "import": "./dist/webmcp-runtime.js",

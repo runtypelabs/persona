@@ -20,6 +20,7 @@ import type {
   AgentWidgetMessage,
   AgentWidgetApproval,
   AgentWidgetApprovalDecisionOptions,
+  AgentWidgetNavigatingToolCall,
 } from "./types";
 import type { SessionCallbacks } from "./session";
 
@@ -33,6 +34,11 @@ export type SessionActionsInternals = {
   approvalTokens: Map<string, object>;
   webMcpInflightKeys: Set<string>;
   webMcpResolvedKeys: Set<string>;
+  webMcpArrivals: Map<string, unknown>;
+  /** Answers produced but not yet confirmed by a `/resume` response, by dedupe key. */
+  webMcpProduced: Map<string, unknown>;
+  /** Executions another tab owns: this tab never answers their pauses. */
+  observed: Set<string>;
   webMcpResolveControllers: Set<AbortController>;
   upsertMessage(message: AgentWidgetMessage): void;
   markAskUserQuestionResolved(
@@ -54,6 +60,12 @@ export type SessionActionsHost = {
   settleApprovalPausedToolCall(approvalMessageId: string): void;
   /** `after` cursor for a /resume on this execution (durable streams). */
   resumeAfter(executionId: string): string | undefined;
+  /** Boot after a navigation: start the run and the resume handle for this execution. */
+  adoptNavigatedRun(executionId: string, after: string): void;
+  /** The old page already answered the navigated call: reconnect from the resume handle instead. */
+  reattachNavigatedRun(executionId: string): void;
+  enqueueWebMcpAwait(message: AgentWidgetMessage): void;
+  flushWebMcpAwaits(): void;
 };
 
 const buildWebMcpErrorResult = (message: string) => ({
@@ -81,6 +93,7 @@ export async function resolveApproval(
   decision: 'approved' | 'denied',
   options?: AgentWidgetApprovalDecisionOptions
 ): Promise<void> {
+  if (h.s.observed.has(approval.executionId)) return;
   // 1. Update approval message status immediately for responsive UI
   const approvalMessageId = `approval-${approval.id}`;
   const errorMessageId = `approval-error-${approval.id}`;
@@ -272,6 +285,7 @@ export async function resolveAskUserQuestion(
   if (live?.agentMetadata?.askUserQuestionAnswered === true) return;
 
   const executionId = toolMessage.agentMetadata?.executionId;
+  if (h.s.observed.has(executionId ?? "")) return;
   const toolName = toolMessage.toolCall?.name;
   if (!executionId || !toolName) {
     h.s.callbacks.onError?.(
@@ -545,6 +559,7 @@ export async function resolveWebMcpToolCallBatch(
   executionId: string,
   snapshots: AgentWidgetMessage[],
 ): Promise<void> {
+  if (h.s.observed.has(executionId)) return;
   type ExecutedWebMcpTool = {
     dedupeKey: string;
     resumeKey: string;
@@ -592,6 +607,19 @@ export async function resolveWebMcpToolCallBatch(
     // for legacy servers that don't emit `webMcpToolCallId`.
     const resumeKey =
       toolMessage.agentMetadata?.webMcpToolCallId ?? wireToolName;
+
+    // This call already ran and navigated the previous page: answer it with
+    // the arrival instead of running it again.
+    if (h.s.webMcpArrivals.has(dedupeKey)) {
+      return {
+        dedupeKey,
+        resumeKey,
+        output: h.s.webMcpArrivals.get(dedupeKey),
+        toolMessage,
+        startedAt,
+        completedAt: Date.now(),
+      };
+    }
 
     // Built-in fire-and-forget tool: no bridge, no confirm gate, no
     // browser-side execution: the chips render from the message list and
@@ -669,6 +697,12 @@ export async function resolveWebMcpToolCallBatch(
     };
   };
 
+  const produce = async (toolMessage: AgentWidgetMessage) => {
+    const result = await executeOne(toolMessage);
+    if (result) h.s.webMcpProduced.set(result.dedupeKey, result.output);
+    return result;
+  };
+
   // Parallel (default): a gated sibling's approval never blocks another's
   // execution. Sequential: one at a time in emission order, so tools that
   // share page state (a canvas, a form) don't interleave; the next call
@@ -677,13 +711,18 @@ export async function resolveWebMcpToolCallBatch(
   if (h.s.config.webmcp?.execution === "sequential") {
     executed = [];
     for (const toolMessage of snapshots) {
-      executed.push(await executeOne(toolMessage));
+      executed.push(await produce(toolMessage));
     }
   } else {
-    executed = await Promise.all(snapshots.map(executeOne));
+    executed = await Promise.all(snapshots.map(produce));
   }
 
   let ready: ExecutedWebMcpTool[] = [];
+  let answeredElsewhere = false;
+  // INVARIANT: an answer is unanswered, produced (in webMcpProduced), or confirmed (in webMcpResolvedKeys).
+  const confirm = () => {
+    for (const r of ready) h.s.webMcpResolvedKeys.add(r.dedupeKey);
+  };
   try {
     ready = executed.filter((r): r is ExecutedWebMcpTool => r !== null);
     // Everything deduped/aborted/failed: nothing to post.
@@ -703,17 +742,23 @@ export async function resolveWebMcpToolCallBatch(
         h.resumeAfter(executionId),
       assistantMessageId,
     });
+    if (response.status === 409 && ready.every((r) => h.s.webMcpArrivals.has(r.dedupeKey))) {
+      answeredElsewhere = true;
+      confirm();
+      for (const r of ready) markWebMcpToolComplete(h, r.toolMessage, r.output, r.startedAt, r.completedAt);
+      return;
+    }
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
       throw new Error(errorData?.error ?? `Resume failed: ${response.status}`);
     }
+    confirm();
     // Server accepted the batch: mark every included call resolved so stale
     // re-emits don't re-execute the page tool, then complete each bubble.
     // Do this only after /resume HTTP success; if /resume fails, the server
     // may still be paused and the retry path must not show a final result.
     const batch = ready[0]!.dedupeKey;
     for (const r of ready) {
-      h.s.webMcpResolvedKeys.add(r.dedupeKey);
       const toolName = r.toolMessage.toolCall?.name;
       const toolCallId = r.toolMessage.agentMetadata?.webMcpToolCallId;
       markWebMcpToolComplete(h, 
@@ -767,10 +812,12 @@ export async function resolveWebMcpToolCallBatch(
     for (const key of claimedKeys) {
       h.s.webMcpInflightKeys.delete(key);
     }
+    for (const r of ready) h.s.webMcpProduced.delete(r.dedupeKey);
     h.s.webMcpResolveControllers.delete(batchController);
     if (h.s.webMcpResolveControllers.size === 0 && !h.s.abortController) {
       h.setStreaming(false);
     }
+    if (answeredElsewhere) h.reattachNavigatedRun(executionId);
   }
 }
 
@@ -922,3 +969,145 @@ async function resumeWithToolOutput(
   }
 }
 
+/** A navigation record older than this is not a fresh arrival. */
+const NAVIGATION_RECORD_TTL_MS = 60_000;
+
+/** Page-tool calls running now or answered without confirmation (those carry their `output`). */
+export function inflightBrowserToolCalls(
+  messages: AgentWidgetMessage[],
+  inflightKeys: Set<string>,
+  answeredKeys: Set<string>,
+  produced: Map<string, unknown>
+): AgentWidgetNavigatingToolCall[] {
+  const calls: AgentWidgetNavigatingToolCall[] = [];
+  for (const message of messages) {
+    const executionId = message.agentMetadata?.executionId;
+    const call = message.toolCall;
+    const key = `${executionId}:${call?.id}`;
+    if (!executionId || !call?.id || !call.name || !inflightKeys.has(key) || answeredKeys.has(key)) continue;
+    const resumeKey = message.agentMetadata?.webMcpToolCallId;
+    calls.push({
+      executionId,
+      toolCallId: call.id,
+      toolName: call.name,
+      ...(resumeKey ? { resumeKey } : {}),
+      ...(produced.has(key) ? { output: produced.get(key) } : {}),
+    });
+  }
+  return calls;
+}
+
+/**
+ * The calls a navigation record (written on `pagehide`) holds for
+ * `executionId`, when it is fresh and was written for this origin. Storage is
+ * per origin, so a record read after a cross-origin round trip is stale.
+ */
+function navigatedToolCalls(
+  stored: unknown,
+  executionId: string,
+  location: { href: string; origin: string }
+): AgentWidgetNavigatingToolCall[] {
+  const record = stored as { calls?: unknown; to?: unknown; at?: unknown } | null;
+  if (!record || typeof record !== "object" || typeof record.at !== "number") return [];
+  if (Date.now() - record.at > NAVIGATION_RECORD_TTL_MS || !Array.isArray(record.calls)) return [];
+  if (typeof record.to === "string") {
+    try {
+      if (new URL(record.to, location.href).origin !== location.origin) return [];
+    } catch {
+      return [];
+    }
+  }
+  return (record.calls as AgentWidgetNavigatingToolCall[]).filter(
+    (call) => call?.executionId === executionId && typeof call.toolCallId === "string"
+  );
+}
+
+/** The restored (interrupted) tool message, reopened to be answered by its arrival. */
+function navigatedToolMessage(
+  message: AgentWidgetMessage,
+  call: AgentWidgetNavigatingToolCall
+): AgentWidgetMessage {
+  const { interrupted: _i, error: _e, success: _s, ...toolCall } = message.toolCall!;
+  return {
+    ...message,
+    streaming: true,
+    toolCall: { ...toolCall, status: "running" },
+    agentMetadata: {
+      ...message.agentMetadata,
+      awaitingLocalTool: true,
+      ...(call.resumeKey ? { webMcpToolCallId: call.resumeKey } : {}),
+    },
+  };
+}
+
+/**
+ * Boot after a page-tool call navigated the previous page: answer each call
+ * in the navigation `record` with `arrival` through `/resume` instead of
+ * running it again (a replayed `await` is then a no-op). Resolves false when
+ * the record names no call the restored transcript holds.
+ */
+export async function resumeNavigatedToolCalls(
+  h: SessionActionsHost,
+  record: unknown,
+  resume: { executionId: string; after: string },
+  arrival: unknown,
+  location: { href: string; origin: string }
+): Promise<boolean> {
+  let answered = false;
+  for (const call of navigatedToolCalls(record, resume.executionId, location)) {
+    const message = h.s.messages.find(
+      (m) => m.agentMetadata?.executionId === call.executionId && m.toolCall?.id === call.toolCallId
+    );
+    if (!message?.toolCall) continue;
+    if (!answered) {
+      answered = true;
+      h.adoptNavigatedRun(call.executionId, resume.after);
+    }
+    h.s.webMcpArrivals.set(`${call.executionId}:${call.toolCallId}`, "output" in call ? call.output : arrival);
+    const snapshot = navigatedToolMessage(message, call);
+    h.s.upsertMessage(snapshot);
+    h.enqueueWebMcpAwait(snapshot);
+  }
+  if (answered) h.flushWebMcpAwaits();
+  return answered;
+}
+
+/**
+ * Navigation API `navigate` handler. Returns the running page-tool calls this
+ * navigation is attributed to: none for a visitor's own. With `hold`, a page
+ * tool's navigation is held while the socket is live: persist the record, tell
+ * the socket (bounded wait for its ack), then proceed. Download, form, hash and traversal navigations are never held.
+ */
+export function holdWidgetNavigation(
+  event: Event,
+  hold: boolean,
+  ctx: {
+    calls(): AgentWidgetNavigatingToolCall[];
+    realtime(): boolean;
+    record(calls: AgentWidgetNavigatingToolCall[]): void;
+    notify(url: string): Promise<unknown>;
+    proceed(url: string, replace: boolean): void;
+  }
+): AgentWidgetNavigatingToolCall[] {
+  const nav = event as Event & {
+    destination?: { url?: string; sameDocument?: boolean };
+    userInitiated?: boolean;
+    hashChange?: boolean;
+    downloadRequest?: string | null;
+    formData?: unknown;
+    navigationType?: string;
+  };
+  const url = nav.destination?.url;
+  // A same-document navigation (pushState) never unloads the page, so it strands nothing.
+  const calls = nav.userInitiated || nav.destination?.sameDocument ? [] : ctx.calls();
+  if (
+    !hold || !url || !nav.cancelable || nav.hashChange || nav.downloadRequest || nav.formData ||
+    (nav.navigationType !== "push" && nav.navigationType !== "replace") || !calls.length || !ctx.realtime()
+  ) {
+    return calls;
+  }
+  event.preventDefault();
+  ctx.record(calls);
+  void ctx.notify(url).finally(() => ctx.proceed(url, nav.navigationType === "replace"));
+  return calls;
+}

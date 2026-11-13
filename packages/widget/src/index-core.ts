@@ -84,6 +84,10 @@ export type {
   AgentWidgetContextMentionCommandContext,
   AgentWidgetContextMentionComposerCapability,
   AgentWidgetCustomFetch,
+  AgentWidgetRealtimeConfig,
+  AgentWidgetRealtimeConnectHook,
+  AgentWidgetRealtimeConnectTrigger,
+  AgentWidgetNavigatingToolCall,
   AgentWidgetSSEEventParser,
   AgentWidgetSSEEventResult,
   AgentWidgetHeadersFunction,
@@ -385,6 +389,24 @@ export {
 } from "./session";
 export { AgentWidgetClient } from "./client";
 export type { SSEEventCallback } from "./client";
+export { PersonaTransportError } from "./transport";
+export type {
+  PersonaTransport,
+  PersonaTransportErrorCode,
+  PersonaTransportNext,
+  PersonaTransportRequest,
+  PersonaTransportRequestKind,
+  PersonaTransportWarmReason,
+} from "./transport";
+// The WebSocket transport itself ships in the lazy `websocket-transport` chunk.
+export { loadWebSocketTransport } from "./websocket-transport-loader";
+export type {
+  WebSocketTransport,
+  WebSocketTransportCodec,
+  WebSocketTransportInbound,
+  WebSocketTransportOptions,
+  WebSocketTransportState,
+} from "./websocket-transport-core";
 // `WebMcpBridge` (the class VALUE) ships from `index.ts` (npm only): the CDN
 // global constructs the runtime lazily inside client.ts from the
 // webmcp-runtime chunk, so the class stays out of the IIFE payload.

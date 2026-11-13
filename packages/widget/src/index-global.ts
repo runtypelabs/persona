@@ -308,6 +308,11 @@ import { setSessionReconnectLoader } from "./session-reconnect-loader";
 
 setSessionReconnectLoader(siblingChunk("session-reconnect.js"));
 
+// The WebSocket transport (generic + Runtype client-session socket) loads only
+// when a session advertises realtime or a host calls `loadWebSocketTransport()`.
+import { setWebSocketTransportLoader } from "./websocket-transport-loader";
+setWebSocketTransportLoader(siblingChunk("websocket-transport.js"));
+
 // ---------------------------------------------------------------------------
 // Deferred event-stream-view loading.
 //

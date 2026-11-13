@@ -135,7 +135,7 @@ In client token mode the widget calls `/v1/client/init` when the visitor shows i
 | `'send'` | Never early; the first send initializes the session. |
 | function | Your own trigger. Called on mount with `{ warm, mount }` (and again if `update()` swaps in a different function); call `warm()` whenever you like and optionally return a cleanup that runs on `destroy()` or replacement. Replaces the built-in triggers. |
 
-The early init sends exactly the same request the send would, runs at most once per session lifetime (re-armed when the session expires or a new conversation starts), and is fire-and-forget: a failure is swallowed and resurfaces normally when the send retries init. A send during an in-flight early init reuses it, so there is only ever one `/v1/client/init`. With `features.history.enabled`, the widget still initializes on mount to restore the conversation. Upvote/downvote on a restored transcript initializes on demand. Outside client token mode the option is ignored.
+The early init sends exactly the same request the send would, runs at most once per session lifetime (re-armed when the session expires or a new conversation starts), and is fire-and-forget: a failure is swallowed and resurfaces normally when the send retries init. A send during an in-flight early init reuses it, so there is only ever one `/v1/client/init`. With `features.history.enabled`, the widget still initializes on mount to restore the conversation. When you set `realtime` explicitly, its `connect` trigger also starts init if none has run, so `realtime: { connect: 'load' }` initializes on mount even with `sessionInit: 'input'`; whichever fires first wins. Upvote/downvote on a restored transcript initializes on demand. Outside client token mode the option is ignored.
 
 You can also trigger init from your own code with `controller.warmSession()`, for example when the visitor hovers your own "Chat with us" button:
 
@@ -1018,6 +1018,15 @@ Resume a dropped durable agent turn from the SSE cursor instead of finalizing a 
 | `resume` | `{ executionId: string; after: string }` | Boot-time resume (tab reload). With `reconnectStream` set, the widget enters `resuming` on mount and replays from `after` into the restored conversation. |
 
 Reconnect lifecycle is also surfaced as controller events (`stream:paused`, `stream:resuming`, `stream:resumed`) and a manual `controller.reconnect()`; status copy is configurable via `statusIndicator.pausedText` / `resumingText`.
+
+### Stream Transport
+
+See the [stream transport guide](../../../docs/websocket-transport.md).
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `transport` | `PersonaTransport` | Carries every streaming request (send, resume, approval, reconnect). Return `next(request)` for HTTP or an SSE `Response` fed from elsewhere, e.g. `createWebSocketTransport()` from `@runtypelabs/persona/websocket-transport`. Without it, HTTP + SSE. |
+| `realtime` | `boolean \| { enabled?, connect?, idleCloseMs?, preconnect? }` | Client-token mode: use the Runtype client-session socket when `/v1/client/init` advertises one. `false` keeps HTTP + SSE. `connect` sets when the socket connects: `'load'`, `'open'`, `'focus'` (default), `'input'`, or `({ connect, mount }) => void \| (() => void)`; when `realtime` is set explicitly, the trigger also starts the client session if none exists, so `'load'` creates a session and a socket on every page view. `idleCloseMs` (default 180000) closes the socket while the page is hidden; `preconnect` (default `true`) adds a `preconnect` hint for the API origin. Ignored when `transport` is set, except that `connect` then decides when `transport.warm` is called. Default: `true`. |
 
 ### Extensibility
 

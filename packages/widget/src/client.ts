@@ -50,6 +50,14 @@ import { getClientStreamSync, loadClientStream } from "./client-stream-loader";
 import { loadClientHistory } from "./client-history-loader";
 import type { ClientHistoryHost } from "./client-history";
 import type { ClientResumeHost } from "./client-resume";
+import type { PersonaTransportNext, PersonaTransportRequest, PersonaTransportWarmReason } from "./transport";
+import { loadWebSocketTransport } from "./websocket-transport-loader";
+import type { RuntypeRealtimeController, RuntypeRealtimeHandlers } from "./runtype-realtime";
+
+/** Session hooks for the Runtype client-session socket. */
+export type ClientRealtimeHandlers = RuntypeRealtimeHandlers;
+
+const RUNTYPE_REALTIME_PROTOCOL = "runtype-client-session-v1";
 
 /** History transcripts stay on the wire shape; `utils/history-messages.ts` maps them. */
 export type { HistoryWireMessage } from "./utils/history-messages";
@@ -195,7 +203,14 @@ export class AgentWidgetClient {
   private set clientSession(session: ClientSession | null) {
     this.#clientSession = session;
     if (session) this.#knownRequireConfirmFor = session.config?.webmcp?.requireConfirmFor ?? [];
+    const warm = this.#warmAfterInit;
+    if (session && warm) {
+      this.#warmAfterInit = null;
+      queueMicrotask(() => this.warmTransport(warm));
+    }
   }
+  /** An intent seen before the session existed; honored once one lands. */
+  #warmAfterInit: PersonaTransportWarmReason | null = null;
   #sessionInitPromise: Promise<ClientSession> | null = null;
   /**
    * Early-init latch for `warmSession()`. `false` = armed. Otherwise it holds
@@ -246,6 +261,13 @@ export class AgentWidgetClient {
   #webMcpBridgePromise: Promise<WebMcpBridge | null> | null = null;
   /** undefined = never set; null = explicitly cleared. Applied at adoption. */
   #pendingWebMcpConfirmHandler: WebMcpConfirmHandler | null | undefined;
+
+  // Runtype client-session socket (lazy `websocket-transport` chunk). Keyed by
+  // the advertised URL, which changes with the conversation.
+  #realtime: RuntypeRealtimeController | null = null;
+  #realtimeLoad: Promise<RuntypeRealtimeController> | null = null;
+  #realtimeHandlers: ClientRealtimeHandlers = {};
+  #destroyed = false;
 
   constructor(
     config: AgentWidgetConfig = {},
@@ -553,7 +575,6 @@ export class AgentWidgetClient {
   }): Promise<Response> {
     let session = await this.initSession();
     let recovered = false;
-
     for (;;) {
       const conversationId = session.conversationId;
       const visitorToken = await this.readVisitorToken();
@@ -571,14 +592,20 @@ export class AgentWidgetClient {
         sessionId: session.sessionId,
         after: ctx.after,
       });
-      const response = await fetch(`${path}?${query}`, {
-        method: 'GET',
-        headers: {
-          'X-Persona-Version': VERSION,
-          'X-Visitor-Token': visitorToken,
+      const response = await this.#transportFetch({
+        kind: 'reconnect',
+        url: `${path}?${query}`,
+        executionId: ctx.executionId,
+        after: ctx.after,
+        init: {
+          method: 'GET',
+          headers: {
+            'X-Persona-Version': VERSION,
+            'X-Visitor-Token': visitorToken,
+          },
+          signal: ctx.signal,
         },
-        signal: ctx.signal,
-      });
+      }, (request) => fetch(request.url, request.init));
       if (response.status === 401 && !recovered) {
         recovered = true;
         const history = await loadClientHistory();
@@ -595,6 +622,120 @@ export class AgentWidgetClient {
       }
       return response;
     }
+  }
+
+  /**
+   * Route one stream-producing request: the host's `transport`, else the
+   * Runtype client-session socket when it is live for this session, else HTTP.
+   */
+  async #transportFetch(request: PersonaTransportRequest, next: PersonaTransportNext): Promise<Response> {
+    const host = this.#config.transport;
+    if (host) return host.request(request, next);
+    // A send is intent: get the socket ready for this turn's pauses and the next one.
+    if (request.kind === "dispatch") this.warmTransport("intent");
+    // An advertised socket whose transport is not created yet (a resume right
+    // after a page load) is worth a bounded wait rather than an SSE turn.
+    const realtime =
+      this.#liveRealtime() ??
+      (request.kind !== "dispatch" && this.#realtimeAdvertisement()
+        ? await this.#ensureRealtime(1500).catch(() => null)
+        : null);
+    return realtime ? realtime.request(request, next) : next(request);
+  }
+
+  /** Client-token mode and the host did not opt out of the socket. */
+  #realtimeAllowed(): boolean {
+    const option = this.#config.realtime;
+    return this.isClientTokenMode() && option !== false && !(typeof option === "object" && option.enabled === false);
+  }
+
+  #realtimeAdvertisement(): { protocol: string; url: string } | null {
+    const advertisement = this.clientSession?.realtime;
+    return this.#destroyed ||
+      !this.#realtimeAllowed() ||
+      this.#config.transport ||
+      typeof WebSocket === "undefined" ||
+      !this.clientSession?.conversationId ||
+      this.clientSession.durableRecovery?.enabled !== true ||
+      advertisement?.protocol !== RUNTYPE_REALTIME_PROTOCOL ||
+      this.#realtime?.disabled(advertisement.url)
+      ? null
+      : advertisement;
+  }
+
+  #liveRealtime() {
+    return this.#realtime?.current(this.#realtimeAdvertisement()) ?? null;
+  }
+
+  /** Load (once) and return the socket transport for the current session, or null. */
+  #ensureRealtime(timeoutMs?: number) {
+    if (!this.#realtimeAdvertisement()) return Promise.resolve(null);
+    const option = this.#config.realtime;
+    const load = (this.#realtimeLoad ??= loadWebSocketTransport().then(
+      (mod) => (this.#realtime = mod.createRuntypeRealtimeController(this, {
+        clientToken: this.#config.clientToken ?? "",
+        clientVersion: `persona/${VERSION}`,
+        visitorToken: () => this.readVisitorToken(),
+        handlers: () => this.#realtimeHandlers,
+        idleCloseMs: typeof option === "object" ? option.idleCloseMs : undefined,
+      })),
+      (error) => {
+        this.#realtimeLoad = null;
+        throw error;
+      }
+    )).then((controller) => {
+      const advertisement = this.#realtimeAdvertisement();
+      return advertisement ? controller.ensure(advertisement) : null;
+    });
+    return timeoutMs
+      ? Promise.race([load, new Promise<null>((resolve) => setTimeout(resolve, timeoutMs, null))])
+      : load;
+  }
+
+  /** Session hooks for turns started elsewhere and out-of-band signals. */
+  public setRealtimeHandlers(handlers: ClientRealtimeHandlers): void {
+    this.#realtimeHandlers = handlers;
+  }
+
+  /**
+   * Intent signal (launcher hover/focus, open, composer focus, a resume on
+   * boot): warm the host transport, or open the client-session socket when it
+   * is advertised. Without a live session the socket opens once one is
+   * initialized; warming never starts one. Never rejects.
+   */
+  public warmTransport(reason: PersonaTransportWarmReason): void {
+    if (this.#config.transport) {
+      this.#config.transport.warm?.(reason);
+      return;
+    }
+    if (!this.#realtimeAllowed()) return;
+    // Warming never creates a session: `sessionInit` decides when one starts.
+    if (!this.clientSession || new Date() >= this.clientSession.expiresAt) {
+      this.#warmAfterInit = reason;
+      return;
+    }
+    this.#ensureRealtime()
+      .then((rt) => rt?.warm?.(reason))
+      .catch(() => {});
+  }
+
+  /** True when the client-session socket is advertised and usable for this session. */
+  public hasRealtime(): boolean {
+    return this.#realtimeAdvertisement() !== null;
+  }
+
+  /**
+   * The page is about to unload on purpose: tell the client-session socket
+   * and wait (bounded) for its ack. Resolves false without a ready socket.
+   */
+  public realtimeNavigating(info: { executionId?: string; url?: string }, timeoutMs?: number): Promise<boolean> {
+    return this.#liveRealtime()?.navigating(info, timeoutMs) ?? Promise.resolve(false);
+  }
+
+  /** Release the client-session socket. A host `transport` stays host-owned. */
+  public destroy(): void {
+    this.#destroyed = true;
+    this.#realtime?.destroy();
   }
 
   /**
@@ -1097,6 +1238,7 @@ export class AgentWidgetClient {
       initSession: () => client.initSession(),
       readVisitorToken: () => client.readVisitorToken(),
       isClientTokenMode: () => client.isClientTokenMode(),
+      transportFetch: (request, next) => client.#transportFetch(request, next),
     });
   }
 

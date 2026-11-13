@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "170 kB",
+    "limit": "172.5 kB",
     "gzip": true
   },
   {
@@ -26,7 +26,7 @@
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "228.5 kB",
+    "limit": "232.2 kB",
     "gzip": true
   },
   {
@@ -120,6 +120,12 @@
     "gzip": true
   },
   {
+    "name": "Lazy · WebSocket transport chunk (websocket-transport.js)",
+    "path": "dist/websocket-transport.js",
+    "limit": "6 kB",
+    "gzip": true
+  },
+  {
     "name": "Lazy · WebMCP bridge runtime chunk (webmcp-runtime.js)",
     "path": "dist/webmcp-runtime.js",
     "limit": "3 kB",
@@ -158,7 +164,7 @@
   {
     "name": "Lazy · SSE stream processor + resume requests chunk (client-stream.js)",
     "path": "dist/client-stream.js",
-    "limit": "10.55 kB",
+    "limit": "10.65 kB",
     "gzip": true
   },
   {
@@ -176,7 +182,7 @@
   {
     "name": "Lazy · approval / local-tool resolve chunk (session-actions.js)",
     "path": "dist/session-actions.js",
-    "limit": "3.25 kB",
+    "limit": "3.7 kB",
     "gzip": true
   },
   {
@@ -212,7 +218,7 @@
   {
     "name": "Lazy · request construction and session initialization (client-dispatch.js)",
     "path": "dist/client-dispatch.js",
-    "limit": "5.7 kB",
+    "limit": "5.8 kB",
     "gzip": true
   },
   {

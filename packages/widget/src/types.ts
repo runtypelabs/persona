@@ -11,6 +11,7 @@ import type { HistoryWireMessage } from "./utils/history-messages";
 // Internal seam (not exported from any entry); type-only, so the cycle is erased.
 import type { HistoryProvider } from "./internal/history-provider";
 import type { IconName } from "./utils/icons";
+import type { PersonaTransport } from "./transport";
 
 export type { TargetResolver, ResolvedTarget } from "./utils/target";
 
@@ -1093,6 +1094,12 @@ export type AgentMessageMetadata = {
    * `POST /v1/dispatch/resume` with the user's answer keyed by tool name.
    */
   awaitingLocalTool?: boolean;
+  /**
+   * The turn was started in another tab, which answers its questions, approvals
+   * and page tools; this tab shows it read-only. Set only on the message passed
+   * to renderers, never on stored messages.
+   */
+  observed?: boolean;
   /**
    * The provider per-call id (`toolu_…`) carried on the `await`
    * event for a LOCAL tool (core#3878). Present only when the
@@ -6842,6 +6849,63 @@ export type AgentWidgetCustomFetch = (
 ) => Promise<Response>;
 
 /**
+ * A page-tool call in flight when the page navigated: persisted on `pagehide`
+ * so the next page answers it with an arrival result instead of re-running it.
+ */
+export type AgentWidgetNavigatingToolCall = {
+  executionId: string;
+  /** The tool call id (`toolCall.id`). */
+  toolCallId: string;
+  toolName: string;
+  /** The `/resume` key (`webMcpToolCallId`) when it differs from the call id. */
+  resumeKey?: string;
+  /** The answer this page produced that the server has not confirmed; the next page sends it. */
+  output?: unknown;
+};
+
+/** Tuning for the Runtype client-session socket (`config.realtime`). */
+export type AgentWidgetRealtimeConfig = {
+  /** @default true */
+  enabled?: boolean;
+  /** Close the idle socket after the page has been hidden this long. @default 180000 */
+  idleCloseMs?: number;
+  /** Add a `preconnect` hint for the API origin at mount. @default true */
+  preconnect?: boolean;
+  /**
+   * When the socket connects:
+   * - `'load'`: when the widget mounts. Opens a socket for every page view.
+   * - `'open'`: when the widget opens (a launcher click; an inline widget is open at mount).
+   * - `'focus'`: launcher hover or focus, the widget opening, or focus in the composer.
+   * - `'input'`: the visitor's first typed character.
+   * - A function: custom trigger, called on mount (and when `update()` swaps in a
+   *   different function) with a `connect` callback; may return a cleanup.
+   *
+   * When `realtime` is set explicitly, a trigger also starts the client session if
+   * none exists yet. When `realtime` is not set, the default trigger only connects
+   * an existing session and `sessionInit` alone decides when one starts. A send
+   * always connects. With `transport` set, the trigger calls `transport.warm()`.
+   *
+   * @default 'focus'
+   */
+  connect?: AgentWidgetRealtimeConnectTrigger | AgentWidgetRealtimeConnectHook;
+};
+
+/** Built-in `realtime.connect` triggers. See {@link AgentWidgetRealtimeConfig.connect}. */
+export type AgentWidgetRealtimeConnectTrigger = "load" | "open" | "focus" | "input";
+
+/**
+ * Custom `realtime.connect` trigger, shaped like {@link AgentWidgetSessionInitHook}.
+ * Call `connect()` whenever you decide (safe to call repeatedly); return a cleanup
+ * to run when the widget is destroyed or the hook is replaced.
+ */
+export type AgentWidgetRealtimeConnectHook = (context: {
+  /** Connect the socket, starting the session first when `realtime` is explicit. */
+  connect: () => void;
+  /** The widget's mount element. */
+  mount: HTMLElement;
+}) => void | (() => void);
+
+/**
  * Dynamic headers function - called before each request
  */
 export type AgentWidgetHeadersFunction = () => Record<string, string> | Promise<Record<string, string>>;
@@ -6880,6 +6944,11 @@ export type ClientSession = {
   conversationRevision?: string;
   /** Server-negotiated durable reconnect support for this client-token session. */
   durableRecovery?: { enabled: boolean };
+  /**
+   * Client-session socket advertisement (`runtype-client-session-v1`). Present
+   * only when the server offers socket delivery for this durable session.
+   */
+  realtime?: { protocol: string; url: string };
   /** Visitor grant backing history. `token` appears only at mint. */
   visitor?: ClientVisitorGrant;
   /** Configuration from the server */
@@ -8448,6 +8517,7 @@ export type AgentWidgetConfig = {
    * when the send retries init. A send during an in-flight early init reuses
    * it, so only one `/v1/client/init` is issued. When visitor history is
    * enabled the widget still initializes on mount to restore the conversation.
+   * An explicit `realtime.connect` trigger can also start it first.
    * Hosts can also trigger it imperatively with `controller.warmSession()`.
    *
    * @default 'input'
@@ -8948,6 +9018,22 @@ export type AgentWidgetConfig = {
    * ```
    */
   customFetch?: AgentWidgetCustomFetch;
+  /**
+   * Stream transport for every request that yields a stream (dispatch, resume,
+   * approval, durable reconnect). Without one the widget uses `fetch` +
+   * SSE (and `customFetch`) exactly as before. A transport can deliver streams
+   * over another channel, e.g. `createWebSocketTransport()` from
+   * `@runtypelabs/persona/websocket-transport`. See `docs/websocket-transport.md`.
+   */
+  transport?: PersonaTransport;
+  /**
+   * Runtype client-token mode only: use the client-session socket when
+   * `/v1/client/init` advertises `realtime` and durable recovery is enabled.
+   * `false` keeps every stream on HTTP + SSE. Ignored when `transport` is set.
+   *
+   * @default true
+   */
+  realtime?: boolean | AgentWidgetRealtimeConfig;
   /** Opt-in durable conversation switching; legacy reconnect closures do not enable it. */
   backgroundConversations?: BackgroundConversationAdapter;
   /** Conversation-scoped last observed server state; local Stop does not imply server cancellation. */

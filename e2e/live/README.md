@@ -75,3 +75,18 @@ The run writes `fast-tier.json` to the run's results directory and prints one an
 - **Readout.** The `delegation_completed` text and when its audio started.
 
 `LIVE_UTTERANCES` overrides the expected commands (`|`-separated). `LIVE_EXPECT_DIRECT=1` fails the run unless every heard utterance got a `client_tool_call`. `LIVE_TURN_WAIT_MS` (default 15000) is the quiet time after the last utterance before hanging up. GPT-Live can split or merge spoken commands, so the heard count can differ from the spoken count; the spec reports both and fails only when it hears fewer than were spoken.
+
+## Client-session socket against a real Runtype API
+
+`realtime-real-api.live.spec.ts` drives the `realtime-mpa*.html` demo pair against a real API with its own config, `playwright.realtime.config.ts`. It creates two agents (`mock/echo-fast` and `mock/stream-slow` by default), a product with a WebMCP chat surface, and three client tokens, then deletes them. The mock models call the demo's page tools through `[[mock:tool name=webmcp:<tool>]]` directives in the message, so no model key is needed.
+
+```sh
+# A local fleet from a core checkout (mock models need no credentials)
+(cd <core worktree> && pnpm control:api up --session socket-live --mode mock > /tmp/up.out 2>&1 &)
+# ...wait for "outcome":"ready" in /tmp/up.out, then from the persona repo root:
+pnpm --filter @runtypelabs/persona build && pnpm --filter web build
+E2E_PORT=4391 CONTROL_API_SESSION=socket-live CORE_DIR=<core worktree> \
+  ./node_modules/.bin/playwright test --config e2e/live/playwright.realtime.config.ts
+```
+
+`REAL_API_URL` + `REAL_API_KEY` target any other API instead; `REAL_API_MODEL` and `REAL_API_SLOW_MODEL` replace the mock models. Each test writes `wire.json` (every socket frame from CDP `Network.webSocketFrame*` plus every `/v1/client/*` exchange), `console.txt`, `final.png` and a trace under `e2e/live/.out/realtime/<run id>/`.

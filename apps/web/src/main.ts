@@ -16,6 +16,7 @@ import { GALLERY_EXAMPLES } from "./examples-nav";
 import { STANDALONE_EXAMPLES } from "./standalone-nav";
 import { editorialWidgetTheme } from "./editorial-widget-theme";
 import { createDeepWikiToolPlugin } from "./plugins/deepwiki-tool-plugin";
+import { homeDemoConnection } from "./home-demo-connection";
 
 installCommandPalette({
   trigger: document.querySelector<HTMLElement>("[data-command-palette-trigger]"),
@@ -109,26 +110,20 @@ const homeDemoSuggestionChips = [
 // mints the public client token. With both set, the widget talks to Runtype
 // directly in client-token mode. Without them (e.g. a fresh local checkout) it
 // falls back to the proxy's server-pinned `/api/chat/dispatch-docs` route.
-const runtypeClientToken: string | undefined = import.meta.env.VITE_RUNTYPE_CLIENT_TOKEN;
-const runtypeDocsAgentId: string | undefined = import.meta.env.VITE_RUNTYPE_DOCS_AGENT_ID;
-const runtypeApiUrl: string | undefined = import.meta.env.VITE_RUNTYPE_API_URL;
-
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
   import.meta.env.VITE_PROXY_URL ?
     `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-docs` :
     `http://localhost:${proxyPort}/api/chat/dispatch-docs`;
 
-const homeDemoConnection =
-  runtypeClientToken && runtypeDocsAgentId
-    ? {
-        clientToken: runtypeClientToken,
-        agentId: runtypeDocsAgentId,
-        // Always set: overrides DEFAULT_WIDGET_CONFIG's proxy-style apiUrl so
-        // client routes resolve against api.runtype.com, or a staging API.
-        apiUrl: runtypeApiUrl,
-      }
-    : { apiUrl: proxyUrl };
+const homeConnection = homeDemoConnection(
+  {
+    VITE_RUNTYPE_CLIENT_TOKEN: import.meta.env.VITE_RUNTYPE_CLIENT_TOKEN,
+    VITE_RUNTYPE_DOCS_AGENT_ID: import.meta.env.VITE_RUNTYPE_DOCS_AGENT_ID,
+    VITE_RUNTYPE_API_URL: import.meta.env.VITE_RUNTYPE_API_URL,
+  },
+  proxyUrl
+);
 
 const homeDemoWelcomeTitle = "Welcome to Persona";
 const homeDemoWelcomeSubtitle =
@@ -164,7 +159,7 @@ const sharedWidgetConfig: NonNullable<
   Parameters<typeof createAgentExperience>[1]
 > = {
   ...DEFAULT_WIDGET_CONFIG,
-  ...homeDemoConnection,
+  ...homeConnection,
   ...homeDemoSharedAssistant,
   // Match the page's editorial/terminal design: paper surfaces, square
   // corners, ink text, teal accents, mono/Geist type. Shared so embedded
@@ -214,21 +209,8 @@ const sharedWidgetConfig: NonNullable<
   // DeepWiki lookups render as a branded card; any other tool keeps the
   // default bubble.
   plugins: [createDeepWikiToolPlugin({ defaultRepo: "runtypelabs/persona" })],
-  // Client-token session init on hover instead of the default first keystroke,
-  // so `/v1/client/init` has already fired by the time a starter chip is
-  // clicked (touch fires pointerenter too). `keydown` covers keyboard users and
-  // the replaced keystroke trigger; unlike `focusin` it never fires for
-  // autofocus, so page views alone don't spend an init. `warm` is latched and
-  // re-arms after "clear chat", so the listeners stay attached rather than
-  // `once`. Ignored on the proxy fallback.
-  sessionInit: ({ warm, mount }) => {
-    mount.addEventListener("pointerenter", warm);
-    mount.addEventListener("keydown", warm);
-    return () => {
-      mount.removeEventListener("pointerenter", warm);
-      mount.removeEventListener("keydown", warm);
-    };
-  },
+  // Session start and socket connect share one trigger: `realtime.connect` in
+  // homeDemoConnection (hover or keydown). Absent on the proxy fallback.
   postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
 };
 

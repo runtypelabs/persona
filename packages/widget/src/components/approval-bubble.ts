@@ -281,8 +281,8 @@ export const createApprovalBubble = (
     content.appendChild(details);
   }
 
-  // Action buttons (only shown when pending)
-  if (isPending) {
+  // Action buttons (only shown when pending, and only in the tab that owns the turn)
+  if (isPending && !message.agentMetadata?.observed) {
     const buttonsContainer = createElement("div", "persona-flex persona-gap-2 persona-mt-2");
     buttonsContainer.setAttribute("data-approval-buttons", "true");
 
