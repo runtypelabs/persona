@@ -122,7 +122,7 @@
   {
     "name": "Lazy · WebSocket transport chunk (websocket-transport.js)",
     "path": "dist/websocket-transport.js",
-    "limit": "6 kB",
+    "limit": "6.3 kB",
     "gzip": true
   },
   {

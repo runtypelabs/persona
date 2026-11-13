@@ -604,6 +604,99 @@ describe("createWebSocketTransport: socket down, HTTP up", () => {
     transport.destroy?.();
   });
 
+  const handOff = async (overrides: Partial<WebSocketTransportOptions>) => {
+    const transport = make({ onStreamLost: "close", codec: downstream(), ...overrides });
+    const connected = transport.connect();
+    await flush();
+    const socket = FakeWebSocket.last();
+    socket.open();
+    await connected;
+    const response = await transport.request(chat("x"), async () =>
+      new Response(JSON.stringify({ id: "exec_9" }), { status: 202 }));
+    return { transport, socket, response };
+  };
+
+  it("recovers a handed-off stream over HTTP from its start when the socket is lost before its first frame", async () => {
+    const recoverStream = vi.fn(async () => new Response("data: recovered\n\n"));
+    const { transport, socket, response } = await handOff({ recoverStream });
+    vi.useFakeTimers();
+    socket.serverClose(1006);
+    // Every reconnect fails to open.
+    for (let i = 0; i < 3; i += 1) {
+      await vi.advanceTimersByTimeAsync(1000);
+      FakeWebSocket.last().serverClose(1006);
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(recoverStream).toHaveBeenCalledWith("exec_9", expect.any(AbortSignal));
+    expect(await response.text()).toBe("data: recovered\n\n");
+    transport.destroy?.();
+  });
+
+  it("recovers a handed-off stream over HTTP when the backend detaches it before its first frame", async () => {
+    const recoverStream = vi.fn(async () => new Response("data: recovered\n\n"));
+    const { transport, socket, response } = await handOff({ recoverStream });
+    socket.receive({ id: "exec_9", end: "detached" });
+    expect(await response.text()).toBe("data: recovered\n\n");
+    transport.destroy?.();
+  });
+
+  it("recovers a handed-off stream over HTTP when the socket reports an error for it before its first frame", async () => {
+    const recoverStream = vi.fn(async () => new Response("data: recovered\n\n"));
+    const { transport, socket, response } = await handOff({ recoverStream });
+    socket.receive({ id: "exec_9", error: "internal" });
+    expect(await response.text()).toBe("data: recovered\n\n");
+    transport.destroy?.();
+  });
+
+  it("leaves a handed-off stream that already delivered frames to the session's own recovery", async () => {
+    const recoverStream = vi.fn(async () => new Response("data: recovered\n\n"));
+    const { transport, socket, response } = await handOff({ recoverStream });
+    socket.receive({ id: "exec_9", sse: "id: 1\ndata: {\"type\":\"text_delta\",\"delta\":\"a\"}\n\n" });
+    socket.receive({ id: "exec_9", end: "detached" });
+    expect(await response.text()).toContain("text_delta");
+    expect(recoverStream).not.toHaveBeenCalled();
+    transport.destroy?.();
+  });
+
+  it("stops an HTTP recovery when the reader cancels", async () => {
+    let recoverySignal: AbortSignal | undefined;
+    const recoverStream = vi.fn(async (_id: string, signal?: AbortSignal) => {
+      recoverySignal = signal;
+      return new Response(new ReadableStream({ start() {} }));
+    });
+    const { transport, socket, response } = await handOff({ recoverStream });
+    socket.receive({ id: "exec_9", end: "detached" });
+    await flush();
+    await response.body!.cancel();
+    expect(recoverySignal?.aborted).toBe(true);
+    transport.destroy?.();
+  });
+
+  it("stops listening to the request's abort signal once an HTTP recovery settles", async () => {
+    const request = new AbortController();
+    const add = vi.spyOn(request.signal, "addEventListener");
+    const remove = vi.spyOn(request.signal, "removeEventListener");
+    const transport = make({
+      onStreamLost: "close",
+      codec: downstream(),
+      recoverStream: async () => new Response("data: recovered\n\n"),
+    });
+    const connected = transport.connect();
+    await flush();
+    const socket = FakeWebSocket.last();
+    socket.open();
+    await connected;
+    const response = await transport.request(chat("x", request.signal), async () =>
+      new Response(JSON.stringify({ id: "exec_9" }), { status: 202 }));
+    socket.receive({ id: "exec_9", end: "detached" });
+    expect(await response.text()).toBe("data: recovered\n\n");
+    await flush();
+    const listeners = (calls: unknown[][]) => calls.filter(([type]) => type === "abort").map(([, listener]) => listener);
+    expect(listeners(add.mock.calls).length).toBeGreaterThan(1);
+    expect(listeners(remove.mock.calls)).toEqual(expect.arrayContaining(listeners(add.mock.calls)));
+    transport.destroy?.();
+  });
+
   it("ends a 202 stream it cannot serve when no recovery is configured", async () => {
     const transport = make({
       onStreamLost: "close",
