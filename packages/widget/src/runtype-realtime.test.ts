@@ -864,6 +864,33 @@ describe("AgentWidgetClient + client-session socket", () => {
     h.client.destroy();
   });
 
+  it.each(["detached", "error"])(
+    "reads a handed-off turn the socket ends as %s before its first frame over HTTP, without attaching to the socket again",
+    async (reason) => {
+      const h = await setup();
+      const urls: string[] = [];
+      vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+        urls.push(url);
+        if (url.endsWith("/v1/client/chat")) {
+          setTimeout(() => FakeWebSocket.last().receive(frameJson(`server/attach_end-${reason}`)), 0);
+          return accepted();
+        }
+        return new Response(
+          sseFrame(1, "text_delta", { id: "t", delta: "Hello http" }) + sseFrame(2, "execution_complete", { success: true, kind: "agent" }),
+          { headers: { "Content-Type": "text/event-stream" } }
+        );
+      }));
+      h.client.warmTransport("intent");
+      const socket = await openSocket();
+      const attachesBefore = socket.sentJson.filter((sent) => (sent as { type?: string }).type === "attach").length;
+      await h.send();
+      expect(h.events.some((e) => e.type === "message" && e.message.content === "Hello http")).toBe(true);
+      expect(urls.filter((url) => url.includes("/executions/exec_1/events"))).toHaveLength(1);
+      expect(socket.sentJson.filter((sent) => (sent as { type?: string }).type === "attach")).toHaveLength(attachesBefore);
+      h.client.destroy();
+    }
+  );
+
   it("first send without a warmed socket still goes over SSE", async () => {
     const h = await setup();
     await h.send();

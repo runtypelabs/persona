@@ -377,9 +377,15 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
   const recoverable = (entry: StreamEntry | undefined): entry is StreamEntry =>
     !!entry?.controller && !!entry.handedOff && !entry.delivered && !!options.recoverStream && !entry.signal?.aborted;
 
+  /** Reads a stream over HTTP; its later reconnects stay on HTTP, so a recovery never re-enters the socket that lost it. */
+  const recover = (streamId: string, signal?: AbortSignal) => {
+    refused.add(streamId);
+    return options.recoverStream!(streamId, signal);
+  };
+
   const loseStream = (streamId: string, error: PersonaTransportError) => {
     const entry = entries.get(streamId);
-    if (!recoverable(entry) || !options.recoverStream) {
+    if (!recoverable(entry)) {
       finish(streamId, options.onStreamLost === "close" ? "close" : error);
       return;
     }
@@ -389,12 +395,13 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
     maybeIdle();
     const stop = new AbortController();
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-    entry.stop = () => {
+    const stopRecovery = () => {
       stop.abort();
       reader?.cancel().catch(() => {});
     };
-    entry.signal?.addEventListener("abort", entry.stop, { once: true });
-    options.recoverStream(streamId, stop.signal)
+    entry.stop = stopRecovery;
+    entry.signal?.addEventListener("abort", stopRecovery, { once: true });
+    recover(streamId, stop.signal)
       .then(async (response) => {
         if (stop.signal.aborted) throw abortError();
         reader = response.body?.getReader();
@@ -409,7 +416,8 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
         } catch {
           // the reader is gone
         }
-      });
+      })
+      .finally(() => entry.signal?.removeEventListener("abort", stopRecovery));
   };
 
   const loseAll = (error: PersonaTransportError) => {
@@ -788,7 +796,7 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
     // The socket can no longer carry a stream the backend handed it (disabled, or refused before any data).
     if (options.recoverStream && (disabled || destroyed || (early && !early.chunks.length && (early.error || isLost(early.ended))))) {
       unclaimed.delete(streamId);
-      return options.recoverStream(streamId, signal);
+      return recover(streamId, signal);
     }
     return claim(streamId, { signal, handedOff: true });
   };

@@ -299,11 +299,13 @@ A turn the backend hands to the socket that is lost before its first frame
 end, or a socket error for that stream) is read over HTTP from its start
 (`recoverStream`); before, it ended with no reply and nothing to resume from.
 The recovery honours the request's abort signal and stops when the reader
-cancels. The transport also remembers the last cursor it delivered for an
-ended stream (`cursor()`), so a tab watching another tab's turn attaches after
-what it already showed and does not repeat it. Both live in the lazy chunk,
-so the core is unchanged. Raise (Before is the After above, local builds):
+cancels, and the stream's later reconnects stay on HTTP so a recovery never
+goes back to the socket that lost it. The transport also remembers the last
+cursor it delivered for an ended stream (`cursor()`), so a tab watching
+another tab's turn attaches after what it already showed and does not repeat
+it. Both live in the lazy chunk, so the core is unchanged. Raise (Before is
+the After above, local builds):
 
 | Output | Before | After | Budget |
 | --- | ---: | ---: | ---: |
-| `dist/websocket-transport.js` | 5.96 kB | 6.22 kB | 6 → 6.25 kB |
+| `dist/websocket-transport.js` | 5.96 kB | 6.24 kB | 6 → 6.3 kB |

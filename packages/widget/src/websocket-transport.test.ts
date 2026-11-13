@@ -672,6 +672,31 @@ describe("createWebSocketTransport: socket down, HTTP up", () => {
     transport.destroy?.();
   });
 
+  it("stops listening to the request's abort signal once an HTTP recovery settles", async () => {
+    const request = new AbortController();
+    const add = vi.spyOn(request.signal, "addEventListener");
+    const remove = vi.spyOn(request.signal, "removeEventListener");
+    const transport = make({
+      onStreamLost: "close",
+      codec: downstream(),
+      recoverStream: async () => new Response("data: recovered\n\n"),
+    });
+    const connected = transport.connect();
+    await flush();
+    const socket = FakeWebSocket.last();
+    socket.open();
+    await connected;
+    const response = await transport.request(chat("x", request.signal), async () =>
+      new Response(JSON.stringify({ id: "exec_9" }), { status: 202 }));
+    socket.receive({ id: "exec_9", end: "detached" });
+    expect(await response.text()).toBe("data: recovered\n\n");
+    await flush();
+    const listeners = (calls: unknown[][]) => calls.filter(([type]) => type === "abort").map(([, listener]) => listener);
+    expect(listeners(add.mock.calls).length).toBeGreaterThan(1);
+    expect(listeners(remove.mock.calls)).toEqual(expect.arrayContaining(listeners(add.mock.calls)));
+    transport.destroy?.();
+  });
+
   it("ends a 202 stream it cannot serve when no recovery is configured", async () => {
     const transport = make({
       onStreamLost: "close",
