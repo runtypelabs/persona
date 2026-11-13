@@ -677,6 +677,74 @@ describe("runtype-client-session-v1: other tabs and navigation", () => {
     transport.destroy?.();
   });
 
+  it("re-watches a paused turn after a reconnect from the last frame it showed, not from the start", async () => {
+    vi.useFakeTimers();
+    const opened: Response[] = [];
+    const onForeignExecution = vi.fn((_id: string, open: () => Response) => {
+      opened.push(open());
+      return true;
+    });
+    const { transport } = makeTransport({ onForeignExecution });
+    const connected = transport.socket.connect();
+    await vi.advanceTimersByTimeAsync(0);
+    const first = FakeWebSocket.last();
+    first.open();
+    first.receive(frameJson("server/hello"));
+    await connected;
+    first.receive(started("exec_1"));
+    first.receive(frame(sseFrame(1, "text_delta", { id: "t", delta: "watched " })));
+    first.receive(frame(sseFrame(2, "text_delta", { id: "t", delta: "text" })));
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
+    first.receive(frameJson("server/attach_end-paused"));
+    expect(await opened[0].text()).toContain("watched ");
+
+    // The owner answers the pause; this tab's socket drops and comes back while the turn runs.
+    first.serverClose(1006);
+    const reconnected = transport.socket.connect();
+    await vi.advanceTimersByTimeAsync(0);
+    const second = FakeWebSocket.last();
+    expect(second).not.toBe(first);
+    second.open();
+    second.receive(JSON.stringify({ ...socketFixture<Record<string, unknown>>("server/hello"), activeExecutionId: "exec_1" }));
+    await reconnected;
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onForeignExecution).toHaveBeenCalledTimes(2);
+    expect(second.sentJson).toContainEqual({ type: "attach", executionId: "exec_1", after: "2" });
+    second.receive({ type: "attached", executionId: "exec_1" });
+    second.receive(frame(sseFrame(1, "text_delta", { id: "t", delta: "watched " }) + sseFrame(2, "text_delta", { id: "t", delta: "text" }) + sseFrame(3, "text_delta", { id: "t2", delta: " more" })));
+    second.receive(frameJson("server/attach_end-terminal"));
+    const replay = await opened[1].text();
+    expect(replay).toContain(" more");
+    expect(replay).not.toContain("watched ");
+    transport.destroy?.();
+  });
+
+  it("drops frames already shown when a watched turn's next leg resends them live", async () => {
+    const opened: Response[] = [];
+    const onForeignExecution = vi.fn((_id: string, open: () => Response) => {
+      opened.push(open());
+      return true;
+    });
+    const { transport } = makeTransport({ onForeignExecution });
+    const socket = await helloed(transport);
+    socket.receive(started("exec_1"));
+    socket.receive(frame(sseFrame(1, "text_delta", { id: "t", delta: "first leg" })));
+    await flush();
+    await flush();
+    socket.receive(frameJson("server/attach_end-paused"));
+    expect(await opened[0].text()).toContain("first leg");
+    socket.receive(frame(sseFrame(1, "text_delta", { id: "t", delta: "first leg" }) + sseFrame(2, "text_delta", { id: "t2", delta: "second leg" })));
+    await flush();
+    await flush();
+    socket.receive(frameJson("server/attach_end-terminal"));
+    const next = await opened[1].text();
+    expect(next).toContain("second leg");
+    expect(next).not.toContain("first leg");
+    transport.destroy?.();
+  });
+
   it("detaches a foreign execution the session declines", async () => {
     const { transport } = makeTransport({ onForeignExecution: () => false });
     const socket = await helloed(transport);

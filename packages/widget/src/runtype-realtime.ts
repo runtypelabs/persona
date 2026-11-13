@@ -189,7 +189,7 @@ export function createRuntypeRealtimeTransport(host: RuntypeRealtimeHost): Runty
     void Promise.allSettled(pending).then(() => setTimeout(() => {
       if (socket.isClaimed(executionId) || ignored.has(executionId)) return;
       const adopted = !ours(executionId, turnOf.get(executionId)) && !!host.onForeignExecution?.(executionId, () =>
-        socket.claim(executionId, { after: null }));
+        socket.claim(executionId, { after: socket.cursor(executionId) }));
       if (!adopted) {
         ignored.add(executionId);
         const detach = codec.detach?.(executionId);
@@ -203,14 +203,15 @@ export function createRuntypeRealtimeTransport(host: RuntypeRealtimeHost): Runty
     const executionId = typeof frame.executionId === "string" ? frame.executionId : undefined;
     switch (frame.type) {
       case "hello":
-        // A turn that started while this page was navigating: attach from the start.
+        // A turn that started while this page was navigating attaches from the start; one this tab already showed, after it.
         if (typeof frame.activeExecutionId === "string") {
           const active = frame.activeExecutionId;
           void Promise.allSettled([...own]).then(() => setTimeout(() => {
             if (socket.isClaimed(active) || ignored.has(active)) return;
             const adopted = !ours(active, frame.activeClientTurnId) && !!host.onForeignExecution?.(active, () => {
-              const response = socket.claim(active, { after: null, replay: true });
-              const attach = codec.attach?.(active, null);
+              const after = socket.cursor(active);
+              const response = socket.claim(active, { after, replay: true });
+              const attach = codec.attach?.(active, after);
               if (attach) socket.send(attach);
               return response;
             });

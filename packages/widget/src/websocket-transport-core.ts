@@ -178,6 +178,12 @@ type StreamEntry = {
    * replay resends them) and are dropped; only a refusal ends the stream.
    */
   replaying?: boolean;
+  /** A backend handoff (`accept`): until a frame arrives, only its id says where to recover it from. */
+  handedOff?: boolean;
+  delivered?: boolean;
+  signal?: AbortSignal;
+  /** Cancels this stream's HTTP recovery. */
+  stop?: () => void;
 };
 
 type Unclaimed = {
@@ -194,6 +200,7 @@ const UNCLAIMED_TTL_MS = 30_000;
 /** How long an HTTP request that the socket could carry waits for an in-progress open. */
 const PREPARE_CONNECT_WAIT_MS = 1500;
 const MAX_UNCLAIMED_CHUNKS = 2048;
+const MAX_ENDED_CURSORS = 64;
 const encoder = new TextEncoder();
 
 const cursorOf = (block: string): string | null => {
@@ -249,6 +256,8 @@ export type WebSocketTransport = PersonaTransport & {
   isClaimed(streamId: string): boolean;
   /** Ids of the open streams. */
   streams(): string[];
+  /** The last cursor delivered for a stream, open or ended, or null. */
+  cursor(streamId: string): string | null;
 };
 
 export function createWebSocketTransport(options: WebSocketTransportOptions): WebSocketTransport {
@@ -284,6 +293,8 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
   const unclaimed = new Map<string, Unclaimed>();
   /** Streams the server said it cannot serve: their reconnects go over HTTP. */
   const refused = new Set<string>();
+  /** Last cursor of each ended stream, so a later attach to the same stream resumes after it. */
+  const endedCursors = new Map<string, string>();
 
   const setState = (next: WebSocketTransportState) => {
     if (state === next) return;
@@ -335,13 +346,21 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
       }
       out += `${block}\n\n`;
     }
-    if (out) entry.controller?.enqueue(encoder.encode(out));
+    if (out) {
+      entry.delivered = true;
+      entry.controller?.enqueue(encoder.encode(out));
+    }
   };
 
   const finish = (streamId: string, outcome: "close" | PersonaTransportError | DOMException) => {
     const entry = entries.get(streamId);
     if (!entry) return;
     entries.delete(streamId);
+    if (entry.cursor) {
+      endedCursors.delete(streamId);
+      endedCursors.set(streamId, entry.cursor);
+      if (endedCursors.size > MAX_ENDED_CURSORS) endedCursors.delete(endedCursors.keys().next().value!);
+    }
     entry.release();
     const controller = entry.controller;
     entry.controller = null;
@@ -354,8 +373,44 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
     maybeIdle();
   };
 
-  const loseStream = (streamId: string, error: PersonaTransportError) =>
-    finish(streamId, options.onStreamLost === "close" ? "close" : error);
+  /** A handoff lost before its first frame gave the session no execution id to resume: read it over HTTP from the start. */
+  const recoverable = (entry: StreamEntry | undefined): entry is StreamEntry =>
+    !!entry?.controller && !!entry.handedOff && !entry.delivered && !!options.recoverStream && !entry.signal?.aborted;
+
+  const loseStream = (streamId: string, error: PersonaTransportError) => {
+    const entry = entries.get(streamId);
+    if (!recoverable(entry) || !options.recoverStream) {
+      finish(streamId, options.onStreamLost === "close" ? "close" : error);
+      return;
+    }
+    const controller = entry.controller!;
+    entries.delete(streamId);
+    entry.release();
+    maybeIdle();
+    const stop = new AbortController();
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    entry.stop = () => {
+      stop.abort();
+      reader?.cancel().catch(() => {});
+    };
+    entry.signal?.addEventListener("abort", entry.stop, { once: true });
+    options.recoverStream(streamId, stop.signal)
+      .then(async (response) => {
+        if (stop.signal.aborted) throw abortError();
+        reader = response.body?.getReader();
+        for (let chunk = await reader?.read(); chunk && !chunk.done; chunk = await reader!.read()) {
+          controller.enqueue(chunk.value);
+        }
+        controller.close();
+      })
+      .catch((failure: unknown) => {
+        try {
+          controller.error(stop.signal.aborted ? abortError() : failure);
+        } catch {
+          // the reader is gone
+        }
+      });
+  };
 
   const loseAll = (error: PersonaTransportError) => {
     for (const id of [...entries.keys()]) loseStream(id, error);
@@ -431,7 +486,8 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
       }
       case "error": {
         const error = new PersonaTransportError("stream_error", item.message || item.code || "Stream error", true);
-        if (item.streamId && entries.has(item.streamId)) finish(item.streamId, error);
+        if (item.streamId && recoverable(entries.get(item.streamId))) loseStream(item.streamId, error);
+        else if (item.streamId && entries.has(item.streamId)) finish(item.streamId, error);
         else if (item.streamId) pendingFor(item.streamId).error = error;
         else options.onError?.(error);
         if (item.fatal) ws?.close(1011, "fatal error");
@@ -609,7 +665,10 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
     }
   };
 
-  const claim = (streamId: string, claimOptions: { signal?: AbortSignal; after?: string | null; replay?: boolean } = {}): Response => {
+  const claim = (
+    streamId: string,
+    claimOptions: { signal?: AbortSignal; after?: string | null; replay?: boolean; handedOff?: boolean } = {}
+  ): Response => {
     const { signal } = claimOptions;
     const existing = entries.get(streamId);
     if (existing) finish(streamId, abortError());
@@ -628,9 +687,12 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
           generation: ready ? generation : -1,
           release: () => signal?.removeEventListener("abort", onAbort),
           replaying: !!claimOptions.replay && !!codec.acknowledgesAttach,
+          handedOff: claimOptions.handedOff,
+          signal,
         };
       },
       cancel() {
+        entry.stop?.();
         if (entries.get(streamId) !== entry) return;
         sendRaw(codec.detach?.(streamId));
         entries.delete(streamId);
@@ -728,7 +790,7 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
       unclaimed.delete(streamId);
       return options.recoverStream(streamId, signal);
     }
-    return claim(streamId, { signal });
+    return claim(streamId, { signal, handedOff: true });
   };
 
   // ---- Idle and page lifecycle ----------------------------------------------
@@ -798,6 +860,7 @@ export function createWebSocketTransport(options: WebSocketTransportOptions): We
     claim,
     isClaimed: (streamId) => entries.has(streamId),
     streams: () => [...entries.keys()],
+    cursor: (streamId) => entries.get(streamId)?.cursor ?? endedCursors.get(streamId) ?? null,
     request,
     warm(_reason: PersonaTransportWarmReason) {
       if (destroyed || disabled) return;
