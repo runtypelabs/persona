@@ -48,7 +48,10 @@
   };
   new PerformanceObserver(refreshAssets).observe({ type: "resource", buffered: true });
   window.siteAgentConfig = {
-    target: "body", cssUrl: "/dist/widget.css", jsUrl: "/dist/index.global.js",
+    // No cssUrl/jsUrl: assets resolve beside the installer, as in a normal embed.
+    // Explicit overrides would measure the installer's conservative path instead,
+    // where the stylesheet is requested alongside the launcher.
+    target: "body",
     config: { apiUrl: "/api/chat", persistState: false, future: { v5Defaults: true }, launcher: { enabled: true, title: "Compressed preview" } },
     onScriptLoad() { note("Installer loaded"); },
     onLauncherShown({ deferred, element }) {

@@ -24,6 +24,13 @@ Measured after the preview compatibility fixes (gzip, decimal kB):
 | `dist/theme-editor.js` | 39.46 kB | 40.5 kB |
 | `dist/theme-editor-preview.js` | 171.94 kB | 174 kB |
 
+`dist/launcher.global.js` has since taken on the launcher's own share of
+`widget.css` (about 2.4 kB gzip), and its budget moved to 20 kB. That trade is
+budgeted where it pays off: "launcher paint" sums `install.global.js` and
+`launcher.global.js`, everything a deferred install downloads before the
+launcher appears, at 24 kB gzip (20.5 KiB Brotli in `check-size.mjs`). The same
+sum used to include the full stylesheet. See `docs/bundle-sizes.md`.
+
 These are explicit budgets, not automatically adjusted thresholds. Future growth
 should be investigated before changing them. Shared theme code affects the
 launcher and editor as well as the main widget; optional behavior still has a

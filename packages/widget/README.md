@@ -17,7 +17,7 @@ pnpm build
 - `dist/index.js` (ESM), `dist/index.cjs` (CJS), and `dist/index.global.js` (IIFE) provide different module formats.
 - `dist/widget.css` is the prefixed Tailwind bundle.
 - `dist/install.global.js` is the automatic installer script for easy script tag installation.
-- `dist/launcher.global.js` is the tiny critical launcher used by deferred script-tag installs before the full panel bundle loads.
+- `dist/launcher.global.js` is the tiny critical launcher used by deferred script-tag installs before the full panel bundle loads. It embeds the launcher's own share of `widget.css`, so it paints without waiting for the stylesheet.
 - `dist/webmcp-polyfill.js` is the lazy WebMCP polyfill chunk used by the IIFE bundle only when `config.webmcp.enabled` is true and the page has no `document.modelContext`.
 
 ### Using with modules

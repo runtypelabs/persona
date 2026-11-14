@@ -5,6 +5,7 @@
  */
 
 import { pinCdnRelease } from "./utils/cdn-release";
+import { FIRST_TURN_CHUNKS, selectRevealChunks } from "./utils/renderer-chunks";
 
 import type { BrandConfig } from "./types/theme";
 import { delayInstallLoading } from "./utils/install-loading";
@@ -214,10 +215,14 @@ declare global {
   //   2. explicit `cdn` / `version` → npm CDN construction
   //   3. the installer's own directory (default)
   //   4. npm CDN construction (currentScript unavailable)
-  const assetUrls = (base: string) => ({
+  // `sameRelease`: the assets sit in the installer's own directory, so they are
+  // the installer's own release. Anything rerouted (`version`, `cdn`, explicit
+  // URLs) may point at an older launcher bundle.
+  const assetUrls = (base: string, sameRelease = false) => ({
     cssUrl: `${base}/widget.css`,
     jsUrl: `${base}/index.global.js`,
-    launcherUrl: `${base}/launcher.global.js`,
+    launcherUrl: `${base}/launcher.global.js` as string | null,
+    sameRelease,
   });
   const getCdnBase = () => {
     // For a custom URL override, derive the sibling launcher URL when the
@@ -230,6 +235,7 @@ declare global {
         cssUrl: config.cssUrl,
         jsUrl: config.jsUrl,
         launcherUrl: (derivedLauncherUrl !== config.jsUrl ? derivedLauncherUrl : null) as string | null,
+        sameRelease: false,
       };
     }
 
@@ -241,7 +247,7 @@ declare global {
       const selfBase = getInstallerBase();
       if (selfBase) {
         if (!config.version) {
-          return assetUrls(selfBase);
+          return assetUrls(selfBase, true);
         }
         // A `version` on the first-party CDN stays first-party: the bucket
         // mirrors every release at /persona/<version>/, and rerouting to a
@@ -263,7 +269,7 @@ declare global {
     return assetUrls(`${host}${basePath}`);
   };
 
-  const { cssUrl, jsUrl, launcherUrl } = getCdnBase();
+  const { cssUrl, jsUrl, launcherUrl, sameRelease } = getCdnBase();
 
   // Surface silent CSP breakage: when `cdn`/`version` reroutes assets to a
   // different origin than the one that served the installer, a strict CSP
@@ -322,42 +328,130 @@ declare global {
     }
   };
 
-  // Stylesheet and script requests share lifecycle and failure handling.
-  const loadAsset = (url: string | null, loaded: boolean, css = false): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (loaded || !url) { resolve(); return; }
+  // Stylesheet and script requests share lifecycle and failure handling. Each
+  // URL is requested once: the warm-up, a pointer reaching for the launcher and
+  // the click itself may all ask for the same file, and a second <script> for
+  // the main bundle would evaluate it twice.
+  const pendingAssets = new Map<string, Promise<void>>();
+  const loadAsset = (url: string | null, isLoaded: () => boolean, css = false, priority?: "low" | "high"): Promise<void> => {
+    if (!url) return Promise.resolve();
+    // A stylesheet link that is still downloading already satisfies
+    // `isCssLoaded()`, so the pending request is consulted first.
+    let pending = pendingAssets.get(url);
+    if (pending) return pending;
+    if (isLoaded()) return Promise.resolve();
+    pending = new Promise<void>((resolve, reject) => {
       const node = document.createElement(css ? "link" : "script");
       Object.assign(node, css ? { rel: "stylesheet", href: url } : { src: url, async: true });
       if (css) node.setAttribute("data-persona", "true");
+      if (priority) node.setAttribute("fetchpriority", priority);
       node.onload = () => resolve();
-      node.onerror = () => reject(new Error(`Failed to load ${url}`));
+      node.onerror = () => {
+        // Leave nothing behind that would make a retry look already loaded.
+        node.remove();
+        pendingAssets.delete(url);
+        reject(new Error(`Failed to load ${url}`));
+      };
       document.head.appendChild(node);
     });
+    pendingAssets.set(url, pending);
+    return pending;
   };
-  const loadCSS = () => loadAsset(cssUrl, isCssLoaded(), true);
-  const loadJS = () => loadAsset(jsUrl, isJsLoaded());
-  const loadLauncher = () => loadAsset(launcherUrl, !!window.AgentWidgetLauncher);
+  const loadCSS = (lowPriority = false) => loadAsset(cssUrl, isCssLoaded, true, lowPriority ? "low" : undefined);
+  // An async script is a low-priority fetch by default, which a browser may
+  // hold back behind the stylesheet and chunk preloads requested with it. When
+  // the visitor is waiting on the bundle (`urgent`), say so.
+  const loadJS = (urgent = false) => loadAsset(jsUrl, isJsLoaded, false, urgent ? "high" : undefined);
+  const loadLauncher = () => loadAsset(launcherUrl, () => !!window.AgentWidgetLauncher);
 
-  // Warm the full bundle in the background (download-only, not executed) so the
-  // first open is quick. Runs at idle so it never competes with the launcher.
-  const prefetchFullBundle = (): void => {
-    const addPrefetch = () => {
-      const urls = isJsLoaded() ? [] : [jsUrl];
-      for (const chunk of ["markdown-parsers.js", "client-stream.js"]) {
-        const url = jsUrl.replace(/index\.global\.js($|\?)/, `${chunk}$1`);
-        if (url !== jsUrl) urls.push(url);
-      }
-      for (const href of urls) {
-        const link = document.createElement("link");
-        Object.assign(link, { rel: "prefetch", as: "script", href });
-        document.head.appendChild(link);
-      }
-    };
-    if (typeof requestIdleCallback !== "undefined") {
-      requestIdleCallback(addPrefetch, { timeout: 4000 });
-    } else {
-      setTimeout(addPrefetch, 1200);
+  // Lazy chunks sit beside the main bundle, which derives the same URLs from
+  // its own `src`; the browser's module map only reuses a preload under an
+  // identical URL. Empty for an unparsable override: every derived URL then
+  // equals it and is dropped, and the widget loads its chunks itself.
+  let bundleSrc = "";
+  try {
+    bundleSrc = pinCdnRelease(new URL(jsUrl, document.baseURI).href);
+  } catch {
+    // leave empty
+  }
+  const chunkUrls = (names: readonly string[]): string[] =>
+    names
+      .map((name) => bundleSrc.replace(/index\.global\.js($|\?)/, `${name}.js$1`))
+      .filter((url) => url !== bundleSrc);
+  // What the reveal waits for under this config, and what the first turn then
+  // imports. Only the first set is worth competing with the main bundle for.
+  const revealChunks = (widgetConfig: any) => chunkUrls(selectRevealChunks(widgetConfig));
+  const firstTurnChunks = () => chunkUrls(FIRST_TURN_CHUNKS);
+
+  // Download a script without running it.
+  //
+  // Speculative passes (idle, pointer intent) only fill the HTTP cache. A
+  // `modulepreload` that fails is remembered by the module map for the life of
+  // the page: the widget's later `import()` of that URL would then fail without
+  // a request, turning one dropped speculative fetch into a failed open.
+  // Committed passes (an open, an eager install) are followed by that import at
+  // once, so they use `modulepreload` and share its request and its outcome;
+  // the chunk is fetched and compiled alongside the main bundle instead of one
+  // round trip after it.
+  const hinted = new Set<string>();
+  const hint = (href: string, module: boolean, committed: boolean, lowPriority = false): void => {
+    const link = document.createElement("link");
+    // `undefined` where there is no feature detection: assume the hint works.
+    const supports = (rel: string): boolean | undefined => link.relList?.supports?.(rel);
+    const rel =
+      module && committed && supports("modulepreload")
+        ? "modulepreload"
+        : supports("prefetch") !== false
+          ? "prefetch"
+          : "";
+    const key = `${rel} ${href}`;
+    if (hinted.has(key)) return;
+    hinted.add(key);
+    if (!rel) {
+      // Safari has no prefetch. Mirror the request each script type makes.
+      const init: RequestInit = module ? {} : { mode: "no-cors", credentials: "include" };
+      if (lowPriority) init.priority = "low";
+      void fetch(href, init).catch(() => {});
+      return;
     }
+    link.rel = rel;
+    if (rel === "prefetch") {
+      link.setAttribute("as", "script");
+      // Module scripts are fetched in CORS mode; match it so the entry is reused.
+      if (module) link.crossOrigin = "anonymous";
+    }
+    link.href = href;
+    if (lowPriority) link.setAttribute("fetchpriority", "low");
+    document.head.appendChild(link);
+  };
+
+  // Fetch everything the first open needs ahead of the click, in parallel: the
+  // stylesheet (applied right away; it repeats the launcher's critical rules
+  // verbatim), the main bundle, and this config's lazy chunks. The open then
+  // runs from cache instead of fetching the chunks one round trip after the
+  // bundle. `background` marks the idle pass, which yields to the host page.
+  const warmFullWidget = (widgetConfig: any, committed: boolean, background = false): void => {
+    loadCSS(background).catch(() => {}); // reported, and retried, on open
+    if (!isJsLoaded() && !pendingAssets.has(jsUrl)) hint(jsUrl, false, committed, background);
+    for (const url of revealChunks(widgetConfig)) hint(url, true, committed, background);
+    // While a visitor waits on the reveal, nothing else joins the queue.
+    if (!committed) warmFirstTurn();
+  };
+  // Always speculative: the first send may never come, and a fetch for it must
+  // not take bandwidth from a reveal in progress.
+  const warmFirstTurn = (): void => {
+    for (const url of firstTurnChunks()) hint(url, true, false, true);
+  };
+
+  // Whether an injected <style> applies here. A `style-src` policy without
+  // 'unsafe-inline' leaves it unparsed, and the launcher's embedded critical
+  // rules with it.
+  const inlineStylesAllowed = (): boolean => {
+    const probe = document.createElement("style");
+    document.head.appendChild(probe);
+    const allowed = !!probe.sheet;
+    probe.remove();
+    return allowed;
   };
 
   // Merge top-level installer options into the widget config. Shared by the
@@ -407,6 +501,9 @@ declare global {
       // Handoff from the critical launcher: the user already clicked, so open
       // the panel via the existing public controller method.
       if (openAfter) handle?.open?.();
+
+      // The reveal is done; have the first send's chunks in cache before it.
+      warmFirstTurn();
 
       // Eager floating installs paint their launcher at load time too: emit the
       // same page-load "appeared" signal as the deferred path. The deferred
@@ -470,9 +567,20 @@ declare global {
     const onOpen = () => {
       if (phase !== "idle") return; // already loading or handed off
       phase = "loading";
-      let errorPhase: "bundle" | "init" = "bundle";
+      let errorPhase: "css" | "bundle" | "init" = "css";
       const stopLoading = delayInstallLoading(launcherHandle?.element ?? null, true, config.renderLoading);
-      loadJS()
+      // Normally all of this is warm already; a click that beats the warm-up
+      // starts the same requests at full priority.
+      const css = loadCSS();
+      const js = loadJS(true);
+      js.catch(() => {}); // reported below, after the stylesheet's outcome
+      warmFullWidget(widgetConfig, true);
+      // The panel must never be revealed ahead of its stylesheet.
+      css
+        .then(() => {
+          errorPhase = "bundle";
+          return js;
+        })
         .then(async () => {
           errorPhase = "init";
           await initWidget(true);    // keep the critical launcher until the panel is complete
@@ -495,8 +603,30 @@ declare global {
     safeCall(config.onLauncherShown, { deferred: true, element: mounted.element });
     dispatchLifecycle("persona:launcher-shown", { deferred: true, element: mounted.element });
 
-    // Warm the full bundle so the first open is quick.
-    prefetchFullBundle();
+    // A pointer or focus reaching the launcher is the strongest signal that a
+    // click follows: fetch whatever is still missing and evaluate the bundle
+    // now, so the click only has to mount.
+    const onIntent = () => {
+      loadJS().catch(() => {}); // reported, and retried, on open
+      warmFullWidget(widgetConfig, false);
+    };
+    for (const type of ["pointerenter", "focus", "touchstart"]) {
+      mounted.element.addEventListener(type, onIntent, { once: true, passive: true });
+    }
+
+    // Otherwise warm up once the page is idle, unless the visitor asked to save
+    // data or is on a 2G-class connection: they pay only when they reach for it.
+    const connection = (navigator as any).connection;
+    if (connection?.saveData || /2g$/.test(connection?.effectiveType ?? "")) return;
+    const warm = () => {
+      // An open already under way has asked for all of it at full priority.
+      if (phase === "idle") warmFullWidget(widgetConfig, false, true);
+    };
+    if (typeof requestIdleCallback !== "undefined") {
+      requestIdleCallback(warm, { timeout: 4000 });
+    } else {
+      setTimeout(warm, 1200);
+    }
   };
 
   // Main installation flow (called after hydration completes)
@@ -510,16 +640,24 @@ declare global {
         config.clientToken
       );
 
-      // Fast path: render the real launcher from the ~13 KB critical bundle and
+      // Fast path: render the real launcher from the small critical bundle and
       // defer the full widget until first open. Only for the common floating
       // case; everything else falls through to the eager path below.
       if (shouldAutoInit) {
         const { target, widgetConfig } = buildWidgetInit();
         if (shouldDeferPanel(widgetConfig)) {
           try {
-            // CSS + launcher in parallel so the launcher paints correctly styled.
-            await Promise.all([loadCSS(), loadLauncher()]);
-            if (window.AgentWidgetLauncher?.mount) {
+            // The launcher bundle embeds the rules its own markup needs, so it
+            // paints without widget.css, which then loads with the warm-up.
+            // Where that may not hold (a rerouted, possibly older launcher
+            // bundle, or a page that blocks inline styles) the stylesheet
+            // starts in parallel, as it always used to.
+            const css = sameRelease && inlineStylesAllowed() ? null : loadCSS();
+            css?.catch(() => {});
+            await loadLauncher();
+            const launcher = window.AgentWidgetLauncher;
+            if (launcher?.mount) {
+              if (launcher.installCriticalStyles?.() !== true) await (css ?? loadCSS());
               mountDeferredLauncher(target, widgetConfig);
               return;
             }
@@ -539,13 +677,25 @@ declare global {
         }
       }
       // Eager path: retain feedback through all renderer/style preparation.
+      // The stylesheet, the main bundle and this config's lazy chunks download
+      // together; the chunks used to wait for the bundle to run and ask.
+      const css = loadCSS();
+      const js = loadJS(true);
+      js.catch(() => {}); // reported below, after the stylesheet's outcome
+      if (shouldAutoInit) {
+        const { widgetConfig } = buildWidgetInit();
+        // An empty config is never initialized, so it needs no chunks.
+        if (Object.keys(widgetConfig).length) {
+          for (const url of revealChunks(widgetConfig)) hint(url, true, true);
+        }
+      }
       try {
-        await loadCSS();
+        await css;
       } catch (error) {
         return fail("css", error);
       }
       try {
-        await loadJS();
+        await js;
       } catch (error) {
         return fail("bundle", error);
       }

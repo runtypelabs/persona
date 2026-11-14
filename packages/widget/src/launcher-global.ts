@@ -15,17 +15,28 @@
  * `icons-extra.js` sibling chunk (loader registered below). See the
  * "Deferred Launcher Loading" pattern in AGENTS.md.
  *
+ * Styles: the bundle embeds the launcher's own share of `widget.css`
+ * (`launcher-critical-css.ts`), so it paints without waiting for the full
+ * stylesheet, which the installer loads afterwards with the rest of the widget.
+ *
  * Public global (via tsdown `globalName: "AgentWidgetLauncher"`):
  *
  *   window.AgentWidgetLauncher.mount({ target, config, onOpen })
  *     → { root, element, update, destroy }
+ *   window.AgentWidgetLauncher.installCriticalStyles()
+ *     → boolean (false: wait for widget.css before mounting)
  */
 import { createLauncherSurface } from "./components/launcher";
 import { applyLauncherThemeVariables } from "./utils/theme";
 import { DEFAULT_LAUNCHER_CONFIG, DEFAULT_LAUNCHER_V5 } from "./defaults";
 import { setIconsExtraLoader } from "./icons-extra-loader";
 import { pinCdnRelease } from "./utils/cdn-release";
+import { installCriticalStyles, removeCriticalStyles } from "./launcher-critical-css";
 import type { AgentWidgetConfig } from "./types";
+
+// The installer asks this before mounting: `true` means the launcher is styled
+// already and need not wait for `widget.css`.
+export { installCriticalStyles };
 
 // ---------------------------------------------------------------------------
 // Deferred extra-icons loading (same sibling-URL scheme as index-global.ts,
@@ -129,6 +140,9 @@ export const mount = (
   // the full widget default object into the critical bundle.
   const config = mergeCriticalLauncherConfig(options.config);
 
+  // No-op when the page already has widget.css or the rules are in place.
+  installCriticalStyles(target.ownerDocument);
+
   const root = document.createElement("div");
   root.setAttribute("data-persona-root", "true");
   root.setAttribute(CRITICAL_LAUNCHER_ATTR, "true");
@@ -151,6 +165,7 @@ export const mount = (
     destroy: () => {
       surface.destroy();
       root.remove();
+      removeCriticalStyles(target.ownerDocument);
     },
   };
 };
