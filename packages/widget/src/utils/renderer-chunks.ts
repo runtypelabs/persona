@@ -68,10 +68,17 @@ export const selectRendererChunks = (config: AgentWidgetConfig): RendererChunk[]
 };
 
 /**
- * The icon registry's tail, which the reveal barrier loads for every config
- * (`prepareIconRegistry`) alongside the renderer chunks.
+ * Everything the reveal barrier waits for under a config: the renderer chunks,
+ * plus the two it loads outside `prepareRendererModules`. The icon registry's
+ * tail is loaded for every config (`prepareIconRegistry`), and the history
+ * shell when visitor history is on (`ensureHistoryShell` in `ui.ts`, which
+ * also starts the shell, so it is not a plain module load).
  */
-export const REVEAL_CHUNK = "icons-extra";
+export const selectRevealChunks = (config: AgentWidgetConfig): string[] => [
+  ...selectRendererChunks(config),
+  "icons-extra",
+  ...(config.features?.history?.enabled === true ? ["history-shell"] : []),
+];
 
 /**
  * Chunks the first turn needs after reveal: request construction and the SSE

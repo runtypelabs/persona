@@ -5,7 +5,7 @@
  */
 
 import { pinCdnRelease } from "./utils/cdn-release";
-import { FIRST_TURN_CHUNKS, REVEAL_CHUNK, selectRendererChunks } from "./utils/renderer-chunks";
+import { FIRST_TURN_CHUNKS, selectRevealChunks } from "./utils/renderer-chunks";
 
 import type { BrandConfig } from "./types/theme";
 import { delayInstallLoading } from "./utils/install-loading";
@@ -380,7 +380,7 @@ declare global {
       .filter((url) => url !== bundleSrc);
   // What the reveal waits for under this config, and what the first turn then
   // imports. Only the first set is worth competing with the main bundle for.
-  const revealChunks = (widgetConfig: any) => chunkUrls([...selectRendererChunks(widgetConfig), REVEAL_CHUNK]);
+  const revealChunks = (widgetConfig: any) => chunkUrls(selectRevealChunks(widgetConfig));
   const firstTurnChunks = () => chunkUrls(FIRST_TURN_CHUNKS);
 
   // Download a script without running it.

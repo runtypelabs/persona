@@ -12,7 +12,7 @@ Measurements from the October 18, 2026 reasoning layout, shared panel theme, too
 | `index.global.js` | 166.44 | 167 |
 | `launcher.global.js` | 19.86 | 20 |
 | `widget.css` | 23.66 | 24 |
-| `install.global.js` | 4.00 | 4.1 |
+| `install.global.js` | 4.03 | 4.1 |
 | `index.js` | 203.99 | 215.75 |
 | `index.cjs` | 203.71 | 216.75 |
 | `theme-editor.js` | 40.47 | 40.5 |
@@ -37,9 +37,9 @@ A deferred install (the floating launcher) paints the launcher from two files:
 
 | Before the launcher paints | KiB |
 | --- | ---: |
-| `install.global.js` | 3.44 |
+| `install.global.js` | 3.47 |
 | `launcher.global.js`, with the launcher's share of `widget.css` embedded | 16.57 |
-| **Total** | **20.01** |
+| **Total** | **20.04** |
 
 Until November 2026 the launcher also waited for all of `widget.css`, making
 that total 37.67 KiB (2.60 + 14.67 + 20.40). The launcher's markup matches
@@ -62,7 +62,9 @@ Once the launcher is up, the installer warms everything the first open and first
 turn load, in parallel: `widget.css` (applied at once), `index.global.js`, and
 the lazy chunks the configuration needs. The chunk list comes from
 `utils/renderer-chunks.ts`, which `renderer-preparation.ts` also loads from, so
-the installer and the widget cannot disagree about it. The warm-up runs when the
+the installer and the widget cannot disagree about it. It also names the two
+files the reveal waits for outside that set: the icon registry's tail, and the
+history shell when visitor history is on. The warm-up runs when the
 page is idle, or sooner when a pointer or focus reaches the launcher, which also
 evaluates the main bundle. `Save-Data` and 2G-class connections skip the idle
 pass and warm on intent only.

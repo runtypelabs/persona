@@ -478,6 +478,17 @@ describe("install.ts: warm-up", () => {
     ]);
   });
 
+  it("warms the history shell, which the reveal also waits for, when history is on", async () => {
+    provideLauncherBundle(true);
+    await install({ config: { apiUrl: "/api", features: { history: { enabled: true } } } });
+    await flush();
+    expect(names(hints("prefetch"))).toEqual(["index.global", ...REVEAL_CHUNKS, "history-shell", ...TURN_CHUNKS]);
+
+    // And an open fetches it alongside the bundle, with the rest of the reveal.
+    capturedOnOpen!();
+    expect(names(hints("modulepreload"))).toEqual([...REVEAL_CHUNKS, "history-shell"]);
+  });
+
   it("warms the HTTP cache with fetch where prefetch is unsupported (Safari)", async () => {
     supportHints("modulepreload");
     provideLauncherBundle(true);

@@ -609,6 +609,8 @@ for (const [name, widgetConfig] of [
   ["V5 with artifacts, mentions and turn activity", {
     future: { v5Defaults: true }, contextMentions: { enabled: true }, turnActivity: { enabled: true },
   }],
+  // The reveal waits for the history shell outside the renderer set.
+  ["visitor history", { features: { history: { enabled: true } } }],
 ] as const) {
   test(`warm-up fetches everything the first open and first turn load: ${name}`, async ({ page }) => {
     const h = await serveDist(page, {

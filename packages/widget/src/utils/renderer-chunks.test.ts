@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mergeWithDefaults } from "../defaults";
 import type { AgentWidgetConfig } from "../types";
-import { FIRST_TURN_CHUNKS, REVEAL_CHUNK, selectRendererChunks } from "./renderer-chunks";
+import { FIRST_TURN_CHUNKS, selectRendererChunks, selectRevealChunks } from "./renderer-chunks";
 
 /**
  * The installer preloads from a host's raw config; the widget prepares from the
@@ -42,6 +42,8 @@ const CONFIGS: Array<[name: string, config: AgentWidgetConfig]> = [
     voiceRecognition: { enabled: true, completionBehavior: "review", provider: { type: "custom", custom: () => ({}) as never } },
   }],
   ["context mentions", { contextMentions: { enabled: true, sources: [] } }],
+  ["visitor history", { features: { history: { enabled: true } } }],
+  ["visitor history off", { features: { history: { enabled: false } } }],
   ["everything", {
     future: { v5Defaults: true }, turnActivity: { enabled: true }, contextMentions: { enabled: true, sources: [] },
     voiceRecognition: { enabled: true, provider: { type: "runtype", runtype: { agentId: "agent_1" } } },
@@ -52,6 +54,7 @@ describe("selectRendererChunks", () => {
   it.each(CONFIGS)("names the same chunks for a raw and a merged config: %s", (_name, config) => {
     const merged = mergeWithDefaults(config) as AgentWidgetConfig;
     expect(selectRendererChunks(config)).toEqual(selectRendererChunks(merged));
+    expect(selectRevealChunks(config)).toEqual(selectRevealChunks(merged));
   });
 
   it("always needs the composer controls and the markdown parsers", () => {
@@ -82,8 +85,16 @@ describe("selectRendererChunks", () => {
     ]);
   });
 
-  it("names the remaining reveal and first-turn chunks by published file stem", () => {
-    expect(REVEAL_CHUNK).toBe("icons-extra");
+  it("adds what the reveal loads outside the renderer set", () => {
+    // The icon registry's tail, for every config.
+    expect(selectRevealChunks({})).toEqual([...selectRendererChunks({}), "icons-extra"]);
+    // The history shell, which the reveal also waits for when history is on.
+    const history: AgentWidgetConfig = { features: { history: { enabled: true } } };
+    expect(selectRevealChunks(history)).toEqual([...selectRendererChunks(history), "icons-extra", "history-shell"]);
+    expect(selectRevealChunks({ features: { history: { enabled: false } } })).not.toContain("history-shell");
+  });
+
+  it("names the first turn's chunks by published file stem", () => {
     expect([...FIRST_TURN_CHUNKS]).toEqual(["client-dispatch", "client-stream"]);
   });
 });
