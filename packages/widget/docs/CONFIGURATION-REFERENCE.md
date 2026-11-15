@@ -459,6 +459,8 @@ config: {
 | `prewarm` | `'hover' \| false \| (ctx) => void \| (() => void)` | Warm the voice path on mic intent, before the click. Default `'hover'` in client token mode, otherwise `false`. See [Voice prewarm](#voice-prewarm). |
 | `iconName`, `iconSize`, `iconColor`, `backgroundColor`, `borderColor`, `borderWidth`, `paddingX`, `paddingY`, `tooltipText`, `showTooltip`, `recordingIconColor`, `recordingBackgroundColor`, `recordingBorderColor`, `showRecordingIndicator` | various | Styling options for the voice button. See [THEME-CONFIG.md](../THEME-CONFIG.md). |
 
+Independent dictation (`voiceRecognition.dictation.provider.browser`) additionally supports `activityDetection: 'adaptive' | 'fixed'`. Adaptive ambient-noise detection is the default; `fixed` retains the previous RMS 0.005 threshold. It is an amplitude heuristic, so loud noise and very quiet speech can still affect automatic completion. See [Dictation](../../../docs/dictation.md) for pause timing and measurement fallback.
+
 **`provider.browser`**
 
 | Property | Type | Description |

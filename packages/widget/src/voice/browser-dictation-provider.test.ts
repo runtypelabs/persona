@@ -9,7 +9,7 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-function setup(pauseDuration = 2000, measureAudioLevel = true) {
+function setup(pauseDuration = 2000, measureAudioLevel = true, activityDetection?: 'adaptive' | 'fixed') {
   vi.useFakeTimers()
   const stopTrack = vi.fn()
   const track = Object.assign(new EventTarget(), { stop: stopTrack, readyState: 'live' })
@@ -43,7 +43,7 @@ function setup(pauseDuration = 2000, measureAudioLevel = true) {
   vi.stubGlobal('window', root)
   const getUserMedia = vi.fn(() => permission.promise)
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
-  const provider = createBrowserDictationProvider(undefined, pauseDuration, measureAudioLevel)
+  const provider = createBrowserDictationProvider({ activityDetection }, pauseDuration, measureAudioLevel)
   const result = vi.fn(), error = vi.fn(), status = vi.fn(), level = vi.fn(), levelUnavailable = vi.fn()
   provider.onResult(result)
   provider.onError(error)
@@ -465,7 +465,7 @@ it('finishes after resumed speech becomes silent even if the browser omits its s
   await vi.advanceTimersByTimeAsync(6000)
   expect(h.recognition.stop).not.toHaveBeenCalled()
   h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0))
-  await vi.advanceTimersByTimeAsync(4049)
+  await vi.advanceTimersByTimeAsync(4249)
   expect(h.recognition.stop).not.toHaveBeenCalled()
   await vi.advanceTimersByTimeAsync(1)
   expect(h.recognition.stop).toHaveBeenCalledOnce()
@@ -477,8 +477,8 @@ it('finishes after resumed speech becomes silent even if the browser omits its s
   expect(vi.getTimerCount()).toBe(0)
 })
 
-it('keeps quiet continuous measured speech open across delayed transcripts and misleading speechend', async () => {
-  const h = setup(4000)
+it('retains the previous low threshold with fixed activity detection', async () => {
+  const h = setup(4000, true, 'fixed')
   h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.006))
   await h.provider.startListening()
   await h.ready()
@@ -571,7 +571,7 @@ it.each(['suspended', 'muted', 'ended'] as const)('does not reuse a speech end c
   await h.ready()
   h.recognition.onspeechstart?.()
   h.transcript()
-  await vi.advanceTimersByTimeAsync(50)
+  await vi.advanceTimersByTimeAsync(150)
   h.recognition.onspeechend?.()
   await vi.advanceTimersByTimeAsync(50)
   if (kind === 'suspended') h.audio.state = 'suspended'
@@ -659,4 +659,115 @@ it('settles measured auto-finish into review without sending and retains the bro
   expect(h.stopTrack).toHaveBeenCalledOnce()
   controller.destroy()
   expect(vi.getTimerCount()).toBe(0)
+})
+
+
+it('does not request microphone access or create an audio graph before capture starts', async () => {
+  const h = setup()
+  await h.provider.connect()
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(h.getUserMedia).not.toHaveBeenCalled()
+  expect(h.audio.createAnalyser).not.toHaveBeenCalled()
+  await h.provider.disconnect()
+})
+
+it('finishes over steady ambient noise above the previous fixed threshold', async () => {
+  const h = setup()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.012))
+  await h.provider.startListening()
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  await vi.advanceTimersByTimeAsync(50)
+  h.recognition.onspeechend?.()
+  await vi.advanceTimersByTimeAsync(1999)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(h.recognition.stop).toHaveBeenCalledOnce()
+  h.recognition.onend?.()
+})
+
+it('keeps immediate sustained speech open and gives a resumed phrase a full silence grace', async () => {
+  const h = setup()
+  await h.provider.startListening()
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  await vi.advanceTimersByTimeAsync(6000)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.001))
+  await vi.advanceTimersByTimeAsync(1500)
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.03))
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.001))
+  await vi.advanceTimersByTimeAsync(2249)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(h.recognition.stop).toHaveBeenCalledOnce()
+  await h.provider.disconnect()
+})
+
+it('detects quieter speech after settling and ignores brief clicks during the final pause', async () => {
+  const h = setup()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.001))
+  await h.provider.startListening()
+  await h.ready()
+  await vi.advanceTimersByTimeAsync(2000)
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.009))
+  h.transcript()
+  await vi.advanceTimersByTimeAsync(4000)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.001))
+  await vi.advanceTimersByTimeAsync(1000)
+  for (let click = 0; click < 4; click++) {
+    h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.2))
+    await vi.advanceTimersByTimeAsync(50)
+    h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.001))
+    await vi.advanceTimersByTimeAsync(200)
+  }
+  await vi.advanceTimersByTimeAsync(250)
+  expect(h.recognition.stop).toHaveBeenCalledOnce()
+  await h.provider.disconnect()
+})
+
+
+it.each(['adaptive', 'fixed'] as const)('honors resumed browser speech just before the %s silence deadline', async (activityDetection) => {
+  const h = setup(2000, true, activityDetection)
+  await h.provider.startListening()
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  await vi.advanceTimersByTimeAsync(500)
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.001))
+  await vi.advanceTimersByTimeAsync(activityDetection === 'adaptive' ? 2150 : 1950)
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.03))
+  h.recognition.onspeechstart?.()
+  await vi.advanceTimersByTimeAsync(2500)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.001))
+  await vi.advanceTimersByTimeAsync(activityDetection === 'adaptive' ? 2250 : 2050)
+  expect(h.recognition.stop).toHaveBeenCalledOnce()
+  await h.provider.disconnect()
+})
+
+
+it.each(['suspended', 'muted'] as const)('resets adaptive activity after the microphone becomes %s', async (kind) => {
+  const h = setup()
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.03))
+  await h.provider.startListening()
+  await h.ready()
+  h.recognition.onspeechstart?.()
+  h.transcript()
+  await vi.advanceTimersByTimeAsync(150)
+  if (kind === 'suspended') h.audio.state = 'suspended'
+  else Object.assign(h.track, { muted: true })
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(h.recognition.stop).not.toHaveBeenCalled()
+  h.audio.state = 'running'
+  Object.assign(h.track, { muted: false })
+  h.meter.getFloatTimeDomainData.mockImplementation((values) => values.fill(0.014))
+  await vi.advanceTimersByTimeAsync(2050)
+  expect(h.recognition.stop).toHaveBeenCalledOnce()
+  await h.provider.disconnect()
 })

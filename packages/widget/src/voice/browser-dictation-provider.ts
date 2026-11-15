@@ -1,3 +1,4 @@
+import { AdaptiveNoiseGate } from './adaptive-noise-gate'
 import type { DictationProviderConfig, VoiceProvider, VoiceResult, VoiceStatus } from '../types'
 
 interface Recognition {
@@ -30,6 +31,8 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
   recognition.lang = config?.language ?? 'en-US'
   recognition.continuous = config?.continuous ?? true
   recognition.interimResults = true
+  let gate = new AdaptiveNoiseGate()
+  let sampledAt: number | undefined
   let closed = false
   let capturing = false
   let output = ''
@@ -55,6 +58,8 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
   const invalidateMeasurement = () => {
     if (audioPause) clearPause()
     audioActive = undefined
+    sampledAt = undefined
+    gate = new AdaptiveNoiseGate()
     measuredLevel = undefined
     if (capturing && !pauseTimer && (speechActive === false || (speechActive === undefined && output))) startPause()
   }
@@ -127,8 +132,9 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
         meter.getFloatTimeDomainData(samples)
         const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length)
         if (audioActive === undefined) clearPause()
-        // WHY: A low amplitude threshold favors keeping noisy recordings open over cutting off quiet speech.
-        audioActive = rms >= 0.005
+        const now = performance.now()
+        audioActive = config?.activityDetection === 'fixed' ? rms >= 0.005 : gate.sample(rms, sampledAt === undefined ? 50 : now - sampledAt)
+        sampledAt = now
         if (audioActive) {
           if (speechActive !== undefined) speechActive = true
           clearPause()
