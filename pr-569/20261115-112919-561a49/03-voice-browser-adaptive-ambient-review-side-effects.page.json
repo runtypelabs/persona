@@ -1,0 +1,100 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": "browser",
+  "requests": [],
+  "events": [
+    {
+      "at": 126122,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1794742301208
+      }
+    },
+    {
+      "at": 126126,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1794742301212
+      }
+    },
+    {
+      "at": 126388,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1794742301474
+      }
+    },
+    {
+      "at": 126527,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1794742301613
+      }
+    },
+    {
+      "at": 126668,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1794742301754
+      }
+    },
+    {
+      "at": 126808,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1794742301894
+      }
+    },
+    {
+      "at": 126948,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1794742302034
+      }
+    },
+    {
+      "at": 127205,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1794742302291
+      }
+    },
+    {
+      "at": 127217,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1794742302303
+      }
+    },
+    {
+      "at": 127220,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1794742302306
+      }
+    }
+  ]
+}

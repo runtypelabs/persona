@@ -1,0 +1,53 @@
+{
+  "runId": "20261115-112919-561a49",
+  "entries": [
+    {
+      "feature": "voice-browser",
+      "label": "adaptive ambient dictation review",
+      "note": null,
+      "files": [
+        "01-voice-browser-adaptive-ambient-dictation-review.gif",
+        "01-voice-browser-adaptive-ambient-dictation-review.webm",
+        "01-voice-browser-adaptive-ambient-dictation-review.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22voiceRecognition%22%3A%7B%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A800%2C%22dictation%22%3A%7B%22display%22%3A%22waveform%22%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-15T11:31:43.481Z",
+      "head": "8078c296d8e4ca5a150d9a80aa087cea67e8b60f",
+      "diffHash": "a6fd8e76f013"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "adaptive ambient review",
+      "note": "Synthetic constant RMS 0.012 microphone stream through real Web Audio; scripted Web Speech. Review retains transcript without a request; source context closes.",
+      "files": [
+        "02-voice-browser-adaptive-ambient-review.png",
+        "02-voice-browser-adaptive-ambient-review.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22voiceRecognition%22%3A%7B%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A800%2C%22dictation%22%3A%7B%22display%22%3A%22waveform%22%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-15T11:31:43.591Z",
+      "head": "8078c296d8e4ca5a150d9a80aa087cea67e8b60f",
+      "diffHash": "a6fd8e76f013"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "adaptive ambient review side effects",
+      "note": "0 request(s) crossed the network boundary, 10 controller event(s)",
+      "files": [
+        "03-voice-browser-adaptive-ambient-review-side-effects.page.json",
+        "03-voice-browser-adaptive-ambient-review-side-effects.voice.json"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22voiceRecognition%22%3A%7B%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A800%2C%22dictation%22%3A%7B%22display%22%3A%22waveform%22%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-15T11:31:43.700Z",
+      "head": "8078c296d8e4ca5a150d9a80aa087cea67e8b60f",
+      "diffHash": "a6fd8e76f013"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "voice-browser",
+      "pass": true,
+      "skipped": false,
+      "note": "Dedicated dictation review with synthetic RMS 0.012 microphone and scripted recognition; zero mic requests before Start; quiet ambient auto-finish retains draft without sending; real room recognition and legacy mic/read-aloud entry points not exercised."
+    }
+  ]
+}
