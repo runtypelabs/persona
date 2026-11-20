@@ -1,0 +1,120 @@
+{
+  "marks": {
+    "recognitionFinal": 30045
+  },
+  "latenciesMs": {},
+  "utterances": [],
+  "sockets": [],
+  "outputTracks": [],
+  "timeline": [
+    {
+      "at": 132,
+      "type": "mic",
+      "detail": {
+        "state": "idle | Start voice recognition"
+      }
+    },
+    {
+      "at": 29217,
+      "type": "tts:cancel"
+    },
+    {
+      "at": 29224,
+      "type": "recognition:start",
+      "detail": {
+        "lang": "en-US",
+        "continuous": true
+      }
+    },
+    {
+      "at": 29485,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What"
+      }
+    },
+    {
+      "at": 29625,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are"
+      }
+    },
+    {
+      "at": 29765,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are your"
+      }
+    },
+    {
+      "at": 29905,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are your opening"
+      }
+    },
+    {
+      "at": 30045,
+      "type": "recognition:final",
+      "detail": {
+        "text": "What are your opening hours?"
+      }
+    },
+    {
+      "at": 32863,
+      "type": "recognition:end"
+    },
+    {
+      "at": 70038,
+      "type": "tts:cancel"
+    },
+    {
+      "at": 70041,
+      "type": "recognition:start",
+      "detail": {
+        "lang": "en-US",
+        "continuous": true
+      }
+    },
+    {
+      "at": 70302,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What"
+      }
+    },
+    {
+      "at": 70442,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are"
+      }
+    },
+    {
+      "at": 70582,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are your"
+      }
+    },
+    {
+      "at": 70721,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are your opening"
+      }
+    },
+    {
+      "at": 70862,
+      "type": "recognition:final",
+      "detail": {
+        "text": "What are your opening hours?"
+      }
+    },
+    {
+      "at": 76698,
+      "type": "recognition:end"
+    }
+  ]
+}

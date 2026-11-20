@@ -1,0 +1,69 @@
+{
+  "marks": {
+    "recognitionFinal": 30045
+  },
+  "latenciesMs": {},
+  "utterances": [],
+  "sockets": [],
+  "outputTracks": [],
+  "timeline": [
+    {
+      "at": 132,
+      "type": "mic",
+      "detail": {
+        "state": "idle | Start voice recognition"
+      }
+    },
+    {
+      "at": 29217,
+      "type": "tts:cancel"
+    },
+    {
+      "at": 29224,
+      "type": "recognition:start",
+      "detail": {
+        "lang": "en-US",
+        "continuous": true
+      }
+    },
+    {
+      "at": 29485,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What"
+      }
+    },
+    {
+      "at": 29625,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are"
+      }
+    },
+    {
+      "at": 29765,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are your"
+      }
+    },
+    {
+      "at": 29905,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are your opening"
+      }
+    },
+    {
+      "at": 30045,
+      "type": "recognition:final",
+      "detail": {
+        "text": "What are your opening hours?"
+      }
+    },
+    {
+      "at": 32863,
+      "type": "recognition:end"
+    }
+  ]
+}

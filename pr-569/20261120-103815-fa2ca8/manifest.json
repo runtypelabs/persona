@@ -1,0 +1,93 @@
+{
+  "runId": "20261120-103815-fa2ca8",
+  "entries": [
+    {
+      "feature": "voice-browser",
+      "label": "speech then ambient noise",
+      "note": null,
+      "files": [
+        "01-voice-browser-speech-then-ambient-noise.gif",
+        "01-voice-browser-speech-then-ambient-noise.webm",
+        "01-voice-browser-speech-then-ambient-noise.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22future%22%3A%7B%22v5%22%3Atrue%7D%2C%22voiceRecognition%22%3A%7B%22enabled%22%3Atrue%2C%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A2000%2C%22dictation%22%3A%7B%22provider%22%3A%7B%22type%22%3A%22browser%22%7D%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-20T10:39:24.934Z",
+      "head": "7dc04e53f6aaa6667d063bb08403015852ff054a",
+      "diffHash": "5a6e7171a462"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "speech first retained in review",
+      "note": "Synthetic real Web Audio RMS 0.03 then 0.012; scripted recognition; complete transcript retained, source context closed, zero requests.",
+      "files": [
+        "02-voice-browser-speech-first-retained-in-review.png",
+        "02-voice-browser-speech-first-retained-in-review.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22future%22%3A%7B%22v5%22%3Atrue%7D%2C%22voiceRecognition%22%3A%7B%22enabled%22%3Atrue%2C%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A2000%2C%22dictation%22%3A%7B%22provider%22%3A%7B%22type%22%3A%22browser%22%7D%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-20T10:39:25.149Z",
+      "head": "7dc04e53f6aaa6667d063bb08403015852ff054a",
+      "diffHash": "5a6e7171a462"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "speech first review side effects",
+      "note": "0 request(s) crossed the network boundary, 10 controller event(s)",
+      "files": [
+        "03-voice-browser-speech-first-review-side-effects.page.json",
+        "03-voice-browser-speech-first-review-side-effects.voice.json"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22future%22%3A%7B%22v5%22%3Atrue%7D%2C%22voiceRecognition%22%3A%7B%22enabled%22%3Atrue%2C%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A2000%2C%22dictation%22%3A%7B%22provider%22%3A%7B%22type%22%3A%22browser%22%7D%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-20T10:39:25.314Z",
+      "head": "7dc04e53f6aaa6667d063bb08403015852ff054a",
+      "diffHash": "5a6e7171a462"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "resumed speech before timeout",
+      "note": null,
+      "files": [
+        "04-voice-browser-resumed-speech-before-timeout.gif",
+        "04-voice-browser-resumed-speech-before-timeout.webm",
+        "04-voice-browser-resumed-speech-before-timeout.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22future%22%3A%7B%22v5%22%3Atrue%7D%2C%22voiceRecognition%22%3A%7B%22enabled%22%3Atrue%2C%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A2000%2C%22dictation%22%3A%7B%22provider%22%3A%7B%22type%22%3A%22browser%22%7D%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-20T10:40:12.624Z",
+      "head": "7dc04e53f6aaa6667d063bb08403015852ff054a",
+      "diffHash": "595fb98bba45"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "resumed speech retained in review",
+      "note": "Real Web Audio speech resumes at 3.17s shortly before expected 3.25s silence deadline; scripted recognition emits no speechstart event; capture continues through resumed audio then returns to review.",
+      "files": [
+        "05-voice-browser-resumed-speech-retained-in-review.png",
+        "05-voice-browser-resumed-speech-retained-in-review.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22future%22%3A%7B%22v5%22%3Atrue%7D%2C%22voiceRecognition%22%3A%7B%22enabled%22%3Atrue%2C%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A2000%2C%22dictation%22%3A%7B%22provider%22%3A%7B%22type%22%3A%22browser%22%7D%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-20T10:40:12.765Z",
+      "head": "7dc04e53f6aaa6667d063bb08403015852ff054a",
+      "diffHash": "595fb98bba45"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "resumed speech side effects",
+      "note": "0 request(s) crossed the network boundary, 20 controller event(s)",
+      "files": [
+        "06-voice-browser-resumed-speech-side-effects.page.json",
+        "06-voice-browser-resumed-speech-side-effects.voice.json"
+      ],
+      "url": "http://127.0.0.1:4391/verify.html?voice=browser&config=%7B%22future%22%3A%7B%22v5%22%3Atrue%7D%2C%22voiceRecognition%22%3A%7B%22enabled%22%3Atrue%2C%22completionBehavior%22%3A%22review%22%2C%22pauseDuration%22%3A2000%2C%22dictation%22%3A%7B%22provider%22%3A%7B%22type%22%3A%22browser%22%7D%2C%22waveform%22%3Atrue%7D%7D%7D",
+      "at": "2026-11-20T10:40:12.870Z",
+      "head": "7dc04e53f6aaa6667d063bb08403015852ff054a",
+      "diffHash": "595fb98bba45"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "voice-browser",
+      "pass": true,
+      "skipped": false,
+      "note": "Dedicated dictation: speech-first RMS 0.03 then ambient 0.012 reaches review; resumed audio near the silence deadline without speechstart stays open through the new phrase, then reviews. Real Web Audio, synthetic mic and scripted recognition; zero requests, closed source contexts. Real room microphone, legacy mic, and read-aloud not exercised."
+    }
+  ]
+}

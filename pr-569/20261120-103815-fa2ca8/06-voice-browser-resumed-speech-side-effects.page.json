@@ -1,0 +1,191 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": "browser",
+  "requests": [],
+  "events": [
+    {
+      "at": 29115,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1795171139464
+      }
+    },
+    {
+      "at": 29122,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171139470
+      }
+    },
+    {
+      "at": 29384,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171139733
+      }
+    },
+    {
+      "at": 29523,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171139872
+      }
+    },
+    {
+      "at": 29663,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171140012
+      }
+    },
+    {
+      "at": 29803,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171140152
+      }
+    },
+    {
+      "at": 29943,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171140292
+      }
+    },
+    {
+      "at": 32760,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1795171143109
+      }
+    },
+    {
+      "at": 32773,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1795171143121
+      }
+    },
+    {
+      "at": 32777,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1795171143126
+      }
+    },
+    {
+      "at": 69937,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1795171180285
+      }
+    },
+    {
+      "at": 69939,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171180287
+      }
+    },
+    {
+      "at": 70201,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171180549
+      }
+    },
+    {
+      "at": 70341,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171180689
+      }
+    },
+    {
+      "at": 70480,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171180829
+      }
+    },
+    {
+      "at": 70620,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171180968
+      }
+    },
+    {
+      "at": 70761,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "system",
+        "timestamp": 1795171181109
+      }
+    },
+    {
+      "at": 76596,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1795171186944
+      }
+    },
+    {
+      "at": 76608,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1795171186956
+      }
+    },
+    {
+      "at": 76609,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "system",
+        "timestamp": 1795171186958
+      }
+    }
+  ]
+}
