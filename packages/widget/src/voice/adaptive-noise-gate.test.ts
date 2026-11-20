@@ -20,7 +20,7 @@ describe('adaptive microphone amplitude gate', () => {
     expect(sampleFor(gate, 0.03, 100)).toBe(false)
     expect(gate.sample(0.03)).toBe(true)
     expect(sampleFor(gate, 0.03, 10000)).toBe(true)
-    expect(sampleFor(gate, 0.014, 1000)).toBe(true)
+    expect(sampleFor(gate, 0.025, 1000)).toBe(true)
   })
 
   it('accepts quieter speech after quiet ambient levels settle', () => {
@@ -45,5 +45,19 @@ describe('adaptive microphone amplitude gate', () => {
     const gate = new AdaptiveNoiseGate()
     expect(gate.sample(0.1, 10000)).toBe(false)
     expect(gate.sample(0.1, 50)).toBe(true)
+  })
+
+  it('learns ambient noise after immediate speech without an initial quiet calibration', () => {
+    const gate = new AdaptiveNoiseGate()
+    expect(sampleFor(gate, 0.03, 1000)).toBe(true)
+    expect(sampleFor(gate, 0.012, 2000)).toBe(false)
+    expect(sampleFor(gate, 0.06, 150)).toBe(true)
+  })
+
+  it('does not let a loud spike make ongoing speech count as ambient noise', () => {
+    const gate = new AdaptiveNoiseGate()
+    expect(sampleFor(gate, 0.03, 1000)).toBe(true)
+    gate.sample(0.2)
+    expect(sampleFor(gate, 0.025, 5000)).toBe(true)
   })
 })
