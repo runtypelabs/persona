@@ -5066,7 +5066,12 @@ export type AgentWidgetStatusIndicatorConfig = {
 /** Independent speech-to-text capture; realtime conversation providers remain separate. */
 export type DictationProviderConfig = {
   type: "browser" | "custom";
-  browser?: { language?: string; continuous?: boolean };
+  browser?: {
+    language?: string;
+    continuous?: boolean;
+    /** Adaptive ambient-noise threshold by default; fixed retains the previous RMS 0.005 threshold. */
+    activityDetection?: "adaptive" | "fixed";
+  };
   /** Prefer a factory returning a fresh provider per recording. disconnect must cancel pending output. */
   custom?: VoiceProvider | (() => VoiceProvider);
 };

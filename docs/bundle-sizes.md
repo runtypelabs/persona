@@ -254,6 +254,18 @@ in the npm entries, while the CDN entry defers it. Public method signatures are
 unchanged. Loaders share pending requests and retry rejected imports; widgets
 ignore results that arrive after teardown or a superseding operation.
 
+## Adaptive dictation detection
+
+The adaptive microphone gate increases only `dictation-runtime.js`: the November
+15, 2026 baseline is approximately 5.74 kB gzip and the adaptive build is 6,100
+bytes gzip (about 360 bytes more). Its gzip ceiling moves from 5.75 kB to 6.1 kB to accommodate the
+ambient estimator and activity hysteresis. The main widget, launcher, installer,
+and stylesheet ceilings stay unchanged. The detector uses no dependencies or
+model downloads. It remains outside the main widget's module graph; the existing
+voice warm-up may fetch the separate runtime when voice is enabled (the default).
+`voiceRecognition.enabled: false` excludes that automatic voice warm-up. Loading
+the runtime does not request microphone access: capture starts on dictation Start.
+
 ## Verification
 
 ```sh

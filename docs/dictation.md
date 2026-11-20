@@ -21,7 +21,20 @@ voiceRecognition: {
 
 Browser dictation attempts an independent microphone stream for silence detection, including when the waveform is hidden. This can request microphone permission separately from browser speech recognition. `waveform: true` or `display: 'waveform'` displays measured amplitude; an explicit `waveform: false` hides it in either display. If measurement cannot start, transcription continues with a Listening status. Custom providers supply levels through `onLevel`; Persona does not open another stream for them. Microphone measurement ends on Finish, Cancel, recognition errors, or page navigation, including permission requests that resolve after capture ends. Page navigation interrupts dictation and restores the original editable draft without submitting speech.
 
-Browser dictation uses `voiceRecognition.pauseDuration` (2000 ms by default) after measured silence begins. Sound above a low amplitude threshold restarts the grace period, so a missing browser speech-end event does not leave capture open indefinitely. This is amplitude detection rather than speech recognition: background noise can keep recording open, and very quiet speech can fall below the threshold. Finish remains available.
+Browser dictation uses an adaptive amplitude threshold by default. It estimates ambient noise from recent quiet samples, requires 150 ms of sustained sound to mark activity, and waits for 250 ms of quiet before starting `voiceRecognition.pauseDuration` (2000 ms by default). Sustained sound restarts the grace period, so a missing browser speech-end event does not leave capture open indefinitely. Short clicks do not restart it. The waveform continues to show measured amplitude, including background noise.
+
+This is an amplitude heuristic, not a speech classifier. Loud continuous noise can keep recording open, and very quiet speech can fall below the threshold, especially before quiet ambient levels settle. Finish remains available. For comparisons or compatibility, retain the previous fixed RMS 0.005 threshold:
+
+```ts
+voiceRecognition: {
+  completionBehavior: 'review',
+  dictation: {
+    provider: { type: 'browser', browser: { activityDetection: 'fixed' } },
+  },
+}
+```
+
+Use `activityDetection: 'adaptive'` explicitly to select the default. These settings apply to independent browser dictation; full-duplex providers and the legacy microphone path retain their behavior. No microphone is requested before capture starts. The adaptive detector has no dependencies or model downloads and stays in the separate dictation runtime. Enabled voice, including the default voice setting, may warm that runtime before capture; `voiceRecognition.enabled: false` excludes it from automatic voice warm-up.
 
 When microphone measurement is unavailable, suspended, muted, or ended, browser speech activity events determine the pause. Losing measurement after a known speech end starts a fresh grace period unless later measured sound contradicted that end. Where speech events are also unavailable, existing text starts a fresh inactivity timer when measurement is lost. Changed transcript revisions restart that timer. Duplicate revisions do not extend the pause. If the browser reports speech starting but never reports it ending and usable measurement is unavailable, automatic completion can remain pending; use Finish. Silence detection does not change `completionBehavior: 'review'`: completed text stays in the composer without sending.
 
