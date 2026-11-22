@@ -206,7 +206,7 @@
   {
     "name": "Lazy · dictation UI and browser transcription (dictation-runtime.js)",
     "path": "dist/dictation-runtime.js",
-    "limit": "5.75 kB",
+    "limit": "6.1 kB",
     "gzip": true
   },
   {

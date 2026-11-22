@@ -12,6 +12,12 @@ const boundaries = [
 ] as const;
 
 describe("optional runtime bundle boundaries", () => {
+  it.runIf(built)("keeps adaptive microphone detection outside the core module graph", () => {
+    const map = JSON.parse(readFileSync(dist("index.global.js.map"), "utf8")) as { sources: string[] };
+    expect(map.sources.some((source) => source.endsWith("adaptive-noise-gate.ts"))).toBe(false);
+    expect(map.sources.some((source) => source.endsWith("browser-dictation-provider.ts"))).toBe(false);
+    expect(readFileSync(dist("dictation-runtime.js"), "utf8")).toContain("aboveMs");
+  });
   it.runIf(built).each(boundaries)("keeps %s implementation outside the CDN core", (name, marker) => {
     const core = readFileSync(dist("index.global.js"), "utf8");
     expect(core).toContain(name);

@@ -1,3 +1,4 @@
+import { AdaptiveNoiseGate } from './adaptive-noise-gate'
 import type { DictationProviderConfig, VoiceProvider, VoiceResult, VoiceStatus } from '../types'
 
 interface Recognition {
@@ -30,6 +31,8 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
   recognition.lang = config?.language ?? 'en-US'
   recognition.continuous = config?.continuous ?? true
   recognition.interimResults = true
+  let gate = new AdaptiveNoiseGate()
+  let sampledAt: number | undefined
   let closed = false
   let capturing = false
   let output = ''
@@ -38,6 +41,7 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
   let audioActive: boolean | undefined
   let audioPause = false
   let pauseTimer: ReturnType<typeof setTimeout> | undefined
+  let sampleAudio: (() => void) | undefined
   let sampleTimer: ReturnType<typeof setInterval> | undefined
   let observedTracks: MediaStreamTrack[] = []
   let context: AudioContext | undefined
@@ -55,12 +59,15 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
   const invalidateMeasurement = () => {
     if (audioPause) clearPause()
     audioActive = undefined
+    sampledAt = undefined
+    gate = new AdaptiveNoiseGate()
     measuredLevel = undefined
     if (capturing && !pauseTimer && (speechActive === false || (speechActive === undefined && output))) startPause()
   }
   const releaseAudio = () => {
     clearInterval(sampleTimer)
     sampleTimer = undefined
+    sampleAudio = undefined
     source?.disconnect()
     analyser?.disconnect()
     source = undefined
@@ -116,7 +123,7 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
       await audio.resume()
       if (!capturing || context !== audio) return
       const samples = new Float32Array(meter.fftSize)
-      sampleTimer = setInterval(() => {
+      sampleAudio = () => {
         if (!capturing) return
         if (!measurementUsable()) {
           const wasAvailable = audioActive !== undefined
@@ -127,8 +134,9 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
         meter.getFloatTimeDomainData(samples)
         const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length)
         if (audioActive === undefined) clearPause()
-        // WHY: A low amplitude threshold favors keeping noisy recordings open over cutting off quiet speech.
-        audioActive = rms >= 0.005
+        const now = performance.now()
+        audioActive = config?.activityDetection === 'fixed' ? rms >= 0.005 : gate.sample(rms, sampledAt === undefined ? 50 : now - sampledAt)
+        sampledAt = now
         if (audioActive) {
           if (speechActive !== undefined) speechActive = true
           clearPause()
@@ -137,7 +145,8 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
         measuredLevel ??= target
         measuredLevel += (target - measuredLevel) * (target > measuredLevel ? 0.65 : 0.2)
         if (measureAudioLevel) onLevel(measuredLevel < 0.005 ? 0 : measuredLevel)
-      }, 50)
+      }
+      sampleTimer = setInterval(sampleAudio, 50)
     } catch {
       releaseAudio()
       invalidateMeasurement()
@@ -154,15 +163,24 @@ export function createBrowserDictationProvider(config: DictationProviderConfig['
     clearPause()
     if (!capturing) return
     audioPause = fromAudio
-    pauseTimer = setTimeout(() => {
-      if (fromAudio && !measurementUsable()) {
-        invalidateMeasurement()
-        if (measureAudioLevel) onLevelUnavailable()
-        return
+    const finishPause = (allowOnsetGrace = true) => {
+      if (fromAudio) {
+        if (!measurementUsable()) {
+          invalidateMeasurement()
+          if (measureAudioLevel) onLevelUnavailable()
+          return
+        }
+        sampleAudio?.()
+        if (audioActive) return
+        if (allowOnsetGrace && gate.pending) {
+          pauseTimer = setTimeout(() => finishPause(false), 150)
+          return
+        }
       }
       onStatus('processing')
       void stopListening().catch(fail)
-    }, pauseDuration)
+    }
+    pauseTimer = setTimeout(finishPause, pauseDuration)
   }
   recognition.onspeechstart = () => {
     if (!capturing) return
