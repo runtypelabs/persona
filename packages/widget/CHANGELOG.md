@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 4.39.1
+
+### Patch Changes
+
+- 7dc04e5: Adapt browser dictation silence detection to ambient microphone noise, reject brief clicks, and preserve the previous fixed threshold through `dictation.provider.browser.activityDetection: 'fixed'`.
+
 ## 4.39.0
 
 ### Minor Changes
