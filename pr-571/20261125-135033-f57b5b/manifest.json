@@ -1,0 +1,65 @@
+{
+  "runId": "20261125-135033-f57b5b",
+  "entries": [
+    {
+      "feature": "launcher-and-theme",
+      "label": "Crowded composer with visible send",
+      "note": null,
+      "files": [
+        "02-launcher-and-theme-crowded-composer-with-visible-send.png",
+        "02-launcher-and-theme-crowded-composer-with-visible-send.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4408/verify.html?config=%7B%22composer%22%3A%7B%22layout%22%3A%22stacked%22%2C%22placement%22%3A%22block%22%7D%2C%22sendButton%22%3A%7B%22visibility%22%3A%22always%22%7D%7D",
+      "at": "2026-11-25T13:51:19.851Z",
+      "head": "777a4ee6b059608670a578f6d673b0f830b24e52",
+      "diffHash": "48e5db24fc54"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Recovered single action row",
+      "note": null,
+      "files": [
+        "03-launcher-and-theme-recovered-single-action-row.png",
+        "03-launcher-and-theme-recovered-single-action-row.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4408/verify.html?config=%7B%22composer%22%3A%7B%22layout%22%3A%22stacked%22%2C%22placement%22%3A%22block%22%7D%2C%22sendButton%22%3A%7B%22visibility%22%3A%22always%22%7D%7D",
+      "at": "2026-11-25T13:51:28.732Z",
+      "head": "777a4ee6b059608670a578f6d673b0f830b24e52",
+      "diffHash": "48e5db24fc54"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Composer recovers after content shrinks",
+      "note": null,
+      "files": [
+        "01-launcher-and-theme-composer-recovers-after-content-shrinks.gif",
+        "01-launcher-and-theme-composer-recovers-after-content-shrinks.webm",
+        "01-launcher-and-theme-composer-recovers-after-content-shrinks.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4408/verify.html?config=%7B%22composer%22%3A%7B%22layout%22%3A%22stacked%22%2C%22placement%22%3A%22block%22%7D%2C%22sendButton%22%3A%7B%22visibility%22%3A%22always%22%7D%7D",
+      "at": "2026-11-25T13:51:29.136Z",
+      "head": "777a4ee6b059608670a578f6d673b0f830b24e52",
+      "diffHash": "48e5db24fc54"
+    },
+    {
+      "feature": "launcher-and-theme",
+      "label": "Composer resize side effects",
+      "note": "0 request(s) crossed the network boundary, 0 controller event(s)",
+      "files": [
+        "04-launcher-and-theme-composer-resize-side-effects.page.json"
+      ],
+      "url": "http://127.0.0.1:4408/verify.html?config=%7B%22composer%22%3A%7B%22layout%22%3A%22stacked%22%2C%22placement%22%3A%22block%22%7D%2C%22sendButton%22%3A%7B%22visibility%22%3A%22always%22%7D%7D",
+      "at": "2026-11-25T13:51:29.232Z",
+      "head": "777a4ee6b059608670a578f6d673b0f830b24e52",
+      "diffHash": "48e5db24fc54"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "launcher-and-theme",
+      "pass": true,
+      "skipped": false,
+      "note": "Stacked composer recovers after the custom context control shrinks while send remains visible. Four Chromium regressions cover always/when-text, LTR/RTL, repeated shrinkage and host widening; launcher/theme entry points were not exercised."
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+- StaticText "ready scenario=echo mode=inline theme=light"
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e2]
+  - heading "Verify fixture" [level=2, ref=e3]
+  - paragraph
+    - StaticText "Scenario: echo. Replies are scripted in-page; no backend."
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e4]
+      - button "Toggle context" [ref=e5]
+      - button "Start voice recognition" [ref=e6]
+      - button "Send message" [ref=e7]
+    - status
+      - StaticText "Online"

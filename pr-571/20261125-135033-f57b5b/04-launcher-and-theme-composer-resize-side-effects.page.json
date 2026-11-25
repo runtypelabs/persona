@@ -1,0 +1,8 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [],
+  "events": []
+}
