@@ -47,8 +47,16 @@ function clusterWidth(
     const childWidth = childStyle.display === "contents"
       ? clusterWidth(child, view)
       : Math.max(child.getBoundingClientRect().width, child.scrollWidth);
-    return total + childWidth +
-      number(childStyle.marginLeft) + number(childStyle.marginRight);
+    // widget.css pushes send to the inline end of a crowded rail with an
+    // auto start margin. Browsers report its used (free-space) width, which
+    // would keep the rail crowded forever. Count only the opposite margin
+    // for that rule; ordinary control margins still contribute to the fit.
+    const margins = child.matches(
+      "[data-persona-composer-crowded] .persona-widget-composer:not(.persona-pill-composer) .persona-send-button-wrapper:has(> [data-persona-composer-submit])"
+    )
+      ? number(childStyle.marginInlineEnd)
+      : number(childStyle.marginLeft) + number(childStyle.marginRight);
+    return total + childWidth + margins;
   }, 0);
   return width + Math.max(0, children.length - 1) * number(style.columnGap) +
     number(style.paddingLeft) + number(style.paddingRight);
