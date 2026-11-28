@@ -60,8 +60,14 @@ export interface ModelContextToolInfo {
    * Absent when the tool registered no schema: v5 omits the member, where v4
    * always emitted a `{"type":"object"}` string.
    */
-  inputSchema?: object | string;
-  /** Owning frame and origin, when supplied by the registry. Never sent on the wire. */
+  inputSchema?: object | string | null;
+  /**
+   * Owning frame, when supplied by the registry. Never sent on the wire.
+   * `source` is the WebMCP `Tool` member (webmcp#348): `null` once the
+   * registering document is no longer fully active. `window` is its pre-rename
+   * spelling (Chrome before 160, `@mcp-b` polyfills).
+   */
+  source?: Window | null;
   window?: Window;
   origin?: string;
   /**
@@ -76,7 +82,7 @@ export interface ModelContextToolInfo {
    * absent on v4 and whenever the tool declared none -- the spec omits the
    * member rather than emitting an empty object.
    */
-  annotations?: ClientToolDefinition["annotations"];
+  annotations?: ClientToolDefinition["annotations"] | null;
 }
 
 export interface ModelContextCoreLike {

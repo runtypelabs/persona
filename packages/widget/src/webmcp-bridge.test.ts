@@ -802,6 +802,116 @@ describe("v6 local-document boundary", () => {
   });
 });
 
+/**
+ * Models the WebMCP `Tool` platform object (webmcp#348, Chrome 160+,
+ * `@w3c/webmcp-polyfill` 0.2.0): members are prototype getters, so spread and
+ * `JSON.stringify` see nothing; absent schemas/annotations are `null`; the
+ * frame is `source`, with no `window` member.
+ */
+type SpecToolFields = {
+  name: string;
+  description: string;
+  title: string;
+  inputSchema: object | null;
+  annotations: object | null;
+  source: unknown;
+  origin: string;
+};
+
+class SpecTool {
+  readonly #fields: SpecToolFields;
+  constructor(fields: Partial<SpecToolFields> & { name: string }) {
+    this.#fields = {
+      description: `${fields.name} tool`,
+      title: "",
+      inputSchema: null,
+      annotations: null,
+      source: window,
+      origin: location.origin,
+      ...fields,
+    };
+  }
+  get name() { return this.#fields.name; }
+  get description() { return this.#fields.description; }
+  get title() { return this.#fields.title; }
+  get inputSchema() { return this.#fields.inputSchema; }
+  get outputSchema() { return null; }
+  get annotations() { return this.#fields.annotations; }
+  get source() { return this.#fields.source; }
+  get origin() { return this.#fields.origin; }
+}
+
+describe("WebMCP Tool interface (webmcp#348)", () => {
+  it("scopes snapshots and same-name execution by Tool.source", async () => {
+    const localWindow = {};
+    vi.stubGlobal("window", localWindow);
+    const local = new SpecTool({ name: "shared", description: "Local", source: localWindow });
+    const remote = new SpecTool({ name: "shared", description: "Remote", source: {} });
+    const remoteOnly = new SpecTool({ name: "remote_only", source: {} });
+    const executeTool = vi.fn(async (info: unknown) =>
+      JSON.stringify(info === local ? "local" : "remote"),
+    );
+    vi.stubGlobal("document", { modelContext: {
+      getTools: async () => [remote, local, remoteOnly],
+      executeTool,
+    } });
+    const consumer = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const snapshot = await consumer.snapshotForDispatch();
+    expect(snapshot.map(tool => tool.description)).toEqual(["Local"]);
+    expect(await consumer.executeToolCall("webmcp:shared", {})).toEqual({
+      content: [{ type: "text", text: "local" }],
+    });
+    // The exact Tool instance from getTools(), never a copy.
+    expect(executeTool.mock.calls[0][0]).toBe(local);
+    expect((await consumer.executeToolCall("webmcp:remote_only", {})).isError).toBe(true);
+  });
+
+  it("excludes tools whose source document is gone (source === null)", async () => {
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("document", { modelContext: {
+      getTools: async () => [new SpecTool({ name: "detached", source: null })],
+      executeTool: vi.fn(),
+    } });
+    const consumer = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    expect(await consumer.snapshotForDispatch()).toEqual([]);
+    expect((await consumer.executeToolCall("webmcp:detached", {})).isError).toBe(true);
+  });
+
+  it("reads getter-only members, with null schema and annotations", async () => {
+    const localWindow = {};
+    vi.stubGlobal("window", localWindow);
+    vi.stubGlobal("document", { modelContext: {
+      getTools: async () => [
+        new SpecTool({ name: "bare", source: localWindow }),
+        new SpecTool({
+          name: "typed",
+          title: "Typed tool",
+          source: localWindow,
+          inputSchema: { type: "object", properties: { q: { type: "string" } } },
+          annotations: { readOnlyHint: true, untrustedContentHint: true },
+        }),
+      ],
+      executeTool: vi.fn(),
+    } });
+    const snapshot = await new WebMcpBridge({ enabled: true }).snapshotForDispatch();
+    expect(snapshot).toEqual([
+      expect.objectContaining({
+        name: "bare",
+        description: "bare tool",
+        parametersSchema: { type: "object", properties: {} },
+      }),
+      expect.objectContaining({
+        name: "typed",
+        parametersSchema: { type: "object", properties: { q: { type: "string" } } },
+        annotations: { readOnlyHint: true, untrustedContentHint: true },
+        untrustedContentHint: true,
+      }),
+    ]);
+    expect(snapshot[0]).not.toHaveProperty("annotations");
+    expect(getWebMcpToolDisplayTitle("typed")).toBe("Typed tool");
+  });
+});
+
 describe("polyfill initializer compatibility", () => {
   it("accepts the legacy initializer used by the automatic fallback", async () => {
     vi.stubGlobal("document", {});

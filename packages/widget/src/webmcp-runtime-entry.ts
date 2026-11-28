@@ -586,8 +586,8 @@ const pickAnnotations = (
   return Object.keys(picked).length > 0 ? picked : undefined;
 };
 
-const normalizeInputSchema = (raw: object | string | undefined): object => {
-  if (raw === undefined || raw === "") return { ...EMPTY_INPUT_SCHEMA };
+const normalizeInputSchema = (raw: object | string | null | undefined): object => {
+  if (raw === undefined || raw === null || raw === "") return { ...EMPTY_INPUT_SCHEMA };
 
   // Object generation (webmcp#241): pass through as-is. Arrays are `typeof
   // "object"` but are not JSON Schema objects, so they fall through.
@@ -728,12 +728,26 @@ const previewArgs = (args: unknown): string => {
   }
 };
 
-/** Keep name-only dispatch scoped to this document, not related frames. */
-const isLocalTool = (info: ModelContextToolInfo): boolean =>
-  (info.window === undefined ||
-    (typeof window !== "undefined" && info.window === window)) &&
-  (info.origin === undefined ||
-    (typeof location !== "undefined" && info.origin === location.origin));
+/**
+ * Keep name-only dispatch scoped to this document, not related frames.
+ *
+ * The registering frame is `Tool.source` since webmcp#348 (Chrome 160+,
+ * `@w3c/webmcp-polyfill` 0.2.0); older Chrome and `@mcp-b` builds expose it as
+ * `window`. Prefer `source` when the member exists: once `window` is gone,
+ * checking only it would pass every frame, and since webmcp#382 `getTools()`
+ * also returns parent/sibling frames' tools. `source` is `null` when the
+ * registering document is no longer fully active, which is never this one.
+ */
+const isLocalTool = (info: ModelContextToolInfo): boolean => {
+  const frame = "source" in info ? info.source : info.window;
+  if (frame === null) return false;
+  return (
+    (frame === undefined ||
+      (typeof window !== "undefined" && frame === window)) &&
+    (info.origin === undefined ||
+      (typeof location !== "undefined" && info.origin === location.origin))
+  );
+};
 
 /**
  * `JSON.stringify` that tolerates circular references and non-serializable
